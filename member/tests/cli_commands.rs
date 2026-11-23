@@ -1052,7 +1052,7 @@ fn pair_with_a_code() {
             // other users and the system's log see it.
             Case {
                 name: "an invitation's text as an argument",
-                args: &["pair", "-invite", "cbb://invite#abc"],
+                args: &["pair", "-invite", "cbb://join#abc"],
                 code: 1,
                 stderr: "never on the command line",
                 ..Case::default()
@@ -1060,7 +1060,7 @@ fn pair_with_a_code() {
             Case {
                 name: "an invitation on standard input",
                 args: &["pair", "-invite", "-"],
-                stdin: "cbb://invite#not-one\n",
+                stdin: "cbb://join#not-one\n",
                 code: 1,
                 stderr: "invitation",
                 ..Case::default()

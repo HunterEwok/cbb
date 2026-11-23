@@ -5,13 +5,14 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/HunterEwok/cbb/internal/invite"
 )
 
 // invitation is a cbb invite running on a group's hub.
@@ -132,17 +133,58 @@ func lastLine(s string) string {
 	return lines[len(lines)-1]
 }
 
+// The invitation's encoding (docs/format.md, section 11.3) starts with a
+// map of four entries, the ID (key 1, 16 bytes) and the secret (key 2, 32
+// bytes): these bytes, then the secret.
+var secretAt = append(append([]byte{0xa4, 0x01, 0x50}, make([]byte, 16)...), 0x02, 0x58, 0x20)
+
 // wrongSecret is the invitation's text with another secret: a device that
 // guesses.
 func wrongSecret(text string) (string, error) {
-	in, err := invite.Parse(text)
+	const prefix = "cbb://join#"
+	if !strings.HasPrefix(text, prefix) {
+		return "", fmt.Errorf("not an invitation: %q", firstLine(text))
+	}
+	b, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(text, prefix))
+	n := len(secretAt)
+	if err != nil || len(b) < n+32 || b[0] != secretAt[0] || b[1] != secretAt[1] || b[2] != secretAt[2] ||
+		string(b[19:n]) != string(secretAt[19:]) {
+		return "", fmt.Errorf("an invitation of another shape: %q", firstLine(text))
+	}
+	for i := n; i < n+32; i++ {
+		b[i] ^= 0x5a
+	}
+	return prefix + base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+var validUntil = regexp.MustCompile(`valid until (\d\d):(\d\d) on ([A-Z][a-z]{2}) (\d+)`)
+
+// left is how long the invitation is valid, from the time cbb invite
+// printed in the hub's local time, read against the hub's clock.
+func (inv *invitation) left(ctx context.Context) (time.Duration, error) {
+	m := validUntil.FindStringSubmatch(inv.output())
+	if m == nil {
+		return 0, fmt.Errorf("cbb invite printed no time it is valid until: %q", inv.output())
+	}
+	out, err := Run(ctx, inv.hub, fmt.Sprintf("date -d '%s %s %s:%s' +%%s && date +%%s", m[3], m[4], m[1], m[2]), "")
 	if err != nil {
-		return "", err
+		return 0, err
 	}
-	for i := range in.Secret {
-		in.Secret[i] ^= 0x5a
+	f := strings.Fields(out)
+	if len(f) != 2 {
+		return 0, fmt.Errorf("date on %s said %q", inv.hub.Name, out)
 	}
-	return in.String(), nil
+	until, err1 := strconv.ParseInt(f[0], 10, 64)
+	now, err2 := strconv.ParseInt(f[1], 10, 64)
+	if err := errors.Join(err1, err2); err != nil {
+		return 0, err
+	}
+	if until < now-3600 {
+		// Past the turn of the year.
+		y := time.Unix(until, 0).AddDate(1, 0, 0)
+		until = y.Unix()
+	}
+	return time.Duration(until-now) * time.Second, nil
 }
 
 // invitations (G13): an invitation refused in every way the catalogue
@@ -173,12 +215,12 @@ func invitations(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 		if err != nil {
 			return err
 		}
-		in, err := invite.Parse(inv.text)
+		left, err := inv.left(ctx)
 		inv.cancel(ctx)
 		if err != nil {
 			return err
 		}
-		if left := time.Until(in.Expires); left < 23*time.Hour || left > 24*time.Hour+time.Minute {
+		if left < 23*time.Hour || left > 24*time.Hour+time.Minute {
 			return fmt.Errorf("an invitation for 24h expires in %s", left.Round(time.Minute))
 		}
 		return inv.ended(ctx, 20*time.Second)
@@ -188,12 +230,12 @@ func invitations(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 		if err != nil {
 			return err
 		}
-		in, err := invite.Parse(inv.text)
+		left, err := inv.left(ctx)
 		inv.cancel(ctx)
 		if err != nil {
 			return err
 		}
-		if left := time.Until(in.Expires); left < 59*time.Minute || left > 61*time.Minute {
+		if left < 59*time.Minute || left > 61*time.Minute {
 			return fmt.Errorf("an invitation by default expires in %s, not an hour", left.Round(time.Minute))
 		}
 		return inv.ended(ctx, 20*time.Second)

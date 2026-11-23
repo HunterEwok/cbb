@@ -44,6 +44,7 @@ pub mod api;
 pub mod arrange;
 #[cfg(feature = "web")]
 pub mod attest;
+pub mod awg;
 pub mod beacon;
 pub mod benchtime;
 pub mod blind;
@@ -66,7 +67,6 @@ pub mod groupgen;
 pub mod hlc;
 pub mod hubkey;
 pub mod identity;
-pub mod invite;
 pub mod issue;
 pub mod join;
 pub mod keyboard;

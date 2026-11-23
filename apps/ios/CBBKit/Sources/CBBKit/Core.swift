@@ -176,14 +176,11 @@ public enum Core {
         return .refused(reason: r.reason, message: r.message)
     }
 
-    /// A remote invitation as the screen that accepts or declines it shows
-    /// it (docs/protocol.md, section 12): its group's tag, its hub's device
-    /// ID, and when it expires.
+    /// A remote invitation the core took (docs/protocol.md, section 12):
+    /// phone is true when it is a phone's. It carries no expiry: the hub
+    /// refuses it once its time is over.
     public struct Invitation: Decodable, Equatable, Sendable {
-        public var group: String
-        public var hub: String
-        /// Unix seconds.
-        public var expires: Int64
+        public var phone: Bool
     }
 
     /// What reading an invitation gave: it, or why it was refused (reason
@@ -194,7 +191,7 @@ public enum Core {
     }
 
     /// Reads what the user scanned, opened or pasted as a remote
-    /// invitation, cbb://invite#...
+    /// invitation, cbb://join#...
     public static func readInvite(_ text: String) throws -> InviteReading {
         struct Args: Encodable { var text: String }
         struct Refused: Decodable { var reason: String, message: String }

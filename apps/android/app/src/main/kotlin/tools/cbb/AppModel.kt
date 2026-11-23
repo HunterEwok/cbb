@@ -312,7 +312,8 @@ class AppModel(private val app: Context) {
     /**
      * Reads a remote invitation the user scanned, opened or pasted, for the
      * screen that accepts or declines it; false with a message when it is
-     * none, has expired, or the phone is in a group already.
+     * none, is another kind of device's, or the phone is in a group already.
+     * It carries no expiry: the hub refuses one whose time is over.
      */
     fun readInvitation(text: String): Boolean {
         val t = text.trim()
@@ -327,8 +328,8 @@ class AppModel(private val app: Context) {
                     false
                 }
                 is Core.InviteReading.Read -> {
-                    if (Instant.ofEpochSecond(r.invitation.expires) <= Instant.now()) {
-                        message = Note(R.string.invitation_expired, error = true)
+                    if (!r.invitation.phone) {
+                        message = Note(R.string.invitation_not_phone, error = true)
                         false
                     } else {
                         message = null

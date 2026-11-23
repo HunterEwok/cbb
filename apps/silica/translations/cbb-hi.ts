@@ -553,10 +553,6 @@
         <translation>समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>फ़ोन अपनी कुंजी नहीं मिटा सका।</translation>
     </message>
@@ -643,6 +639,10 @@
     <message>
         <source>This build of CBB is broken.</source>
         <translation>CBB का यह बिल्ड खराब है।</translation>
+    </message>
+    <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>यह निमंत्रण किसी दूसरी तरह के डिवाइस के लिए है। इस फ़ोन के लिए निमंत्रण माँगें।</translation>
     </message>
     <message>
         <source>This is not a CBB invitation.</source>
@@ -782,14 +782,6 @@
         <translation>अस्वीकार करें</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>समूह</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>हब</translation>
-    </message>
-    <message>
         <source>Join</source>
         <translation>जुड़ें</translation>
     </message>
@@ -802,8 +794,8 @@
         <translation>निमंत्रण से जुड़ें</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>या निमंत्रण का पाठ चिपकाएँ, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>या निमंत्रण का पाठ चिपकाएँ, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +804,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>तक मान्य</translation>
     </message>
     <message>
         <source>You are invited to a group</source>

@@ -507,14 +507,22 @@ struct InviteArgs {
     text: String,
 }
 
-/// `read_invite`: a remote invitation's text read and checked (docs/protocol.md,
-/// section 12): `{"invitation"}` when it is taken, `{"refused": {"reason",
-/// "message"}}` with its stable reason and a sentence for the user when it
-/// is not. The caller checks the expiry against its clock.
+/// `read_invite`: a remote invitation's text (`cbb://join#`,
+/// docs/protocol.md, section 12) read and checked before the user agrees
+/// to join: `{"invitation": {"phone"}}`, true when it is a phone's, or
+/// `{"refused": {"reason", "message"}}` with its stable reason and a
+/// sentence for the user. The invitation carries no expiry: the hub
+/// refuses it once its time is over.
 fn read_invite(a: InviteArgs) -> Result<Vec<u8>, Refusal> {
-    Ok(json(match crate::invite::parse(&a.text) {
-        Ok(inv) => serde_json::json!({ "invitation": inv.to_json() }),
-        Err(r) => serde_json::json!({ "refused": { "reason": r.name(), "message": r.message() } }),
+    use crate::join::invitation::{Invitation, PathKind};
+    let refused =
+        |reason: &str, message: &str| serde_json::json!({ "refused": { "reason": reason, "message": message } });
+    Ok(json(match Invitation::parse(&a.text) {
+        Ok(inv) if inv.paths.iter().any(|p| p.kind == PathKind::Guest) => {
+            serde_json::json!({ "invitation": { "phone": inv.profile.role == crate::records::body::ROLE_PHONE } })
+        }
+        Ok(_) => refused("invite/guest", "the invitation has no way in through a hub; ask for a new one"),
+        Err(r) => refused(r.name(), "this is not an invitation of CBB"),
     }))
 }
 
@@ -743,21 +751,39 @@ mod tests {
         assert_eq!(code(&ask("read_recovery_sheet", serde_json::json!({}))), Code::Request as u64);
     }
 
-    /// read_invite answers each text of testdata/interop/invites.json as
-    /// the file says: the invitation, or the reason it is refused.
+    /// read_invite takes an invitation with a guest path, says whose it
+    /// is, and refuses any other text with its rule.
     #[test]
     fn reads_invitations() {
-        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/invites.json");
-        let v: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        for c in v["valid"].as_array().unwrap() {
-            let got = ask("read_invite", serde_json::json!({"text": c["text"]}));
-            let mut want = c.clone();
-            want.as_object_mut().unwrap().retain(|k, _| k != "name" && k != "text");
-            assert_eq!(got["ok"]["invitation"], want, "{}", c["name"]);
-        }
-        for c in v["refused"].as_array().unwrap() {
-            let got = ask("read_invite", serde_json::json!({"text": c["text"]}));
-            assert_eq!(got["ok"]["refused"]["reason"], c["reason"], "{}", c["name"]);
+        use crate::join::invitation::{Invitation, Path, PathKind, Profile};
+        use crate::records::body::{RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
+        let guest = Path {
+            kind: PathKind::Guest,
+            endpoints: alloc::vec!["203.0.113.9:8764".into()],
+            hub_key: Some([7; 32]),
+            guest: Some(([8; 32], [9; 32])),
+            obfuscation: None,
+        };
+        let home = Path { kind: PathKind::Home, endpoints: Vec::new(), hub_key: None, guest: None, obfuscation: None };
+        let profile = |role| Profile { role, rights: RIGHT_READ | RIGHT_SEND, home_only: false, guarded: false };
+        let phone = Invitation::new(alloc::vec![guest.clone()], profile(ROLE_PHONE));
+        let got = ask("read_invite", serde_json::json!({"text": phone.text()}));
+        assert_eq!(got["ok"]["invitation"], serde_json::json!({"phone": true}));
+        let computer = Invitation::new(alloc::vec![guest], profile(ROLE_MEMBER));
+        let got = ask("read_invite", serde_json::json!({"text": format!("  {}\n", computer.text())}));
+        assert_eq!(got["ok"]["invitation"], serde_json::json!({"phone": false}));
+        let at_home = Invitation::new(alloc::vec![home], profile(ROLE_MEMBER));
+        let got = ask("read_invite", serde_json::json!({"text": at_home.text()}));
+        assert_eq!(got["ok"]["refused"]["reason"], "invite/guest");
+        for (text, reason) in [
+            ("", "invite/shape"),
+            ("cbb://invite#e30", "invite/shape"),
+            ("https://cbb.tools", "invite/shape"),
+            ("cbb://join#!", "invite/shape"),
+            ("cbb://join#", "cbor/truncated"),
+        ] {
+            let got = ask("read_invite", serde_json::json!({"text": text}));
+            assert_eq!(got["ok"]["refused"]["reason"], reason, "{text}");
             assert!(!got["ok"]["refused"]["message"].as_str().unwrap().is_empty());
         }
         assert_eq!(code(&ask("read_invite", serde_json::json!({}))), Code::Request as u64);

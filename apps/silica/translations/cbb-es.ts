@@ -553,10 +553,6 @@
         <translation>El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>La invitación ha caducado. Pide una nueva.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>El teléfono no pudo borrar su clave.</translation>
     </message>
@@ -643,6 +639,10 @@
     <message>
         <source>This build of CBB is broken.</source>
         <translation>Esta compilación de CBB está dañada.</translation>
+    </message>
+    <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>Esta invitación es para otro tipo de dispositivo. Pide una para este teléfono.</translation>
     </message>
     <message>
         <source>This is not a CBB invitation.</source>
@@ -782,14 +782,6 @@
         <translation>Rechazar</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>Grupo</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>Hub</translation>
-    </message>
-    <message>
         <source>Join</source>
         <translation>Unirse</translation>
     </message>
@@ -802,8 +794,8 @@
         <translation>Unirse con una invitación</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>O pega el texto de la invitación, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>O pega el texto de la invitación, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +804,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>La cámara no se inicia: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>Válida hasta</translation>
     </message>
     <message>
         <source>You are invited to a group</source>

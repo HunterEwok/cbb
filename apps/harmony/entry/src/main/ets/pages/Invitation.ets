@@ -30,7 +30,7 @@ struct Invitation {
   take(text: string): void {
     this.error = '';
     if (!isInvitation(text)) {
-      this.error = Errors.shown(new Failure(t('error_invite_not'), 'invite: the text does not start with cbb://invite#'));
+      this.error = Errors.shown(new Failure(t('error_invite_not'), 'invite: the text does not start with cbb://join#'));
       return;
     }
     const r = readInvitation(text);
@@ -76,18 +76,6 @@ struct Invitation {
               this.take(this.pasted);
             })
         } else {
-          Row({ space: 8 }) {
-            Text($r('app.string.invitation_group')).fontColor($r('app.color.secondary'))
-            Text(this.read.group).fontColor($r('app.color.text'))
-          }
-          Row({ space: 8 }) {
-            Text($r('app.string.invitation_hub')).fontColor($r('app.color.secondary'))
-            Text(this.read.hub).fontFamily('monospace').fontColor($r('app.color.text'))
-          }
-          Row({ space: 8 }) {
-            Text($r('app.string.invitation_until')).fontColor($r('app.color.secondary'))
-            Text(new Date(this.read.expiresMs).toLocaleString()).fontColor($r('app.color.text'))
-          }
           Text($r('app.string.invitation_note')).fontSize(14).fontColor($r('app.color.secondary'))
           Button($r('app.string.invitation_join'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED }).attributeModifier(EMPHASIZED_BUTTON)
             .width('100%')

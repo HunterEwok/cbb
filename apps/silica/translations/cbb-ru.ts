@@ -553,10 +553,6 @@
         <translation>Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>Срок приглашения истёк. Попросите новое.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>Телефону не удалось удалить свой ключ.</translation>
     </message>
@@ -643,6 +639,10 @@
     <message>
         <source>This build of CBB is broken.</source>
         <translation>Эта сборка CBB повреждена.</translation>
+    </message>
+    <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>Это приглашение для устройства другого типа. Попросите приглашение для этого телефона.</translation>
     </message>
     <message>
         <source>This is not a CBB invitation.</source>
@@ -782,14 +782,6 @@
         <translation>Отклонить</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>Группа</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>Хаб</translation>
-    </message>
-    <message>
         <source>Join</source>
         <translation>Вступить</translation>
     </message>
@@ -802,8 +794,8 @@
         <translation>Вступить по приглашению</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>Или вставьте текст приглашения, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>Или вставьте текст приглашения, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +804,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>Камера не запускается: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>Действует до</translation>
     </message>
     <message>
         <source>You are invited to a group</source>

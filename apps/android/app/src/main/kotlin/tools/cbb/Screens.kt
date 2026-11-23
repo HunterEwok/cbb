@@ -97,7 +97,6 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import tools.cbb.kit.RemotePaste
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -400,13 +399,6 @@ private fun InvitationAnswerScreen(model: AppModel, invite: AppModel.PendingInvi
             color = palette.accent,
             textAlign = TextAlign.Center,
         )
-        val until = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
-            .format(Instant.ofEpochSecond(invite.invitation.expires).atZone(ZoneId.systemDefault()))
-        Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Text(stringResource(R.string.invitation_group, invite.invitation.group), fontFamily = FontFamily.Monospace)
-            Text(stringResource(R.string.invitation_hub, invite.invitation.hub.take(12)), fontFamily = FontFamily.Monospace)
-            Text(stringResource(R.string.invitation_until, until))
-        }
         Text(stringResource(R.string.invitation_answer_hint), textAlign = TextAlign.Center, color = palette.textDim)
         AccentButton(stringResource(R.string.invitation_accept), onClick = model::acceptInvitation, modifier = Modifier.widthIn(max = 480.dp))
         QuietButton(stringResource(R.string.invitation_decline), onClick = model::declineInvitation)

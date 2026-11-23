@@ -553,10 +553,6 @@
         <translation>הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>תוקף ההזמנה פג. בקשו הזמנה חדשה.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>הטלפון לא הצליח למחוק את המפתח שלו.</translation>
     </message>
@@ -643,6 +639,10 @@
     <message>
         <source>This build of CBB is broken.</source>
         <translation>גרסת ה-CBB הזו פגומה.</translation>
+    </message>
+    <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>ההזמנה הזו מיועדת לסוג אחר של מכשיר. בקשו הזמנה לטלפון הזה.</translation>
     </message>
     <message>
         <source>This is not a CBB invitation.</source>
@@ -782,14 +782,6 @@
         <translation>דחייה</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>קבוצה</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>רכזת</translation>
-    </message>
-    <message>
         <source>Join</source>
         <translation>הצטרפות</translation>
     </message>
@@ -802,8 +794,8 @@
         <translation>הצטרפות בהזמנה</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>או הדביקו את טקסט ההזמנה, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>או הדביקו את טקסט ההזמנה, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +804,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>המצלמה לא מופעלת: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>בתוקף עד</translation>
     </message>
     <message>
         <source>You are invited to a group</source>

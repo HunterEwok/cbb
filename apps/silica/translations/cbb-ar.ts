@@ -553,10 +553,6 @@
         <translation>لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>انتهت صلاحية الدعوة. اطلب دعوة جديدة.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>تعذّر على الهاتف حذف مفتاحه.</translation>
     </message>
@@ -643,6 +639,10 @@
     <message>
         <source>This build of CBB is broken.</source>
         <translation>هذا الإصدار من CBB معطوب.</translation>
+    </message>
+    <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>هذه الدعوة لنوع آخر من الأجهزة. اطلب دعوة لهذا الهاتف.</translation>
     </message>
     <message>
         <source>This is not a CBB invitation.</source>
@@ -782,14 +782,6 @@
         <translation>رفض</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>المجموعة</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>المحور</translation>
-    </message>
-    <message>
         <source>Join</source>
         <translation>انضمام</translation>
     </message>
@@ -802,8 +794,8 @@
         <translation>الانضمام بدعوة</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>أو الصق نص الدعوة، cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>أو الصق نص الدعوة، cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +804,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>لا تبدأ الكاميرا: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>صالحة حتى</translation>
     </message>
     <message>
         <source>You are invited to a group</source>

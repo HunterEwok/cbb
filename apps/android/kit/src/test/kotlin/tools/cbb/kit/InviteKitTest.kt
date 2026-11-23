@@ -16,10 +16,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 
 /**
  * Remote invitations in the kit (docs/protocol.md, section 12): reading one, a phone that joins by one of 0.6 through
@@ -29,8 +25,6 @@ import kotlinx.serialization.json.long
 class InviteKitTest {
     private val top: File = createTempDirectory("cbb-invite-kit").toFile()
     private val members = mutableListOf<CoreMember>()
-    private val hubID = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
-    private val tag = "0123456789abcdef"
 
     @AfterTest
     fun cleanUp() {
@@ -38,18 +32,14 @@ class InviteKitTest {
         top.deleteRecursively()
     }
 
+    /** What is no invitation of 0.6 is refused with a reason and a sentence: an invitation of 0.5 among them. */
     @Test
-    fun readsAnInvitationAndRefusesOthers() {
-        // testdata/interop/invites.json, which the core reads as Go wrote it.
-        val v = Interop.read("invites.json").jsonObject.getValue("valid").jsonArray.first().jsonObject
-        val read = assertIs<Core.InviteReading.Read>(Core.readInvite(v.getValue("text").jsonPrimitive.content))
-        assertEquals(v.getValue("group").jsonPrimitive.content, read.invitation.group)
-        assertEquals(v.getValue("hub").jsonPrimitive.content, read.invitation.hub)
-        assertEquals(v.getValue("expires").jsonPrimitive.long, read.invitation.expires)
-        val refused = assertIs<Core.InviteReading.Refused>(Core.readInvite("cbb://invite#{}"))
-        assertTrue(refused.reason.isNotEmpty())
-        assertTrue(refused.message.isNotEmpty())
-        assertIs<Core.InviteReading.Refused>(Core.readInvite("not an invitation"))
+    fun refusesWhatIsNoInvitation() {
+        for (text in listOf("cbb://invite#e30", "cbb://join#", "not an invitation", "")) {
+            val refused = assertIs<Core.InviteReading.Refused>(Core.readInvite(text), text)
+            assertTrue(refused.reason.isNotEmpty(), text)
+            assertTrue(refused.message.isNotEmpty(), text)
+        }
     }
 
     /** The first state named want, failing on a failed one, for at most 400 waits of 100 ms. */
@@ -122,6 +112,8 @@ class InviteKitTest {
         }
         inviting.use { inv ->
             assertTrue(inv.text.startsWith("cbb://join#"), inv.text)
+            // The screen that accepts it reads it first: a phone's invitation.
+            assertTrue(assertIs<Core.InviteReading.Read>(Core.readInvite(inv.text)).invitation.phone)
             val key = SoftwareSigner()
             val joiner = CorePairing.Joiner(File(top, "far").path, "", "Far phone", "android", key.publicKeyDER, key::signDigest, invite = inv.text)
             joiner.use {

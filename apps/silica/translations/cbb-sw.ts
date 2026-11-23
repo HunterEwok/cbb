@@ -553,10 +553,6 @@
         <translation>Kitovu cha kikundi hakikujibu. Hakikisha mwaliko bado ni halali na kitovu kimewashwa, kisha jaribu tena.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>Mwaliko umeisha muda. Omba mpya.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>Simu haikuweza kufuta ufunguo wake.</translation>
     </message>
@@ -643,6 +639,10 @@
     <message>
         <source>This build of CBB is broken.</source>
         <translation>Muundo huu wa CBB umeharibika.</translation>
+    </message>
+    <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>Mwaliko huu ni wa aina nyingine ya kifaa. Omba mwaliko wa simu hii.</translation>
     </message>
     <message>
         <source>This is not a CBB invitation.</source>
@@ -782,14 +782,6 @@
         <translation>Kataa</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>Kikundi</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>Kitovu</translation>
-    </message>
-    <message>
         <source>Join</source>
         <translation>Jiunge</translation>
     </message>
@@ -802,8 +794,8 @@
         <translation>Jiunge kwa mwaliko</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>Au bandika maandishi ya mwaliko, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>Au bandika maandishi ya mwaliko, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +804,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>Kamera haianzi: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>Halali hadi</translation>
     </message>
     <message>
         <source>You are invited to a group</source>

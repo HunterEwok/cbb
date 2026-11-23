@@ -236,7 +236,7 @@ func fakeDangerousRun(args []string, _ string, _ bool) error {
 				file = args[i+1]
 			}
 		}
-		line = appInvite{Invite: "cbb://invite?g=cbb-7f3a&h=203.0.113.9%3A8764&t=q83vEjRWeJA", Expires: inviteSeconds,
+		line = appInvite{Invite: "cbb://join#pAFQq83vEjRWeJA", Expires: inviteSeconds,
 			Joining: &InviteJoining{Name: "Anna's laptop", OS: "Windows", Fingerprint: "3F9A 1C2E 88B0 D45E 7A19"}}
 	default:
 		return errCancelled

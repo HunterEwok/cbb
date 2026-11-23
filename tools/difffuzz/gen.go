@@ -334,8 +334,8 @@ func writeFormatSeeds(dir string, out string) error {
 
 // writeAPISeeds writes the seeds of the cargo fuzz target api, requests to
 // the core's entry point (docs/core-api.md): the version, each body of the
-// corpus's seeds of a kind parse_body reads, each invitation of
-// invites.json for read_invite, and the sheet's text and QR code of
+// corpus's seeds of a kind parse_body reads, a few invitations' shapes
+// for read_invite, and the sheet's text and QR code of
 // recovery-sheet.json for read_recovery_sheet.
 func writeAPISeeds(dir, out string, base []Case) error {
 	var reqs [][]byte
@@ -360,15 +360,9 @@ func writeAPISeeds(dir, out string, base []Case) error {
 			return err
 		}
 	}
-	var invites struct {
-		Valid   []struct{ Text string } `json:"valid"`
-		Refused []struct{ Text string } `json:"refused"`
-	}
-	if err := readJSON(filepath.Join(dir, "invites.json"), &invites); err != nil {
-		return err
-	}
-	for _, i := range append(invites.Valid, invites.Refused...) {
-		if err := add("read_invite", map[string]string{"text": i.Text}); err != nil {
+	// Invitations: a few shapes, the corpus's mutations do the rest.
+	for _, text := range []string{"cbb://join#", "cbb://join#oA", "cbb://join#pAFQ", "cbb://invite#e30"} {
+		if err := add("read_invite", map[string]string{"text": text}); err != nil {
 			return err
 		}
 	}

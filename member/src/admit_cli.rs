@@ -18,12 +18,12 @@ use crate::{Global, check, flag, open, request};
 /// its addresses, ID and key, with room to spare.
 const MAX_QR_TEXT: usize = 1024;
 
-/// How long an invitation is valid by default, and at most, as Go's
-/// invite.DefaultLifetime and invite.MaxLifetime.
+/// How long an invitation is valid by default, and at most, as the
+/// service keeps it (`crate::inviter`).
 const INVITE_LIFETIME_MS: i64 = 3_600_000;
 const INVITE_MAX_MS: i64 = 24 * 3_600_000;
 
-/// The file cbb invite writes by default, as Go's defaultInviteFile.
+/// The file cbb invite writes by default.
 const INVITE_FILE: &str = "cbb.cbbinvite";
 
 /// A request on its own connection, for the operations that answer more

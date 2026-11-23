@@ -12,8 +12,8 @@ import Sailfish.Silica 1.0
 Page {
     id: page
 
-    // What the core read of the invitation: {group, hub, expiresMs}, or
-    // {error}; empty while scanning.
+    // What the core read of the invitation: {phone}, or {error}; empty
+    // while scanning.
     property var found: ({})
     property string text: ""
     readonly property bool scanning: page.text === ""
@@ -94,28 +94,12 @@ Page {
                 id: pasted
                 visible: page.scanning
                 width: parent.width
-                label: qsTr("Or paste the invitation's text, cbb://invite…")
+                label: qsTr("Or paste the invitation's text, cbb://join…")
                 placeholderText: label
                 inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhUrlCharactersOnly
                 EnterKey.enabled: text.trim() !== ""
                 EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                 EnterKey.onClicked: page.use(text)
-            }
-
-            DetailItem {
-                visible: !page.scanning
-                label: qsTr("Group")
-                value: page.found.group !== undefined ? page.found.group : ""
-            }
-            DetailItem {
-                visible: !page.scanning
-                label: qsTr("Hub")
-                value: page.found.hub !== undefined ? page.found.hub : ""
-            }
-            DetailItem {
-                visible: !page.scanning
-                label: qsTr("Valid until")
-                value: page.found.expiresMs !== undefined ? Qt.formatDateTime(new Date(page.found.expiresMs), Qt.DefaultLocaleShortDate) : ""
             }
 
             Label {

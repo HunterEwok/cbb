@@ -1784,7 +1784,8 @@ root's beats an admin's; of two roots', the later root on the path, then the hig
 two of one admin, the higher `seq`; of two admins', the one whose `seen` holds the other, else
 the smaller ID. A removed admin's record never counts here. The state carries its `ttl_ms` and
 `secret_ttl_ms`; without a `copies` record the lifetimes are
-`records::body::DEFAULT_COPY_TTL_MS` (300000) and `DEFAULT_SECRET_TTL_MS` (60000).
+5 minutes and 60 seconds (`DEFAULT_COPY_TTL_MS` and `DEFAULT_SECRET_TTL_MS` in
+`core/src/records/body.rs`).
 
 #### Stopping the exchange
 
@@ -2152,78 +2153,36 @@ and keeps it with its key; it learns the rest from the forwarder's answer when i
 
 A device that shares no network with the group joins through the hub's tunnel with a remote
 invitation ([design.md](design.md), "Joining from another network"). Implemented in the Rust
-`cbb` (`member/src/inviter.rs`, `member/src/away/invite.rs`, `cbb invite`, `cbb pair -invite`)
-on the computers and small devices, in the phones' member through ffi (`cbb_invite_*`,
-`cbb_joiner_*` with `invite`), and on an admin phone that is the group's hub (the member's
-Live hub, ffi's `hub` operation). The text is read by the Rust
-core (`cbb_core::invite`) and Go's `internal/invite`.
+`cbb`: the hub's side in `member/src/live/invite.rs` (the control operation `invite` in
+`member/src/service/on_live.rs`, `cbb invite`), an admin's through a hub in
+`member/src/live/through.rs`, the guest's keys in `member/src/inviter.rs`, the joiner in
+`member/src/joining.rs` (`cbb pair -invite`); on the phones through ffi (`cbb_invite_*`, and
+`cbb_joiner_*` with `invite`). The text is read by the Rust core
+(`cbb_core::join::invitation`), and the apps' screen that accepts it asks the core's
+`read_invite` ([core-api.md](core-api.md)).
 
 ### The invitation
 
-Made by the root or any admin that admits devices: on the hub, by the control operation
-`invite` (`cbb invite`) or in the app of a phone that is the hub, whose endpoints are its
-forwarder's; on another admin, through a hub ("Through the hub"). A hub that only passes
-copies on (section 11, "Two kinds of hub") holds no CA key and makes none itself, though it
-opens the guest tunnel of another admin's invitation. Its text is
-`cbb://invite#` followed by standard base64 of this JSON (byte strings
-in it as in the rest of this document):
+It is the invitation of the [format](format.md), section 11.3, `cbb://join#` and its
+encoding, made on a hub that serves or through a hub ("Through the hub"). It carries no group,
+no hub and no expiry, only one-time values and one guest path: the hub's addresses away from
+home (its forwarder's after its own, at most eight), the key it serves under, the guest's
+one-time WireGuard key and pre-shared key, and the group's obfuscation settings.
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `v` | number | 1 |
-| `g` | string | the group's tag |
-| `h` | string | the hub's device ID |
-| `hk` | bytes | the hub's WireGuard public key, 32 bytes |
-| `ep` | array of strings | the hub's addresses away from home, `ip:port`, 1 to 8 |
-| `k` | bytes | the guest's one-time WireGuard private key, 32 bytes |
-| `psk` | bytes | the guest's preshared key, 32 bytes |
-| `s` | bytes | the pairing secret, at least 16 random bytes (128 bits) |
-| `exp` | number | when it expires, Unix seconds |
-| `o` | object or absent | the hub's obfuscation settings, as in its offer (section 11, "Obfuscation") |
-| `x` | object or absent | the way to the hub's forwarder over VLESS with XHTTP, as in its offer (section 11, "VLESS"): `transport` (`xhttp`), `endpoint`, `server_name`, `path` and `id`, all strings |
-
-The JSON is in the strict form of signed bodies (Conventions), with exactly these fields and
-no other, so that every implementation reads one text alike (Go's `internal/invite`, the
-Rust core's `cbb_core::invite`, both checked on `testdata/interop/invites.json`):
-
-- The text is the prefix, in these lowercase letters, and standard base64 in its one form
-  (Conventions, "Bytes"); spaces, tabs and line breaks around it are ignored, and nothing else
-  is.
-- `g` is a group tag and `h` a device ID (section 1). `hk`, `k`, `psk`, `s` and the
-  obfuscation's `header_protection_key` are standard base64 in its one form (padded).
-- `hk`, `k` and `psk` are 32 bytes and not all zeros. `s` holds 16 to 64 bytes. `exp` is
-  greater than 0.
-- Each `ep` is an address in its canonical form: an IPv4 address without leading zeros, or
-  an IPv6 address in brackets, compressed, in lowercase and without a zone, then `:` and a
-  port from 1 to 65535 without a leading zero.
-- `o`, when present, has every field of the offer's settings, each within the offer's
-  bounds. Each `h1` to `h4` is `min-max`: two decimal numbers of 32 bits, without a sign or
-  a leading zero, `min` not above `max`.
-- `x`, when present, has exactly its five fields, each a string: `transport` is `xhttp`,
-  `endpoint` an address as in `ep`, `server_name` a host name, `path` an absolute path and
-  `id` a UUID in lowercase, as the offer's VLESS settings. A hub whose offer has none, or
-  REALITY, which the phones and `cbb` do not speak, writes none. A device that
-  cannot reach the hub over UDP dials the guest tunnel through it.
-
-A text refused names one reason, the same in every implementation:
-
-- `not_invitation`: not the prefix.
-- `damaged`: not standard base64, not strict JSON, a field missing, unknown or of another type.
-- `version`: a `v` other than 1.
-- `group`, `hub`, `key`, `endpoints`, `secret`, `expiry`, `obfuscation` or `vless`: that
-  field's value is refused.
-
-A device joins only while `exp` is later than its clock. A device that does not know the
-time yet does not join.
-
-It travels as a QR code of its text, the usual way, which a phone scans in Join with an
-invitation, or as its text or a file of one line (`.cbbinvite`, mode 0600, which `cbb invite`
-deletes when the invitation ends and `cbb pair -invite` deletes once it joined), for a
-computer and for whoever got the QR code another way; it is never typed. It is a secret
-until it is used. It serves one device once, for 1 hour unless the admin asks for up to 24
-hours, and closes after three failed attempts or when the admin cancels it. A device asks
-its user before it joins: it shows the group's tag, the hub and when the invitation expires,
-and joins only once the user accepts; declining sends nothing.
+- Its profile is a computer's (role member) or, with `cbb invite -phone`, a phone's, with
+  the rights a home window gives (read, send, secrets, and hub for a member with the cap
+  that the root admits); never home only. A phone refuses another role's invitation before it
+  asks its user; the hub refuses a device of another role.
+- It serves one device once, for 1 hour unless the admin asks for up to 24 hours, which the
+  hub keeps; it closes after three failed attempts, when its time is over or when the admin
+  cancels it. A hub that only passes copies on (section 11, "Two kinds of hub") makes none
+  itself, though it opens the guest tunnel of another admin's invitation.
+- It travels as a QR code of its text, which a phone scans in Join with an invitation, or as
+  its text or a file of one line (`cbb.cbbinvite` by default, mode 0600, which `cbb invite`
+  deletes when the invitation ends), for a computer and for whoever got the QR code another
+  way; it is never typed and never a command line argument. It is a secret until it is used.
+  A device asks its user before it joins, and joins only once the user accepts; declining
+  sends nothing.
 
 ### The guest tunnel
 
@@ -2232,55 +2191,21 @@ and joins only once the user accepts; declining sends nothing.
   SHA-256 of the guest's public key. That prefix is apart from the members' (section 11),
   so a guest address never names a member. Peers that stay when the hub's peers change
   keep their sessions.
-- Inside the tunnel, a connection from a guest address to TCP 8764 gets the pairing
-  (ALPN `cbb-pair/3`, section 6) of that invitation's window and nothing else,
-  except, once the window admitted a device, member TLS from that device alone, for its
-  first hello (below). Any other connection MUST be closed.
-- The hub drops the guest peer when the invitation ends without a device, and once the
-  admitted device reached it with its own tunnel key (Joining, step 4), or 24 hours after it
-  admitted the device, whichever comes first: a device that starts late, or loses its
-  network after the join, still offers its key through the guest tunnel.
-
-### Joining
-
-1. The new device starts a tunnel client with the guest key, its guest address and the
-   hub's key, tries the hub's endpoints in turn (20 s each), and dials the hub's tunnel
-   address, TCP 8764.
-2. It pairs as in section 6 with the secret as the password. The window MUST take no other
-   password, MUST give no CA keys, and before it makes the certificate MUST ask the hub's
-   admin to confirm the device, with its name, system, device ID and key fingerprint; the device
-   shows the same fingerprint. The admin has 5 minutes; a no sends `declined`. The device
-   MUST check that ADb's `group` is the invitation's `g` before it sends its tag, and so that
-   the Welcome's group CA is that group's: whoever else holds the secret cannot bring the
-   device into another group.
-3. Once it has its certificate, the device turns sync away from home on (the user
-   consented before the join) and makes a member connection to the hub through the guest
-   tunnel. Its hello carries its own tunnel key, which the hub admits (section 11) and
-   answers with its offer.
-4. With the offer, the device closes the guest tunnel and from then on reaches the hub
-   through the tunnel with its own key, as any member. Until it has the offer, it keeps the
-   invitation (`cbb` in `invite-guest`, mode 0600, the phones in
-   their key store) and tries again through the guest tunnel, after a restart too, for up to
-   24 hours.
-
-### On the records of 0.6
-
-A group of 0.6 makes the invitation of the [format](format.md), section 11.3 (`cbb://join#...`),
-on a hub that serves (`member/src/live/invite.rs`, the control operation
-`invite` in `member/src/service/on_live.rs`), or through a hub (below). It
-carries no group and no hub, only one-time values and one guest path: the hub's addresses
-away from home (its forwarder's after its own, at most eight), the key it serves under, the
-guest's one-time WireGuard key and pre-shared key, and the group's obfuscation settings.
-
-- Its profile is a computer's (role member) or, with `cbb invite -phone`, a phone's, with
-  the rights a home window gives (read, send, secrets, and hub for a member with the cap
-  that the root admits); never home only.
-- Inside a guest tunnel the hub also answers at its guest address, `fd00:cbc::1`: the
+- Inside a guest tunnel the hub answers at its guest address, `fd00:cbc::1`: the
   invitation names no hub, so the guest dials TCP 8764 there. It is the first address of
   the guests' prefix and no guest's (a guest whose address it would be is refused); only a
   guest's packets may reach it. There a connection gets only the pairing (`cbb-pair/3`) of
   its invitation, one attempt at a time, and once the admin admitted a device, member TLS
-  from that device alone.
+  from that device alone. Any other connection MUST be closed.
+- The hub drops the guest peer when the invitation ends without a device, and once the
+  admitted device's member connection through the guest tunnel ends, or a day after it
+  admitted the device, whichever comes first: a device that starts late, or loses its
+  network after the join, still reaches the hub through the guest tunnel.
+
+### Joining
+
+- The new device starts a tunnel client with the guest key and the hub's key, tries the
+  hub's endpoints in turn, and dials the hub's guest address.
 - The pairing is section 8's, by the invitation, from network `guest`. Once the device
   proved the secret, the member writes nothing yet: the operation `invite` answers a partial
   `joining` with the device's name, system, device ID and key fingerprint (standard base64 of
@@ -2289,56 +2214,33 @@ guest's one-time WireGuard key and pre-shared key, and the group's obfuscation s
   gets pair error 7 (`declined`), nothing is written, and the invitation takes the next
   attempt at once; three failed attempts close it. A yes writes the device's record and
   sends the Welcome. The device waits for each answer that long.
-- The device that joined keeps the invitation in `invite-guest` (mode 0600) and turns sync
-  away from home on before it keeps the set. Until it holds a hub's offer, its member dials
-  the hub through the guest tunnel; its `tunnel` (t 15) there gets the hub's offer, and the
-  hub drops the guest once that connection ends, or a day after the admission. The device
-  then forgets the invitation and reaches the hub with its own key.
-- An admin that is not the hub makes it through a hub (`member/src/live/through.rs`, the
-  hub's side in `member/src/live/invite.rs`): the one `cbb invite -hub` names, or the first of
-  the group's hub order connected now that takes it (one that answers that it serves as none
-  is skipped). The two talk in their member connection with message `guest` (t 17, table
-  `guest`): field 2 the op, 3 the guest's WireGuard key (which names the invitation), and by
-  op 1 `open` 4 the pre-shared key, 5 the expiry (Unix ms, at most 24 hours and a minute
-  away) and 11 the invitation's ID; 2 `opened` 6 the hub's offer (table `offer`: 1 its key,
-  2 its addresses, 3 the obfuscation settings), from which the admin makes the guest path;
-  3 `refused` 7 a sentence for the user; 4 `data` 8 the connection (numbered by the hub from
-  1) and 9 at most 16 KiB of its bytes; 5 `end` 8; 6 `admitted` 10 the device ID; 7 `close`.
-  The hub takes `open` only from a member its records let admit devices, and every later
-  message about the guest only from that admin. It keeps at most 4 such invitations of one
-  admin and 16 in all, passes at most two pairing connections of a guest at once, each at
-  most 1 MiB and silent at most 6 minutes, and closes one that comes while the admin is not
-  connected. The admin's window takes each passed connection as its own; once it admitted a
-  device, the device's member connection through the guest tunnel reaches the hub's member
-  listener, as on the hub's own invitation.
+- The device that joined keeps the invitation in `invite-guest` (mode 0600; the phones in
+  their key store) and turns sync away from home on (its user consented before the join)
+  before it keeps the set. Until it holds a hub's offer, its member dials the hub through the
+  guest tunnel; its `tunnel` (t 15) there gets the hub's offer. The device then forgets the
+  invitation and reaches the hub with its own key, as any member.
 
 ### Through the hub
 
-An admin that is not the hub makes the invitation through a hub it is connected to: the
-first of the group's hubs (section 11) that takes it, or the one the admin names (`cbb invite
--hub`). The admin keeps the window and the CA key; the hub only lets the guest in and passes
-the bytes. They talk in the member connection with `guest` messages (section 4): `{"t":
-"guest", "guest": {...}}`, the object's `op` naming what it does and `key` the guest's
-WireGuard public key, standard base64, which names the invitation:
+An admin that is not the hub makes the invitation through a hub (`member/src/live/through.rs`,
+the hub's side in `member/src/live/invite.rs`): the one `cbb invite -hub` names, or the first
+of the group's hub order connected now that takes it (one that answers that it serves as none
+is skipped). The admin keeps the window; the hub only lets the guest in and passes the bytes.
+The two talk in their member connection with message `guest` (t 17, table `guest`): field 2
+the op, 3 the guest's WireGuard key (which names the invitation), and by op 1 `open` 4 the
+pre-shared key, 5 the expiry (Unix ms, at most 24 hours and a minute away) and 11 the
+invitation's ID; 2 `opened` 6 the hub's offer (table `offer`: 1 its key, 2 its addresses, 3
+the obfuscation settings), from which the admin makes the guest path; 3 `refused` 7 a
+sentence for the user; 4 `data` 8 the connection (numbered by the hub from 1) and 9 at most
+16 KiB of its bytes; 5 `end` 8; 6 `admitted` 10 the device ID; 7 `close`.
 
-| `op` | From | Fields | Meaning |
-|------|------|--------|---------|
-| `open` | admin | `psk`, `expires_ms` | let this guest in until `expires_ms` (Unix milliseconds, at most 24 hours and a minute away) |
-| `opened` | hub | `hub_key`, `endpoints`, `obfuscation`, `vless` | the guest is in: the invitation's `hk`, `ep`, `o` and `x` |
-| `refused` | hub | `reason` | a sentence for the user: not a hub, not an admin that admits devices, a lifetime too long, or the key in use |
-| `data` | both | `conn`, `data` | bytes of the guest's connection `conn` (numbered by the hub from 1), at most 16 KiB a message |
-| `end` | both | `conn` | that side closed the connection for writing |
-| `admitted` | admin | `device` | the window admitted this device: the hub keeps the guest for its first hello (Joining, step 3) |
-| `close` | admin | | the invitation ended without a device |
-
-The hub takes `open` only from a peer whose chain and records make it the root or an admin
-that admits devices, and every later message about a guest only from the admin that opened
-it. The guest's connections to TCP 8764 inside the tunnel reach the admin's window through
-`data` messages; once the window admitted a device, its member connection through the guest
-tunnel reaches the hub's member listener, as on the hub's own invitation. A guest
-connection that comes while the admin is not connected is closed, and the device tries
-again; the guest stays until the invitation's expiry. A hub keeps a few such guests at once,
-and fewer for one admin.
+The hub takes `open` only from a member its records let admit devices, and every later
+message about the guest only from that admin. It keeps at most 4 such invitations of one admin
+and 16 in all, passes at most two pairing connections of a guest at once, each at most 1 MiB
+and silent at most 6 minutes, and closes one that comes while the admin is not connected. The
+admin's window takes each passed connection as its own; once it admitted a device, the
+device's member connection through the guest tunnel reaches the hub's member listener, as on
+the hub's own invitation.
 
 ### On a phone that joins
 
@@ -3616,8 +3518,8 @@ period.
 ### The period
 
 The current root starts a period for a face when it has none, when the one it keeps has less
-than 5 days left of its 35 (`faces::PERIOD_LIFETIME_MS`, renewed after
-`faces::PERIOD_RENEW_MS`), and when a device that sent a server credential for it is no longer
+than 5 days left of its 35 (`PERIOD_LIFETIME_MS`, renewed after `PERIOD_RENEW_MS`, in
+`member/src/faces.rs`), and when a device that sent a server credential for it is no longer
 in the group: a removed device knows the face's tag. It makes the period key and a new tag and
 signs the period with its root key; the period key stays on the root's device
 (`period-key`, readable by the service alone), which signs the lists without the root key. A
@@ -3640,8 +3542,8 @@ there, or it names a server key the signer keeps but no longer wants.
 
 ### Keeping and passing them on
 
-A member keeps, in `server-credentials.cbor` beside the set, for each face (at most
-`faces::MAX_FACES`, by the server's pin): the newest period the group's current root signed,
+A member keeps, in `server-credentials.cbor` beside the set, for each face (at most 16,
+`MAX_FACES` in `member/src/faces.rs`, by the server's pin): the newest period the group's current root signed,
 the newest server credential of each device of the group that is not frozen, the newest hubs'
 credential the period key signed, and the newest members' credential the period key or an
 admin of that hubs' credential signed. A newer period with another tag drops the credentials
@@ -3773,7 +3675,7 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | A relay's own tunnel address | `fd00:cbb::1` | 14 |
 | The hub's guest address, inside a guest tunnel (0.6) | `fd00:cbc::1` | 12 |
 | Join QR code | `cbb://join?code=...&addr=...&fp=...` | 6, 7 |
-| Remote invitation | `cbb://invite#...`, file `.cbbinvite`; on 0.6 `cbb://join#...` | 12 |
+| Remote invitation | `cbb://join#...`, file `.cbbinvite` | 12 |
 
 ### Bounds
 

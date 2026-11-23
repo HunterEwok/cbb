@@ -22,7 +22,7 @@ use crate::error::{Error, Result};
 pub const MAX_OPEN: usize = 4;
 
 /// How long an invitation is valid unless the admin asks otherwise, and at
-/// most, as Go's invite.DefaultLifetime and MaxLifetime.
+/// most.
 pub const DEFAULT_LIFETIME: Duration = Duration::from_secs(3600);
 pub const MAX_LIFETIME: Duration = Duration::from_secs(24 * 3600);
 
@@ -39,7 +39,7 @@ impl GuestKeys {
     /// New keys for a guest.
     pub fn new() -> Result<GuestKeys> {
         let key = random32()?;
-        Ok(GuestKeys { key, public: cbb_core::invite::guest_public(&key), psk: random32()? })
+        Ok(GuestKeys { key, public: cbb_core::hubkey::guest_public(&key), psk: random32()? })
     }
 }
 

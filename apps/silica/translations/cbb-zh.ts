@@ -553,10 +553,6 @@
         <translation>群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>邀请已过期。请索要新的邀请。</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>手机无法删除它的密钥。</translation>
     </message>
@@ -643,6 +639,10 @@
     <message>
         <source>This build of CBB is broken.</source>
         <translation>此 CBB 版本已损坏。</translation>
+    </message>
+    <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>此邀请适用于其他类型的设备。请索要适用于此手机的邀请。</translation>
     </message>
     <message>
         <source>This is not a CBB invitation.</source>
@@ -782,14 +782,6 @@
         <translation>拒绝</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>群组</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>中心节点</translation>
-    </message>
-    <message>
         <source>Join</source>
         <translation>加入</translation>
     </message>
@@ -802,8 +794,8 @@
         <translation>通过邀请加入</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>或粘贴邀请文本，cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>或粘贴邀请文本，cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +804,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>相机无法启动：%1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>有效期至</translation>
     </message>
     <message>
         <source>You are invited to a group</source>

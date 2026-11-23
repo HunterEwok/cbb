@@ -720,7 +720,7 @@ pub(crate) fn watch_app_file(path: String) {
 }
 
 /// Reads a remote invitation for cbb pair -invite, its file or with "-"
-/// its text (cbb://invite#..., as a scanned code gives it) on the first
+/// its text (cbb://join#..., as a scanned code gives it) on the first
 /// line of standard input, and asks the user to agree that sync away from
 /// home goes on with the join; returns the path, empty for a text, and the
 /// invitation's text. The text itself is never taken on the command line,
@@ -735,27 +735,18 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the invitation")?;
         (String::new(), line.trim().to_string())
-    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX)
-        || path.trim_start().starts_with(cbb_core::join::invitation::PREFIX)
-    {
+    } else if path.trim_start().starts_with(cbb_core::join::invitation::PREFIX) {
         return Err(Error::msg(tr!(
             "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line"
         )));
     } else {
         (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
     };
-    if text.trim_start().starts_with(cbb_core::join::invitation::PREFIX) {
-        // An invitation of 0.6 carries no expiry: the hub refuses it once
-        // its time is over.
-        let inv = cbb_core::join::invitation::Invitation::parse(text.trim())
-            .map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
-        live::invite::guest_path(&inv)?;
-    } else {
-        let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
-        if inv.expired(uptime::wall_ms() / 1000) {
-            return Err(Error::msg("the invitation has expired; ask for a new one"));
-        }
-    }
+    // An invitation carries no expiry: the hub refuses it once its time
+    // is over.
+    let inv = cbb_core::join::invitation::Invitation::parse(text.trim())
+        .map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
+    live::invite::guest_path(&inv)?;
     println!(
         "{}",
         tr!(

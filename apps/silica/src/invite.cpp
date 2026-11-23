@@ -187,15 +187,11 @@ QVariantMap Invite::read(const QString &text) const
         return {{QStringLiteral("error"), Errors::shown({QCoreApplication::translate("Errors", "This is not a CBB invitation."),
                                                           QStringLiteral("invite: %1").arg(why.value(QStringLiteral("message")).toString())})}};
     }
-    const double expiresMs = inv.value(QStringLiteral("expires")).toDouble() * 1000;
-    if (expiresMs <= double(QDateTime::currentMSecsSinceEpoch()))
-        return {{QStringLiteral("error"), Errors::shown({QCoreApplication::translate("Errors", "The invitation has expired. Ask for a new one."),
-                                                          QStringLiteral("invite: expired")})}};
-    return {
-        {QStringLiteral("group"), inv.value(QStringLiteral("group")).toString()},
-        {QStringLiteral("hub"), inv.value(QStringLiteral("hub")).toString().left(12)},
-        {QStringLiteral("expiresMs"), expiresMs},
-    };
+    // An invitation carries no expiry: the hub refuses one whose time is over.
+    if (!inv.value(QStringLiteral("phone")).toBool())
+        return {{QStringLiteral("error"), Errors::shown({QCoreApplication::translate("Errors", "This invitation is for another kind of device. Ask for one for this phone."),
+                                                          QStringLiteral("invite: the invitation is not a phone's")})}};
+    return {{QStringLiteral("phone"), true}};
 }
 
 QString Invite::scan(const QVariant &frame) const
@@ -212,7 +208,7 @@ QString Invite::scan(const QVariant &frame) const
                                         len, QStringLiteral("qr"), &failure);
     for (const QJsonValue &t : read.value(QStringLiteral("texts")).toArray()) {
         const QString text = t.toString().trimmed();
-        if (text.startsWith(QStringLiteral("cbb://invite#")))
+        if (text.startsWith(QStringLiteral("cbb://join#")))
             return text;
     }
     return QString();

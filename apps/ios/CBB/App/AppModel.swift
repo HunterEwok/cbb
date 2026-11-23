@@ -668,7 +668,8 @@ final class AppModel: ObservableObject {
 
     /// Reads a remote invitation the user scanned, opened or pasted, for
     /// the screen that accepts or declines it; false with a message when it
-    /// is none, has expired, or the phone is in a group already.
+    /// is none, is another kind of device's, or the phone is in a group
+    /// already. It carries no expiry: the hub refuses one whose time is over.
     func readInvitation(_ text: String) -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard phase == .start else {
@@ -682,8 +683,8 @@ final class AppModel: ObservableObject {
                 message = Self.showsErrorDetails ? summary + "\n\n" + why : summary
                 return false
             case let .invitation(inv):
-                guard Date(timeIntervalSince1970: TimeInterval(inv.expires)) > Date() else {
-                    message = String(localized: "The invitation has expired. Ask for a new one.", bundle: .app)
+                guard inv.phone else {
+                    message = String(localized: "This invitation is for another kind of device. Ask for one for this phone.", bundle: .app)
                     return false
                 }
                 message = nil

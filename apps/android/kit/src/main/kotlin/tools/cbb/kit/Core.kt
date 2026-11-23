@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
@@ -236,8 +237,8 @@ object Core {
         return SheetReading.Refused(r.optString("reason") ?: "", r.optString("message") ?: "")
     }
 
-    /** A remote invitation as the screen that accepts or declines it shows it: its group's tag, its hub's device ID, and when it expires, Unix seconds. */
-    data class Invitation(val group: String, val hub: String, val expires: Long)
+    /** A remote invitation the core took: phone is true when it is a phone's. It carries no expiry: the hub refuses it once its time is over. */
+    data class Invitation(val phone: Boolean)
 
     sealed class InviteReading {
         class Read(val invitation: Invitation) : InviteReading()
@@ -246,12 +247,13 @@ object Core {
         class Refused(val reason: String, val message: String) : InviteReading()
     }
 
-    /** Reads what the user scanned, opened or pasted as a remote invitation, cbb://invite#... */
+    /** Reads what the user scanned, opened or pasted as a remote invitation, cbb://join#... */
     fun readInvite(text: String): InviteReading {
         val ok = run("read_invite", Wire.obj("text" to Wire.str(text))) as? JsonObject
             ?: throw Mismatch("the answer to read_invite is not an object")
         (ok["invitation"] as? JsonObject)?.let { i ->
-            return InviteReading.Read(Invitation(i.optString("group") ?: "", i.optString("hub") ?: "", i.optLong("expires") ?: 0))
+            val phone = (i["phone"] as? JsonPrimitive)?.booleanOrNull ?: throw Mismatch("the answer to read_invite has no phone")
+            return InviteReading.Read(Invitation(phone))
         }
         val r = ok["refused"] as? JsonObject ?: throw Mismatch("the answer to read_invite has neither invitation nor refused")
         return InviteReading.Refused(r.optString("reason") ?: "", r.optString("message") ?: "")

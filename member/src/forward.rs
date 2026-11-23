@@ -344,7 +344,7 @@ fn once(
         .ok_or_else(|| Error::msg("registering with the forwarder: a bad challenge"))?;
     let obfuscation = match &cfg.obfuscation {
         Some(o) => Some(
-            cbb_core::invite::obfuscation_from_json(o)
+            cbb_core::awg::from_json(o)
                 .and_then(|o| obfuscation_encoding(&o))
                 .ok_or_else(|| Error::msg("the group's obfuscation settings do not fit the format"))?,
         ),
@@ -449,7 +449,7 @@ fn vless_offer(endpoint: SocketAddr, id: &str, v: v3::Way) -> Value {
 
 /// The group's AmneziaWG settings as the format's table `obfuscation`
 /// writes them; None when they do not fit it.
-fn obfuscation_encoding(o: &cbb_core::invite::Obfuscation) -> Option<Vec<u8>> {
+fn obfuscation_encoding(o: &cbb_core::awg::Obfuscation) -> Option<Vec<u8>> {
     use cbb_core::format::cbor::Value as V;
     let s: Vec<V<'_>> = o.s.iter().map(|x| V::Uint(u64::from(*x))).collect();
     let h: Vec<V<'_>> =

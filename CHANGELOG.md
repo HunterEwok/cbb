@@ -2975,6 +2975,10 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The remote invitation of 0.5 (`cbb://invite#`): its readers in the core (`cbb_core::invite`)
+  and in Go (`internal/invite`) and their vectors (`testdata/interop/invites.json`); `cbb pair
+  -invite` and the apps take the invitation of 0.6 alone, and `docs/protocol.md`, section 12,
+  describes it alone (D-130).
 - The specification of the records of 0.5 (`docs/records-v2.md`, and the part of
   `docs/protocol.md`, section 10, that described them); section 10 now gives for the records of
   0.6 who signs what, the admins and watches, the hubs table, the copies setting, voiding two
@@ -3135,6 +3139,11 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone, Android, HarmonyOS and Aurora apps join with a remote invitation of 0.6
+  (`cbb://join#`, from `cbb invite` or an admin phone): their screen read only the invitation
+  of 0.5 and said the text was no invitation. The screen no longer shows a group, a hub or an
+  expiry, which the invitation of 0.6 does not carry, and refuses an invitation made for
+  another kind of device.
 - The computer and Mac apps say that a recovery by the group's recovery key makes the computer
   the group's root at once, as it does on 0.6, and no longer that the claim waits for the
   group's takeover delay.
