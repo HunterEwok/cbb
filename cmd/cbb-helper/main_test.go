@@ -44,3 +44,12 @@ func TestRun(t *testing.T) {
 		t.Fatalf("hello: %+v %q %v", m.Header, m.Payload, err)
 	}
 }
+
+// Input that is not the control protocol ends the helper with 1 and says
+// why.
+func TestRunOnBrokenInput(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := run(nil, strings.NewReader("\xff\xff\xff\xffnot a message"), &out, &errw, false); code != 1 || !strings.HasPrefix(errw.String(), "cbb-helper:") {
+		t.Errorf("broken input: code %d, %q", code, errw.String())
+	}
+}
