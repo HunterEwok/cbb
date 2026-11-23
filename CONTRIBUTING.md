@@ -254,6 +254,16 @@ sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos setup armv7hl
 sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos run '~/silica/build.sh rpm SailfishOS-4.6.0.13-armv7hl.default sailfish'
 ```
 
+The app's code that needs no screen (errors, the saved membership, the device events, the
+calls into the core, the key in a file) is tested on the computer too, with desktop Qt 5
+(`qtbase5-dev`) and the core built for the computer; with a file named, the run measures it
+with gcov for `tools/coverage` (`gcovr`):
+
+```sh
+apps/silica/tests/qt/run.sh                 # the tests
+apps/silica/tests/qt/run.sh /tmp/aurora.info  # with coverage, as LCOV
+```
+
 The app for HarmonyOS 5 and later (`apps/harmony`, in development; the plan is
 [docs/apps.md](docs/apps.md)): ArkTS and ArkUI in `entry/src/main/ets`, over the Rust core
 through the Node-API module in `entry/src/main/cpp` (`napi_init.cpp`, one function for each
@@ -269,13 +279,17 @@ watch's `wearable`. DevEco Studio's Previewer loads no native module and takes t
 `entry/src/mock/` instead, which answers every request with an error, so the pages show as on a
 phone in no group; outside mainland China DevEco offers only a watch emulator, which runs the
 `wearable` module. The tests in `entry/src/ohosTest` (Hypium) run on a phone
-or the emulator.
+or the emulator, and on the computer under Node (`nodetest/run.sh`): TypeScript turns the
+model, core and common ArkTS into JavaScript, `nodetest/run.cjs` plays Hypium, ArkUI's
+decorators and the kits, and the native module's `call` goes to the real core built for the
+computer. CI runs them in its `Aurora and HarmonyOS apps' code on the computer` job.
 
 ```sh
 apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/core/ffi
 apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
 sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
 apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
+apps/harmony/nodetest/run.sh      # the ohosTest suite under Node (cargo, a C compiler, Node.js)
 ```
 
 The differential run of all three implementations (Go, Rust and JDK 17;

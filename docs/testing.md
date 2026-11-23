@@ -450,6 +450,9 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
 | `js-tray` | lines of the tray app's scripts (`apps/desktop/frontend`) | the browser's count under `TestWindow` (`CBB_JS_COVERAGE`), as LCOV, in the `tray app (ubuntu-latest)` job |
+| `cpp-aurora` | lines of the Aurora app's code that runs without a screen (`apps/silica/src`: `errors`, `membership`, `events`, `core` and `platform/keystore_file`) | `apps/silica/tests/qt/run.sh` in the `Aurora and HarmonyOS apps' code on the computer` job: the tests on desktop Qt 5 against the core built for the computer, with gcov |
+| `ets-harmony` | lines of code of the HarmonyOS app's model, core and common ArkTS (`apps/harmony/entry/src/main/ets`, without the pages and components), every module loaded | `apps/harmony/nodetest/run.sh` in the same job: the app's ohosTest suite under Node's test runner, its ArkTS turned into JavaScript by TypeScript, with the real core behind the native module's `call` |
+| `ets-harmony-watch` | the same of the HarmonyOS watch's app (`apps/harmony/wearable/src/main/ets`) | as `ets-harmony` |
 
 A test that compares two times of its own run is not timed under `cargo llvm-cov`, which counts every step of the code under test and none of its dependencies (`cfg(coverage)`): the full group's fill against its signatures (`records::tests::insert_cost`) is ignored there and runs in the `cbb (Rust), the checks` job's plain build.
 

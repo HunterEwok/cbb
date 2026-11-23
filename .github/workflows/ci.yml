@@ -282,7 +282,7 @@ jobs:
   # format rule no vector refuses.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, androidkit, rust-coverage, service, service-coverage, trayapp]
+    needs: [changes, test, gocover, kit, androidkit, rust-coverage, service, service-coverage, trayapp, phonelogic]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -312,6 +312,9 @@ jobs:
           [ -f cov/coverage-swift-kit.json ] && set -- "$@" -llvm swift-kit=cov/coverage-swift-kit.json
           [ -f cov/jacocoTestReport.xml ] && set -- "$@" -jacoco kotlin-kit=cov/jacocoTestReport.xml
           [ -f cov/coverage-js-tray.info ] && set -- "$@" -lcov js-tray=cov/coverage-js-tray.info
+          [ -f cov/coverage-cpp-aurora.info ] && set -- "$@" -lcov cpp-aurora=cov/coverage-cpp-aurora.info
+          [ -f cov/coverage-ets-harmony.info ] && set -- "$@" -lcov ets-harmony=cov/coverage-ets-harmony.info
+          [ -f cov/coverage-ets-harmony-watch.info ] && set -- "$@" -lcov ets-harmony-watch=cov/coverage-ets-harmony-watch.info
           go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 \
             -audit testdata/audit/closed.json -rules core/src -vectors testdata/format \
             -summary "$GITHUB_STEP_SUMMARY" "$@"
@@ -3446,6 +3449,54 @@ jobs:
           "$RUNNER_TEMP/der_test"
           sh apps/harmony/check.sh "$RUNNER_TEMP/ohos-sdk"
 
+  phonelogic:
+    name: Aurora and HarmonyOS apps' code on the computer
+    needs: changes
+    if: needs.changes.outputs.silica == 'true' || needs.changes.outputs.harmony == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust build from this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: phonelogic
+      - name: apt packages for the next steps
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: qtbase5-dev gcovr
+          cache: phonelogic
+      - name: the core for the computer, which both apps' tests call
+        run: cargo build --locked -p cbb-ffi
+      - name: the Rust build into this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: phonelogic
+          save: "true"
+      # The Aurora app's code that needs no screen (errors, the saved
+      # membership, the device events, the calls into the core, the key in
+      # a file) on desktop Qt 5, with gcov.
+      - name: the Aurora app's tests (apps/silica/tests/qt)
+        env:
+          CBB_FFI_LIB: ${{ github.workspace }}/target/debug/libcbb_ffi.a
+        run: apps/silica/tests/qt/run.sh "$GITHUB_WORKSPACE/coverage-cpp-aurora.info"
+      # The HarmonyOS app's ohosTest suite under Node, its ArkTS turned
+      # into JavaScript by TypeScript, with the real core behind the native
+      # module's call.
+      - name: the HarmonyOS app's tests (apps/harmony/nodetest)
+        env:
+          CBB_FFI_LIB: ${{ github.workspace }}/target/debug/libcbb_ffi.a
+        run: apps/harmony/nodetest/run.sh "$GITHUB_WORKSPACE/coverage-ets-harmony.info" "$GITHUB_WORKSPACE/coverage-ets-harmony-watch.info"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-phonelogic
+          path: |
+            coverage-cpp-aurora.info
+            coverage-ets-harmony.info
+            coverage-ets-harmony-watch.info
+
   phonecore:
     name: phone core (${{ matrix.target }})
     needs: changes
@@ -3784,7 +3835,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust-build, rust, rust-coverage, rustinstall, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model, format]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust-build, rust, rust-coverage, rustinstall, rustmips, esp32, zxnext, silica, harmony, phonelogic, advisories, docker, differential, model, format]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

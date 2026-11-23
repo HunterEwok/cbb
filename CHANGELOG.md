@@ -1595,7 +1595,11 @@ with 0.5 is set up again once. The details follow.
   clipboards and the e2e), the lite member, the Swift kit and the Kotlin kit, prints it in
   the run's summary, and fails when a part falls below its floor (`tools/coverage`,
   docs/testing.md, "Coverage"). The tray app is measured too: its Go code (`go-tray`) and,
-  from the browser's own count under its window's tests, its scripts (`js-tray`, LCOV).
+  from the browser's own count under its window's tests, its scripts (`js-tray`, LCOV). So
+  are the Aurora app's code that needs no screen, tested on desktop Qt 5 with gcov
+  (`cpp-aurora`), and the HarmonyOS phone's and watch's ArkTS, whose ohosTest suite also runs
+  under Node with the real core behind the native module (`ets-harmony`,
+  `ets-harmony-watch`).
 - The bench's desktop suite runs on the Linux member alone too: the primary selection kept
   out of the group (Y26), HTML and a PNG image copied on Linux and arriving with their types
   (O4, O1), the session's kind and a copy from an X11 program under Wayland (H1), the keys

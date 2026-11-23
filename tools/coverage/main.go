@@ -14,7 +14,8 @@
 // and the e2e add up. -llvm takes llvm-cov's JSON export (cargo llvm-cov
 // --json, swift test --enable-code-coverage), -jacoco a JaCoCo XML report
 // (Gradle's jacoco plugin), -lcov an LCOV tracefile (the tray app's window
-// test writes its scripts' lines so, from the browser's own count). A part
+// test writes its scripts' lines so, from the browser's own count; gcovr
+// the Aurora app's, Node the HarmonyOS app's). A part
 // with no input is not measured and not checked, as when CI skipped its jobs.
 //
 // It counts lines in every part, and branches where the input has them

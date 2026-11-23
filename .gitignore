@@ -49,6 +49,7 @@ go.work.sum
 /apps/android/local.properties
 /site/out-lighthouse/
 /site/node_modules/
+/apps/harmony/nodetest/node_modules/
 
 # The Rust workspace and the ESP32 firmware
 /target/
