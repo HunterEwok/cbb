@@ -241,9 +241,11 @@ jobs:
           path: mutants.out/
           if-no-files-found: ignore
 
-  # The service's readers of the control socket and the pairing window, the
-  # server credentials and the seals of the copies: a mutant the tests let
-  # live that tools/mutants/missed.txt does not name fails the job.
+  # The service's reader of the control socket and the seals of the copies: a
+  # mutant the tests let live that tools/mutants/missed.txt does not name
+  # fails the job. The core's seals are caught by its library's tests, which
+  # each mutant runs alone (the whole core's tests take longer than a
+  # mutant's time).
   mutants-service:
     name: cargo mutants (${{ matrix.crate }}, shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
@@ -256,8 +258,10 @@ jobs:
         include:
           - crate: cbb-core
             files: -f core/src/seal.rs
+            args: --cargo-test-arg=--lib --minimum-test-timeout 300
           - crate: cbb-member
-            files: -f member/src/control.rs -f member/src/window.rs
+            files: -f member/src/control.rs
+            args: --timeout 300
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -270,13 +274,14 @@ jobs:
         env:
           CRATE: ${{ matrix.crate }}
           FILES: ${{ matrix.files }}
+          ARGS: ${{ matrix.args }}
           SHARD: ${{ matrix.shard }}
         run: |
           # 2 is missed mutants and 3 timeouts, which the next step judges;
           # anything else (4: the tests fail unmutated) is a failure here.
           status=0
-          # shellcheck disable=SC2086 # FILES is several arguments
-          cargo mutants --in-place --no-shuffle --shard "$SHARD/4" --timeout 300 -p "$CRATE" $FILES || status=$?
+          # shellcheck disable=SC2086 # FILES and ARGS are several arguments
+          cargo mutants --in-place --no-shuffle --shard "$SHARD/4" $ARGS -p "$CRATE" $FILES || status=$?
           {
             echo "### cargo mutants, $CRATE, shard $SHARD/4"
             echo '```'
@@ -449,5 +454,54 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unstable-${{ matrix.member }}
+          path: ${{ runner.temp }}/tests.json
+          if-no-files-found: ignore
+
+  # The tray app's tests ten times over, its window's in a browser among them
+  # (apps/desktop), with the same summary.
+  unstable-tray:
+    name: unstable tests (tray app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: GTK 4 and WebKitGTK, which Wails builds on, and the screenshots' fonts
+        timeout-minutes: 25
+        run: |
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-retries >/dev/null
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev \
+            fonts-noto-core fonts-noto-mono fonts-droid-fallback
+      - name: each test ten times
+        run: |
+          go test -json -count=10 -timeout 80m ./... >"$RUNNER_TEMP/tests.json" || true
+          jq -r 'select(.Action == "fail" and .Test != null) | "\(.Package) \(.Test)"' "$RUNNER_TEMP/tests.json" |
+            sort | uniq -c | sort -rn >"$RUNNER_TEMP/failed.txt"
+          jq -r 'select(.Action == "fail" and .Test == null) | .Package' "$RUNNER_TEMP/tests.json" |
+            sort -u >"$RUNNER_TEMP/packages.txt"
+          {
+            echo "### Unstable tests (tray app), failures in 10 runs"
+            echo '```'
+            if [ -s "$RUNNER_TEMP/failed.txt" ]; then cat "$RUNNER_TEMP/failed.txt"; else echo "(none)"; fi
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          if [ -s "$RUNNER_TEMP/failed.txt" ] || [ -s "$RUNNER_TEMP/packages.txt" ]; then
+            cat "$RUNNER_TEMP/failed.txt" "$RUNNER_TEMP/packages.txt"
+            exit 1
+          fi
+      - name: the tests' output
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unstable-tray
           path: ${{ runner.temp }}/tests.json
           if-no-files-found: ignore
