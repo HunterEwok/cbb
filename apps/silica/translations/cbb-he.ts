@@ -1732,10 +1732,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 לקח את הקבוצה מהמכשיר הזה.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>החלפה של המכשיר הראשי של הקבוצה בדרך.</translation>
     </message>
@@ -1760,10 +1756,6 @@
         <translation>בקשו מהבעלים של הקבוצה להחזיר לו את ההרשאות.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>חברו אותו בבית למכשיר מהימן של הקבוצה, והוא יחדש את התעודה.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 זמין.</translation>
     </message>
@@ -1778,10 +1770,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>בדקו את החיבור לאינטרנט; CBB ינסה שוב בעצמו.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>לפני כן, חברו אותו בבית למכשיר מהימן של הקבוצה.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1790,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>״בכל מקום״ מופעל, אבל לקבוצה אין בסיס.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>אם המכשיר לא אבד, הסירו את %1 מהקבוצה.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1950,14 +1934,6 @@
     <message>
         <source>This device was removed from the group.</source>
         <translation>המכשיר הזה הוסר מהקבוצה.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>התעודה של המכשיר הזה פגה ב־%1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>התעודה של המכשיר הזה תפוג ב־%1.</translation>
     </message>
     <message>
         <source>This device's rights as a trusted device are paused.</source>

@@ -157,7 +157,7 @@ struct RecoverySheet: View {
         VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
             Text("Recovery key").font(.title2.weight(.semibold))
             if model.inGroup {
-                Text("Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.")
+                Text("Type the key from the sheet, or paste its QR code's text. This Mac becomes the group's root at once.")
                     .foregroundStyle(palette.textDim)
                     .fixedSize(horizontal: false, vertical: true)
                 TextField(text: $key) { Text("Recovery key") }

@@ -1732,10 +1732,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 забрал группу у этого устройства.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>Смена главного устройства группы уже в пути.</translation>
     </message>
@@ -1760,10 +1756,6 @@
         <translation>Попросите владельца группы вернуть ему права.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>Подключите его дома к доверенному устройству группы: оно продлит сертификат.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>Доступна CBB %1.</translation>
     </message>
@@ -1778,10 +1770,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>Проверьте подключение к интернету; CBB попробует снова сам.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>До этого подключите его дома к доверенному устройству группы.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1790,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>«Везде» включено, но в группе нет базы.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>Если устройство не терялось, удалите %1 из группы.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1950,14 +1934,6 @@
     <message>
         <source>This device was removed from the group.</source>
         <translation>Это устройство удалено из группы.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>Сертификат этого устройства истёк %1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>Сертификат этого устройства истекает %1.</translation>
     </message>
     <message>
         <source>This device's rights as a trusted device are paused.</source>

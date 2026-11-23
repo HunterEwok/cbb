@@ -402,9 +402,6 @@ pub struct Status {
     /// The records freeze this admin computer's admin key, as Go's.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub frozen: bool,
-    /// The admin that took the group over from this root, as Go's.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub taken_over_by: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media: Option<Media>,
     /// The group's key level: which keys may be its root, an admin or a hub.
@@ -420,9 +417,6 @@ pub struct Status {
     /// How long a secret lives in the group.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub secret_ttl_ms: i64,
-    /// The claims to take the group over that wait or stop the group.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub claims: Vec<Claim>,
     /// The conflicts that stop the group until its root decides.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conflicts: Vec<Conflict>,
@@ -446,19 +440,8 @@ pub struct Status {
     pub why: Vec<cbb_core::why::Reason>,
 }
 
-/// A claim to take the group over, as Go's control.Claim: who claims it
-/// (a device's name, or the key hash), pending, competing or disputed, and
-/// how long a pending one still waits.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct Claim {
-    pub by: String,
-    pub state: String,
-    #[serde(default, skip_serializing_if = "is_zero_i")]
-    pub left_ms: i64,
-}
-
 /// A conflict of the group's records, as Go's control.Conflict: admins,
-/// claims or two_histories, and the signers' devices.
+/// fork, two_histories, admits or ids, and the signers' devices.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Conflict {
     pub kind: String,

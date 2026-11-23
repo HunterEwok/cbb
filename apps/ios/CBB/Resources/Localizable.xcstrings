@@ -47,144 +47,6 @@
         }
       }
     },
-    "%@ claims the group, and the group is stopped until its root decides.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يطالب %@ بالمجموعة، والمجموعة متوقفة حتى يقرر جذرها."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ reclama el grupo, y el grupo está detenido hasta que su raíz decida."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ תובע את הקבוצה, והקבוצה עצורה עד שהשורש שלה יחליט."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ समूह पर दावा करता है, और जब तक रूट निर्णय न ले, समूह रुका हुआ है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ хочет забрать группу, и группа остановлена, пока корень не решит."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ kinadai kikundi, na kikundi kimesimamishwa hadi mzizi wake uamue."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 声明接管群组，群组已停止，直到其根设备做出决定。"
-          }
-        }
-      }
-    },
-    "%@ claims the group, to take it over from its root.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يطالب %@ بالمجموعة، لتولّيها من جذرها."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ reclama el grupo para tomarlo de su raíz."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ समूह पर दावा करता है, ताकि उसे रूट से अपने हाथ में ले।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ хочет забрать группу у корня."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ kinadai kikundi, ili kukichukua kutoka kwa mzizi wake."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 声明接管群组，以从根设备手中接管。"
-          }
-        }
-      }
-    },
-    "%@ claims the group, to take it over from its root: it takes effect in %@.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يطالب %@ بالمجموعة، لتولّيها من جذرها: تسري خلال %@."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ reclama el grupo para tomarlo de su raíz: surte efecto en %@."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה: זה ייכנס לתוקף בעוד %@."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ समूह पर दावा करता है, ताकि उसे रूट से अपने हाथ में ले: यह %@ में लागू होगा।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ хочет забрать группу у корня: это произойдёт через %2$@."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ kinadai kikundi, ili kukichukua kutoka kwa mzizi wake: kitaanza kutumika baada ya %@."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 声明接管群组，以从根设备手中接管：将在 %@ 后生效。"
-          }
-        }
-      }
-    },
     "%@ could not be read.": {
       "localizations": {
         "ar": {
@@ -457,52 +319,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 用同一个密钥签署了两份历史，就像被盗密钥或从备份恢复时那样。"
-          }
-        }
-      }
-    },
-    "%@ took the group over from this device.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "استولى %@ على المجموعة من هذا الجهاز."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ tomó el grupo de este dispositivo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ לקח את הקבוצה מהמכשיר הזה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ ने इस डिवाइस से समूह ले लिया।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ забрал группу у этого устройства."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ kilichukua kikundi kutoka kifaa hiki."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 已从此设备接管群组。"
           }
         }
       }
@@ -3359,52 +3175,6 @@
         }
       }
     },
-    "Bring it home to a trusted device of the group, which renews the certificate.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "صِله في المنزل بجهاز موثوق في المجموعة، فيجدّد الشهادة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conéctalo en casa a un dispositivo de confianza del grupo, que renueva el certificado."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "חברו אותו בבית למכשיר מהימן של הקבוצה, והוא יחדש את התעודה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें, वह प्रमाणपत्र नवीनीकृत करेगा।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Подключите его дома к доверенному устройству группы: оно продлит сертификат."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kiunganishe nyumbani na kifaa kinachoaminika cha kikundi, nacho kitafanya upya cheti."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在家中将它连接到群组的受信任设备：该设备会续订证书。"
-          }
-        }
-      }
-    },
     "CBB": {
       "shouldTranslate": false
     },
@@ -3542,52 +3312,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消"
-          }
-        }
-      }
-    },
-    "Cancel the claim": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إلغاء المطالبة"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancelar la reclamación"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ביטול התביעה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "दावा रद्द करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Отменить заявку"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ghairi dai"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消申领"
           }
         }
       }
@@ -4370,52 +4094,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "连接新设备"
-          }
-        }
-      }
-    },
-    "Connect it at home to a trusted device of the group before then.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قبل ذلك، صِله في المنزل بجهاز موثوق في المجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Antes de esa fecha, conéctalo en casa a un dispositivo de confianza del grupo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "לפני כן, חברו אותו בבית למכשיר מהימן של הקבוצה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "उससे पहले इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "До этого подключите его дома к доверенному устройству группы."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kabla ya hapo, kiunganishe nyumbani na kifaa kinachoaminika cha kikundi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在此之前，请在家中将它连接到群组的受信任设备。"
           }
         }
       }
@@ -7498,52 +7176,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "我已保存"
-          }
-        }
-      }
-    },
-    "If this device was not lost, remove %@ from the group.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إن لم يكن هذا الجهاز مفقودًا، فأزل %@ من المجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Si este dispositivo no se perdió, quita %@ del grupo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אם המכשיר לא אבד, הסירו את %@ מהקבוצה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "अगर यह डिवाइस खोया नहीं था, तो %@ को समूह से हटाएँ।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Если устройство не терялось, удалите %@ из группы."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ikiwa kifaa hiki hakikupotea, ondoa %@ kwenye kikundi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "如果此设备并未丢失，请将 %@ 移出群组。"
           }
         }
       }
@@ -20152,52 +19784,6 @@
         }
       }
     },
-    "The claim is cancelled. The other devices hear of it as soon as they connect.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُلغيت المطالبة. تعلم بها الأجهزة الأخرى فور اتصالها."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La reclamación está cancelada. Los demás dispositivos se enteran en cuanto se conectan."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "התביעה בוטלה. המכשירים האחרים שומעים על כך ברגע שהם מתחברים."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "दावा रद्द हो गया। बाकी डिवाइसों को जुड़ते ही इसका पता चलता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Заявка отменена. Остальные устройства узнают об этом, как только подключатся."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dai limeghairiwa. Vifaa vingine hulisikia mara tu vinapounganishwa."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "声明已取消。其他设备连接后就会得知。"
-          }
-        }
-      }
-    },
     "The clipboard holds no text.": {
       "localizations": {
         "ar": {
@@ -24384,98 +23970,6 @@
         }
       }
     },
-    "This device's certificate ended on %@.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انتهت شهادة هذا الجهاز في %@."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El certificado de este dispositivo venció el %@."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "התעודה של המכשיר הזה פגה ב־%@."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इस डिवाइस का प्रमाणपत्र %@ को समाप्त हो गया।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сертификат этого устройства истёк %@."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cheti cha kifaa hiki kiliisha %@."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此设备的证书已于 %@ 到期。"
-          }
-        }
-      }
-    },
-    "This device's certificate ends on %@.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تنتهي شهادة هذا الجهاز في %@."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El certificado de este dispositivo vence el %@."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "התעודה של המכשיר הזה תפוג ב־%@."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इस डिवाइस का प्रमाणपत्र %@ को समाप्त होगा।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сертификат этого устройства истекает %@."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cheti cha kifaa hiki kinaisha %@."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此设备的证书将于 %@ 到期。"
-          }
-        }
-      }
-    },
     "This device's rights as a trusted device are paused.": {
       "localizations": {
         "ar": {
@@ -26680,52 +26174,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "两位管理员对一台设备意见不一：群组在等待其主设备决定。"
-          }
-        }
-      }
-    },
-    "Two claims to take the group over: %@.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مطالبتان بتولّي المجموعة: %@."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dos reclamaciones para tomar el grupo: %@."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שתי תביעות להשתלט על הקבוצה: %@."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह अपने हाथ में लेने के दो दावे: %@।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Две заявки на передачу группы: %@."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Madai mawili ya kuchukua kikundi: %@."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有两个接管群组的声明：%@。"
           }
         }
       }

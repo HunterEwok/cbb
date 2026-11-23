@@ -1732,10 +1732,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>استولى %1 على المجموعة من هذا الجهاز.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>تغيير الجهاز الرئيسي للمجموعة في الطريق.</translation>
     </message>
@@ -1760,10 +1756,6 @@
         <translation>اطلب من مالك المجموعة إعادة صلاحياته.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>صِله في المنزل بجهاز موثوق في المجموعة، فيجدّد الشهادة.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>يتوفر CBB %1.</translation>
     </message>
@@ -1778,10 +1770,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>تحقق من الاتصال بالإنترنت؛ يعيد CBB المحاولة تلقائيًا.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>قبل ذلك، صِله في المنزل بجهاز موثوق في المجموعة.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1790,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>«في كل مكان» مفعّل، لكن ليس للمجموعة قاعدة.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>إن لم يكن هذا الجهاز مفقودًا، فأزل %1 من المجموعة.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1950,14 +1934,6 @@
     <message>
         <source>This device was removed from the group.</source>
         <translation>أُزيل هذا الجهاز من المجموعة.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>انتهت شهادة هذا الجهاز في %1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>تنتهي شهادة هذا الجهاز في %1.</translation>
     </message>
     <message>
         <source>This device's rights as a trusted device are paused.</source>

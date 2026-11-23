@@ -1732,10 +1732,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 已从此设备接管群组。</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>群组主设备的更换正在传来。</translation>
     </message>
@@ -1760,10 +1756,6 @@
         <translation>请群组的所有者恢复它的权限。</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>在家中将它连接到群组的受信任设备：该设备会续订证书。</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 已可用。</translation>
     </message>
@@ -1778,10 +1770,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>请检查网络连接；CBB 会自动重试。</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>在此之前，请在家中将它连接到群组的受信任设备。</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1790,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>“随处”已打开，但群组没有主站。</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>如果此设备并未丢失，请将 %1 移出群组。</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1950,14 +1934,6 @@
     <message>
         <source>This device was removed from the group.</source>
         <translation>此设备已被移出群组。</translation>
-    </message>
-    <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>此设备的证书已于 %1 到期。</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>此设备的证书将于 %1 到期。</translation>
     </message>
     <message>
         <source>This device's rights as a trusted device are paused.</source>

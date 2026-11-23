@@ -24,10 +24,6 @@
     <string name="admin">msimamizi</string>
     <string name="advanced_settings">Mipangilio ya kina</string>
     <string name="alert_admins">Wasimamizi waliondoana au kugandishana bila kuona: %1$s. Mzizi humwondoa mmoja wao.</string>
-    <string name="alert_claim_pending">%1$s kinadai kikundi, ili kukichukua kutoka kwa mzizi wake.</string>
-    <string name="alert_claim_pending_left">%1$s kinadai kikundi, ili kukichukua kutoka kwa mzizi wake: kitaanza kutumika baada ya %2$s.</string>
-    <string name="alert_claim_stopped">%1$s kinadai kikundi, na kikundi kimesimamishwa hadi mzizi wake uamue.</string>
-    <string name="alert_claims">Madai mawili ya kuchukua kikundi: %1$s.</string>
     <string name="alert_newer">Kikundi kina rekodi %1$d za toleo la baadaye: sasisha programu ili kuzisoma.</string>
     <string name="alert_root_decides">Mzizi wa kikundi huamua.</string>
     <string name="alert_secrets_stopped">Kikundi hakitumi siri zozote hadi mmiliki wake aamue.</string>
@@ -75,7 +71,6 @@
     <string name="camera_denied">Kamera hairuhusiwi. Iruhusu katika mipangilio ya programu ili kuchanganua, au bandika maandishi ya msimbo wa QR wa cbb pair.</string>
     <string name="camera_failed">Kamera haikuanza. Bandika maandishi ya msimbo wa QR wa cbb pair badala yake.</string>
     <string name="cancel">Ghairi</string>
-    <string name="cancel_claim">Ghairi dai</string>
     <string name="change_root">Hamishia kikundi kwenye simu hii</string>
     <string name="change_root_admin_kept">Kinabaki, na kinabaki msimamizi</string>
     <string name="change_root_admin_lost">Kinabaki, si msimamizi tena: kifanye msimamizi tena baadaye</string>
@@ -97,7 +92,6 @@
     <string name="channel_pastes">Mabandiko ya mbali</string>
     <string name="channel_push">Programu ikiwa imefungwa</string>
     <string name="channel_sync">Inasawazisha na kompyuta zako</string>
-    <string name="claim_cancelled">Dai limeghairiwa. Vifaa vingine hulisikia mara tu vinapounganishwa.</string>
     <string name="close">Funga</string>
     <string name="close_tip">Funga kidokezo</string>
     <string name="collection_drag_here">Buruta vifaa hapa</string>
@@ -183,10 +177,6 @@
     <string name="group">Kikundi</string>
     <string name="group_hub">Kitovu cha kikundi</string>
     <string name="group_hub_in_use">Kitovu cha kikundi, kinatumika sasa</string>
-    <string name="handed_body">Kompyuta iliyoshikilia kikundi imeikabidhi simu hii. Kichukue ili simu hii iwe mzizi wa kikundi; kompyuta inabaki kwenye kikundi.</string>
-    <string name="handed_take">Chukua kikundi</string>
-    <string name="handed_taken">Simu hii sasa ndiyo mzizi wa kikundi. Vifaa vingine vinalisikia mara tu vinapounganishwa.</string>
-    <string name="handed_title">Kikundi ni chako kukichukua</string>
     <string name="hidden_by_system">imefichwa na mfumo</string>
     <string name="histories_voided">Historia zote mbili ni batili. Kifaa hutia sahihi rekodi zake upya chenyewe.</string>
     <string name="hub_add_home">Huu ni mtandao wangu wa nyumbani</string>
@@ -440,8 +430,6 @@
     <string name="reason_renew_peer">Fanya upya cheti cha kifaa</string>
     <string name="reason_resolve">Tatua mgongano katika kikundi chako</string>
     <string name="reason_set_mode">Badilisha hali ya usawazishaji ya kompyuta</string>
-    <string name="reason_take_handed">Chukua kikundi ambacho kompyuta iliikabidhi simu hii</string>
-    <string name="reason_take_over">Chukua kikundi kutoka kwa simu iliyopotea</string>
     <string name="reason_ttl">Badilisha muda wa nakala na siri</string>
     <string name="reason_unfreeze">Fungua ugandishaji wa kompyuta ya msimamizi</string>
     <string name="reason_unmute">Ondoa unyamazishaji wa kifaa</string>
@@ -627,10 +615,6 @@
     <string name="why_also">Pia</string>
     <string name="why_away_off_d">Washa Kila mahali ili kusawazisha ukiwa mbali na nyumbani.</string>
     <string name="why_away_off_t">Hakuna kifaa cha kikundi kwenye mtandao huu.</string>
-    <string name="why_cert_ending_d">Kabla ya hapo, kiunganishe nyumbani na kifaa kinachoaminika cha kikundi.</string>
-    <string name="why_cert_ending_t">Cheti cha kifaa hiki kinaisha %1$s.</string>
-    <string name="why_cert_expired_d">Kiunganishe nyumbani na kifaa kinachoaminika cha kikundi, nacho kitafanya upya cheti.</string>
-    <string name="why_cert_expired_t">Cheti cha kifaa hiki kiliisha %1$s.</string>
     <string name="why_change_arriving_d">Weka kifaa hiki kikiwa kimewashwa karibu na vifaa vingine vya kikundi hadi mabadiliko yafike.</string>
     <string name="why_change_arriving_t">Mabadiliko ya kifaa kikuu cha kikundi yako njiani.</string>
     <string name="why_checkpoint_stuck_d">Washa vifaa vingine vya kikundi.</string>
@@ -684,8 +668,6 @@
     <string name="why_sync_off_d">Washa usawazishaji.</string>
     <string name="why_sync_off_t">Usawazishaji umezimwa kwenye kifaa hiki.</string>
     <string name="why_sync_off_until_t">Usawazishaji umezimwa kwenye kifaa hiki hadi %1$s.</string>
-    <string name="why_taken_over_d">Ikiwa kifaa hiki hakikupotea, ondoa %1$s kwenye kikundi.</string>
-    <string name="why_taken_over_t">%1$s kilichukua kikundi kutoka kifaa hiki.</string>
     <string name="why_tunnel_blocked_d">Mtandao huu unaweza kuzuia mahandaki: washa Mitandao mikali kwenye kituo.</string>
     <string name="why_tunnel_blocked_t">Handaki kwenda kituo %1$s halipiti.</string>
     <string name="why_unreached_d">Ruhusu CBB kupitia ngome ya kompyuta hii.</string>

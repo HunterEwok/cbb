@@ -1732,10 +1732,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 ने इस डिवाइस से समूह ले लिया।</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>समूह के मुख्य डिवाइस का बदलाव आ रहा है।</translation>
     </message>
@@ -1760,10 +1756,6 @@
         <translation>समूह के स्वामी से इसके अधिकार लौटाने को कहें।</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें, वह प्रमाणपत्र नवीनीकृत करेगा।</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 उपलब्ध है।</translation>
     </message>
@@ -1778,10 +1770,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>इंटरनेट कनेक्शन जाँचें; CBB खुद फिर कोशिश करता है।</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>उससे पहले इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें।</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1790,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>हर जगह चालू है, पर समूह में कोई बेस नहीं है।</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>अगर यह डिवाइस खोया नहीं था, तो %1 को समूह से हटाएँ।</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1950,14 +1934,6 @@
     <message>
         <source>This device was removed from the group.</source>
         <translation>यह डिवाइस समूह से हटा दिया गया।</translation>
-    </message>
-    <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>इस डिवाइस का प्रमाणपत्र %1 को समाप्त हो गया।</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>इस डिवाइस का प्रमाणपत्र %1 को समाप्त होगा।</translation>
     </message>
     <message>
         <source>This device's rights as a trusted device are paused.</source>

@@ -2355,17 +2355,12 @@ fn update_usage() {
 }
 
 /// What cbb status says when the records stop the exchange: the stop, each
-/// conflict and claim with what ends it, and the records of a later version.
+/// conflict with what ends it, and the records of a later version.
 #[test]
 fn stop_lines() {
     let dir = tempdir("stop");
     let st = json!({"os": "linux", "device": "d1", "group": "g1", "stop": "full", "newer": 2,
-    "conflicts": [{"kind": "admins", "devices": ["Laptop", "Desk"]}, {"kind": "two_histories", "devices": ["Pi"]}],
-    "claims": [
-        {"by": "Laptop", "state": "pending", "left_ms": 50 * 3_600_000},
-        {"by": "Desk", "state": "pending"},
-        {"by": "Old", "state": "disputed"},
-    ]});
+    "conflicts": [{"kind": "admins", "devices": ["Laptop", "Desk"]}, {"kind": "two_histories", "devices": ["Pi"]}]});
     let r = run_in(&dir, &["status"], "", status(st), b"");
     for w in [
         "exchange records only",
@@ -2373,9 +2368,6 @@ fn stop_lines() {
         "cbb remove NAME",
         "Pi signed two histories",
         "cbb resolve",
-        "takes effect in 2 days",
-        "once this device knows how long",
-        "Old claims the group, and another admin removed it",
         "2 records of a later version",
     ] {
         assert!(r.stdout.contains(w), "no {w:?} in {:?}", r.stdout);
@@ -2389,7 +2381,7 @@ fn stop_lines() {
     );
     assert!(r.stdout.contains("no secrets"), "{:?}", r.stdout);
     let r = run_in(&dir, &["status"], "", status(json!({"os": "linux", "device": "d1", "group": "g1"})), b"");
-    assert!(!r.stdout.contains("stopped") && !r.stdout.contains("claims"), "{:?}", r.stdout);
+    assert!(!r.stdout.contains("stopped") && !r.stdout.contains("conflict"), "{:?}", r.stdout);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

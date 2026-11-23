@@ -24,10 +24,6 @@
     <string name="admin">एडमिन</string>
     <string name="advanced_settings">उन्नत सेटिंग्स</string>
     <string name="alert_admins">एडमिन ने बिना देखे एक-दूसरे को हटाया या फ़्रीज़ किया: %1$s। रूट उनमें से एक को हटाता है।</string>
-    <string name="alert_claim_pending">%1$s समूह पर दावा करता है, ताकि उसे रूट से अपने हाथ में ले।</string>
-    <string name="alert_claim_pending_left">%1$s समूह पर दावा करता है, ताकि उसे रूट से अपने हाथ में ले: यह %2$s में लागू होगा।</string>
-    <string name="alert_claim_stopped">%1$s समूह पर दावा करता है, और जब तक रूट निर्णय न ले, समूह रुका हुआ है।</string>
-    <string name="alert_claims">समूह अपने हाथ में लेने के दो दावे: %1$s।</string>
     <string name="alert_newer">समूह में बाद के संस्करण के %1$d रिकॉर्ड हैं: उन्हें पढ़ने के लिए ऐप अपडेट करें।</string>
     <string name="alert_root_decides">समूह का रूट निर्णय लेता है।</string>
     <string name="alert_secrets_stopped">जब तक स्वामी निर्णय न ले, समूह कोई रहस्य नहीं भेजता।</string>
@@ -75,7 +71,6 @@
     <string name="camera_denied">कैमरे की अनुमति नहीं है। स्कैन करने के लिए ऐप की सेटिंग्स में अनुमति दें, या cbb pair के QR कोड का टेक्स्ट पेस्ट करें।</string>
     <string name="camera_failed">कैमरा शुरू नहीं हुआ। इसकी जगह cbb pair के QR कोड का टेक्स्ट पेस्ट करें।</string>
     <string name="cancel">रद्द करें</string>
-    <string name="cancel_claim">दावा रद्द करें</string>
     <string name="change_root">समूह को इस फ़ोन पर ले आएँ</string>
     <string name="change_root_admin_kept">रहेगा, और एडमिन बना रहेगा</string>
     <string name="change_root_admin_lost">रहेगा, पर एडमिन नहीं रहेगा: बाद में फिर से एडमिन बनाएँ</string>
@@ -97,7 +92,6 @@
     <string name="channel_pastes">रिमोट पेस्ट</string>
     <string name="channel_push">ऐप बंद होने पर</string>
     <string name="channel_sync">आपके कंप्यूटरों के साथ सिंक हो रहा है</string>
-    <string name="claim_cancelled">दावा रद्द हो गया। बाकी डिवाइसों को जुड़ते ही इसका पता चलता है।</string>
     <string name="close">बंद करें</string>
     <string name="close_tip">सुझाव बंद करें</string>
     <string name="collection_drag_here">डिवाइस यहाँ खींचें</string>
@@ -183,10 +177,6 @@
     <string name="group">समूह</string>
     <string name="group_hub">समूह का हब</string>
     <string name="group_hub_in_use">समूह का हब, अभी उपयोग में</string>
-    <string name="handed_body">जिस कंप्यूटर के पास समूह था उसने उसे इस फ़ोन को सौंप दिया। इस फ़ोन को समूह का रूट बनाने के लिए इसे लें; कंप्यूटर समूह में बना रहता है।</string>
-    <string name="handed_take">समूह अपने हाथ में लें</string>
-    <string name="handed_taken">अब यह फ़ोन समूह का रूट है। बाकी डिवाइसों को जुड़ते ही इसका पता चलता है।</string>
-    <string name="handed_title">समूह आपके लेने के लिए तैयार है</string>
     <string name="hidden_by_system">सिस्टम द्वारा छिपाया गया</string>
     <string name="histories_voided">दोनों इतिहास रद्द हैं। डिवाइस अपने रिकॉर्ड खुद फिर से हस्ताक्षरित करता है।</string>
     <string name="hub_add_home">यह मेरा घर का नेटवर्क है</string>
@@ -440,8 +430,6 @@
     <string name="reason_renew_peer">किसी डिवाइस का प्रमाणपत्र नवीनीकृत करें</string>
     <string name="reason_resolve">अपने समूह में किसी टकराव को सुलझाएँ</string>
     <string name="reason_set_mode">किसी कंप्यूटर का सिंक मोड बदलें</string>
-    <string name="reason_take_handed">वह समूह लें जो कंप्यूटर ने इस फ़ोन को सौंपा</string>
-    <string name="reason_take_over">खोए फ़ोन से समूह अपने हाथ में लें</string>
     <string name="reason_ttl">बदलें कि कॉपी और सीक्रेट कितनी देर रहते हैं</string>
     <string name="reason_unfreeze">किसी एडमिन कंप्यूटर को अनफ़्रीज़ करें</string>
     <string name="reason_unmute">किसी डिवाइस को अनम्यूट करें</string>
@@ -627,10 +615,6 @@
     <string name="why_also">और</string>
     <string name="why_away_off_d">घर से बाहर सिंक करने के लिए हर जगह चालू करें।</string>
     <string name="why_away_off_t">इस नेटवर्क पर समूह का कोई डिवाइस नहीं है।</string>
-    <string name="why_cert_ending_d">उससे पहले इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें।</string>
-    <string name="why_cert_ending_t">इस डिवाइस का प्रमाणपत्र %1$s को समाप्त होगा।</string>
-    <string name="why_cert_expired_d">इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें, वह प्रमाणपत्र नवीनीकृत करेगा।</string>
-    <string name="why_cert_expired_t">इस डिवाइस का प्रमाणपत्र %1$s को समाप्त हो गया।</string>
     <string name="why_change_arriving_d">बदलाव आने तक इस डिवाइस को समूह के दूसरे डिवाइसों के पास चालू रखें।</string>
     <string name="why_change_arriving_t">समूह के मुख्य डिवाइस का बदलाव आ रहा है।</string>
     <string name="why_checkpoint_stuck_d">समूह के दूसरे डिवाइस चालू करें।</string>
@@ -684,8 +668,6 @@
     <string name="why_sync_off_d">सिंक चालू करें।</string>
     <string name="why_sync_off_t">इस डिवाइस पर सिंक बंद है।</string>
     <string name="why_sync_off_until_t">इस डिवाइस पर सिंक %1$s तक बंद है।</string>
-    <string name="why_taken_over_d">अगर यह डिवाइस खोया नहीं था, तो %1$s को समूह से हटाएँ।</string>
-    <string name="why_taken_over_t">%1$s ने इस डिवाइस से समूह ले लिया।</string>
     <string name="why_tunnel_blocked_d">यह नेटवर्क सुरंगें रोक सकता है: बेस पर सख़्त नेटवर्क चालू करें।</string>
     <string name="why_tunnel_blocked_t">बेस %1$s तक सुरंग नहीं पहुँच रही।</string>
     <string name="why_unreached_d">इस कंप्यूटर के फ़ायरवॉल में CBB को अनुमति दें।</string>

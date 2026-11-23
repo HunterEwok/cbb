@@ -3,7 +3,7 @@
 import SwiftUI
 
 /// What the group's records stop and what ends it, from cbb status: the
-/// stop, each conflict and each claim (docs/protocol.md, section 10,
+/// stop and each conflict (docs/protocol.md, section 10,
 /// "Stopping the exchange"). On the group's root it offers what ends each:
 /// cbb resolve for two histories, removing an admin for the others.
 struct GroupAlerts: View {
@@ -75,27 +75,6 @@ struct GroupAlerts: View {
                 out.append(Line(text: String(localized: "\(who) signed two histories with one key, as a stolen key or a restore from a backup would."), resolve: true))
             case "admins":
                 out.append(Line(text: String(localized: "Admins removed or froze each other without seeing it: \(who). The root removes one of them."), remove: c.devices))
-            case "claims":
-                out.append(Line(text: String(localized: "Two claims to take the group over: \(who). The root cancels one or both by removing its admin."), remove: c.devices))
-            default:
-                break
-            }
-        }
-        for c in st.claims ?? [] {
-            switch c.state {
-            case "pending":
-                if let ms = c.leftMS, ms > 0 {
-                    let f = DateComponentsFormatter()
-                    f.unitsStyle = .full
-                    f.maximumUnitCount = 1
-                    f.allowedUnits = [.day, .hour, .minute]
-                    let left = f.string(from: Double(ms) / 1000) ?? ""
-                    out.append(Line(text: String(localized: "\(c.by) claims the group, to take it over from its root: it takes effect in \(left), unless the root removes \(c.by)."), remove: [c.by]))
-                } else {
-                    out.append(Line(text: String(localized: "\(c.by) claims the group, to take it over from its root, unless the root removes \(c.by)."), remove: [c.by]))
-                }
-            case "competing", "disputed":
-                out.append(Line(text: String(localized: "\(c.by) claims the group, and the group is stopped until its root decides."), remove: [c.by]))
             default:
                 break
             }

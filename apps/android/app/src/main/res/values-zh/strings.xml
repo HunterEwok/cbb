@@ -24,10 +24,6 @@
     <string name="admin">管理员</string>
     <string name="advanced_settings">高级设置</string>
     <string name="alert_admins">有管理员在互不知情的情况下互相移除或冻结：%1$s。由根设备移除其中一个。</string>
-    <string name="alert_claim_pending">%1$s 声明接管群组，以从根设备手中接管。</string>
-    <string name="alert_claim_pending_left">%1$s 声明接管群组，以从根设备手中接管：将在 %2$s 后生效。</string>
-    <string name="alert_claim_stopped">%1$s 声明接管群组，群组已停止，直到其根设备做出决定。</string>
-    <string name="alert_claims">有两个接管群组的声明：%1$s。</string>
     <string name="alert_newer">群组包含 %1$d 条更高版本的记录：请更新应用以读取它们。</string>
     <string name="alert_root_decides">由群组的根设备决定。</string>
     <string name="alert_secrets_stopped">在所有者做出决定之前，群组不会发送任何秘密。</string>
@@ -75,7 +71,6 @@
     <string name="camera_denied">未允许使用相机。请在应用设置中允许相机以进行扫描，或粘贴 cbb pair 二维码的文本。</string>
     <string name="camera_failed">相机未启动。请改为粘贴 cbb pair 二维码的文本。</string>
     <string name="cancel">取消</string>
-    <string name="cancel_claim">取消申领</string>
     <string name="change_root">把群组移到这部手机</string>
     <string name="change_root_admin_kept">留下，仍是管理员</string>
     <string name="change_root_admin_lost">留下，但不再是管理员：之后可再设为管理员</string>
@@ -97,7 +92,6 @@
     <string name="channel_pastes">远程粘贴记录</string>
     <string name="channel_push">应用关闭时</string>
     <string name="channel_sync">正在与你的电脑同步</string>
-    <string name="claim_cancelled">声明已取消。其他设备连接后就会得知。</string>
     <string name="close">关闭</string>
     <string name="close_tip">关闭提示</string>
     <string name="collection_drag_here">把设备拖到这里</string>
@@ -183,10 +177,6 @@
     <string name="group">群组</string>
     <string name="group_hub">群组的中心节点</string>
     <string name="group_hub_in_use">群组的中心节点，正在使用</string>
-    <string name="handed_body">持有群组的电脑已将它交给这部手机。接管后这部手机将成为群组的根设备；电脑仍留在群组中。</string>
-    <string name="handed_take">接管群组</string>
-    <string name="handed_taken">这部手机现在是群组的根设备。其他设备连接后就会得知。</string>
-    <string name="handed_title">群组等你接管</string>
     <string name="hidden_by_system">被系统隐藏</string>
     <string name="histories_voided">两段历史都作废。设备会自行重新签署它的记录。</string>
     <string name="hub_add_home">这是我的家庭网络</string>
@@ -440,8 +430,6 @@
     <string name="reason_renew_peer">续订设备的证书</string>
     <string name="reason_resolve">解决群组中的冲突</string>
     <string name="reason_set_mode">更改电脑的同步模式</string>
-    <string name="reason_take_handed">接管电脑交给这部手机的群组</string>
-    <string name="reason_take_over">从丢失的手机接管群组</string>
     <string name="reason_ttl">更改副本和秘密的有效期</string>
     <string name="reason_unfreeze">解冻管理员电脑</string>
     <string name="reason_unmute">取消设备静音</string>
@@ -627,10 +615,6 @@
     <string name="why_also">另外</string>
     <string name="why_away_off_d">打开“随处”，以便在家以外同步。</string>
     <string name="why_away_off_t">此网络中没有群组的设备。</string>
-    <string name="why_cert_ending_d">在此之前，请在家中将它连接到群组的受信任设备。</string>
-    <string name="why_cert_ending_t">此设备的证书将于 %1$s 到期。</string>
-    <string name="why_cert_expired_d">在家中将它连接到群组的受信任设备：该设备会续订证书。</string>
-    <string name="why_cert_expired_t">此设备的证书已于 %1$s 到期。</string>
     <string name="why_change_arriving_d">在更换到达前，让此设备保持开启并靠近群组的其他设备。</string>
     <string name="why_change_arriving_t">群组主设备的更换正在传来。</string>
     <string name="why_checkpoint_stuck_d">打开群组的其他设备。</string>
@@ -684,8 +668,6 @@
     <string name="why_sync_off_d">打开同步。</string>
     <string name="why_sync_off_t">此设备上的同步已关闭。</string>
     <string name="why_sync_off_until_t">此设备上的同步已关闭，直到 %1$s。</string>
-    <string name="why_taken_over_d">如果此设备并未丢失，请将 %1$s 移出群组。</string>
-    <string name="why_taken_over_t">%1$s 已从此设备接管群组。</string>
     <string name="why_tunnel_blocked_d">此网络可能会阻止隧道：请在主站上打开“严格网络”。</string>
     <string name="why_tunnel_blocked_t">通往主站 %1$s 的隧道无法连通。</string>
     <string name="why_unreached_d">在这台电脑的防火墙中允许 CBB。</string>

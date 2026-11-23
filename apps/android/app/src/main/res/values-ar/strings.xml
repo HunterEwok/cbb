@@ -24,10 +24,6 @@
     <string name="admin">مشرف</string>
     <string name="advanced_settings">إعدادات متقدمة</string>
     <string name="alert_admins">أزال مشرفون بعضهم بعضًا أو جمّدوا بعضهم دون أن يروا ذلك: %1$s. يزيل الجذر أحدهم.</string>
-    <string name="alert_claim_pending">يطالب %1$s بالمجموعة، لتولّيها من جذرها.</string>
-    <string name="alert_claim_pending_left">يطالب %1$s بالمجموعة، لتولّيها من جذرها: تسري خلال %2$s.</string>
-    <string name="alert_claim_stopped">يطالب %1$s بالمجموعة، والمجموعة متوقفة حتى يقرر جذرها.</string>
-    <string name="alert_claims">مطالبتان بتولّي المجموعة: %1$s.</string>
     <string name="alert_newer">تحتوي المجموعة على %1$d من السجلات من إصدار أحدث: حدّث التطبيق لقراءتها.</string>
     <string name="alert_root_decides">يقرر جذر المجموعة.</string>
     <string name="alert_secrets_stopped">لا ترسل المجموعة أي أسرار حتى يقرر مالكها.</string>
@@ -75,7 +71,6 @@
     <string name="camera_denied">الكاميرا غير مسموح بها. اسمح بها في إعدادات التطبيق للمسح، أو الصق نص رمز QR الخاص بـ cbb pair.</string>
     <string name="camera_failed">لم تبدأ الكاميرا. الصق نص رمز QR الخاص بـ cbb pair بدلًا من ذلك.</string>
     <string name="cancel">إلغاء</string>
-    <string name="cancel_claim">إلغاء المطالبة</string>
     <string name="change_root">نقل المجموعة إلى هذا الهاتف</string>
     <string name="change_root_admin_kept">يبقى، ويبقى مشرفًا</string>
     <string name="change_root_admin_lost">يبقى، لكنه لم يعد مشرفًا: اجعله مشرفًا مرة أخرى لاحقًا</string>
@@ -97,7 +92,6 @@
     <string name="channel_pastes">عمليات اللصق عن بُعد</string>
     <string name="channel_push">عندما يكون التطبيق مغلقًا</string>
     <string name="channel_sync">جارٍ المزامنة مع حواسيبك</string>
-    <string name="claim_cancelled">أُلغيت المطالبة. تعلم بها الأجهزة الأخرى فور اتصالها.</string>
     <string name="close">إغلاق</string>
     <string name="close_tip">إغلاق التلميح</string>
     <string name="collection_drag_here">اسحب الأجهزة إلى هنا</string>
@@ -183,10 +177,6 @@
     <string name="group">المجموعة</string>
     <string name="group_hub">محور المجموعة</string>
     <string name="group_hub_in_use">محور المجموعة، قيد الاستخدام الآن</string>
-    <string name="handed_body">سلّم الحاسوب الذي كان يحمل المجموعة إياها إلى هذا الهاتف. تولّها ليصبح هذا الهاتف جذر المجموعة؛ ويبقى الحاسوب في المجموعة.</string>
-    <string name="handed_take">تولّي المجموعة</string>
-    <string name="handed_taken">أصبح هذا الهاتف الآن جذر المجموعة. تعلم الأجهزة الأخرى بذلك فور اتصالها.</string>
-    <string name="handed_title">المجموعة لك لتتولاها</string>
     <string name="hidden_by_system">مخفي بواسطة النظام</string>
     <string name="histories_voided">كلا السجلّين باطل. يوقّع الجهاز سجلاته من جديد بنفسه.</string>
     <string name="hub_add_home">هذه شبكتي المنزلية</string>
@@ -440,8 +430,6 @@
     <string name="reason_renew_peer">تجديد شهادة جهاز</string>
     <string name="reason_resolve">حل تعارض في مجموعتك</string>
     <string name="reason_set_mode">تغيير وضع مزامنة حاسوب</string>
-    <string name="reason_take_handed">تولّي المجموعة التي سلّمها الحاسوب إلى هذا الهاتف</string>
-    <string name="reason_take_over">تولّي المجموعة من الهاتف المفقود</string>
     <string name="reason_ttl">تغيير مدة بقاء النسخ والأسرار</string>
     <string name="reason_unfreeze">إلغاء تجميد حاسوب مشرف</string>
     <string name="reason_unmute">إلغاء كتم جهاز</string>
@@ -627,10 +615,6 @@
     <string name="why_also">أيضًا</string>
     <string name="why_away_off_d">شغّل «في كل مكان» للمزامنة خارج المنزل.</string>
     <string name="why_away_off_t">لا يوجد أي جهاز من المجموعة على هذه الشبكة.</string>
-    <string name="why_cert_ending_d">قبل ذلك، صِله في المنزل بجهاز موثوق في المجموعة.</string>
-    <string name="why_cert_ending_t">تنتهي شهادة هذا الجهاز في %1$s.</string>
-    <string name="why_cert_expired_d">صِله في المنزل بجهاز موثوق في المجموعة، فيجدّد الشهادة.</string>
-    <string name="why_cert_expired_t">انتهت شهادة هذا الجهاز في %1$s.</string>
     <string name="why_change_arriving_d">أبقِ هذا الجهاز قيد التشغيل قرب أجهزة المجموعة الأخرى حتى يصل التغيير.</string>
     <string name="why_change_arriving_t">تغيير الجهاز الرئيسي للمجموعة في الطريق.</string>
     <string name="why_checkpoint_stuck_d">شغّل أجهزة المجموعة الأخرى.</string>
@@ -684,8 +668,6 @@
     <string name="why_sync_off_d">شغّل المزامنة.</string>
     <string name="why_sync_off_t">المزامنة متوقفة على هذا الجهاز.</string>
     <string name="why_sync_off_until_t">المزامنة متوقفة على هذا الجهاز حتى %1$s.</string>
-    <string name="why_taken_over_d">إن لم يكن هذا الجهاز مفقودًا، فأزل %1$s من المجموعة.</string>
-    <string name="why_taken_over_t">استولى %1$s على المجموعة من هذا الجهاز.</string>
     <string name="why_tunnel_blocked_d">قد تحجب هذه الشبكة الأنفاق: فعّل «الشبكات الصارمة» على القاعدة.</string>
     <string name="why_tunnel_blocked_t">النفق إلى القاعدة %1$s لا يمر.</string>
     <string name="why_unreached_d">اسمح لـ CBB في جدار حماية هذا الحاسوب.</string>

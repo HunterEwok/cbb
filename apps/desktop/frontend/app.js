@@ -427,14 +427,6 @@ function pickTime(title, text, forever) {
   });
 }
 
-// A wait in days, hours or minutes.
-function roughly(ms) {
-  const h = Math.floor(ms / 3600000);
-  if (h >= 48) return t("%d d", Math.floor(h / 24));
-  if (h >= 2) return t("%d h", h);
-  return t("%d min", Math.max(1, Math.floor(ms / 60000)));
-}
-
 // The alerts of a status: a sentence each, whether cbb resolve ends it, and
 // the devices whose removal does.
 function alertLines(st) {
@@ -448,16 +440,6 @@ function alertLines(st) {
     const who = c.devices?.length ? c.devices.join(", ") : t("devices unknown here");
     if (c.kind === "two_histories") out.push({ text: t("%s signed two histories with one key, as a stolen key or a restore from a backup would.", who), resolve: true, remove: [] });
     if (c.kind === "admins") out.push({ text: t("Admins removed or froze each other without seeing it: %s. The root removes one of them.", who), remove: c.devices ?? [] });
-    if (c.kind === "claims") out.push({ text: t("Two claims to take the group over: %s. The root cancels one or both by removing its admin.", who), remove: c.devices ?? [] });
-  }
-  for (const c of st.claims ?? []) {
-    if (c.state === "pending") {
-      out.push({ text: c.left_ms > 0
-        ? t("%s claims the group, to take it over from its root: it takes effect in %s, unless the root removes it.", c.by, roughly(c.left_ms))
-        : t("%s claims the group, to take it over from its root, unless the root removes it.", c.by), remove: [c.by] });
-    } else if (c.state === "competing" || c.state === "disputed") {
-      out.push({ text: t("%s claims the group, and the group is stopped until its root decides.", c.by), remove: [c.by] });
-    }
   }
   if (st.newer > 0) out.push({ text: t("The group holds %d records of a later version: update CBB to read them.", st.newer), newer: true, remove: [] });
   return out;
@@ -1061,10 +1043,7 @@ function whyTitle(r) {
   switch (r.code) {
     case "not_in_group": return t("This device is in no group.");
     case "removed": return t("This device was removed from the group.");
-    case "taken_over": return t("%s took the group over from this device.", r.device);
     case "frozen": return t("This device's rights as a trusted device are paused.");
-    case "cert_expired": return t("This device's certificate ended on %s.", date);
-    case "cert_ending": return t("This device's certificate ends on %s.", date);
     case "stopped": return t("The group's records stop the exchange.");
     case "secrets_stopped": return t("The group sends no secrets until its owner decides.");
     case "sync_off": return r.until_ms ? t("Sync is off on this device until %s.", date) : t("Sync is off on this device.");
@@ -1103,10 +1082,7 @@ function whyAction(r) {
   switch (r.code) {
     case "not_in_group": return t("Start a group or join one.");
     case "removed": return t("Leave the group on this device, then join again.");
-    case "taken_over": return t("If this device was not lost, remove %s from the group.", r.device);
     case "frozen": return t("Ask the group's owner to restore its rights.");
-    case "cert_expired": return t("Bring it home to a trusted device of the group, which renews the certificate.");
-    case "cert_ending": return t("Connect it at home to a trusted device of the group before then.");
     case "stopped": return t("The group's owner decides on its alerts.");
     case "sync_off": return t("Turn sync on.");
     case "only_device": return t("Add a phone or a computer.");
@@ -1275,7 +1251,7 @@ async function recovery() {
     await ask(t("Recovery key"), t("The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings."), t("OK"));
     return;
   }
-  const key = await ask(t("Claim the group with its recovery key?"), t("Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does."), t("Claim"), "");
+  const key = await ask(t("Claim the group with its recovery key?"), t("Type the key from the sheet, or paste its QR code's text. This computer becomes the group's root at once."), t("Claim"), "");
   if (key?.trim()) await act("Recover", key.trim());
 }
 

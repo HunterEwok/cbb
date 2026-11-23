@@ -251,25 +251,14 @@ type Release struct {
 	Release release.File `json:"release"`
 }
 
-// Claim is a claim to take the group over (docs/protocol.md, section 10,
-// "Handing the group over"), for cbb status and the apps.
-type Claim struct {
-	// By names the admin that claims the group: its device's name, or its
-	// key hash when no device record names it.
-	By string `json:"by"`
-	// State is pending, competing or disputed.
-	State string `json:"state"`
-	// LeftMS is how long a pending claim still waits on this member, 0
-	// while it does not know.
-	LeftMS int64 `json:"left_ms,omitempty"`
-}
-
 // Conflict is a conflict of the group's records, for cbb status and the
 // apps.
 type Conflict struct {
 	// Kind is admins (admins that removed or froze each other without
-	// seeing it), claims (two claims) or two_histories (a key that signed
-	// two histories).
+	// seeing it), fork (the recovery key signed two changes at one step),
+	// two_histories (a key that signed two histories), admits (two admins
+	// admitted one device with different records) or ids (two keys with one
+	// device ID).
 	Kind string `json:"kind"`
 	// Devices name the devices of the signers involved, or their key
 	// hashes when no device record names them.
@@ -320,18 +309,11 @@ type Status struct {
 	// the others refuse it until the group's root or an admin phone
 	// unfreezes it. Removed is false then.
 	Frozen bool `json:"frozen,omitempty"`
-	// TakenOverBy names the admin that took the group over from this
-	// device, the group's root computer, while it was away; removing that
-	// admin here undoes it. Removed is false then.
-	TakenOverBy string `json:"taken_over_by,omitempty"`
 	// Stop says how far the group's records stop the exchange: "secrets"
 	// (no member sends a secret) or "full" (the members exchange records
-	// only), empty when nothing stops; Claims and Conflicts say why
+	// only), empty when nothing stops; Conflicts say why
 	// (docs/protocol.md, section 10, "Stopping the exchange").
 	Stop string `json:"stop,omitempty"`
-	// Claims are the claims to take the group over that wait or stop the
-	// group: pending, competing or disputed.
-	Claims []Claim `json:"claims,omitempty"`
 	// Conflicts are the conflicts that stop the group until its root
 	// decides.
 	Conflicts []Conflict `json:"conflicts,omitempty"`

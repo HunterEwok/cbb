@@ -24,10 +24,6 @@
     <string name="admin">administrador</string>
     <string name="advanced_settings">Ajustes avanzados</string>
     <string name="alert_admins">Unos administradores se eliminaron o congelaron entre sí sin verlo: %1$s. La raíz elimina a uno de ellos.</string>
-    <string name="alert_claim_pending">%1$s reclama el grupo para tomarlo de su raíz.</string>
-    <string name="alert_claim_pending_left">%1$s reclama el grupo para tomarlo de su raíz: surte efecto en %2$s.</string>
-    <string name="alert_claim_stopped">%1$s reclama el grupo, y el grupo está detenido hasta que su raíz decida.</string>
-    <string name="alert_claims">Dos reclamaciones para tomar el grupo: %1$s.</string>
     <string name="alert_newer">El grupo tiene %1$d registros de una versión posterior: actualiza la app para leerlos.</string>
     <string name="alert_root_decides">Decide la raíz del grupo.</string>
     <string name="alert_secrets_stopped">El grupo no envía secretos hasta que su propietario decida.</string>
@@ -75,7 +71,6 @@
     <string name="camera_denied">La cámara no está permitida. Permítela en los ajustes de la app para escanear, o pega el texto del código QR de cbb pair.</string>
     <string name="camera_failed">La cámara no se inició. Pega en su lugar el texto del código QR de cbb pair.</string>
     <string name="cancel">Cancelar</string>
-    <string name="cancel_claim">Cancelar la reclamación</string>
     <string name="change_root">Pasar el grupo a este teléfono</string>
     <string name="change_root_admin_kept">Se queda, y sigue siendo administrador</string>
     <string name="change_root_admin_lost">Se queda, ya sin ser administrador: hazlo administrador de nuevo más tarde</string>
@@ -97,7 +92,6 @@
     <string name="channel_pastes">Pegados remotos</string>
     <string name="channel_push">Con la app cerrada</string>
     <string name="channel_sync">Sincronizando con tus ordenadores</string>
-    <string name="claim_cancelled">La reclamación está cancelada. Los demás dispositivos se enteran en cuanto se conectan.</string>
     <string name="close">Cerrar</string>
     <string name="close_tip">Cerrar el consejo</string>
     <string name="collection_drag_here">Arrastra dispositivos aquí</string>
@@ -183,10 +177,6 @@
     <string name="group">Grupo</string>
     <string name="group_hub">El hub del grupo</string>
     <string name="group_hub_in_use">El hub del grupo, en uso ahora</string>
-    <string name="handed_body">El ordenador que tenía el grupo se lo entregó a este teléfono. Tómalo para que este teléfono sea la raíz del grupo; el ordenador sigue en el grupo.</string>
-    <string name="handed_take">Tomar el grupo</string>
-    <string name="handed_taken">Ahora este teléfono es la raíz del grupo. Los demás dispositivos se enteran en cuanto se conectan.</string>
-    <string name="handed_title">El grupo es tuyo para tomarlo</string>
     <string name="hidden_by_system">oculto por el sistema</string>
     <string name="histories_voided">Ambos historiales quedan anulados. El dispositivo vuelve a firmar sus registros por sí mismo.</string>
     <string name="hub_add_home">Esta es mi red de casa</string>
@@ -440,8 +430,6 @@
     <string name="reason_renew_peer">Renovar el certificado de un dispositivo</string>
     <string name="reason_resolve">Resolver un conflicto en tu grupo</string>
     <string name="reason_set_mode">Cambiar el modo de sincronización de un ordenador</string>
-    <string name="reason_take_handed">Tomar el grupo que el ordenador entregó a este teléfono</string>
-    <string name="reason_take_over">Tomar el grupo del teléfono perdido</string>
     <string name="reason_ttl">Cambiar cuánto duran las copias y los secretos</string>
     <string name="reason_unfreeze">Descongelar un ordenador de administrador</string>
     <string name="reason_unmute">Quitar el silencio a un dispositivo</string>
@@ -627,10 +615,6 @@
     <string name="why_also">Además</string>
     <string name="why_away_off_d">Activa En todas partes para sincronizar fuera de casa.</string>
     <string name="why_away_off_t">No hay ningún dispositivo del grupo en esta red.</string>
-    <string name="why_cert_ending_d">Antes de esa fecha, conéctalo en casa a un dispositivo de confianza del grupo.</string>
-    <string name="why_cert_ending_t">El certificado de este dispositivo vence el %1$s.</string>
-    <string name="why_cert_expired_d">Conéctalo en casa a un dispositivo de confianza del grupo, que renueva el certificado.</string>
-    <string name="why_cert_expired_t">El certificado de este dispositivo venció el %1$s.</string>
     <string name="why_change_arriving_d">Mantén este dispositivo encendido cerca de los demás dispositivos del grupo hasta que llegue.</string>
     <string name="why_change_arriving_t">Está en camino un cambio del dispositivo principal del grupo.</string>
     <string name="why_checkpoint_stuck_d">Enciende los demás dispositivos del grupo.</string>
@@ -684,8 +668,6 @@
     <string name="why_sync_off_d">Activa la sincronización.</string>
     <string name="why_sync_off_t">La sincronización está desactivada en este dispositivo.</string>
     <string name="why_sync_off_until_t">La sincronización está desactivada en este dispositivo hasta %1$s.</string>
-    <string name="why_taken_over_d">Si este dispositivo no se perdió, quita %1$s del grupo.</string>
-    <string name="why_taken_over_t">%1$s tomó el grupo de este dispositivo.</string>
     <string name="why_tunnel_blocked_d">Esta red puede bloquear túneles: activa Redes estrictas en la base.</string>
     <string name="why_tunnel_blocked_t">El túnel a la base %1$s no pasa.</string>
     <string name="why_unreached_d">Permite CBB en el cortafuegos de este ordenador.</string>

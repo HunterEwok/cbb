@@ -336,9 +336,9 @@ func (d *Desk) Resolve() {
 
 // Recover claims the group with its recovery key, typed from the sheet or
 // its QR code's text, as cbb recovery does as the administrator with the
-// key on its standard input; the claim waits as a takeover does.
+// key on its standard input; this computer is the group's root at once.
 func (d *Desk) Recover(key string) {
-	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "The claim is made: it takes effect after the group's takeover delay.")
+	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "This computer is the group's root now.")
 }
 
 // Update installs the newest signed release the group passed around, as

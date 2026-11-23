@@ -2975,6 +2975,10 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The takeover claims of 0.5 from the status and the apps: `cbb status`, the computer and Mac
+  apps no longer have lines for an admin's claim to take the group over, and `control.Status`
+  has no `claims` or `taken_over_by`; the apps say no reason `taken_over`, `cert_expired` or
+  `cert_ending`, which the core of 0.6 never gives (D-117).
 - The rest of the core's code of 0.5: the records of version 2 and their rules
   (`cbb_core::authority`, `group`), the pairing of 0.5 (`cbb_core::pair`), the server
   credentials on those records (`cbb_core::credential`), the JSON operations on them
@@ -3126,6 +3130,9 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The computer and Mac apps say that a recovery by the group's recovery key makes the computer
+  the group's root at once, as it does on 0.6, and no longer that the claim waits for the
+  group's takeover delay.
 - A member that is given the revocation list of Android attestations it already holds no
   longer takes it as a new one on the second time: it wrote the list again, said it took it
   and checked its peers' evidence again for nothing.

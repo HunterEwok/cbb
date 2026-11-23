@@ -264,12 +264,12 @@ final class MacModel: ObservableObject {
     func update() async { await admin(["update"], done: String(localized: "CBB is updated.")) }
 
     /// Claims the group with its recovery key, typed from the sheet or its
-    /// QR code's text, on cbb recovery's standard input; the claim waits as
-    /// a takeover does.
+    /// QR code's text, on cbb recovery's standard input; this Mac is the
+    /// group's root at once.
     func recover(_ key: String) async {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        await admin(["recovery"], input: key + "\n", done: String(localized: "The claim is made: it takes effect after the group's takeover delay."))
+        await admin(["recovery"], input: key + "\n", done: String(localized: "This Mac is the group's root now."))
     }
 
     func rename(_ id: String, to name: String) async {

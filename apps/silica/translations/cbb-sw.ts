@@ -1732,10 +1732,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 kilichukua kikundi kutoka kifaa hiki.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>Mabadiliko ya kifaa kikuu cha kikundi yako njiani.</translation>
     </message>
@@ -1760,10 +1756,6 @@
         <translation>Omba mmiliki wa kikundi arejeshe haki zake.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>Kiunganishe nyumbani na kifaa kinachoaminika cha kikundi, nacho kitafanya upya cheti.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 inapatikana.</translation>
     </message>
@@ -1778,10 +1770,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>Angalia muunganisho wa intaneti; CBB hujaribu tena yenyewe.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>Kabla ya hapo, kiunganishe nyumbani na kifaa kinachoaminika cha kikundi.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1790,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>Kila mahali kimewashwa, lakini kikundi hakina kituo.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>Ikiwa kifaa hiki hakikupotea, ondoa %1 kwenye kikundi.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1950,14 +1934,6 @@
     <message>
         <source>This device was removed from the group.</source>
         <translation>Kifaa hiki kiliondolewa kwenye kikundi.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>Cheti cha kifaa hiki kiliisha %1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>Cheti cha kifaa hiki kinaisha %1.</translation>
     </message>
     <message>
         <source>This device's rights as a trusted device are paused.</source>

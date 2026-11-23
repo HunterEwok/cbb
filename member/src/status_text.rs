@@ -40,12 +40,6 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> S
         w.push_str("This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair.\n");
     } else if st.frozen {
         w.push_str("Another admin froze this computer's admin key: its members refuse it until the group's root or an admin phone unfreezes it (cbb unfreeze on the root).\n");
-    } else if !st.taken_over_by.is_empty() {
-        let by = &st.taken_over_by;
-        let _ = writeln!(
-            w,
-            "{by}, an admin, took the group over from this computer, its root, while it was away. If this computer is not lost, sudo cbb remove {by} undoes it; otherwise the group is {by}'s now."
-        );
     } else if let Some(c) = renewal_line(st.cert_ends_ms, now_ms) {
         let _ = writeln!(w, "{c}");
     }
@@ -328,54 +322,16 @@ fn stop_lines(st: &Status) -> Vec<String> {
             "admins" => format!(
                 "Admins removed or froze each other without seeing it ({who}): the root decides by removing one of them (cbb remove NAME on a root computer, or on the root phone)."
             ),
-            "claims" => {
-                format!("Two claims to take the group over ({who}): the root cancels one or both by removing its admin.")
-            }
             "two_histories" => format!(
                 "{who} signed two histories with one key, as a stolen key or a device brought back from a backup would: the group's root voids both (cbb resolve on a root computer, or on the root phone), and the device signs its records again."
             ),
             k => format!("A conflict of kind {k} ({who}): the root decides."),
         });
     }
-    for c in &st.claims {
-        match c.state.as_str() {
-            "pending" => {
-                let left = if c.left_ms > 0 {
-                    format!("in {}", roughly(c.left_ms))
-                } else {
-                    "once this device knows how long it has held it".to_string()
-                };
-                out.push(format!(
-                    "{} claims the group, to take it over from its root: it takes effect {left}, unless the root cancels it by removing {}.",
-                    c.by, c.by
-                ));
-            }
-            "disputed" => out.push(format!(
-                "{} claims the group, and another admin removed it: the group is stopped until the root decides.",
-                c.by
-            )),
-            "competing" => out.push(format!(
-                "{} claims the group while another admin claims it too: the group is stopped until the root decides.",
-                c.by
-            )),
-            _ => {}
-        }
-    }
     if st.newer > 0 {
         out.push(format!("The group holds {} records of a later version of CBB: update it to read them.", st.newer));
     }
     out
-}
-
-/// A duration in days, hours or minutes, as Go's roughly.
-fn roughly(ms: i64) -> String {
-    let (h, m) = (ms / 3_600_000, ms / 60_000);
-    match () {
-        _ if h >= 48 => format!("{} days", h / 24),
-        _ if h >= 2 => format!("{h} hours"),
-        _ if m >= 2 => format!("{m} minutes"),
-        _ => "a minute".to_string(),
-    }
 }
 
 /// Whether sync is on, and until when it is off, as Go's syncLine.
@@ -802,14 +758,6 @@ mod tests {
     }
 
     #[test]
-    fn durations() {
-        assert_eq!(roughly(3 * 24 * 3_600_000), "3 days");
-        assert_eq!(roughly(5 * 3_600_000), "5 hours");
-        assert_eq!(roughly(10 * 60_000), "10 minutes");
-        assert_eq!(roughly(30_000), "a minute");
-    }
-
-    #[test]
     fn no_group() {
         let st = Status { version: "cbb dev".into(), ..Default::default() };
         assert_eq!(
@@ -872,11 +820,6 @@ mod tests {
             w(&Status { mode: "own".into(), sync_until_ms: now + day, ..base.clone() })
                 .contains("Sync is off until 20")
         );
-        for (ms, want) in
-            [(3 * day, "3 days"), (5 * 3_600_000, "5 hours"), (10 * 60_000, "10 minutes"), (1, "a minute")]
-        {
-            assert_eq!(roughly(ms), want);
-        }
         for os in [
             "linux",
             "windows",

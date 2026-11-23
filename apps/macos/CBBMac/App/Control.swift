@@ -124,9 +124,8 @@ enum Control {
         var mode: String?
         var syncUntilMS: Int64?
         /// How far the group's records stop the exchange: "secrets" or
-        /// "full"; nil when nothing stops. Claims and conflicts say why.
+        /// "full"; nil when nothing stops. The conflicts say why.
         var stop: String?
-        var claims: [Claim]?
         var conflicts: [Conflict]?
         /// How many records of a later version the service keeps.
         var newer: Int?
@@ -147,28 +146,15 @@ enum Control {
         var bug: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update, why, bug
+            case device, group, removed, role, os, away, version, mode, stop, conflicts, newer, muted, update, why, bug
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
         }
     }
 
-    /// A claim to take the group over that waits or stops the group.
-    struct Claim: Codable, Equatable {
-        /// The name of the admin that claims the group.
-        var by: String
-        /// pending, competing or disputed.
-        var state: String
-        var leftMS: Int64?
-
-        enum CodingKeys: String, CodingKey {
-            case by, state
-            case leftMS = "left_ms"
-        }
-    }
-
     /// A conflict that stops the group until its root decides: kind is
-    /// admins, claims or two_histories, devices the names of those involved.
+    /// admins, fork, two_histories, admits or ids, devices the names of
+    /// those involved.
     struct Conflict: Codable, Equatable {
         var kind: String
         var devices: [String]

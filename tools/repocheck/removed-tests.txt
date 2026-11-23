@@ -1211,3 +1211,4 @@ core/src/credential.rs a_new_tag_drops_the_old_periods_credentials D-130: the se
 core/src/credential.rs a_period_goes_stale_at_its_renewal D-130: the server credentials signed on the records of version 2 went with them; the credentials of 0.6 are tested in core/src/blind
 core/src/credential.rs a_list_in_another_order_is_stale D-130: the server credentials signed on the records of version 2 went with them; the credentials of 0.6 are tested in core/src/blind
 core/src/credential.rs a_period_credential_must_match_the_hubs D-130: the server credentials signed on the records of version 2 went with them; the credentials of 0.6 are tested in core/src/blind
+member/src/status_text.rs durations D-117: the takeover claims whose waiting time it wrote went with the takeover; cbb status shows no claims

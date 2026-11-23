@@ -2358,7 +2358,7 @@ A member applies it as soon as it holds the records, and lifts it as soon as it 
 root's records that end it: the check of a peer's certificate ("Certificates") lets a
 connection carry records only while the stop holds, and the member connects again as a member
 once it ends. `cbb status` and the apps show the cause, the devices involved and what ends it
-(in Go `control.Status`'s `stop`, `claims`, `conflicts` and `newer`). A user who has lost the
+(in Go `control.Status`'s `stop`, `conflicts` and `newer`). A user who has lost the
 root sets the group up again.
 
 ### The state

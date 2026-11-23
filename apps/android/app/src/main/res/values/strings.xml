@@ -24,10 +24,6 @@
     <string name="admin">admin</string>
     <string name="advanced_settings">Advanced settings</string>
     <string name="alert_admins">Admins removed or froze each other without seeing it: %1$s. The root removes one of them.</string>
-    <string name="alert_claim_pending">%1$s claims the group, to take it over from its root.</string>
-    <string name="alert_claim_pending_left">%1$s claims the group, to take it over from its root: it takes effect in %2$s.</string>
-    <string name="alert_claim_stopped">%1$s claims the group, and the group is stopped until its root decides.</string>
-    <string name="alert_claims">Two claims to take the group over: %1$s.</string>
     <string name="alert_newer">The group holds %1$d records of a later version: update the app to read them.</string>
     <string name="alert_root_decides">The group\'s root decides.</string>
     <string name="alert_secrets_stopped">The group sends no secrets until its owner decides.</string>
@@ -76,7 +72,6 @@
     <string name="camera_denied">The camera is not allowed. Allow it in the app\'s settings to scan, or paste the text of the QR code of cbb pair.</string>
     <string name="camera_failed">The camera did not start. Paste the text of the QR code of cbb pair instead.</string>
     <string name="cancel">Cancel</string>
-    <string name="cancel_claim">Cancel the claim</string>
     <string name="cbb_name" translatable="false">CBB</string>
     <string name="change_root">Move the group to this phone</string>
     <string name="change_root_admin_kept">Stays, and stays an admin</string>
@@ -99,7 +94,6 @@
     <string name="channel_pastes">Remote pastes</string>
     <string name="channel_push">While the app is closed</string>
     <string name="channel_sync">Syncing with your computers</string>
-    <string name="claim_cancelled">The claim is cancelled. The other devices hear of it as soon as they connect.</string>
     <string name="close">Close</string>
     <string name="close_tip">Close the tip</string>
     <string name="collection_drag_here">Drag devices here</string>
@@ -186,10 +180,6 @@
     <string name="group">Group</string>
     <string name="group_hub">The group\'s hub</string>
     <string name="group_hub_in_use">The group\'s hub, in use now</string>
-    <string name="handed_body">The computer that held the group handed it to this phone. Take it to make this phone the group\'s root; the computer stays in the group.</string>
-    <string name="handed_take">Take the group</string>
-    <string name="handed_taken">This phone is the group\'s root now. The other devices hear of it as soon as they connect.</string>
-    <string name="handed_title">The group is yours to take</string>
     <string name="hidden_by_system">hidden by the system</string>
     <string name="histories_voided">Both histories are void. The device signs its records again by itself.</string>
     <string name="hub_add_home">This is my home network</string>
@@ -443,8 +433,6 @@
     <string name="reason_renew_peer">Renew a device\'s certificate</string>
     <string name="reason_resolve">Resolve a conflict in your group</string>
     <string name="reason_set_mode">Change a computer\'s sync mode</string>
-    <string name="reason_take_handed">Take the group the computer handed to this phone</string>
-    <string name="reason_take_over">Take the group over from the lost phone</string>
     <string name="reason_ttl">Change how long copies and secrets last</string>
     <string name="reason_unfreeze">Unfreeze an admin computer</string>
     <string name="reason_unmute">Unmute a device</string>
@@ -631,10 +619,6 @@
     <string name="why_also">Also</string>
     <string name="why_away_off_d">Turn on Everywhere to sync away from home.</string>
     <string name="why_away_off_t">No device of the group is on this network.</string>
-    <string name="why_cert_ending_d">Connect it at home to a trusted device of the group before then.</string>
-    <string name="why_cert_ending_t">This device\'s certificate ends on %1$s.</string>
-    <string name="why_cert_expired_d">Bring it home to a trusted device of the group, which renews the certificate.</string>
-    <string name="why_cert_expired_t">This device\'s certificate ended on %1$s.</string>
     <string name="why_change_arriving_d">Keep this device on near the group\'s other devices until it arrives.</string>
     <string name="why_change_arriving_t">A change of the group\'s main device is on its way.</string>
     <string name="why_checkpoint_stuck_d">Turn on the group\'s other devices.</string>
@@ -688,8 +672,6 @@
     <string name="why_sync_off_d">Turn sync on.</string>
     <string name="why_sync_off_t">Sync is off on this device.</string>
     <string name="why_sync_off_until_t">Sync is off on this device until %1$s.</string>
-    <string name="why_taken_over_d">If this device was not lost, remove %1$s from the group.</string>
-    <string name="why_taken_over_t">%1$s took the group over from this device.</string>
     <string name="why_tunnel_blocked_d">This network may block tunnels: turn on Strict networks on the base.</string>
     <string name="why_tunnel_blocked_t">The tunnel to the base %1$s does not get through.</string>
     <string name="why_unreached_d">Let CBB through this computer\'s firewall.</string>

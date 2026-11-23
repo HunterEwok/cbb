@@ -17,10 +17,7 @@ Column {
         switch (r.code) {
         case "not_in_group": return qsTr("This device is in no group.")
         case "removed": return qsTr("This device was removed from the group.")
-        case "taken_over": return qsTr("%1 took the group over from this device.").arg(r.device)
         case "frozen": return qsTr("This device's rights as a trusted device are paused.")
-        case "cert_expired": return qsTr("This device's certificate ended on %1.").arg(date)
-        case "cert_ending": return qsTr("This device's certificate ends on %1.").arg(date)
         case "stopped": return qsTr("The group's records stop the exchange.")
         case "secrets_stopped": return qsTr("The group sends no secrets until its owner decides.")
         case "sync_off": return r.until_ms ? qsTr("Sync is off on this device until %1.").arg(date) : qsTr("Sync is off on this device.")
@@ -59,10 +56,7 @@ Column {
         switch (r.code) {
         case "not_in_group": return qsTr("Start a group or join one.")
         case "removed": return qsTr("Leave the group on this device, then join again.")
-        case "taken_over": return qsTr("If this device was not lost, remove %1 from the group.").arg(r.device)
         case "frozen": return qsTr("Ask the group's owner to restore its rights.")
-        case "cert_expired": return qsTr("Bring it home to a trusted device of the group, which renews the certificate.")
-        case "cert_ending": return qsTr("Connect it at home to a trusted device of the group before then.")
         case "stopped": return qsTr("The group's owner decides on its alerts.")
         case "sync_off": return qsTr("Turn sync on.")
         case "only_device": return qsTr("Add a phone or a computer.")

@@ -24,10 +24,6 @@
     <string name="admin">מנהל</string>
     <string name="advanced_settings">הגדרות מתקדמות</string>
     <string name="alert_admins">מנהלים הסירו או הקפיאו זה את זה בלי לראות: %1$s. השורש מסיר אחד מהם.</string>
-    <string name="alert_claim_pending">%1$s תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה.</string>
-    <string name="alert_claim_pending_left">%1$s תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה: זה ייכנס לתוקף בעוד %2$s.</string>
-    <string name="alert_claim_stopped">%1$s תובע את הקבוצה, והקבוצה עצורה עד שהשורש שלה יחליט.</string>
-    <string name="alert_claims">שתי תביעות להשתלט על הקבוצה: %1$s.</string>
     <string name="alert_newer">הקבוצה מחזיקה %1$d רשומות מגרסה מאוחרת יותר: עדכנו את היישום כדי לקרוא אותן.</string>
     <string name="alert_root_decides">השורש של הקבוצה מחליט.</string>
     <string name="alert_secrets_stopped">הקבוצה לא שולחת סודות עד שהבעלים שלה יחליטו.</string>
@@ -75,7 +71,6 @@
     <string name="camera_denied">המצלמה אינה מורשית. אפשרו אותה בהגדרות היישום כדי לסרוק, או הדביקו את הטקסט של קוד ה-QR של cbb pair.</string>
     <string name="camera_failed">המצלמה לא הופעלה. הדביקו במקום זאת את הטקסט של קוד ה-QR של cbb pair.</string>
     <string name="cancel">ביטול</string>
-    <string name="cancel_claim">ביטול התביעה</string>
     <string name="change_root">להעביר את הקבוצה לטלפון הזה</string>
     <string name="change_root_admin_kept">נשאר, ונשאר מנהל</string>
     <string name="change_root_admin_lost">נשאר, אבל כבר לא מנהל: הפכו אותו למנהל שוב מאוחר יותר</string>
@@ -97,7 +92,6 @@
     <string name="channel_pastes">הדבקות מרחוק</string>
     <string name="channel_push">כשהאפליקציה סגורה</string>
     <string name="channel_sync">מסנכרן עם המחשבים שלכם</string>
-    <string name="claim_cancelled">התביעה בוטלה. המכשירים האחרים שומעים על כך ברגע שהם מתחברים.</string>
     <string name="close">סגירה</string>
     <string name="close_tip">סגירת הטיפ</string>
     <string name="collection_drag_here">גררו מכשירים לכאן</string>
@@ -183,10 +177,6 @@
     <string name="group">קבוצה</string>
     <string name="group_hub">הרכזת של הקבוצה</string>
     <string name="group_hub_in_use">הרכזת של הקבוצה, בשימוש כעת</string>
-    <string name="handed_body">המחשב שהחזיק את הקבוצה העביר אותה לטלפון הזה. קבלו אותה כדי להפוך את הטלפון הזה לשורש הקבוצה; המחשב נשאר בקבוצה.</string>
-    <string name="handed_take">השתלטות על הקבוצה</string>
-    <string name="handed_taken">הטלפון הזה הוא עכשיו השורש של הקבוצה. המכשירים האחרים שומעים על כך ברגע שהם מתחברים.</string>
-    <string name="handed_title">הקבוצה מחכה שתקבלו אותה</string>
     <string name="hidden_by_system">מוסתר על ידי המערכת</string>
     <string name="histories_voided">שתי ההיסטוריות בטלות. המכשיר חותם מחדש על הרשומות שלו בעצמו.</string>
     <string name="hub_add_home">זו הרשת הביתית שלי</string>
@@ -440,8 +430,6 @@
     <string name="reason_renew_peer">חידוש האישור של מכשיר</string>
     <string name="reason_resolve">פתרון התנגשות בקבוצה שלכם</string>
     <string name="reason_set_mode">שינוי מצב הסנכרון של מחשב</string>
-    <string name="reason_take_handed">קבלת הקבוצה שהמחשב העביר לטלפון הזה</string>
-    <string name="reason_take_over">השתלטות על הקבוצה מהטלפון שאבד</string>
     <string name="reason_ttl">לשנות כמה זמן נשמרים עותקים וסודות</string>
     <string name="reason_unfreeze">הפשרת מחשב מנהל</string>
     <string name="reason_unmute">ביטול השתקה של מכשיר</string>
@@ -627,10 +615,6 @@
     <string name="why_also">עוד</string>
     <string name="why_away_off_d">הפעילו את ״בכל מקום״ כדי לסנכרן מחוץ לבית.</string>
     <string name="why_away_off_t">אף מכשיר של הקבוצה לא נמצא ברשת הזו.</string>
-    <string name="why_cert_ending_d">לפני כן, חברו אותו בבית למכשיר מהימן של הקבוצה.</string>
-    <string name="why_cert_ending_t">התעודה של המכשיר הזה תפוג ב־%1$s.</string>
-    <string name="why_cert_expired_d">חברו אותו בבית למכשיר מהימן של הקבוצה, והוא יחדש את התעודה.</string>
-    <string name="why_cert_expired_t">התעודה של המכשיר הזה פגה ב־%1$s.</string>
     <string name="why_change_arriving_d">השאירו את המכשיר הזה דלוק ליד שאר מכשירי הקבוצה עד שההחלפה תגיע.</string>
     <string name="why_change_arriving_t">החלפה של המכשיר הראשי של הקבוצה בדרך.</string>
     <string name="why_checkpoint_stuck_d">הדליקו את שאר מכשירי הקבוצה.</string>
@@ -684,8 +668,6 @@
     <string name="why_sync_off_d">הפעילו את הסנכרון.</string>
     <string name="why_sync_off_t">הסנכרון כבוי במכשיר הזה.</string>
     <string name="why_sync_off_until_t">הסנכרון כבוי במכשיר הזה עד %1$s.</string>
-    <string name="why_taken_over_d">אם המכשיר לא אבד, הסירו את %1$s מהקבוצה.</string>
-    <string name="why_taken_over_t">%1$s לקח את הקבוצה מהמכשיר הזה.</string>
     <string name="why_tunnel_blocked_d">ייתכן שהרשת הזו חוסמת מנהרות: הפעילו ״רשתות מחמירות״ בבסיס.</string>
     <string name="why_tunnel_blocked_t">המנהרה לבסיס %1$s לא עוברת.</string>
     <string name="why_unreached_d">אפשרו את CBB בחומת האש של המחשב הזה.</string>

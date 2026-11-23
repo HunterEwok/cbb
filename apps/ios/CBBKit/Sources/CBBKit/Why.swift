@@ -16,7 +16,7 @@ public struct WhyReason: Codable, Equatable, Hashable, Sendable {
     /// When sync turns on again, a mute ends or the certificate ends, in
     /// Unix milliseconds; nil when the reason has no time.
     public var untilMS: Int64?
-    /// A device's name: the hub, the admin that took the group over.
+    /// A device's name: the hub.
     public var device: String?
     /// The devices the reason is about, by name.
     public var devices: [String]?

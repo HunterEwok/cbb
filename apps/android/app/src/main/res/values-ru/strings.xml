@@ -24,10 +24,6 @@
     <string name="admin">админ</string>
     <string name="advanced_settings">Дополнительные настройки</string>
     <string name="alert_admins">Админы удалили или заморозили друг друга, не зная об этом: %1$s. Корень удаляет одного из них.</string>
-    <string name="alert_claim_pending">%1$s хочет забрать группу у корня.</string>
-    <string name="alert_claim_pending_left">%1$s хочет забрать группу у корня: это произойдёт через %2$s.</string>
-    <string name="alert_claim_stopped">%1$s хочет забрать группу, и группа остановлена, пока корень не решит.</string>
-    <string name="alert_claims">Две заявки на передачу группы: %1$s.</string>
     <string name="alert_newer">В группе есть записи более новой версии (%1$d): обновите приложение, чтобы их прочитать.</string>
     <string name="alert_root_decides">Решает корень группы.</string>
     <string name="alert_secrets_stopped">Группа не пересылает секреты, пока её владелец не решит.</string>
@@ -75,7 +71,6 @@
     <string name="camera_denied">Доступ к камере не разрешён. Разрешите его в настройках приложения, чтобы сканировать, или вставьте текст QR-кода cbb pair.</string>
     <string name="camera_failed">Камера не запустилась. Вставьте вместо этого текст QR-кода cbb pair.</string>
     <string name="cancel">Отмена</string>
-    <string name="cancel_claim">Отменить заявку</string>
     <string name="change_root">Перенести группу на этот телефон</string>
     <string name="change_root_admin_kept">Остаётся и остаётся администратором</string>
     <string name="change_root_admin_lost">Остаётся, но уже не администратор: сделайте его администратором позже</string>
@@ -97,7 +92,6 @@
     <string name="channel_pastes">Удалённые вставки</string>
     <string name="channel_push">Когда приложение закрыто</string>
     <string name="channel_sync">Синхронизация с компьютерами</string>
-    <string name="claim_cancelled">Заявка отменена. Остальные устройства узнают об этом, как только подключатся.</string>
     <string name="close">Закрыть</string>
     <string name="close_tip">Закрыть подсказку</string>
     <string name="collection_drag_here">Перетащите сюда устройства</string>
@@ -183,10 +177,6 @@
     <string name="group">Группа</string>
     <string name="group_hub">Хаб группы</string>
     <string name="group_hub_in_use">Хаб группы, используется сейчас</string>
-    <string name="handed_body">Компьютер, который держал группу, передал её этому телефону. Возьмите её, чтобы этот телефон стал корнем группы; компьютер останется в группе.</string>
-    <string name="handed_take">Взять группу</string>
-    <string name="handed_taken">Теперь этот телефон — корень группы. Остальные устройства узнают об этом, как только подключатся.</string>
-    <string name="handed_title">Группу можно забрать</string>
     <string name="hidden_by_system">скрыт системой</string>
     <string name="histories_voided">Обе истории отменены. Устройство само подпишет свои записи заново.</string>
     <string name="hub_add_home">Это моя домашняя сеть</string>
@@ -440,8 +430,6 @@
     <string name="reason_renew_peer">Продлить сертификат устройства</string>
     <string name="reason_resolve">Разрешить конфликт в группе</string>
     <string name="reason_set_mode">Изменить режим синхронизации компьютера</string>
-    <string name="reason_take_handed">Взять группу, которую компьютер передал этому телефону</string>
-    <string name="reason_take_over">Забрать группу у потерянного телефона</string>
     <string name="reason_ttl">Изменить, сколько живут копии и секреты</string>
     <string name="reason_unfreeze">Разморозить компьютер-админа</string>
     <string name="reason_unmute">Включить устройство</string>
@@ -627,10 +615,6 @@
     <string name="why_also">Ещё</string>
     <string name="why_away_off_d">Включите «Везде», чтобы синхронизироваться вне дома.</string>
     <string name="why_away_off_t">В этой сети нет устройств группы.</string>
-    <string name="why_cert_ending_d">До этого подключите его дома к доверенному устройству группы.</string>
-    <string name="why_cert_ending_t">Сертификат этого устройства истекает %1$s.</string>
-    <string name="why_cert_expired_d">Подключите его дома к доверенному устройству группы: оно продлит сертификат.</string>
-    <string name="why_cert_expired_t">Сертификат этого устройства истёк %1$s.</string>
     <string name="why_change_arriving_d">Держите это устройство включённым рядом с другими устройствами группы, пока смена не придёт.</string>
     <string name="why_change_arriving_t">Смена главного устройства группы уже в пути.</string>
     <string name="why_checkpoint_stuck_d">Включите другие устройства группы.</string>
@@ -684,8 +668,6 @@
     <string name="why_sync_off_d">Включите синхронизацию.</string>
     <string name="why_sync_off_t">На этом устройстве синхронизация выключена.</string>
     <string name="why_sync_off_until_t">На этом устройстве синхронизация выключена до %1$s.</string>
-    <string name="why_taken_over_d">Если устройство не терялось, удалите %1$s из группы.</string>
-    <string name="why_taken_over_t">%1$s забрал группу у этого устройства.</string>
     <string name="why_tunnel_blocked_d">Эта сеть может резать туннели: включите «Строгие сети» на базе.</string>
     <string name="why_tunnel_blocked_t">Туннель к базе %1$s не проходит.</string>
     <string name="why_unreached_d">Разрешите CBB в файрволе этого компьютера.</string>

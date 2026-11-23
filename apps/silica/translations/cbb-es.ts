@@ -1732,10 +1732,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 tomó el grupo de este dispositivo.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>Está en camino un cambio del dispositivo principal del grupo.</translation>
     </message>
@@ -1760,10 +1756,6 @@
         <translation>Pide al propietario del grupo que le devuelva sus derechos.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>Conéctalo en casa a un dispositivo de confianza del grupo, que renueva el certificado.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 está disponible.</translation>
     </message>
@@ -1778,10 +1770,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>Comprueba la conexión a internet; CBB lo intenta de nuevo solo.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>Antes de esa fecha, conéctalo en casa a un dispositivo de confianza del grupo.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1790,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>En todas partes está activado, pero el grupo no tiene base.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>Si este dispositivo no se perdió, quita %1 del grupo.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1950,14 +1934,6 @@
     <message>
         <source>This device was removed from the group.</source>
         <translation>Este dispositivo se quitó del grupo.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>El certificado de este dispositivo venció el %1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>El certificado de este dispositivo vence el %1.</translation>
     </message>
     <message>
         <source>This device's rights as a trusted device are paused.</source>
