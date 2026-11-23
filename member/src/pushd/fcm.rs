@@ -335,5 +335,6 @@ mod tests {
         let mut d = delivery(b"phone-token", Some(b"body"));
         d.env = cbb_core::push::ENV_APNS;
         assert_eq!(f.send(&d), Outcome::NoPath);
+        assert!(Fcm::new(account(), rustls::RootCertStore::empty()).is_ok());
     }
 }
