@@ -2493,6 +2493,9 @@ to the records of 0.6 (D-122; "Until the phones move to the records of 0.6" belo
   `result` (t 10) whose field 2 is the first 16 bytes of SHA-256(`cbb offer id v1` ‖ 0x00 ‖
   the tag) (`hubkey::offer_id`), field 3 the hub, and field 6 its offer (table `offer`, below),
   which the device keeps as that hub's, the tag in the offer's field 8 confirming the key.
+  A device the records name a hub that does not serve yet (it is starting, or sync away from
+  home makes it no hub yet) keeps the last `tunnel` of each device connected and answers it
+  once it serves; a device whose `tunnel` got no offer sends it again 15 s later.
   An offer comes only from the hub itself: no hub passes on another's offer or clients (A-22).
 - All of this happens inside member TLS, so a device gets into the tunnel only after it met
   the hub as a member, and only with the key it sent on such a connection. A device that is

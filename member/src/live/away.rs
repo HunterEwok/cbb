@@ -191,13 +191,13 @@ impl Live {
     /// with its offer confirming the tag, and its tunnel takes the keys.
     fn tunnel_from(&self, peer: &DeviceId, msg: &[u8]) {
         let Some(away) = self.away.get() else { return };
-        // A hub that is starting has not made its keys for the period yet:
-        // the client's `tunnel` waits until it serves (a client asks as soon
-        // as it sees this device is a hub, which can be before).
-        if away.hub_settings().is_some()
-            && self.hub.lock().unwrap().is_none()
-            && !self.standing_by.load(std::sync::atomic::Ordering::SeqCst)
-        {
+        // A hub that does not serve yet, starting or only named a hub by the
+        // records, keeps the client's `tunnel` until it serves (a client asks
+        // as soon as it connects to a device the records name a hub, which
+        // can be long before, and asks again only RETUNNEL later). One is
+        // kept for each device, and only those connected then get an answer.
+        let named = away.hub_settings().is_some() || self.mesh.may_be_hub(&self.mesh.device());
+        if named && self.hub.lock().unwrap().is_none() && !self.standing_by.load(std::sync::atomic::Ordering::SeqCst) {
             self.early_tunnels.lock().unwrap().insert(*peer, msg.to_vec());
             return;
         }
@@ -422,7 +422,7 @@ const STEADY: Duration = Duration::from_secs(30);
 /// How often `tunnel` goes again to a device connected that may be a hub
 /// and whose offer this member does not hold: it may have become a hub, or
 /// one by the records, since the connection began.
-const RETUNNEL: Duration = Duration::from_secs(15);
+pub(super) const RETUNNEL: Duration = Duration::from_secs(15);
 
 /// Dials, through the tunnel, the first hub whose offer is kept that
 /// answers, whenever no hub is connected or at home, until the member
@@ -613,7 +613,7 @@ fn serve_hub(w: &Weak<Live>) {
                     if l.handoff.lock().unwrap().is_none() {
                         l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
                     }
-                    // The clients that asked while it started get the offer
+                    // The clients that asked before it served get the offer
                     // it serves with now.
                     let early = std::mem::take(&mut *l.early_tunnels.lock().unwrap());
                     let connected = l.mesh.connected();

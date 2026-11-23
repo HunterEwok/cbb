@@ -3126,6 +3126,10 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A hub of sync away from home now answers the devices that were connected to it before it
+  served, as soon as it serves: their `tunnel` waited for its next round, 15 s later, so they
+  learned of a new hub, or of the hub a move went to, that much later or not before the old
+  hub stopped.
 - The iPhone app's theme swatches in Settings are laid out all at once, so none is left
   undrawn while its name is on screen (the accessibility audit of `testLanguages`).
 - A restart of the service no longer leaves it unreachable for a few seconds where the

@@ -240,6 +240,54 @@ fn a_device_reaches_its_hub_of_0_6_through_the_tunnel() {
     b.close();
 }
 
+/// A device connected to a device the records name a hub, before that one
+/// serves, gets its offer as soon as it serves: the hub keeps the `tunnel`
+/// that came first, so the device does not wait until it sends it again
+/// (`RETUNNEL` later).
+#[test]
+#[cfg(feature = "tunnel")]
+fn a_hub_answers_the_tunnel_that_came_before_it_served() {
+    let (da, db) = two_dirs_b_hub("away-before");
+    let (a, b) = (open(&da), open(&db));
+    let away_of = |l: &Arc<Live>, dir: &Path| {
+        let me = crate::certs::DeviceId::parse(&id_text(&l.mesh.device())).unwrap();
+        Arc::new(crate::away::Away::new(dir.to_path_buf(), l.tag(), me, Arc::new(|_| {})))
+    };
+    let hub_away = away_of(&b, &db);
+    b.with_away(hub_away.clone());
+    let dev_away = away_of(&a, &da);
+    dev_away.turn_on().unwrap();
+    a.with_away(dev_away.clone());
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let member_port = crate::discovery::listen(b.clone(), 0, log.clone()).unwrap();
+    crate::discovery::start(
+        a.clone(),
+        a.tag(),
+        vec![SocketAddr::from(([127, 0, 0, 1], member_port))],
+        false,
+        None,
+        log,
+    );
+    until("the device's tunnel toward the hub that does not serve yet", || {
+        a.toward.lock().unwrap().contains_key(&b.mesh.device())
+    });
+    let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let port = udp.local_addr().unwrap().port();
+    drop(udp);
+    let h = crate::control::Header {
+        addrs: vec![format!("127.0.0.1:{port}")],
+        port: i64::from(port),
+        consent: true,
+        ..Default::default()
+    };
+    let made = Instant::now();
+    hub_away.make_hub(&h).unwrap();
+    until("the hub's offer", || dev_away.live_status().is_some_and(|s| s.hub_device == id_text(&b.mesh.device())));
+    assert!(made.elapsed() < super::away::RETUNNEL, "the offer came only with the device's next tunnel");
+    a.close();
+    b.close();
+}
+
 /// Of two hubs of 0.6, the one lower in the order stands by while the one
 /// above serves and says so (`hubs`, t 16); once the one above stops being
 /// a hub and says so, the lower one serves after its wait.
