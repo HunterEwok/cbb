@@ -138,7 +138,7 @@
     },
     {
       "concept": "hold to the phone",
-      "note": "A YubiKey held to the phone for NFC: the phones' own NFC sheets say so. Over USB-C it is inserted, and its button is touched (Yubico Authenticator's wording).",
+      "note": "A YubiKey held to the phone for NFC: the phones' own NFC sheets say so. Over USB-C it is plugged in (the next concept), and its button is touched.",
       "langs": {
         "en": {
           "use": "hold to the phone"
@@ -147,6 +147,23 @@
           "use": "поднесите",
           "avoid": [
             "\\bприложи(?:ть|те|л|ли|ла)\\b"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "plug in",
+      "note": "A YubiKey connected to the phone's USB-C port: Yubico's own Russian says «Подключите YubiKey к USB-порту». Paste (вставьте текст) is another word and stays.",
+      "langs": {
+        "en": {
+          "use": "plug in"
+        },
+        "ru": {
+          "use": "подключите",
+          "avoid": [
+            "\\bвстав\\pL*(?:\\s+\\pL+){0,2}\\s+(?:в|во)\\s+(?:порт|разъ[её]м)\\pL*",
+            "\\bвставь\\pL*\\s+YubiKey\\b",
+            "\\bYubiKey\\s+не\\s+вставлен\\pL*"
           ]
         }
       }

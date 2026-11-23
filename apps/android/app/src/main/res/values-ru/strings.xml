@@ -633,10 +633,10 @@
     <string name="window_joined">Устройство присоединилось к группе.</string>
     <string name="window_waiting">Ожидание нового устройства…</string>
     <string name="yubikey_go">Продолжить</string>
-    <string name="yubikey_hold">Поднесите YubiKey к задней стороне телефона или вставьте его в порт USB-C и не убирайте, пока это сообщение не исчезнет.</string>
-    <string name="yubikey_insert_or_hold">Вставьте YubiKey или поднесите его к телефону.</string>
+    <string name="yubikey_hold">Поднесите YubiKey к задней стороне телефона или подключите его к порту USB-C и не убирайте, пока это сообщение не исчезнет.</string>
+    <string name="yubikey_insert_or_hold">Подключите YubiKey или поднесите его к телефону.</string>
     <string name="yubikey_open">Использовать YubiKey</string>
-    <string name="yubikey_open_body">Введите PIN-код YubiKey, затем поднесите YubiKey к телефону или вставьте его в порт USB-C и держите, пока всё не закончится.</string>
+    <string name="yubikey_open_body">Введите PIN-код YubiKey, затем поднесите YubiKey к телефону или подключите его к порту USB-C и держите, пока всё не закончится.</string>
     <string name="yubikey_open_title">Использовать YubiKey с ключом восстановления</string>
     <string name="yubikey_opened">YubiKey открыл ключ восстановления.</string>
     <string name="yubikey_pin">PIN YubiKey</string>

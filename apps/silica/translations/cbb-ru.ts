@@ -206,7 +206,7 @@
     </message>
     <message>
         <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Вставьте YubiKey в порт USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
+        <translation>Подключите YubiKey к порту USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -502,7 +502,7 @@
     </message>
     <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
-        <translation>YubiKey не вставлен. Вставьте его в порт USB-C и попробуйте снова.</translation>
+        <translation>YubiKey не подключён. Подключите его к порту USB-C и попробуйте снова.</translation>
     </message>
     <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
@@ -1376,7 +1376,7 @@
     </message>
     <message>
         <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
-        <translation>Вставьте YubiKey в порт USB-C и введите его PIN.</translation>
+        <translation>Подключите YubiKey к порту USB-C и введите его PIN.</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
