@@ -280,16 +280,17 @@ watch's `wearable`. DevEco Studio's Previewer loads no native module and takes t
 phone in no group; outside mainland China DevEco offers only a watch emulator, which runs the
 `wearable` module. The tests in `entry/src/ohosTest` (Hypium) run on a phone
 or the emulator, and on the computer under Node (`nodetest/run.sh`): TypeScript turns the
-model, core and common ArkTS into JavaScript, `nodetest/run.cjs` plays Hypium, ArkUI's
+model, core and common ArkTS into JavaScript, `nodetest/shim.cjs` plays Hypium, ArkUI's
 decorators and the kits, and the native module's `call` goes to the real core built for the
-computer. CI runs them in its `Aurora and HarmonyOS apps' code on the computer` job.
+computer. Beside them, `nodetest/watch.test.cjs` tests the watch's link to its phone, with a
+fake Wear Engine and admin key. CI runs them in its `Aurora and HarmonyOS apps' code on the computer` job.
 
 ```sh
 apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/core/ffi
 apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
 sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
 apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
-apps/harmony/nodetest/run.sh      # the ohosTest suite under Node (cargo, a C compiler, Node.js)
+apps/harmony/nodetest/run.sh      # the ohosTest suite and the watch's test under Node (cargo, a C compiler, Node.js)
 ```
 
 The differential run of all three implementations (Go, Rust and JDK 17;

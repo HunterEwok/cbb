@@ -282,7 +282,7 @@ jobs:
   # format rule no vector refuses.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, androidkit, rust-coverage, service, service-coverage, trayapp, phonelogic]
+    needs: [changes, test, gocover, kit, androidkit, android, rust-coverage, service, service-coverage, trayapp, phonelogic]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -311,6 +311,7 @@ jobs:
           [ -f cov/coverage-rust-service.json ] && set -- "$@" -llvm rust-service=cov/coverage-rust-service.json
           [ -f cov/coverage-swift-kit.json ] && set -- "$@" -llvm swift-kit=cov/coverage-swift-kit.json
           [ -f cov/jacocoTestReport.xml ] && set -- "$@" -jacoco kotlin-kit=cov/jacocoTestReport.xml
+          [ -f cov/coverage-kotlin-watch.xml ] && set -- "$@" -jacoco kotlin-watch=cov/coverage-kotlin-watch.xml
           [ -f cov/coverage-js-tray.info ] && set -- "$@" -lcov js-tray=cov/coverage-js-tray.info
           [ -f cov/coverage-cpp-aurora.info ] && set -- "$@" -lcov cpp-aurora=cov/coverage-cpp-aurora.info
           [ -f cov/coverage-ets-harmony.info ] && set -- "$@" -lcov ets-harmony=cov/coverage-ets-harmony.info
@@ -2176,7 +2177,15 @@ jobs:
           # screenshots compared with app/src/test/screenshots (ScreenshotTest).
           ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease \
             :app:verifyRoborazziFullDebug :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
-            :shared:testDebugUnitTest :shared:lintDebug :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+            :shared:testDebugUnitTest :shared:createDebugUnitTestCoverageReport :shared:lintDebug \
+            :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+          cp shared/build/reports/coverage/test/debug/report.xml "$GITHUB_WORKSPACE/coverage-kotlin-watch.xml"
+      # What the phone and the watch share (WatchState and the design), for the
+      # coverage job's row kotlin-watch.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-kotlin-watch
+          path: coverage-kotlin-watch.xml
       # The new pictures and their differences when a screenshot does not match.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
