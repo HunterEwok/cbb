@@ -2737,11 +2737,11 @@ receiver, which answers with `result` (t 10, [format](format.md) section 9): the
 the receiver's device ID, the status, 1 `done`, 2 `refused` (the receiver does not take it, or
 its user or settings say no, such as remote paste being off) or 3 `failed` (it took it and
 could not carry it out), and for the last two the reason. A refusal before the signature
-verifies gets no answer. The reason is a peer's text: a member that shows it, or passes it to a
-program, first turns each control character (C0, DEL, C1) into a space and cuts it to 256 bytes
-at a character boundary. A `hub` command's `done` carries the new hub's offer. The sender gives
-up after 30 s; a sender that has no connection to the receiver says that the device is not
-connected.
+verifies gets no answer. The receiver writes the reason as the message carries it: each control
+character (C0, DEL, C1) a space, cut to 256 bytes at a character boundary; a reason that breaks
+this is dropped from the message, so the sender shows none. A `hub` command's `done` carries
+the new hub's offer. The sender gives up after 30 s; a sender that has no connection to the
+receiver says that the device is not connected.
 
 A `hub` command orders field 10 (the hub: its address away from home and the hash of its
 member key, the format's 32-byte reference to a signer, so that every reader knows which device

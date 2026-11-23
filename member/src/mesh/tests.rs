@@ -360,6 +360,20 @@ fn the_root_commands_a_member_and_gets_its_result() {
 }
 
 #[test]
+fn a_results_reason_comes_cleaned() {
+    let (a, b) = two("reason");
+    b.on_command(Box::new(|_| Err(Error::msg("no\u{1b}[2Jway\u{7}\u{9b}here"))));
+    connect(&a, &b);
+    until("the connection", || a.connected().contains(&b.device()));
+    let r = a.command(&root(), b.device(), cbb_core::commands::COMMAND_UNMUTE, None).unwrap();
+    assert_eq!(r.status, 3);
+    // Each control character, escape and C1 too, is a space.
+    assert_eq!(r.reason, "no [2Jway  here");
+    a.close();
+    b.close();
+}
+
+#[test]
 fn the_signed_files_travel_as_published() {
     let text = r#"{"keys":{"body":"AAE=", "sig":"AgM=","key":"BAU="},"channel":{"body":"Bg==","sig":"Bw==","key":"CA=="},"release":{"body":"CQ==","sig":"Cg==","key":"Cw=="}}"#;
     let v = serde_json::value::RawValue::from_string(text.into()).unwrap();

@@ -20,15 +20,6 @@ use crate::certs::b64;
 /// sorted.
 pub const CAPS: [&str; 3] = ["admin", "dials", "hub"];
 
-/// The capabilities of a hello this member knows, of its first 32 names,
-/// sorted, each once.
-pub fn clean_caps(caps: &[String]) -> Vec<String> {
-    let mut out: Vec<String> = caps.iter().take(32).filter(|c| CAPS.contains(&c.as_str())).cloned().collect();
-    out.sort();
-    out.dedup();
-    out
-}
-
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and
 /// why for the last two.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -50,14 +41,13 @@ pub struct CommandResult {
     pub tunnel: Option<Value>,
 }
 
-/// The most bytes of a result's reason a member keeps.
+/// The most bytes of a result's reason (section 15).
 pub const MAX_REASON: usize = 256;
 
-/// Makes a result's reason fit to show to a person, a terminal's user among
-/// them: a control character (escape included) becomes a space, and it is
-/// cut to MAX_REASON bytes at a character boundary. The member that answers
-/// is a peer, so the member that takes its result cleans it, as Go's
-/// CleanReason did.
+/// Makes a result's reason one the message carries (section 15): a control
+/// character (escape included) becomes a space, and it is cut to MAX_REASON
+/// bytes at a character boundary. The member that answers cleans it before
+/// it writes the result; the message drops a reason that is not clean.
 pub fn clean_reason(s: &str) -> String {
     let mut out: String = s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
     if out.len() > MAX_REASON {
@@ -196,7 +186,7 @@ mod tests {
     use super::{CommandResult, DeviceInfo, MAX_REASON, archive_name_valid, clean_reason};
 
     /// A result's reason keeps its text, loses its control characters and
-    /// is cut whole characters at a time, as Go's TestCleanReason.
+    /// is cut whole characters at a time.
     #[test]
     fn reasons_are_cleaned() {
         for (input, want) in [

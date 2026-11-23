@@ -3187,6 +3187,10 @@ with 0.5 is set up again once. The details follow.
 - The push service keeps APNs' or FCM's answer when the platform closes the connection right
   after it: a failed acknowledgement only ends the connection, and the notification is not
   posted a second time.
+- A home pairing window's five minutes count from the moment it opens, not from after `cbb
+  pair` hears of it: a slow machine no longer gives the window a few seconds more.
+- A device that refuses or fails a command cleans its reason before it answers, so a reason
+  with a line break or over 256 bytes reaches the sender instead of being dropped.
 - The tray app's Add a device dialog closes by itself when the device joins after it was
   cancelled and opened again at once; the first close used to end the new pairing window.
 - The iPhone, Android, HarmonyOS and Aurora apps join with a remote invitation of 0.6

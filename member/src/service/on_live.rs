@@ -976,7 +976,14 @@ impl Service {
             n.learn_all();
         }
         let now = crate::admitting::home_window_ms;
-        let (mut open, digits) = crate::admitting::home_window(now(), crate::admitting::WINDOW_LIFETIME);
+        // Five minutes of this device's running time, which a wall clock
+        // set ahead does not move (docs/protocol.md, "Pairing in 0.6"),
+        // counted from before the client hears the window opened: what it
+        // does after that falls within the five minutes.
+        let opened_at = crate::uptime::now();
+        let end = opened_at + crate::admitting::WINDOW_LIFETIME;
+        let opened_ms = u64::try_from(opened_at.as_millis()).unwrap_or(u64::MAX);
+        let (mut open, digits) = crate::admitting::home_window(opened_ms, crate::admitting::WINDOW_LIFETIME);
         let (tx, rx) = mpsc::sync_channel(1);
         live.mesh.on_pair(Some(Box::new(move |sock, s, x| {
             // One device at a time; another is dropped.
@@ -1006,9 +1013,6 @@ impl Service {
             ..Default::default()
         };
         control::write(out, &control::partial(opened))?;
-        // Five minutes of this device's running time, which a wall clock
-        // set ahead does not move (docs/protocol.md, "Pairing in 0.6").
-        let end = crate::uptime::now() + crate::admitting::WINDOW_LIFETIME;
         loop {
             if hung.load(Ordering::SeqCst) {
                 (self.log)("cbb: the pairing window closed: its cbb pair ended");

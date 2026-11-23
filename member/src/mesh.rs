@@ -319,8 +319,11 @@ fn result_frame(id: &[u8; 16], by: &DeviceId, status: u64, reason: &str) -> Vec<
         (3, Value::Bytes(&by.0)),
         (4, Value::Uint(status)),
     ];
+    // A reason the message would not carry (a control character, over
+    // 256 bytes) is cleaned to one it does (section 15).
+    let reason = cbb_core::wire::clean_reason(reason);
     if !reason.is_empty() {
-        f.push((5, Value::Text(reason)));
+        f.push((5, Value::Text(&reason)));
     }
     frame::write(&Value::Map(f))
 }
