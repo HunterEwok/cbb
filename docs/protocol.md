@@ -231,7 +231,7 @@ so are the texts a person or a server reads (a link, a pin).
 |------|-------|--------|
 | Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `core/src/certs.rs` |
 | Event ID | same format as a device ID, random per event | `internal/clip/clip.go` |
-| Group tag | on the records of 0.6, the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters; in a group of 0.5, the first 8 bytes of SHA-256 over the group CA certificate (DER) | `member::live::tag` |
+| Group tag | the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters | `member::live::tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves the pairing windows | `member/src/lib.rs`, `member/src/discovery.rs` |
@@ -312,10 +312,10 @@ TXT strings (each at most 255 bytes):
 | Key | Value | Meaning |
 |-----|-------|---------|
 | `v` | `1` | protocol version |
-| `g` | group tag | members of another group, or of a replaced CA, are ignored |
-| `p` | `1` | present only while a pairing window is open (a computer's or, in 0.6, a phone's) |
-| `f` | fingerprint | with `p`, on the records of 0.6: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the window's QR code's `fp` (section 7), which the new device checks before it sends anything; with `j`, until the switch: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
-| `i` | window ID | with `p`, on the records of 0.6: the home window's ID, 32 lowercase hex characters, by which a new device that has only the six digits typed into it finds the window and builds its password (section 6, "Pairing in 0.6"); never the digits |
+| `g` | group tag | members of another group are ignored |
+| `p` | `1` | present only while a pairing window is open (a computer's or a phone's) |
+| `f` | fingerprint | with `p`: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the window's QR code's `fp` (section 7), which the new device checks before it sends anything |
+| `i` | window ID | with `p`: the home window's ID, 32 lowercase hex characters, by which a new device that has only the six digits typed into it finds the window and builds its password (section 6, "Pairing in 0.6"); never the digits |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
 
 A computer or a phone whose pairing window of 0.6 is open publishes `v=1`, `g=<tag>`, `p=1`,
@@ -1847,8 +1847,7 @@ side in `member/src/live/away.rs` and `member/src/away/toward.rs`, the offer in
 `core/src/hubkey.rs`; the tunnel carries the member protocol between members ("Through the
 tunnel" below). `cbb` runs GotaTun's WireGuard and smoltcp's TCP in its process
 (`member/src/tunnel.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over XHTTP
-(`member/src/vless.rs`). The phones' member keeps the messages of 0.5 until the phones move
-to the records of 0.6 (D-122; "Until the phones move to the records of 0.6" below).
+(`member/src/vless.rs`).
 
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). A device whose
@@ -2355,8 +2354,7 @@ until the hub's offer comes, as a computer that joined by an invitation does.
 
 A phone that is a hub of a group of 0.6 is the Live member's hub, which serves the guests of
 invitations as the computers' does. An admin phone makes its invitation through a hub of the
-group, as "Through the hub" says, with the window in its member (`cbb_invite_*`), and so does
-an admin phone of a group of 0.5, which is no hub (D-123); the invitation shows as a QR code,
+group, as "Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows as a QR code,
 and its file goes through the phone's share sheet. `TestFFIInviteThroughHub` and the Kotlin
 kit's `InviteKitTest` run it.
 
@@ -3162,8 +3160,7 @@ reader requires: `1` and `4`, fixed in every program from 0.6, with no switch to
 off. A signature of an algorithm the reader does not know, or by a half it does not list, is
 passed over, whatever its length; a signature of a known algorithm by a listed half that does
 not verify refuses the file. So a later version can add an algorithm beside these two, and
-MUST keep signing with both while readers of 0.6 are in use. 0.5 reads no release files, so
-the envelope of `sig` and `key` that it never took is gone.
+MUST keep signing with both while readers of 0.6 are in use.
 
 Every reader reads a file alike, in one strict form beside the body's own:
 
@@ -3706,8 +3703,6 @@ does not know unless its section says it refuses it.
 |---|---|---|
 | `EXPERIMENTAL-cbb-pair-v3` | TLS exporter label of a 0.6 pairing: CPace's `sid` and the exporter of the session mark | 6 |
 | `cbb pair channel v3` + `0x00` | CPace's channel identifier prefix in 0.6 | 6 |
-| `EXPERIMENTAL-cbb-pair-v2` | TLS exporter label: CPace's `sid` (0.5's pairing, until wave 5) | 6 |
-| `cbb pair v2` + `0x00` | CPace's channel identifier prefix (0.5's pairing, until wave 5) | 6 |
 | `cbb forwarder key` | TLS exporter label: a hub's proof of its WireGuard key | 13 |
 | `cbb forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
 | `cbb forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |
