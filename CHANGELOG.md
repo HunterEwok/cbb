@@ -3245,6 +3245,8 @@ with 0.5 is set up again once. The details follow.
 - The preview of who stays after a change of root with the recovery key works in the iPhone,
   Android and Aurora apps: the member took that step, which signs nothing, only with a key, as
   HarmonyOS's app sent an empty one; ffi's manage now takes a step without `public`.
+- The iPhone app's Home no longer draws its device list again every two seconds when nothing
+  changed: the refresh sets only what differs.
 - The push service keeps APNs' or FCM's answer when the platform closes the connection right
   after it: a failed acknowledgement only ends the connection, and the notification is not
   posted a second time.

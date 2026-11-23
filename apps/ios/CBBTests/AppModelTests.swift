@@ -198,6 +198,27 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    /// Home refreshes every two seconds; a refresh that finds the group as
+    /// it was tells the views nothing, so the screen is not drawn again,
+    /// and one that finds a change tells them.
+    func testRefreshWithoutChangeChangesNothing() async {
+        let g = FakeGroup()
+        let m = AppModel(group: g)
+        let ok = await m.joinByWindow(qr)
+        XCTAssertTrue(ok)
+        await m.refresh()
+        var changes = 0
+        let watch = m.objectWillChange.sink { changes += 1 }
+        defer { watch.cancel() }
+        await m.refresh()
+        await m.refresh()
+        XCTAssertEqual(changes, 0, "a refresh without a change told the views of one")
+        g.computers[0].name = "pi4"
+        await m.refresh()
+        XCTAssertGreaterThan(changes, 0)
+        XCTAssertEqual(m.devices.first { $0.id == "a" }?.name, "pi4")
+    }
+
     /// A removed phone leaves and is back on Start with a new key; the
     /// root leaves only alone; a phone in no group has nothing to leave.
     func testLeave() async {

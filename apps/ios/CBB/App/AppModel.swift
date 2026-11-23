@@ -979,15 +979,21 @@ final class AppModel: ObservableObject {
 
     func refresh() async {
         await group.refresh()
-        computers = group.computers
-        devices = group.devices
-        isRoot = group.isRoot
-        before06 = group.before06
-        removed = group.removed
-        notices = group.notices
-        rootChanged = group.rootChanged
-        keyLevel = group.keyLevel
-        (ttlMS, secretTtlMS) = group.ttlMS
+        // Home asks every two seconds. A value that did not change is not
+        // set again: setting it would draw again every view it feeds (the
+        // device list is built anew from the devices), and the screen would
+        // change under a person reading it, or a test reading its elements.
+        keep(\.computers, group.computers)
+        keep(\.devices, group.devices)
+        keep(\.isRoot, group.isRoot)
+        keep(\.before06, group.before06)
+        keep(\.removed, group.removed)
+        keep(\.notices, group.notices)
+        keep(\.rootChanged, group.rootChanged)
+        keep(\.keyLevel, group.keyLevel)
+        let ttl = group.ttlMS
+        keep(\.ttlMS, ttl.0)
+        keep(\.secretTtlMS, ttl.1)
         await refreshAway()
         await refreshRelay()
         if notifies {
@@ -996,9 +1002,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Sets the model's value at key to value only when it differs, so
+    /// that nothing that watches it is told of a change that is none.
+    private func keep<T: Equatable>(_ key: ReferenceWritableKeyPath<AppModel, T>, _ value: T) {
+        if self[keyPath: key] != value { self[keyPath: key] = value }
+    }
+
     private func refreshAway() async {
         guard let a = await group.awayStatus() else {
-            away = nil
+            keep(\.away, nil)
             Island.end(.away)
             return
         }
@@ -1012,9 +1024,9 @@ final class AppModel: ObservableObject {
         // at home it is old news. The member logs each failure itself.
         let failing = a.status == .connecting ? a.error : nil
         if notifies { Notifier.shared.away(trying: a.on && failing != nil) }
-        away = Away(on: a.on, status: a.status, error: failing.map {
+        keep(\.away, Away(on: a.on, status: a.status, error: failing.map {
             Self.describe($0, summary: String(localized: "The hub does not answer through the tunnel.", bundle: .app), log: false)
-        }, hub: a.hub, hubs: a.hubs)
+        }, hub: a.hub, hubs: a.hubs))
     }
 
     private func refreshRelay() async {
@@ -1023,7 +1035,7 @@ final class AppModel: ObservableObject {
             relayError = r?.error
             if let e = relayError { log.error("the relay: \(e, privacy: .public)") }
         }
-        blindRelay = r
+        keep(\.blindRelay, r)
     }
 
     /// Meets the group at the blind relay at address with the key pin, as
