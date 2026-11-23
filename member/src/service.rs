@@ -20,8 +20,6 @@ use crate::copies;
 use crate::discovery;
 use crate::error::{Context, Error, Result};
 use crate::files;
-use crate::identity::Identity;
-use crate::identity::Stored as _;
 use crate::peer;
 use crate::remotepaste;
 use crate::uptime;

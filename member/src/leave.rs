@@ -7,7 +7,6 @@
 use std::path::Path;
 
 use crate::error::{Error, Result};
-use crate::identity::Stored as _;
 use crate::{actions, identity, records, remotepaste};
 
 /// The answer to a leave in no group.
@@ -58,10 +57,12 @@ pub const GROUP_FILES: &[&str] = &[
 ];
 
 /// Whether dir holds a group, of 0.6 or from before it: its records or
-/// the device's identity, as a leave cut short leaves them last.
+/// the device's identity, as a leave cut short leaves them last. A file
+/// this user cannot see counts as there.
 pub fn in_group(dir: &Path) -> bool {
-    matches!(identity::Identity::load(dir), Ok(Some(_)) | Err(_))
-        || [records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| dir.join(f).exists())
+    [identity::FILE_NAME, records::FILE_NAME, crate::set::FILE_NAME]
+        .iter()
+        .any(|f| dir.join(f).try_exists().unwrap_or(true))
 }
 
 /// Deletes the group's files from dir and turns remote paste and the quick

@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The group's root and its admins on a computer (docs/design.md, "Full
-//! members, admins and the operating system"), as Go's service does them:
-//! cbb new makes a group with this computer as its root, and the root or an
-//! admin removes, renames, freezes and unfreezes devices, voids two
-//! histories, makes admins and sets the key level, each a record it signs
-//! (docs/protocol.md, section 10). The keys it signs with are the admin's
-//! fields of the identity file (identity::ADMIN_FIELDS): the group CA key
-//! of the computer that made the group, a root key it took the group over
-//! with, or an admin key, in a file or in the hardware, with its admin CA.
-//! The rules and the messages are Go's (internal/service), which stays the
-//! reference.
+//! What a computer says about itself to its group, how long a quick action
+//! may take, and whether it may hold the keys of the group's root or an
+//! admin (docs/design.md, "Full members, admins and the operating
+//! system"); the writers of the records are `crate::writers`.
 
 use std::time::Duration;
 

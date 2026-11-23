@@ -1212,7 +1212,7 @@ impl Service {
     /// the service starts in the group it kept.
     pub(super) fn live_join(&self, m: &Message, _r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
         let h = &m.header;
-        if in_group(&self.state_dir) || matches!(Identity::load(&self.state_dir), Ok(Some(_))) {
+        if in_group(&self.state_dir) {
             return Err(Error::msg("this device is already in a group"));
         }
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;

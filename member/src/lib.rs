@@ -142,7 +142,6 @@ use std::time::Duration;
 
 use cbb_core::{certs, clip};
 use error::{Context, Error, Result};
-use identity::Stored as _;
 
 const USAGE: &str = "Usage: cbb <command> [arguments]
 
@@ -1166,9 +1165,7 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         request(g, &control::Message::new(control::Header { op: "leave".into(), ..Default::default() }, Vec::new()))?;
         println!("{}", tr!("Left the group. The service restarts in no group: cbb pair joins one."));
     } else {
-        if identity::Identity::load(&g.state).ok().flatten().is_none()
-            && ![records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| g.state.join(f).exists())
-        {
+        if !leave::in_group(&g.state) {
             return Err(Error::msg(leave::NOTHING_TO_LEAVE));
         }
         leave::leave_group(&g.state)?;
