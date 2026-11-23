@@ -2093,4 +2093,98 @@ mod tests {
             assert_eq!(terminal_text(input, all), (want.to_string(), dropped), "{input:?}");
         }
     }
+
+    /// cbb update's link to the group over the control sockets: what the
+    /// service holds and wants, an archive it sends whole or not at all,
+    /// and one handed to it to serve.
+    #[cfg(unix)]
+    #[test]
+    fn the_update_s_link_to_the_service() {
+        use super::update::Group as _;
+        use std::os::unix::net::UnixListener;
+
+        let dir = std::env::temp_dir().join(format!("cbb-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let g = super::Global { state: dir.clone(), socket: dir.join("cbb.sock") };
+        let kept = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        for path in [g.socket.clone(), control::admin_socket(&g.socket)] {
+            let ln = UnixListener::bind(&path).unwrap();
+            let kept = kept.clone();
+            std::thread::spawn(move || {
+                for c in ln.incoming() {
+                    let Ok(mut c) = c else { return };
+                    let mut r = control::Reader::new(c.try_clone().unwrap());
+                    let Ok(Some(m)) = r.read() else { continue };
+                    let h = control::Header::default();
+                    let part = |size| control::Header {
+                        part: Some(control::Part { size, ..Default::default() }),
+                        ..Default::default()
+                    };
+                    let data = |p: &[u8], done| {
+                        control::Message::new(
+                            control::Header { op: "reply".into(), done, ..Default::default() },
+                            p.to_vec(),
+                        )
+                    };
+                    let answers: Vec<control::Message> = match (m.header.op.as_str(), m.header.value.as_str()) {
+                        ("release", _) => vec![control::reply(h, Vec::new())],
+                        ("release_held", _) => vec![control::reply(h, br#"{"keys":1}"#.to_vec())],
+                        ("release_want", _) => vec![control::reply(h, br#"["abc"]"#.to_vec())],
+                        ("release_get", "whole") => {
+                            vec![control::partial(part(5)), data(b"hel", false), data(b"lo", true)]
+                        }
+                        ("release_get", "short") => vec![control::partial(part(5)), data(b"hi", true)],
+                        ("release_get", "long") => vec![control::partial(part(5)), data(b"hello!", true)],
+                        ("release_get", "other") => vec![control::partial(part(9))],
+                        ("release_get", _) => vec![control::failure(&super::Error::msg("no such archive"))],
+                        ("release_file", _) => {
+                            let size = m.header.part.map(|p| p.size).unwrap_or_default() as usize;
+                            let mut got = Vec::new();
+                            while got.len() < size {
+                                let Ok(Some(d)) = r.read() else { break };
+                                got.extend(d.payload);
+                            }
+                            kept.lock().unwrap().push(got);
+                            vec![control::reply(h, Vec::new())]
+                        }
+                        _ => vec![control::failure(&super::Error::msg("unknown"))],
+                    };
+                    for a in answers {
+                        let _ = control::write(&mut c, &a);
+                    }
+                }
+            });
+        }
+
+        let link = super::ServiceLink(&g);
+        link.share(&serde_json::value::RawValue::from_string("{}".into()).unwrap());
+        assert_eq!(link.held().unwrap().get(), r#"{"keys":1}"#);
+        assert_eq!(link.want(), ["abc"]);
+
+        let out = dir.join("archive");
+        link.get("whole", 5, &out).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), b"hello");
+        let err = |sha: &str| link.get(sha, 5, &dir.join(sha)).unwrap_err().message().to_string();
+        assert!(err("short").contains("less than the archive"), "{}", err("short"));
+        assert!(err("long").contains("more than the archive"));
+        assert!(err("other").contains("another file"));
+        assert!(err("gone").contains("no such archive"));
+        assert!(!dir.join("short").exists() && !dir.join("long").exists(), "a broken download leaves nothing");
+
+        std::fs::write(dir.join("served"), b"the archive").unwrap();
+        link.keep("abc", 11, &dir.join("served"));
+        assert_eq!(kept.lock().unwrap().as_slice(), [b"the archive".to_vec()]);
+        // An archive that is not there is not handed on, and says so only
+        // in the log.
+        link.keep("abc", 11, &dir.join("none"));
+        assert_eq!(kept.lock().unwrap().len(), 1);
+
+        // No service: its help costs nothing.
+        let none = super::Global { state: dir.clone(), socket: dir.join("gone").join("cbb.sock") };
+        let link = super::ServiceLink(&none);
+        assert!(link.want().is_empty());
+        assert!(link.held().is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
