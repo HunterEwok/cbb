@@ -87,7 +87,8 @@ pub(crate) const PAIR_USAGE: &str =
                                 makes the phone that joins an admin; -app writes the window
                                 into an app's FILE
        cbb pair -code [address:port]   in no group: join a pairing window by its six digits
-       cbb pair -invite FILE    in no group: join from afar with an invitation";
+       cbb pair -invite FILE [-app FILE]   in no group: join from afar with an invitation;
+                                -app writes the key fingerprint into an app's FILE";
 
 /// Opens a pairing window and waits for the device that joins with its
 /// code.

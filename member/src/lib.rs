@@ -81,6 +81,7 @@ mod next;
 mod nextimage;
 #[cfg(unix)]
 mod nextlink;
+pub mod notices;
 
 pub mod offered;
 pub mod orders;
@@ -225,8 +226,10 @@ Commands:
                           In no group: join a pairing window by its six digits, typed here;
                           -caps joins as a member that can do a comma-separated subset of
                           admin,dials,hub (by default all three).
-  pair -invite file|-     Join from afar with an invitation from cbb invite
-                          (its file, or with - its text pasted on standard input).
+  pair -invite file|- [-app FILE]
+                          Join from afar with an invitation from cbb invite
+                          (its file, or with - its text pasted on standard input);
+                          -app writes the key fingerprint into the desktop app's file.
   invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]
                           Invite a device from afar, on the root or an admin: shows a QR
                           code for the app and writes a file for a computer. Through the
@@ -463,7 +466,7 @@ const JOIN_BY_WINDOW: &str = "to join a group, open a pairing window with cbb pa
 pub(crate) const OLD_INVITATION: &str = "this invitation comes from a group made before 0.6, which a device joins only at home with cbb pair; ask for an invitation of a group of 0.6";
 
 /// cbb pair's usage in no group.
-const PAIR_USE: &str = "cbb pair [-code [ADDRESS:PORT] | -invite FILE] [-caps LIST] [-name NAME]";
+const PAIR_USE: &str = "cbb pair [-code [ADDRESS:PORT] | -invite FILE [-app FILE]] [-caps LIST] [-name NAME]";
 
 /// Joins a group: by a pairing window's six digits (-code) or by a remote
 /// invitation (-invite).
@@ -475,6 +478,7 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
     let mut code_addr = None;
     let mut caps = default_caps();
     let mut invite = None;
+    let mut app = None;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
@@ -498,6 +502,9 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
                 }
             },
             Some("invite") => invite = Some(next()?),
+            // The desktop app's file for a join by invitation, which shows
+            // the fingerprint while cbb waits.
+            Some("app") if args.iter().any(|a| flag(a) == Some("invite")) => app = Some(next()?),
             // The QR code a computer showed for a phone to dial it (D-119).
             Some("app" | "port" | "addr") => return Err(Error::msg(JOIN_BY_WINDOW)),
             _ => return Err(cli::usage(PAIR_USE)),
@@ -562,7 +569,7 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
     if let Some((path, text)) =
         invite.as_ref().filter(|(_, t)| t.trim_start().starts_with(cbb_core::join::invitation::PREFIX))
     {
-        join_invited(g, &name, &caps, given_name, given_caps, text)?;
+        join_invited(g, &name, &caps, given_name, given_caps, text, app.as_deref())?;
         // It is used up, and was a secret; nothing needs it any more.
         if !path.is_empty() {
             let _ = std::fs::remove_file(path);
@@ -584,7 +591,9 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
 /// the running service, with its own -name and -caps unless cbb pair gives
 /// them, or with no service running, into the state folder, before the
 /// service starts. Shows this device's key fingerprint, which the admin
-/// compares before admitting it.
+/// compares before admitting it; with app (cbb pair -app FILE), also as one
+/// line of JSON in the desktop app's file, `{fingerprint}`, rewritten with
+/// done once the device joined. Removing the file gives up.
 fn join_invited(
     g: &Global,
     name: &str,
@@ -592,13 +601,29 @@ fn join_invited(
     given_name: Option<String>,
     given_caps: Option<Vec<String>>,
     text: &str,
+    app: Option<&str>,
 ) -> Result<()> {
-    let shown = |fp: &str| {
-        println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
+    let out = app.map(open_app_file).transpose()?.map(std::sync::Mutex::new);
+    let write = |line: serde_json::Value| -> Result<()> {
+        let Some(out) = &out else { return Ok(()) };
+        let mut f = out.lock().unwrap_or_else(|e| e.into_inner());
+        f.set_len(0)
+            .and_then(|_| std::io::Seek::rewind(&mut *f))
+            .and_then(|_| f.write_all(format!("{line}\n").as_bytes()))
+            .and_then(|_| f.sync_all())
+            .context("cannot write the fingerprint for the app")
+    };
+    let shown = |fp: &str| -> Result<()> {
+        let fp = fp.get(..23).unwrap_or(fp);
+        println!("{}", tr!("\nThis device's key fingerprint:  {}", fp));
         println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
         println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
         std::io::stdout().flush().ok();
+        write(serde_json::json!({ "fingerprint": fp }))
     };
+    if let Some(app) = app {
+        watch_app_file(app.to_string());
+    }
     if service_answers(g) {
         let h = control::Header {
             op: "join".into(),
@@ -609,12 +634,14 @@ fn join_invited(
             ..Default::default()
         };
         let (_w, mut r, mut m) = admit_cli::stream(g, h)?;
+        let mut fp = String::new();
         loop {
             if !m.header.fingerprint.is_empty() {
-                shown(&m.header.fingerprint);
+                fp = m.header.fingerprint.clone();
+                shown(&fp)?;
             }
             if m.header.done {
-                return Ok(());
+                return write(serde_json::json!({ "fingerprint": fp.get(..23).unwrap_or(&fp), "done": true }));
             }
             m = check(admit_cli::next(&mut r)?)?;
         }
@@ -622,11 +649,11 @@ fn join_invited(
     let me =
         joining::Me { name, os: cbb_core::format::print::os_number(admin::os_name()), caps: roster::caps_number(caps) };
     std::fs::create_dir_all(&g.state).context(format!("cannot create {}", g.state.display()))?;
-    let fp = own::Own::load(&g.state)?.hash();
-    shown(&base64::Engine::encode(&base64::engine::general_purpose::STANDARD, fp.0));
+    let fp = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, own::Own::load(&g.state)?.hash().0);
+    shown(&fp)?;
     let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
     live::invite::join(&g.state, &me, text, log)?;
-    Ok(())
+    write(serde_json::json!({ "fingerprint": fp.get(..23).unwrap_or(&fp), "done": true }))
 }
 
 /// After a join by invitation, waits a while for the service to hand this
@@ -2241,8 +2268,15 @@ mod tests {
                 _ => vec![control::failure(&super::Error::msg("unknown"))],
             }
         });
-        super::join_invited(&g, "pi", &[], Some("desk".into()), None, " cbb://join#x \n").unwrap();
+        // The desktop app's file gets the fingerprint, and done at the end.
+        // The file stays: removing it while the test runs would give up.
+        let app = std::env::temp_dir().join(format!("cbb-join-app-{}.json", std::process::id()));
+        std::fs::write(&app, "").unwrap();
+        let app = app.to_string_lossy().into_owned();
+        super::join_invited(&g, "pi", &[], Some("desk".into()), None, " cbb://join#x \n", Some(&app)).unwrap();
         assert_eq!(joins.lock().unwrap().as_slice(), [("cbb://join#x".to_string(), "desk".to_string(), true)]);
+        let line: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&app).unwrap()).unwrap();
+        assert_eq!(line, serde_json::json!({ "fingerprint": "AAAA BBBB CCCC DDDD EEE", "done": true }));
         super::wait_for_hub(&g);
         std::fs::remove_dir_all(&g.state).unwrap();
 
@@ -2251,7 +2285,7 @@ mod tests {
             "status" => vec![control::reply(control::Header::default(), Vec::new())],
             _ => vec![control::failure(&super::Error::msg("the invitation has expired"))],
         });
-        let e = super::join_invited(&g, "pi", &[], None, None, "cbb://join#x").unwrap_err();
+        let e = super::join_invited(&g, "pi", &[], None, None, "cbb://join#x", None).unwrap_err();
         assert!(e.to_string().contains("expired"), "{e}");
         std::fs::remove_dir_all(&g.state).unwrap();
 
@@ -2260,7 +2294,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cbb-join-alone-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let g = super::Global { state: dir.join("state"), socket: dir.join("gone").join("cbb.sock") };
-        assert!(super::join_invited(&g, "pi", &[], None, None, "cbb://join#not-one").is_err());
+        assert!(super::join_invited(&g, "pi", &[], None, None, "cbb://join#not-one", None).is_err());
         assert!(g.state.is_dir());
         super::wait_for_hub(&g);
         let _ = std::fs::remove_dir_all(&dir);

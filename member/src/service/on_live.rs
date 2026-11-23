@@ -360,8 +360,13 @@ impl Service {
         // say of this device and the group.
         let mut facts = crate::why::facts(&status, &devices);
         cbb_core::why::group_facts(&mut facts, &st, &me);
-        facts.checkpoint_stuck = !live.mesh.set().lock().unwrap().stuck_checkpoints().is_empty();
-        Status { why: cbb_core::why::diagnose(&facts, uptime::wall_ms()), ..status }
+        let notices = {
+            let set = live.mesh.set();
+            let set = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            facts.checkpoint_stuck = !set.stuck_checkpoints().is_empty();
+            crate::notices::of(&set, &me, uptime::wall_ms().max(0).unsigned_abs())
+        };
+        Status { why: cbb_core::why::diagnose(&facts, uptime::wall_ms()), notices, ..status }
     }
 
     /// The devices of a group of 0.6, as `cbb devices` shows them.
@@ -496,6 +501,15 @@ impl Service {
             "status" => {
                 Ok(control::reply(Header { status: Some(self.live_status(live)), ..Default::default() }, Vec::new()))
             }
+            // A notice the user hid (`Status::notices`): the set keeps it
+            // dismissed, on this device only.
+            "dismiss" => crate::notices::record_id(&h.value)
+                .ok_or_else(|| Error::msg("dismiss needs a notice's id"))
+                .and_then(|id| {
+                    live.mesh.set().lock().unwrap_or_else(std::sync::PoisonError::into_inner).dismiss(&id);
+                    live.mesh.changed()
+                })
+                .map(|()| control::reply(Header { done: true, ..Default::default() }, Vec::new())),
             "devices" => {
                 Ok(control::reply(Header { devices: self.live_devices(live), ..Default::default() }, Vec::new()))
             }

@@ -49,6 +49,7 @@ const (
 	OpBug         = "bug"            // client → service: the bug report of the panic before the last restart, as the core made it (empty when none waits)
 	OpBugAllow    = "bug_allow"      // client → service: the user allowed it (payload {"always"}), and it goes
 	OpBugCancel   = "bug_cancel"     // client → service: the user cancelled it: nothing goes
+	OpDismiss     = "dismiss"        // client → service: hide the notice whose ID is Value, on this device (Status.Notices)
 	OpView        = "view"           // client → service: the tiles to draw (docs/apps.md, "What the member shows")
 	OpArrange     = "arrange"        // client → service: the user's change of the tiles' order (Header.Arrange), answered as view
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
@@ -251,6 +252,18 @@ type Release struct {
 	Release release.File `json:"release"`
 }
 
+// Notice is one of the member's notices about the group: its ID, its kind
+// (change_arriving, removals_waiting, root_room_waiting, ack_owed,
+// frozen_holding, checkpoint_stuck or returned_after_removal) with its
+// arguments (device, devices, percent, removals, days_left), and whether
+// the user may hide it.
+type Notice struct {
+	ID          string         `json:"id"`
+	Kind        string         `json:"kind"`
+	Args        map[string]any `json:"args,omitempty"`
+	Dismissable bool           `json:"dismissable,omitempty"`
+}
+
 // Conflict is a conflict of the group's records, for cbb status and the
 // apps.
 type Conflict struct {
@@ -317,6 +330,10 @@ type Status struct {
 	// Conflicts are the conflicts that stop the group until its root
 	// decides.
 	Conflicts []Conflict `json:"conflicts,omitempty"`
+	// Notices are the member's notices about the group, as the phones'
+	// apps show them (docs/apps.md, "Notices"); OpDismiss hides one that
+	// is Dismissable.
+	Notices []Notice `json:"notices,omitempty"`
 	// Newer is how many records of a later version this member keeps: an
 	// update of CBB reads them.
 	Newer int `json:"newer,omitempty"`

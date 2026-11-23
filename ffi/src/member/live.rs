@@ -654,7 +654,10 @@ impl Phone {
             // A notice the person hid: the set keeps it dismissed.
             "dismiss" => {
                 let id = arg("id");
-                let id = id.as_str().and_then(record_id).ok_or_else(|| Error::msg("dismiss needs a notice's id"))?;
+                let id = id
+                    .as_str()
+                    .and_then(cbb_member::notices::record_id)
+                    .ok_or_else(|| Error::msg("dismiss needs a notice's id"))?;
                 lock(&l.mesh.set()).dismiss(&id);
                 l.mesh.changed()?;
                 done()
@@ -750,11 +753,11 @@ impl Phone {
         cbb_core::why::diagnose(&facts, cbb_member::uptime::wall_ms())
     }
 
-    /// The member's notices about the group (`notices_of`).
+    /// The member's notices about the group (`cbb_member::notices`).
     fn notices(&self) -> Vec<Value> {
         let held = self.live.mesh.set();
         let set = lock(&held);
-        notices_of(&set, &self.live.mesh.device())
+        cbb_member::notices::of(&set, &self.live.mesh.device(), wall_ms_u64())
     }
 
     /// Sync away from home as the away ops answer it: its state, null
@@ -1286,62 +1289,6 @@ fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::comm
     }
 }
 
-/// The share of the root's room that removals waiting for admins take
-/// before the root phone says so (docs/apps.md, "Notices").
-const ROOT_ROOM_WARN_PERCENT: u64 = 50;
-
-/// The member's notices about the group (docs/apps.md, "Notices"), as
-/// the apps show them: `{id, kind, args, dismissable}`. Only the notices of
-/// removed devices that count again (`returned_after_removal`, by the
-/// removal's or the change's record ID) may be hidden; the others stay
-/// until what they say is over. `root_room_waiting` shows on the root's
-/// own device.
-fn notices_of(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId) -> Vec<Value> {
-    let st = set.state();
-    let device_of = |k: &cbb_core::records::KeyHash| {
-        st.devices.iter().find(|d| d.key.hash() == *k || d.admin.as_ref() == Some(k)).map(|d| id_text(&d.id))
-    };
-    let notice = |id: String, kind: &str, args: Value, dismissable: bool| json!({ "id": id, "kind": kind, "args": args, "dismissable": dismissable });
-    let mut out = Vec::new();
-    if set.change_arriving(&st).is_some() {
-        out.push(notice("change_arriving".into(), "change_arriving", json!({}), false));
-    }
-    if !set.removals_waiting(&st).is_empty() {
-        out.push(notice("removals_waiting".into(), "removals_waiting", json!({}), false));
-    }
-    if let Some(w) = set.root_room_waiting(&st, ROOT_ROOM_WARN_PERCENT).filter(|_| st.root_device == Some(*me)) {
-        let percent = w.waiting_units.saturating_mul(100).checked_div(w.room.cap.max(1)).unwrap_or(0);
-        out.push(notice("root_room_waiting".into(), "root_room_waiting", json!({ "percent": percent }), false));
-    }
-    let own_admin = st.devices.iter().find(|d| d.id == *me).and_then(|d| d.admin);
-    if let Some(o) = own_admin.and_then(|k| set.ack_owed(&st, &k, wall_ms_u64())) {
-        out.push(notice(
-            "ack_owed".into(),
-            "ack_owed",
-            json!({ "removals": o.removals, "days_left": o.days_left }),
-            false,
-        ));
-    }
-    for f in set.frozen_holding(&st) {
-        let d = id_text(&f.device);
-        out.push(notice(format!("frozen_holding:{d}"), "frozen_holding", json!({ "device": d }), false));
-    }
-    if !set.stuck_checkpoints().is_empty() {
-        out.push(notice("checkpoint_stuck".into(), "checkpoint_stuck", json!({}), false));
-    }
-    for (id, keys) in set.notices(&st) {
-        let devices: Vec<String> = keys.iter().filter_map(device_of).collect();
-        let Some(first) = devices.first() else { continue };
-        out.push(notice(
-            certs::b64::encode(&id.0),
-            "returned_after_removal",
-            json!({ "device": first, "devices": devices.len() }),
-            true,
-        ));
-    }
-    out
-}
-
 /// Where the phone keeps the group's root as it last told its app of it.
 const ROOT_SEEN: &str = "root_seen.json";
 
@@ -1421,7 +1368,7 @@ fn watch_records(live: &Arc<Live>, dir: &Path, ev: Events, log: Arc<dyn Fn(&str)
             log(&format!("cbb: the group's root as seen: {}", e.for_log()));
         }
         let mut ids = Vec::new();
-        new_notices(&mut ids, &notices_of(&set, &me));
+        new_notices(&mut ids, &cbb_member::notices::of(&set, &me, wall_ms_u64()));
         (Arc::new(Mutex::new(ids)), root_seen(dir).and_then(|s| s.pending))
     };
     if let Some(c) = pending {
@@ -1454,7 +1401,7 @@ fn watch_records(live: &Arc<Live>, dir: &Path, ev: Events, log: Arc<dyn Fn(&str)
             Ok(None) => {}
             Err(e) => log(&format!("cbb: the group's root as seen: {}", e.for_log())),
         }
-        let now = notices_of(set, &me);
+        let now = cbb_member::notices::of(set, &me, wall_ms_u64());
         for n in new_notices(&mut lock(&shown), &now) {
             queue(&Event::Notice { notice: n });
         }
@@ -1465,12 +1412,6 @@ fn watch_records(live: &Arc<Live>, dir: &Path, ev: Events, log: Arc<dyn Fn(&str)
 /// The app's own tunnel as why takes it (`away`), none when it is null.
 fn away_arg(v: &Value) -> Result<Option<cbb_core::why::AwayFacts>> {
     serde_json::from_value(v.clone()).map_err(|e| Error::msg(format!("away: {e}")))
-}
-
-/// A record's ID in base64, as the notices name it.
-fn record_id(s: &str) -> Option<cbb_core::records::RecordId> {
-    let b = certs::b64::decode_str(s)?;
-    Some(cbb_core::records::RecordId(b.try_into().ok()?))
 }
 
 /// The wall clock in milliseconds, as the records count it.
@@ -1989,7 +1930,7 @@ mod tests {
         let id = certs::b64::encode(&[9; 32]);
         ok(&call("dismiss", json!({ "id": id })));
         let phone = &*m.0;
-        let rid = record_id(&id).unwrap();
+        let rid = cbb_member::notices::record_id(&id).unwrap();
         assert!(lock(&phone.live.mesh.set()).dismissed().any(|d| *d == rid));
         assert_eq!(ok(&call("notices", Value::Null))["notices"], json!([]));
 

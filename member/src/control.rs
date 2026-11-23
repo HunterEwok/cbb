@@ -438,6 +438,11 @@ pub struct Status {
     /// everything syncs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub why: Vec<cbb_core::why::Reason>,
+    /// The member's notices about the group (`crate::notices`; docs/apps.md,
+    /// "Notices"), as the phones' apps get them: `{id, kind, args,
+    /// dismissable}`; the op `dismiss` hides one whose dismissable is true.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<serde_json::Value>,
 }
 
 /// A conflict of the group's records, as Go's control.Conflict: admins,
@@ -858,6 +863,9 @@ pub fn is_admin(op: &str) -> bool {
             | "bug"
             | "bug_allow"
             | "bug_cancel"
+            // A notice of the group hidden on this device, as a phone's
+            // user hides it: the other devices still show theirs.
+            | "dismiss"
     )
 }
 
@@ -1010,7 +1018,7 @@ mod tests {
     #[test]
     fn which_requests_need_the_admin_socket() {
         let h = |op: &str, device: &str| Header { op: op.into(), device: device.into(), ..Default::default() };
-        for op in ["copy", "paste", "status", "watch", "reply", "keys"] {
+        for op in ["copy", "paste", "status", "watch", "reply", "keys", "dismiss"] {
             assert!(!is_admin(op) && !needs_admin(&h(op, "")), "{op}");
         }
         for op in ["pair", "remove", "leave", "mode"] {
