@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestLockAgent allows one agent in a user's session: the user unit and the
@@ -58,5 +59,24 @@ func TestRunEnds(t *testing.T) {
 	}
 	if dir := ReceivedFiles(); dir != "" && filepath.Base(dir) != "received" {
 		t.Errorf("received files in %s", dir)
+	}
+}
+
+// TestNoDisplay: with no display to open, the agent tries a few times and
+// then gives up with why, so it does not outlive its session.
+func TestNoDisplay(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("DISPLAY", "")
+	defer func(w time.Duration) { firstWait = w }(firstWait)
+	firstWait = time.Millisecond
+	defer func() {
+		if agentLockFile != nil {
+			agentLockFile.Close()
+			agentLockFile = nil
+		}
+	}()
+	if err := runDesktop(context.Background(), "/nonexistent", func(string, ...any) {}); err == nil {
+		t.Fatal("no display, and no error")
 	}
 }
