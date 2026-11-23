@@ -667,10 +667,7 @@ jobs:
           cp "$dir/cbb" freebsd-bin/cbb
           CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath -o freebsd-bin/cbb-helper ./cmd/cbb-helper
       - name: go test in a FreeBSD 15.1 virtual machine
-        # With v1.6.0 (anyvm 0.7.7) one run's machine ran every CPU-bound
-        # package 20 to 40 times slower, as if without KVM, and those that
-        # sign with SLH-DSA met the 25 minutes; main runs v1.5.9.
-        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
         with:
           release: "15.1"
           usesh: true
