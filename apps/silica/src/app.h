@@ -148,8 +148,9 @@ public:
     // window of the group shows (the window announced at home), or a
     // window's QR code text.
     Q_INVOKABLE void joinByWindow(const QString &text);
-    // An admin's change to a device of the group (remove, rename, thaw,
-    // make_admin as the root, for a computer) or command for it (mute, unmute), signed with the admin key, or the
+    // An admin's change to a device of the group (remove, rename, freeze,
+    // thaw, make_admin as the root, for a computer) or command for it (mute,
+    // unmute, hub for an admin computer), signed with the admin key, or the
     // root's, off the GUI thread; managed() tells when it is done.
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),

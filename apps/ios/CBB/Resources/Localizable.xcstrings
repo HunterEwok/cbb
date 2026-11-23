@@ -6306,6 +6306,52 @@
         }
       }
     },
+    "For a stolen admin computer: it changes nothing more and the others refuse it until the main device unfreezes or removes it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لحاسوب مشرف مسروق: لا يغيّر شيئًا بعد ذلك ويرفضه الآخرون حتى يلغي الجهاز الرئيسي تجميده أو يزيله."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para un ordenador de administrador robado: ya no cambia nada y los demás lo rechazan hasta que el dispositivo principal lo descongele o lo quite."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "למחשב מנהל שנגנב: הוא לא משנה עוד דבר והאחרים דוחים אותו עד שהמכשיר הראשי יפשיר או יסיר אותו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चोरी हुए एडमिन कंप्यूटर के लिए: वह आगे कुछ नहीं बदलता और बाकी उसे तब तक ठुकराते हैं जब तक मुख्य डिवाइस उसे अनफ़्रीज़ न करे या हटा न दे।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для украденного компьютера-администратора: он больше ничего не меняет, и остальные отказываются с ним работать, пока главное устройство не разморозит или не удалит его."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwa kompyuta ya msimamizi iliyoibiwa: haibadilishi chochote tena na vingine huikataa hadi kifaa kikuu kiifungue au kiiondoe."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于被盗的管理员电脑：它不能再更改任何内容，其他设备会拒绝它，直到主设备解冻或移除它。"
+          }
+        }
+      }
+    },
     "For an hour": {
       "localizations": {
         "ar": {
@@ -6348,6 +6394,190 @@
           "stringUnit": {
             "state": "translated",
             "value": "1 小时"
+          }
+        }
+      }
+    },
+    "Freeze": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تجميد"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congelar"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הקפאה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़्रीज़ करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заморозить"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gandisha"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冻结"
+          }
+        }
+      }
+    },
+    "Freeze %@?": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تجميد %@؟"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Congelar %@?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להקפיא את %@?"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को फ़्रीज़ करें?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заморозить %@?"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gandisha %@?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冻结 %@？"
+          }
+        }
+      }
+    },
+    "Freeze an admin computer": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تجميد حاسوب مشرف"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congelar un ordenador de administrador"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הקפאת מחשב מנהל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी एडमिन कंप्यूटर को फ़्रीज़ करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заморозить компьютер-администратор"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gandisha kompyuta ya msimamizi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冻结管理员电脑"
+          }
+        }
+      }
+    },
+    "Frozen.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم التجميد."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congelado."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הוקפא."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़्रीज़ किया गया।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заморожено."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imegandishwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已冻结。"
           }
         }
       }
@@ -7544,6 +7774,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "将在一分钟后执行；在此之前，“取消重启或关机”可阻止它。"
+          }
+        }
+      }
+    },
+    "It is a hub now.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أصبح الآن محورًا."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora es un hub."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עכשיו זו רכזת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अब यह हब है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Теперь это хаб."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sasa ni kitovu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它现在是中心节点。"
           }
         }
       }
@@ -9434,6 +9710,52 @@
         }
       }
     },
+    "Make %@ a hub?": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جعل %@ محورًا؟"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Convertir %@ en hub?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להפוך את %@ לרכזת?"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को हब बनाएँ?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать %@ хабом?"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ufanye %@ kuwa kitovu?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让 %@ 成为中心节点？"
+          }
+        }
+      }
+    },
     "Make %@ an admin?": {
       "localizations": {
         "ar": {
@@ -9476,6 +9798,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "让 %@ 成为管理员？"
+          }
+        }
+      }
+    },
+    "Make a computer a hub": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جعل حاسوب محورًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convertir un ordenador en hub"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפיכת מחשב לרכזת"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी कंप्यूटर को हब बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать компьютер хабом"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya kompyuta kuwa kitovu"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将电脑设为中心节点"
           }
         }
       }
@@ -9752,6 +10120,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "创建邀请"
+          }
+        }
+      }
+    },
+    "Make it a hub": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جعله محورًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convertirlo en hub"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפיכה לרכזת"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इसे हब बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать хабом"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifanye kitovu"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设为中心节点"
           }
         }
       }
@@ -27048,6 +27462,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "你被邀请加入一个群组"
+          }
+        }
+      }
+    },
+    "Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عندها تصل أجهزتك إلى المجموعة عبره عندما تكون بعيدة عن المنزل، عبر مُعيد توجيه المشروع على cbb.tools. يجب أن تكون المزامنة بعيدًا عن المنزل مفعّلة هناك مسبقًا؛ ولا يشغّلها إلا مستخدمه."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entonces tus dispositivos llegan al grupo a través de él cuando están fuera de casa, por el reenviador del proyecto en cbb.tools. La sincronización fuera de casa ya debe estar activada allí; solo su propio usuario la activa."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אז המכשירים שלכם מגיעים דרכו לקבוצה כשהם מחוץ לבית, דרך המעביר של הפרויקט ב-cbb.tools. הסנכרון מחוץ לבית חייב להיות מופעל שם כבר; רק המשתמש שלו מפעיל אותו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "तब घर से दूर होने पर आपके डिवाइस cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए, इसके माध्यम से समूह तक पहुँचते हैं। वहाँ घर से दूर सिंक पहले से चालू होना चाहिए; केवल उसका अपना उपयोगकर्ता इसे चालू करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома ваши устройства будут связываться с группой через него, через сервер пересылки проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kisha vifaa vyako hufikia kikundi kupitia hicho vikiwa mbali na nyumbani, kupitia kisambazaji cha mradi kwenye cbb.tools. Kusawazisha ukiwa mbali na nyumbani lazima kuwe kumewashwa huko tayari; mtumiaji wake pekee ndiye hukuwasha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之后你的设备离家时会通过它连接群组，经由项目在 cbb.tools 的转发器。那里必须已开启离家同步；只有它自己的用户才能开启。"
           }
         }
       }

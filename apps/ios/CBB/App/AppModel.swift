@@ -47,6 +47,10 @@ protocol GroupController: AnyObject {
     func setTtl(ms: Int64?, secretMS: Int64?) async throws
     /// Unfreezes an admin computer that another admin froze.
     func unfreeze(_ id: String) async throws
+    /// Freezes an admin computer, as one does with a stolen one.
+    func freeze(_ id: String) async throws
+    /// Makes an admin computer a hub through the project's forwarder (D-134).
+    func makeHub(_ id: String) async throws
     /// Whether this phone holds the group's root.
     var isRoot: Bool { get }
     /// Whether the saved group was made before 0.6, which this version no
@@ -162,6 +166,8 @@ extension GroupController {
     var groupTag: String? { hasGroup ? "group" : nil }
     func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? { nil }
     func unfreeze(_ id: String) async throws {}
+    func freeze(_ id: String) async throws { throw PhoneGroup.Failure.notAdmin }
+    func makeHub(_ id: String) async throws { throw PhoneGroup.Failure.notAdmin }
     var removed: Bool { false }
     func leave() async throws { throw LiveGroup.Failure.noGroup }
     var isRoot: Bool { false }
@@ -1217,6 +1223,30 @@ final class AppModel: ObservableObject {
         do {
             try await group.unfreeze(id)
             message = String(localized: "It is an admin again.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        devices = group.devices
+    }
+
+    /// Freezes a stolen admin computer: nothing it signs counts until the
+    /// root unfreezes it.
+    func freeze(_ id: String) async {
+        do {
+            try await group.freeze(id)
+            message = String(localized: "Frozen.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        devices = group.devices
+    }
+
+    /// Makes an admin computer a hub with a hub command; the computer
+    /// answers (D-134: a hub is never a phone).
+    func makeHub(_ id: String) async {
+        do {
+            try await group.makeHub(id)
+            message = String(localized: "It is a hub now.", bundle: .app)
         } catch {
             message = Self.describe(error)
         }

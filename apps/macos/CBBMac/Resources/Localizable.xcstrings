@@ -461,48 +461,48 @@
         }
       }
     },
-    "A phone is a hub only from its own app's Settings, while the app is open.": {
+    "A phone is never a hub.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يكون الهاتف محورًا إلا من إعدادات تطبيقه، والتطبيق مفتوح."
+            "value": "الهاتف لا يكون محورًا أبدًا."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un teléfono solo es hub desde los Ajustes de su propia app, mientras la app está abierta."
+            "value": "Un teléfono nunca es un hub."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "טלפון הוא רכזת רק מההגדרות של האפליקציה שלו, כשהאפליקציה פתוחה."
+            "value": "טלפון אף פעם אינו רכזת."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "फ़ोन केवल अपने ऐप की सेटिंग्स से हब बनता है, जब तक ऐप खुला है।"
+            "value": "फ़ोन कभी हब नहीं होता।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Телефон становится хабом только в настройках своего приложения и только пока приложение открыто."
+            "value": "Телефон не бывает хабом."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Simu ni kitovu tu kutoka Mipangilio ya programu yake, programu ikiwa imefunguliwa."
+            "value": "Simu kamwe si kitovu."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "手机只能在其应用打开时，从应用自己的设置中成为中心节点。"
+            "value": "手机从不担任中心节点。"
           }
         }
       }

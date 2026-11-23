@@ -352,6 +352,14 @@
         <translation>设备 ID</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>冻结</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>正在冻结 %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>在群组中</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>Make an admin</source>
         <translation>设为管理员</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>设为中心节点</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>正在将 %1 设为中心节点</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>

@@ -7,7 +7,7 @@
   "A device did not pair: %s": "एक डिवाइस पेयर नहीं हुआ: %s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "हब को घर से बाहर सिंक चाहिए, जो इस कंप्यूटर पर बंद है, इसलिए पहले उसे चालू किया जाता है। इसके बाद घर से बाहर होने पर आपके डिवाइस इस कंप्यूटर से होकर, cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए समूह तक पहुँचते हैं।",
   "A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": "जो हब कॉपी केवल आगे भेजता है, वह उन्हें पढ़ नहीं सकता: वे केवल आपके दूसरे डिवाइसों के लिए सील होती हैं, इसलिए उसकी कुंजियों को हार्डवेयर नहीं चाहिए।",
-  "A phone is a hub only from its own app's Settings, while the app is open.": "फ़ोन केवल अपने ऐप की सेटिंग्स से हब बनता है, जब तक ऐप खुला है।",
+  "A phone is never a hub.": "फ़ोन कभी हब नहीं होता।",
   "A watch is never a hub.": "घड़ी कभी हब नहीं होती।",
   "About": "परिचय",
   "Add a device": "डिवाइस जोड़ें",

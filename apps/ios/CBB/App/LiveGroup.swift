@@ -639,6 +639,17 @@ final class LiveGroup: GroupController {
         try await act(String(localized: "Unfreeze an admin computer", bundle: .app), "thaw", ["device": .string(id)])
     }
 
+    /// Freezes an admin computer, as one does with a stolen one.
+    func freeze(_ id: String) async throws {
+        try await act(String(localized: "Freeze an admin computer", bundle: .app), "freeze", ["device": .string(id)])
+    }
+
+    /// Makes an admin computer a hub through the project's forwarder; the
+    /// computer answers whether it is one.
+    func makeHub(_ id: String) async throws {
+        try await act(String(localized: "Make a computer a hub", bundle: .app), "hub", ["device": .string(id)])
+    }
+
     /// Gives a device another name (docs/protocol.md, section 10): a device
     /// record like its newest one with that name, signed with this phone's
     /// root or admin key after Face ID, sent to every connected computer.

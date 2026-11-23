@@ -352,6 +352,14 @@
         <translation>معرّف الجهاز</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>تجميد</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>جارٍ تجميد %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>في المجموعة</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>Make an admin</source>
         <translation>اجعله مشرفًا</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>جعله محورًا</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>جارٍ جعل %1 محورًا</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>

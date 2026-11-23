@@ -352,6 +352,14 @@
         <translation>ID устройства</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>Заморозить</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>Заморозка: %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>В группе</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>Make an admin</source>
         <translation>Сделать администратором</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>Сделать хабом</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>%1 становится хабом</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>

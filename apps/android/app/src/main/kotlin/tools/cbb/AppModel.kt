@@ -901,6 +901,32 @@ class AppModel(private val app: Context) {
         update()
     }
 
+    /** Freezes a stolen admin computer: nothing it signs counts until the root unfreezes it. */
+    suspend fun freeze(id: String) {
+        message = try {
+            group.freeze(id)
+            Note(R.string.frozen_done)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
+    /** Makes an admin computer a hub, through the project's forwarder, with a hub command (D-134). */
+    suspend fun makeHub(id: String) {
+        message = try {
+            group.makeHub(id)
+            Note(R.string.made_hub)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
     /** The mutes asked for and not yet answered, by device: the tile shows the new state at once and goes back only when it is refused. */
     val pendingMute = mutableStateMapOf<String, Boolean>()
 

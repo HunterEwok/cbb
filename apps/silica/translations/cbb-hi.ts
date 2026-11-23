@@ -352,6 +352,14 @@
         <translation>डिवाइस ID</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>फ़्रीज़ करें</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>%1 फ़्रीज़ किया जा रहा है</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>समूह में</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>Make an admin</source>
         <translation>एडमिन बनाएँ</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>इसे हब बनाएँ</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>%1 को हब बनाया जा रहा है</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>

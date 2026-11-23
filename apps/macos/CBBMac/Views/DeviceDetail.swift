@@ -415,13 +415,13 @@ struct DeviceDetail: View {
         }
     }
 
-    /// Why d cannot be a hub, nil when it can: a phone only from its own
-    /// app, never a member without the cap hub, a watch or a computer without root, and a
+    /// Why d cannot be a hub, nil when it can: never a phone (D-134),
+    /// never a member without the cap hub, a watch or a computer without root, and a
     /// computer only as the root or an admin with the hub power. Another
     /// computer turns sync away from home on itself, and is told so.
     private func noHub(_ d: Control.Device) -> LocalizedStringKey? {
         switch d.role {
-        case "phone": return "A phone is a hub only from its own app's Settings, while the app is open."
+        case "phone": return "A phone is never a hub."
         case "watch": return "A watch is never a hub."
         default: break
         }

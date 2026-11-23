@@ -86,24 +86,41 @@ Item {
                                            function() { app.manage("thaw", page.device.id) })
             }
             MenuItem {
+                // A hub is a computer, a router or a board, never a phone
+                // (D-134): an admin phone makes an admin computer one.
+                visible: page.acts && page.device.role === "member" && page.device.admin && !page.device.frozen
+                text: qsTr("Make it a hub")
+                onClicked: remorse.execute(qsTr("Making %1 a hub").arg(Devices.name(page.device)),
+                                           function() { app.manage("hub", page.device.id) })
+            }
+            MenuItem {
+                // A stolen admin computer: an admin freezes it, the root
+                // unfreezes it.
+                visible: page.acts && page.device.role === "member" && page.device.admin && !page.device.root && !page.device.frozen
+                text: qsTr("Freeze")
+                onClicked: remorse.execute(qsTr("Freezing %1").arg(Devices.name(page.device)),
+                                           function() { app.manage("freeze", page.device.id) })
+            }
+            MenuItem {
                 // Members and Android and Aurora phones take pastes; iPhones cannot.
                 visible: page.acts && Devices.takesPaste(page.device)
                 text: qsTr("Paste on it…")
                 onClicked: pageStack.push(Qt.resolvedUrl("PastePage.qml"), { device: page.device })
             }
             MenuItem {
-                visible: page.acts
+                // Unmute for a muted device, the two mutes for one that is not.
+                visible: page.acts && page.device.muted === true
                 text: qsTr("Unmute")
                 onClicked: app.manage("unmute", page.device.id)
             }
             MenuItem {
-                visible: page.acts
+                visible: page.acts && page.device.muted !== true
                 text: qsTr("Mute until unmuted")
                 onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
                                            function() { app.manage("mute", page.device.id, "", 0) })
             }
             MenuItem {
-                visible: page.acts
+                visible: page.acts && page.device.muted !== true
                 text: qsTr("Mute for an hour")
                 onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
                                            function() { app.manage("mute", page.device.id, "", 60) })

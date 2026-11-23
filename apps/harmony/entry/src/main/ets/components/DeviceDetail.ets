@@ -3,8 +3,8 @@
 
 // A device's details (docs/apps.md, Devices), the page Device and, on a big
 // screen, the pane beside Home's devices: its sync, and for an
-// admin its changes and commands: paste on it, rename, mute, freeze's thaw, make an admin (the root,
-// for a phone or a computer that offers an admin key), hand the group over (the root),
+// admin its changes and commands: paste on it, rename, mute, freeze and thaw, make an admin (the root,
+// for a phone or a computer that offers an admin key), make an admin computer a hub (never a phone), hand the group over (the root),
 // take the group over (an admin, from a lost root), remove. A removal by
 // the root is final, so the page asks first and says so.
 
@@ -163,6 +163,26 @@ export struct DeviceDetail {
                   this.action(t('device_thaw'), false, () => {
                     this.confirm(t('device_thaw_confirm'), t('device_thaw'), () => {
                       app.manage('thaw', this.deviceId);
+                    });
+                  })
+                }
+                // A hub is a computer, a router or a board, never a phone
+                // (D-134): an admin phone makes an admin computer one.
+                if ((this.device() as DeviceInfo).role === 'member' && (this.device() as DeviceInfo).admin === true &&
+                  (this.device() as DeviceInfo).frozen !== true) {
+                  this.action(t('device_make_hub'), false, () => {
+                    this.confirm(t('device_make_hub_confirm'), t('device_make_hub'), () => {
+                      app.manage('hub', this.deviceId);
+                    });
+                  })
+                }
+                // A stolen admin computer: an admin freezes it, the root
+                // unfreezes it.
+                if ((this.device() as DeviceInfo).role === 'member' && (this.device() as DeviceInfo).admin === true &&
+                  (this.device() as DeviceInfo).root !== true && (this.device() as DeviceInfo).frozen !== true) {
+                  this.action(t('device_freeze'), true, () => {
+                    this.confirm(t('device_freeze_confirm'), t('device_freeze'), () => {
+                      app.manage('freeze', this.deviceId);
                     });
                   })
                 }

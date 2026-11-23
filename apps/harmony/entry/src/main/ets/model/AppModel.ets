@@ -338,8 +338,9 @@ export class AppModel {
     }
   }
 
-  // An admin's change to a device (remove, rename, thaw, make_admin,
-  // sync_on, sync_off) or command for it (mute, unmute), signed with the
+  // An admin's change to a device (remove, rename, freeze, thaw,
+  // make_admin, sync_on, sync_off) or command for it (mute, unmute, hub:
+  // an admin computer a hub through the project's forwarder), signed with the
   // admin key; forMinutes: how long a mute or a sync off lasts, 0 for until
   // undone. True once the change is in the records or the device took the
   // command.

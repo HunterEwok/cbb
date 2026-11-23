@@ -7,7 +7,7 @@
   "A device did not pair: %s": "有设备未能配对：%s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "中心节点需要离家同步，而这台电脑上它是关闭的，所以会先把它打开。之后你的设备离家时会经由这台电脑、通过项目在 cbb.tools 的转发器连到群组。",
   "A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": "只转发副本的中心节点无法读取它们：副本只为你的其他设备密封，所以它的密钥不需要硬件。",
-  "A phone is a hub only from its own app's Settings, while the app is open.": "手机只能在其应用打开时，从应用自己的设置中成为中心节点。",
+  "A phone is never a hub.": "手机从不担任中心节点。",
   "A watch is never a hub.": "手表从不担任中心节点。",
   "About": "关于",
   "Add a device": "添加设备",

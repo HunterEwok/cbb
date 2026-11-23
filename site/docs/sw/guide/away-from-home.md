@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b61fb28e5395 -->
+<!-- source: 68da0e7aeffa -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
@@ -17,7 +17,7 @@ Kitovu ni cha mojawapo ya aina mbili, na unachagua aina unapokifanya kitovu:
 - **Kitovu kinachosoma nakala** ni msimamizi wa kikundi, kwa hiyo nakala hufungwa kwa ajili yake kama kwa vifaa vyako vingine, na [kiwango cha funguo](keys.md#the-three-levels) cha kikundi kinatumika kwa funguo zake. Katika kikundi kilichoundwa kwenye simu, simu huifanya kompyuta kuwa msimamizi kwanza.
 - **Kitovu kinachopitisha nakala tu** ni kompyuta nyingine yoyote ya kikundi. Nakala hufungwa mwisho hadi mwisho kwa ajili ya vifaa vyako vingine na kamwe si kwa ajili yake, kwa hiyo haisomi yoyote, na funguo zake hazihitaji chipu ya usalama: Raspberry Pi au NAS kwenye Docker yenye funguo zake kwenye faili ni chaguo zuri. Haitengenezi, haisomi wala haibandiki nakala zake yenyewe.
 
-Kwenye simu, gusa kompyuta, kisha **Make it a hub** na aina; programu ya Mac na programu ya trei huuliza vivyo hivyo. Kutoka kwenye kompyuta ya msimamizi, `sudo cbb global hub -on DEVICE -forward-only` huifanya kompyuta nyingine kuwa kitovu kinachopitisha nakala tu. Usawazishaji ukiwa mbali na nyumbani lazima uwe umewashwa huko kwanza (hatua ya 2 hapa chini, kwa `sudo cbb global on`).
+Kwenye simu ya msimamizi, gusa kompyuta ya msimamizi, kisha **Make it a hub**: inakuwa kitovu kinachosoma nakala. Programu ya Mac na programu ya trei huuliza aina ipi. Kutoka kwenye kompyuta ya msimamizi, `sudo cbb global hub -on DEVICE -forward-only` huifanya kompyuta nyingine kuwa kitovu kinachopitisha nakala tu. Usawazishaji ukiwa mbali na nyumbani lazima uwe umewashwa huko kwanza (hatua ya 2 hapa chini, kwa `sudo cbb global on`).
 
 ## 2. Kiwashe kwenye kitovu
 

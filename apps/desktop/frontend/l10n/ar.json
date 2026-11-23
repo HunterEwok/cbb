@@ -7,7 +7,7 @@
   "A device did not pair: %s": "لم يقترن جهاز: %s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "يحتاج المحور إلى المزامنة خارج المنزل، وهي متوقفة على هذا الحاسوب، لذا تُشغَّل أولًا. بعدها تصل أجهزتك إلى المجموعة عبر هذا الحاسوب وهي خارج المنزل، من خلال مُعيد توجيه المشروع في cbb.tools.",
   "A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": "المحور الذي يمرّر النسخ فقط لا يستطيع قراءتها: فهي مختومة لأجهزتك الأخرى وحدها، لذا لا تحتاج مفاتيحه إلى عتاد.",
-  "A phone is a hub only from its own app's Settings, while the app is open.": "لا يكون الهاتف محورًا إلا من إعدادات تطبيقه، والتطبيق مفتوح.",
+  "A phone is never a hub.": "الهاتف لا يكون محورًا أبدًا.",
   "A watch is never a hub.": "الساعة لا تكون محورًا أبدًا.",
   "About": "حول",
   "Add a device": "إضافة جهاز",

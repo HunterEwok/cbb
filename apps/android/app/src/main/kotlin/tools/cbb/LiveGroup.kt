@@ -790,6 +790,16 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         act(R.string.reason_unfreeze, "thaw", "device" to JsonPrimitive(id))
     }
 
+    /** Freezes an admin computer, as one does with a stolen one. */
+    suspend fun freeze(id: String) {
+        act(R.string.reason_freeze, "freeze", "device" to JsonPrimitive(id))
+    }
+
+    /** Makes an admin computer a hub through the project's forwarder; the computer answers. */
+    suspend fun makeHub(id: String) {
+        act(R.string.reason_make_hub, "hub", "device" to JsonPrimitive(id))
+    }
+
     /** Gives a phone that just made or joined a group the sync mode of a new device, shared (receive on a TV), unless it has one from an earlier group. */
     private fun newDeviceMode() {
         // A TV receives the group's copies and sends none of its own (docs/roadmap.md, item 25).

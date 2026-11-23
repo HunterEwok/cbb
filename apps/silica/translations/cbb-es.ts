@@ -352,6 +352,14 @@
         <translation>ID del dispositivo</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>Congelar</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>Congelando %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>En el grupo</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>Make an admin</source>
         <translation>Hacer admin</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>Convertirlo en hub</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>Convirtiendo %1 en hub</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>

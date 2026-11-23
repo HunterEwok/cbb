@@ -352,6 +352,14 @@
         <translation>מזהה מכשיר</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>הקפאה</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>מקפיא את %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>בקבוצה</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>Make an admin</source>
         <translation>הפיכה למנהל</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>הפיכה לרכזת</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>הופך את %1 לרכזת</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>

@@ -7,7 +7,7 @@
   "A device did not pair: %s": "Un dispositivo no se emparejó: %s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "Un hub necesita la sincronización fuera de casa, que está desactivada en este ordenador, así que primero la activa. Tus dispositivos llegan entonces al grupo a través de este ordenador cuando están fuera de casa, por el reenviador del proyecto en cbb.tools.",
   "A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": "Un hub que solo reenvía las copias no puede leerlas: van selladas solo para tus otros dispositivos, así que sus claves no necesitan hardware.",
-  "A phone is a hub only from its own app's Settings, while the app is open.": "Un teléfono solo es hub desde los Ajustes de su propia app, mientras la app está abierta.",
+  "A phone is never a hub.": "Un teléfono nunca es un hub.",
   "A watch is never a hub.": "Un reloj nunca es un hub.",
   "About": "Acerca de",
   "Add a device": "Añadir un dispositivo",

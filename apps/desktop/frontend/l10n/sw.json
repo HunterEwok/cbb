@@ -7,7 +7,7 @@
   "A device did not pair: %s": "Kifaa kimoja hakikuoanishwa: %s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "Kitovu kinahitaji usawazishaji ukiwa mbali na nyumbani, ambao umezimwa kwenye kompyuta hii, kwa hiyo unawashwa kwanza. Kisha vifaa vyako hufikia kikundi kupitia kompyuta hii vikiwa mbali na nyumbani, kupitia kisambazaji cha mradi kwenye cbb.tools.",
   "A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": "Kitovu kinachopitisha nakala tu hakiwezi kuzisoma: zimefungwa kwa ajili ya vifaa vyako vingine tu, kwa hiyo funguo zake hazihitaji maunzi.",
-  "A phone is a hub only from its own app's Settings, while the app is open.": "Simu ni kitovu tu kutoka Mipangilio ya programu yake, programu ikiwa imefunguliwa.",
+  "A phone is never a hub.": "Simu kamwe si kitovu.",
   "A watch is never a hub.": "Saa kamwe si kitovu.",
   "About": "Kuhusu",
   "Add a device": "Ongeza kifaa",

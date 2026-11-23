@@ -7,7 +7,7 @@
   "A device did not pair: %s": "Устройство не сопряглось: %s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "Хабу нужна синхронизация вне дома, а на этом компьютере она выключена, поэтому сначала она включится. Вне дома ваши устройства будут связываться с группой через этот компьютер, через сервер пересылки проекта на cbb.tools.",
   "A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": "Хаб, который только пересылает копии, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование.",
-  "A phone is a hub only from its own app's Settings, while the app is open.": "Телефон становится хабом только в настройках своего приложения и только пока приложение открыто.",
+  "A phone is never a hub.": "Телефон не бывает хабом.",
   "A watch is never a hub.": "Часы не бывают хабом.",
   "About": "О программе",
   "Add a device": "Добавить устройство",

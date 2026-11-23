@@ -352,6 +352,14 @@
         <translation>Kitambulisho cha kifaa</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>Gandisha</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>Inagandisha %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>Katika kikundi</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>Make an admin</source>
         <translation>Fanya msimamizi</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>Kifanye kitovu</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>Inafanya %1 kuwa kitovu</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>

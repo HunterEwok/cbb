@@ -7,7 +7,7 @@
   "A device did not pair: %s": "מכשיר לא צומד: %s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "רכזת צריכה סנכרון מחוץ לבית, שכבוי במחשב הזה, ולכן הוא יופעל קודם. המכשירים שלכם יגיעו אז לקבוצה דרך המחשב הזה כשהם מחוץ לבית, דרך המעביר של הפרויקט ב־cbb.tools.",
   "A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": "רכזת שרק מעבירה את ההעתקות לא יכולה לקרוא אותן: הן חתומות רק למכשירים האחרים שלכם, ולכן המפתחות שלה לא צריכים חומרה.",
-  "A phone is a hub only from its own app's Settings, while the app is open.": "טלפון הוא רכזת רק מההגדרות של האפליקציה שלו, כשהאפליקציה פתוחה.",
+  "A phone is never a hub.": "טלפון אף פעם אינו רכזת.",
   "A watch is never a hub.": "שעון אף פעם אינו רכזת.",
   "About": "אודות",
   "Add a device": "הוספת מכשיר",

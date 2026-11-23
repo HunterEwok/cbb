@@ -152,13 +152,14 @@ they look, so both apps are built to the same plan.
    online dot and badges (this phone, root, admin, hub, frozen), one line of its system and
    CBB version, the house (its sync: this phone's own, or on an admin phone a connected
    computer's), a row of icons (paste on it, mute, quick actions), the rest (type, MAC
-   address, role, ID) under More, and "…" with rename, make it an admin or a hub, unfreeze
+   address, role, ID) under More, and "…" with rename, make it an admin or a hub, freeze or unfreeze
    and remove; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
    system (Linux, Windows, macOS, iOS, Android, or "device" for firmware), a "root", "admin" or "frozen" mark, a live dot when it is online and
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
    device records (section 10 of [protocol.md](protocol.md)), so every app and
    `cbb status` show the same. On an admin phone, a row opens the device: rename,
-   "Make it an admin" (on the root phone), "Unfreeze" for an admin computer
+   "Make it an admin" (on the root phone), "Freeze" for an admin computer that is not the
+   root's, as one does with a stolen one, "Unfreeze" for an admin computer
    that another admin froze (design.md, "Who may remove an admin"), and "Remove", which asks once, then
    needs Face ID, the fingerprint or the passcode, and is done; removing an admin phone shows
    the devices it had admitted, which stay. On the root phone the row of a phone or a computer
@@ -173,7 +174,8 @@ they look, so both apps are built to the same plan.
    on or off: the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
    An admin phone also offers "Make it a hub" for a connected computer that is an admin, or that
-   the root phone makes one first: after Face ID or the fingerprint it signs a `hub` command
+   the root phone makes one first (a phone is never a hub, D-134): after Face ID or the
+   fingerprint it signs a `hub` command
    (docs/protocol.md, section 11, "Several hubs") with its forwarder, or the project's, and the
    computer becomes a hub of the group as well; it refuses while sync away from home is off
    there, which only its own user turns on.

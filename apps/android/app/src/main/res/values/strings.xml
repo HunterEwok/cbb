@@ -163,7 +163,11 @@
     <string name="files_saved">Saved in Downloads, in the folder CBB.</string>
     <string name="files_sent">Sent to the computers, which fetch it from this phone now.</string>
     <string name="filter_online">Online</string>
+    <string name="freeze">Freeze</string>
+    <string name="freeze_body">For a stolen admin computer: it changes nothing more and the others refuse it until the main device unfreezes or removes it.</string>
+    <string name="freeze_title">Freeze %1$s?</string>
     <string name="frozen">frozen</string>
+    <string name="frozen_done">Frozen.</string>
     <string name="full_name" translatable="false">Copy Beyond Borders</string>
     <string name="group">Group</string>
     <string name="group_hub">The group\'s hub</string>
@@ -272,12 +276,16 @@
     <string name="lost_phone_title">Lost phone?</string>
     <string name="mac_address">MAC address</string>
     <string name="made_admin">It is an admin now: it adds and removes devices with cbb pair and cbb remove.</string>
+    <string name="made_hub">It is a hub now.</string>
     <string name="make_admin">Make it an admin</string>
     <string name="make_admin_body">It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.</string>
     <string name="make_admin_files_body">The group then lets keys in files be admins and hubs (Settings, Admin keys).</string>
     <string name="make_admin_hardware_body">It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.</string>
     <string name="make_admin_phone_body">It can then add and remove devices, and move the group to itself if this phone is lost.</string>
     <string name="make_admin_title">Make %1$s an admin?</string>
+    <string name="make_hub">Make it a hub</string>
+    <string name="make_hub_body">Your devices then reach the group through it when they are away from home, through the project\'s forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.</string>
+    <string name="make_hub_title">Make %1$s a hub?</string>
     <string name="menu">Menu</string>
     <string name="more">More</string>
     <string name="move_earlier">Move earlier</string>
@@ -370,8 +378,10 @@
     <string name="reason_add">Add a computer to your group</string>
     <string name="reason_add_watch">Make the watch an admin</string>
     <string name="reason_change_root">Make this phone the group\'s main device</string>
+    <string name="reason_freeze">Freeze an admin computer</string>
     <string name="reason_key_level">Change which keys may be admins</string>
     <string name="reason_make_admin">Make a device an admin</string>
+    <string name="reason_make_hub">Make a computer a hub</string>
     <string name="reason_mute">Mute a device</string>
     <string name="reason_paste">Paste on a device</string>
     <string name="reason_period">Renew the group\'s keys for sync away from home</string>

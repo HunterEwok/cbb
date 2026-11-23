@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b61fb28e5395 -->
+<!-- source: 68da0e7aeffa -->
 # Fuera de casa
 
 En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
@@ -26,8 +26,8 @@ Un hub es de uno de dos tipos, y eliges cuál al nombrarlo:
   claves no necesitan un chip de seguridad: una Raspberry Pi o un NAS en Docker con sus claves en
   un archivo es una buena opción. No hace, lee ni pega copias propias.
 
-En el teléfono, toca el ordenador, luego **Make it a hub** y el tipo; la app del Mac y la app
-de la bandeja preguntan lo mismo. Desde un ordenador administrador,
+En un teléfono administrador, toca un ordenador administrador y luego **Make it a hub**: se
+convierte en un hub que lee las copias. La app del Mac y la app de la bandeja preguntan el tipo. Desde un ordenador administrador,
 `sudo cbb global hub -on DEVICE -forward-only` convierte otro ordenador en un hub que solo pasa
 las copias. Antes debe estar activada allí la sincronización fuera de casa (paso 2 más abajo,
 con `sudo cbb global on`).

@@ -185,11 +185,11 @@ const hubTunnel = (a) => a?.vless ? "vless" : a?.obfuscated ? "obfuscate" : "pla
 // The tunnel after a switch: VLESS goes only with AmneziaWG.
 const tunnelAfter = (sw, on) => sw === "web" ? (on ? "vless" : "obfuscate") : (on ? "obfuscate" : "plain");
 
-// noHub says why d cannot be a hub, "" when it can: a phone only from its
-// own app, never a member without the cap hub, a watch or a computer without root, and a
+// noHub says why d cannot be a hub, "" when it can: never a phone (D-134),
+// never a member without the cap hub, a watch or a computer without root, and a
 // computer only as the root or an admin with the hub power.
 function noHub(d, me) {
-  const never = { phone: "A phone is a hub only from its own app's Settings, while the app is open.", watch: "A watch is never a hub." }[d.role];
+  const never = { phone: "A phone is never a hub.", watch: "A watch is never a hub." }[d.role];
   if (never) return t(never);
   if (!can(d, "hub")) return t("This device is never a hub.");
   if (d.store === "rootless") return t("It runs without administrator rights, so it is never a hub.");

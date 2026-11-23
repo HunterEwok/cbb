@@ -31,8 +31,8 @@ A hub is one of two kinds, and you choose which when you make it one:
   need no security chip: a Raspberry Pi or a NAS in Docker with its keys in a file is a good
   one. It makes, reads and pastes no copies of its own.
 
-On the phone, tap the computer, then **Make it a hub** and the kind; the Mac app and the tray
-app ask the same. From an admin computer, `sudo cbb global hub -on DEVICE -forward-only`
+On an admin phone, tap an admin computer, then **Make it a hub**: it becomes a hub that reads
+the copies. The Mac app and the tray app ask which kind. From an admin computer, `sudo cbb global hub -on DEVICE -forward-only`
 makes another computer a hub that only passes copies on. Sync away from home must be on there
 first (step 2 below, with `sudo cbb global on`).
 
