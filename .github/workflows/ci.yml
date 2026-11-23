@@ -685,14 +685,26 @@ jobs:
             go version
             # The processor the machine got and what a hash costs on it: the
             # release tools sign with SLH-DSA-SHA2-128s, nearly all SHA-256,
-            # and their packages take about 40 s here, but once ran 40 times
-            # slower on another host while the rest ran as usual.
-            # kern.vm_guest is kvm, and dmesg names KVMKVMKVM, when the
-            # machine runs under KVM rather than QEMU's emulation (TCG).
+            # and their packages take about 40 s here, but ran past the 25
+            # minutes in some runs of the whole suite while SHA-256 alone ran
+            # at 1.8 GB/s under KVM. So the clock too: a time counter that
+            # traps to the host (i8254, ACPI) makes every reading of the time
+            # cost microseconds, and the scheduler reads it all the time.
+            # kern.vm_guest is kvm when the machine runs under KVM rather
+            # than QEMU's emulation (TCG).
             sysctl -n hw.model hw.ncpu kern.vm_guest
-            grep -E '^ *(Hypervisor:|Features|Structured Extended Features)' /var/run/dmesg.boot || true
+            sysctl kern.timecounter.hardware kern.timecounter.choice kern.eventtimer.timer || true
             go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256 || true
+            go test -run '^$' -bench '^BenchmarkNow$' -benchtime 200000x time || true
+            # The release package alone, timed, before the suite runs it
+            # beside the others.
+            /usr/bin/time go test -count=1 ./internal/release </dev/null || true
+            # What uses the processors while the suite runs, every five
+            # minutes, so a slow run shows what it waited behind.
+            (while sleep 300; do date; top -b -d1 -o cpu 12 | tail -n 16; done) &
+            top_pid=$!
             go test -timeout 25m ./... </dev/null
+            kill "$top_pid" 2>/dev/null || true
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
             Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
