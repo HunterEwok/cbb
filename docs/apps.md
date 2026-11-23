@@ -1236,8 +1236,8 @@ offers Leave, which alone deletes its files (D-126).
   as on the iPhone.
 - **Notifications**: the group's events as on the other phones (joined, removed, an admin, a
   takeover, frozen), each kind with its switch, and the received files.
-- **Errors**: the core's message, and in debug mode its details under it; the details switch
-  in Settings turns them on in a release build. A member that panics is started again, and in
+- **Errors**: the core's message, and in debug mode its details under it; the details switch,
+  which seven taps on the version in Settings show, turns them on in a release build. A member that panics is started again, and in
   release mode the app asks to send the bug report (docs/core-api.md, "Bug reports").
 - **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
   DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a

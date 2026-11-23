@@ -26,6 +26,10 @@ with 0.5 is set up again once. The details follow.
   main device changed, with "This wasn't me", and Aurora's "OK" on that card is kept by the
   member (`root_change_seen`), so it does not come back when the app starts again
   ([apps](docs/apps.md), "Notices").
+- The platform parity table has a HarmonyOS column, lists the group's notices and cards where
+  it listed the alerts card of 0.5, shows the phones' remote invitations and Aurora's relay,
+  and marks the group management the Mac and tray apps still lack as a gap with its plan
+  ([parity](docs/parity.md)).
 - Small fixes from a review of the apps' screens: the HarmonyOS app shows "Show error details"
   only after seven taps on the version, as the other phones do; the "+" menu's item that opens
   the pairing window is "Add a device" (it said "Scan a code"); the Android TV's start screen

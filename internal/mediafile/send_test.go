@@ -50,6 +50,9 @@ func service(t *testing.T) (func() *control.Client, <-chan []*control.Message) {
 		}
 		accepted <- c
 		defer c.Close()
+		// However the client's close reaches it, the service stops reading
+		// in a minute, so a test never waits on it for longer.
+		c.SetReadDeadline(time.Now().Add(time.Minute))
 		r := control.NewReader(c)
 		var ms []*control.Message
 		for {
