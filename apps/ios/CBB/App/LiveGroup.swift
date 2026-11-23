@@ -4,6 +4,7 @@ import CBBKit
 import CryptoKit
 import Foundation
 import LocalAuthentication
+import Network
 import os
 import Security
 import UIKit
