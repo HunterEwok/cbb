@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The entry point's call for the signed bodies that are not records
-//! (docs/core-api.md, "Signed bodies"): commands, server credentials,
-//! release files and manifests. Go and the phone kits read each through
+//! (docs/core-api.md, "Signed bodies"): server credentials, release files
+//! and manifests. Go and the phone kits read each through
 //! the core, so that every program takes exactly the same bodies.
 
 use alloc::string::String;
@@ -27,8 +27,8 @@ struct ParseArgs {
 }
 
 /// The kinds of body `parse_body` reads.
-pub const KINDS: [&str; 9] =
-    ["command", "credential", "keys", "release", "channel", "attest-status", "entries", "zxnext", "manifest"];
+pub const KINDS: [&str; 8] =
+    ["credential", "keys", "release", "channel", "attest-status", "entries", "zxnext", "manifest"];
 
 /// Reads a body of the kind and gives it back as its value.
 fn read(kind: &str, body: &[u8]) -> Result<Value> {
@@ -42,7 +42,6 @@ fn read(kind: &str, body: &[u8]) -> Result<Value> {
         return Err(Error::msg("The file is too large."));
     }
     match kind {
-        "command" => value(crate::command::Command::parse(body)?),
         "keys" => value(crate::release::decode_keys(body)?),
         "release" => value(crate::release::decode_release(body)?),
         "channel" => value(crate::release::decode_channel(body)?),
@@ -69,24 +68,6 @@ fn parse_body(a: ParseArgs) -> core::result::Result<Vec<u8>, Refusal> {
     m.insert("kind".into(), Value::String(String::from(a.kind.as_str())));
     m.insert("value".into(), v);
     Ok(json(Value::Object(m)))
-}
-
-/// The arguments of `seal_command`.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SealArgs {
-    #[serde(with = "b64")]
-    body: Vec<u8>,
-    #[serde(with = "b64")]
-    key: Vec<u8>,
-}
-
-/// `seal_command`: a command in the open with its orders sealed to the
-/// receiver's key for sealed messages (docs/protocol.md, section 15,
-/// "Sealed commands"), as `{"body": ...}` for the sender to sign.
-fn seal_command(a: SealArgs) -> core::result::Result<Vec<u8>, Refusal> {
-    let body = crate::command::Command::seal_body(&a.body, &a.key).map_err(|e| refuse(Code::Signed, e))?;
-    Ok(json(super::body_answer(&body)))
 }
 
 /// The arguments of `seal_public`.
@@ -246,7 +227,6 @@ fn release_named(a: NamedArgs) -> core::result::Result<Vec<u8>, Refusal> {
 pub(super) fn dispatch(op: &str, args: &Value) -> Option<core::result::Result<Vec<u8>, Refusal>> {
     Some(match op {
         "parse_body" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(parse_body),
-        "seal_command" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_command),
         "seal_public" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_public),
         "release_named" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(release_named),
         "release_check" | "release_check_status" | "release_check_entries" => {
@@ -284,64 +264,20 @@ mod tests {
         STANDARD.decode(v.as_str().unwrap()).unwrap()
     }
 
-    /// A command sealed by the call opens with the receiver's secret to
-    /// the same orders, under the same header, and a sealed command or a
-    /// bad key is refused.
-    #[test]
-    fn seals_commands() {
-        let secret = crate::seal::generate_secret().unwrap();
-        let public = crate::seal::public_key(&secret).unwrap();
-        let body = br#"{"by":"00000000000000000000000000000001","enter":true,"expires_ms":31000,"group":"g","id":"0123456789abcdef0123456789abcdef","kind":"text","mode":"paste","text":"hello","time_ms":1000,"to":"00000000000000000000000000000002","type":"paste","v":1}"#;
-        let seal = |body: &[u8], key: &[u8]| -> Value {
-            let req = format!(
-                r#"{{"abi":1,"op":"seal_command","args":{{"body":"{}","key":"{}"}}}}"#,
-                STANDARD.encode(body),
-                STANDARD.encode(key)
-            );
-            serde_json::from_slice(&call(req.as_bytes())).unwrap()
-        };
-        let got = seal(body, &public);
-        let sealed = bytes(&got["ok"]["body"]);
-        assert_eq!(crate::strict::canonicalize(&sealed).unwrap(), sealed);
-        let text = core::str::from_utf8(&sealed).unwrap();
-        assert!(!text.contains("hello") && text.contains(r#""v":2"#), "{text}");
-        let mut c = crate::command::Command::parse(&sealed).unwrap();
-        assert!(c.sealed());
-        c.open(&secret).unwrap();
-        assert_eq!((c.text.as_str(), c.mode.as_str(), c.enter), ("hello", "paste", true));
-        let other = crate::seal::public_key(&crate::seal::generate_secret().unwrap()).unwrap();
-        let mut c = crate::command::Command::parse(&bytes(&seal(body, &other)["ok"]["body"])).unwrap();
-        assert!(c.open(&secret).is_err());
-        assert_eq!(seal(&sealed, &public)["error"]["name"], "signed");
-        assert_eq!(seal(body, &[1, 2, 3])["error"]["name"], "signed");
-    }
-
-    /// A hub command's order to stop being a hub carries nothing else.
-    #[test]
-    fn hub_stop_order() {
-        let body = |hub: &str| {
-            format!(
-                r#"{{"by":"00000000000000000000000000000001","expires_ms":31000,"group":"g","hub":{hub},"id":"0123456789abcdef0123456789abcdef","time_ms":1000,"to":"00000000000000000000000000000002","type":"hub","v":1}}"#
-            )
-        };
-        assert!(crate::command::Command::parse(body(r#"{"stop":true}"#).as_bytes()).is_ok());
-        assert!(
-            crate::command::Command::parse(body(r#"{"endpoints":["203.0.113.7:8764"],"stop":true}"#).as_bytes())
-                .is_err()
-        );
-        assert!(crate::command::Command::parse(body(r#"{"stop":false}"#).as_bytes()).is_err());
-    }
-
-    /// `seal_public` gives the public key of a secret, the one the Go
-    /// vectors carry, and refuses a secret of the wrong size.
+    /// `seal_public` gives the public key of a secret, the one Go's
+    /// sealing vectors carry, and refuses a secret of the wrong size.
     #[test]
     fn seal_public_key() {
-        let v = vectors("go-sealed-commands.json");
+        let v = &vectors("seal-go.json")["cases"][0];
         let ask_key = |secret: &[u8]| -> Value {
             let req = format!(r#"{{"abi":1,"op":"seal_public","args":{{"secret":"{}"}}}}"#, STANDARD.encode(secret));
             serde_json::from_slice(&call(req.as_bytes())).unwrap()
         };
-        assert_eq!(bytes(&ask_key(&bytes(&v["secret"]))["ok"]["key"]), bytes(&v["public"]));
+        let unhex = |v: &Value| -> alloc::vec::Vec<u8> {
+            let s = v.as_str().unwrap();
+            (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+        };
+        assert_eq!(bytes(&ask_key(&unhex(&v["secret"]))["ok"]["key"]), unhex(&v["public"]));
         assert_eq!(ask_key(&[1, 2, 3])["error"]["name"], "request");
     }
 
@@ -373,10 +309,8 @@ mod tests {
         files.extend((1..).map(|i| format!("strict-generated-{i}.json")).take_while(exists));
         for f in &files {
             let v = vectors(f);
-            for (section, kind) in [("commands", "command"), ("manifests", "manifest")] {
-                for c in v[section].as_array().into_iter().flatten() {
-                    check(kind, c);
-                }
+            for c in v["manifests"].as_array().into_iter().flatten() {
+                check("manifest", c);
             }
         }
         let v = vectors("strict-files.json");
@@ -540,12 +474,13 @@ mod tests {
     #[test]
     fn answers() {
         let v = vectors("strict.json");
-        let good = v["commands"].as_array().unwrap().iter().find(|c| c["valid"] == true).unwrap();
-        let got = ask("command", &bytes(&good["body"]));
-        assert_eq!(got["ok"]["kind"], "command");
-        assert!(got["ok"]["value"]["type"].is_string(), "{got}");
+        let good = v["manifests"].as_array().unwrap().iter().find(|c| c["valid"] == true).unwrap();
+        let got = ask("manifest", &bytes(&good["body"]));
+        assert_eq!(got["ok"]["kind"], "manifest");
+        assert!(got["ok"]["value"].is_object(), "{got}");
         assert_eq!(ask("nothing", b"{}")["error"]["name"], "request");
-        assert_eq!(KINDS.len(), 9);
+        assert_eq!(ask("command", b"{}")["error"]["name"], "request");
+        assert_eq!(KINDS.len(), 8);
         for kind in KINDS {
             assert_eq!(ask(kind, b"{}")["error"]["name"], "signed", "{kind}");
         }

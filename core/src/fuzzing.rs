@@ -7,13 +7,19 @@
 
 use alloc::vec::Vec;
 
-/// A command's body: one it takes is in the strict form.
+/// A command (docs/format.md, section 6): one it takes writes back to the
+/// same bytes, and the orders of every type are read without a panic.
 pub fn command(data: &[u8]) {
-    if crate::command::Command::parse(data).is_ok() {
-        assert!(
-            crate::strict::check(data, &["v", "type", "group", "by", "to", "id", "time_ms", "expires_ms"]).is_ok(),
-            "took a command not in the strict form"
+    if let Ok(c) = crate::commands::Command::read(data) {
+        let e = &c.envelope;
+        assert_eq!(
+            crate::format::envelope::write(e.body, e.sig, e.sig2),
+            data,
+            "took a command that does not write back"
         );
+    }
+    for t in 1..=10 {
+        let _ = crate::commands::orders::check(t, data);
     }
 }
 

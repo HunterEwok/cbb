@@ -55,7 +55,8 @@ fn plain_text(t: &str) -> bool {
     (1..=255).contains(&t.len()) && !t.chars().any(hidden)
 }
 
-fn action_name(t: &str) -> bool {
+/// An action's name: 1 to 32 of a-z, 0-9 and -, starting with a letter.
+pub fn valid_action_name(t: &str) -> bool {
     (1..=32).contains(&t.len())
         && t.starts_with(|c: char| c.is_ascii_lowercase())
         && t.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -133,7 +134,7 @@ pub fn check(t: u64, b: &[u8]) -> Result<(), Rule> {
         }
         COMMAND_ACTION => {
             only(&m, &[10])?;
-            if !m.get(10).and_then(Value::as_text).is_some_and(action_name) {
+            if !m.get(10).and_then(Value::as_text).is_some_and(valid_action_name) {
                 return Err(RULE_ACTION);
             }
         }

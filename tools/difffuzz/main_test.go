@@ -38,7 +38,7 @@ func TestGenerateSeeded(t *testing.T) {
 	for _, x := range a[len(base):] {
 		kinds[x.Kind]++
 	}
-	for _, k := range []string{"command", "manifest", "keys", "release", "channel", "attest-status"} {
+	for _, k := range []string{"manifest", "keys", "release", "channel", "attest-status"} {
 		if kinds[k] == 0 {
 			t.Errorf("no changed %s", k)
 		}
@@ -49,7 +49,7 @@ func TestGenerateSeeded(t *testing.T) {
 // readers' tests apply it.
 func TestSeedsPad(t *testing.T) {
 	dir := t.TempDir()
-	gen := `{"commands":[{"name":"c","rule":"r","valid":false,"body":"e30=","pad":2,"pad_at":1}],"manifests":[{"name":"m","rule":"r","valid":false,"body":"e30="}]}`
+	gen := `{"manifests":[{"name":"m","rule":"r","valid":false,"body":"e30=","pad":2,"pad_at":1},{"name":"n","rule":"r","valid":false,"body":"e30="}]}`
 	files := `{"releases":[{"name":"k","rule":"r","valid":false,"kind":"keys","body":"e30="}]}`
 	for f, data := range map[string]string{"strict-generated-1.json": gen, "strict-files.json": files} {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte(data), 0o644); err != nil {
@@ -60,7 +60,7 @@ func TestSeedsPad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Case{{Kind: "command", Body: []byte("{aa}")}, {Kind: "manifest", Body: []byte("{}")}, {Kind: "keys", Body: []byte("{}")}}
+	want := []Case{{Kind: "manifest", Body: []byte("{aa}")}, {Kind: "manifest", Body: []byte("{}")}, {Kind: "keys", Body: []byte("{}")}}
 	if len(got) != len(want) {
 		t.Fatalf("%d seeds, want %d", len(got), len(want))
 	}
@@ -153,11 +153,5 @@ func TestCompare(t *testing.T) {
 	}
 	if _, err := compare(&out, corpus, []string{"a=" + write("short", "refused\n")}, 5, "", nil); err == nil {
 		t.Fatal("took verdicts for fewer cases")
-	}
-	if err := checkFields("command", "taken type=00 group=00"); err == nil {
-		t.Fatal("took a command's verdict with other fields")
-	}
-	if err := checkFields("command", "taken type= group= by= to= id= time_ms=1 expires_ms=2 mode= enter=0 kind= text= action="); err != nil {
-		t.Fatal(err)
 	}
 }

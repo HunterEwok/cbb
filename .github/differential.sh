@@ -18,7 +18,7 @@ go run ./tools/difffuzz gen -seed "$seed" -n "$bodies" -o "$out/corpus.jsonl"
 export CBB_VERDICTS="$out/corpus.jsonl"
 
 CBB_VERDICTS_OUT="$out/go-release.txt" go test ./internal/release -run '^TestVerdicts$' -count=1
-(cd core/ && CBB_VERDICTS_OUT="$out/rust.txt" cargo test --locked --release --lib command::verdicts)
+(cd core/ && CBB_VERDICTS_OUT="$out/rust.txt" cargo test --locked --release --lib verdicts::verdicts)
 # --rerun: Gradle does not see the corpus change between runs.
 (cd apps/android && CBB_VERDICTS_OUT="$out/kotlin.txt" ./gradlew --no-daemon -q -p kit test --tests '*.VerdictTest' --rerun)
 

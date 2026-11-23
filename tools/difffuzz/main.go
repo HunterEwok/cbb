@@ -19,19 +19,13 @@
 // core/fuzz.
 //
 // A case is a JSON object, {"kind": K, "body": base64}, with K one of
-// command, manifest, keys, release, channel or attest-status.
+// manifest, keys, release, channel or attest-status.
 //
 // A verdict is one line per case, in the corpus's order:
 //
 //   - "refused" when the implementation refuses the body;
 //   - "skip" when it does not read bodies of that kind;
-//   - "taken" and, for commands, the fields it read, each " name=value",
-//     in the order of fields below.
-//
-// A value is written as: a string as the hex of its UTF-8 bytes, an absent
-// one as empty; an integer in decimal; a boolean as 0 or 1; bytes in hex; a
-// list as its items joined by "."; a command's text as the hex SHA-256 of
-// its UTF-8 bytes, to keep the lines short.
+//   - "taken" when it takes the body.
 package main
 
 import (
@@ -40,11 +34,6 @@ import (
 	"os"
 	"strings"
 )
-
-// The fields of a verdict, per kind; every implementation writes these.
-var fields = map[string][]string{
-	"command": {"type", "group", "by", "to", "id", "time_ms", "expires_ms", "mode", "enter", "kind", "text", "action"},
-}
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: difffuzz gen [-seed N] [-n N] [-o file]\n       difffuzz compare -corpus file impl=file[,file] ...\n       difffuzz seeds -o dir")

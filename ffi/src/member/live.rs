@@ -701,7 +701,6 @@ impl Phone {
                 l.mesh.changed()?;
                 done()
             }
-            "check_command" | "answer" => Err(not_yet("a command for this phone")),
             _ => Err(not_yet(&format!("the operation {op:?}"))),
         }
     }

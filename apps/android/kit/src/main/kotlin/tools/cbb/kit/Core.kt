@@ -161,7 +161,7 @@ object Core {
 
     /**
      * Checks a signed body that is not a record through the core's
-     * parse_body (docs/core-api.md, "Signed bodies"): [kind] is `command`,
+     * parse_body (docs/core-api.md, "Signed bodies"): [kind] is
      * `credential`, `keys`, `release`, `channel` or `attest-status`. The
      * core alone decides whether the body is taken; it answers null for a
      * body it takes and why it refused one otherwise, the message and the
@@ -174,17 +174,6 @@ object Core {
         } catch (r: Refusal) {
             r.details?.takeIf { it.isNotEmpty() }?.let { "${r.message}: $it" } ?: r.message
         }
-
-    /**
-     * A command in the open with its orders sealed to key, the receiver's key
-     * for sealed messages (seal_command, docs/core-api.md, "Signed bodies"),
-     * for the sender to sign.
-     */
-    internal fun sealCommand(body: ByteArray, key: ByteArray): ByteArray {
-        val ok = run("seal_command", Wire.obj("body" to Wire.bytes(body), "key" to Wire.bytes(key))) as? JsonObject
-            ?: throw Mismatch("the answer to seal_command is not an object")
-        return ok.optBytes("body") ?: throw Mismatch("the answer to seal_command has no body")
-    }
 
     /** The public key for sealed messages of secret, 32 random bytes the device keeps: the `seal` its pairing and device record carry. */
     fun sealPublic(secret: ByteArray): ByteArray {

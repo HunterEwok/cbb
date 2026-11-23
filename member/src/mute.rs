@@ -16,7 +16,9 @@ use crate::sync::Switches;
 pub const FILE_NAME: &str = "mute.json";
 
 /// The longest mute, as a mute command's: 30 days.
-pub const MAX_MS: i64 = cbb_core::command::MAX_MUTE_MS;
+// 30 days fits an i64 with room to spare.
+#[allow(clippy::cast_possible_wrap)]
+pub const MAX_MS: i64 = cbb_core::commands::orders::MAX_MUTE_MS as i64;
 
 /// What the file holds: the end of the mute, in Unix milliseconds, 0 for
 /// until it is lifted, and the device whose admin muted this one.

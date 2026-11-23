@@ -52,7 +52,6 @@ pub mod bounds;
 pub mod bug;
 pub mod certs;
 pub mod clip;
-pub mod command;
 pub mod commands;
 pub mod content;
 pub mod copies;
@@ -107,6 +106,8 @@ mod testkit;
 pub mod tls;
 #[cfg(test)]
 mod vectors;
+#[cfg(test)]
+mod verdicts;
 pub mod vless;
 pub mod why;
 pub mod wire;

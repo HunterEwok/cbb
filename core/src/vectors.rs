@@ -143,24 +143,6 @@ fn member_certs() {
     }
 }
 
-/// Where a device's keys live, as Go's StoreOf reads a record's store.
-#[test]
-fn stores() {
-    use crate::command::store_of;
-    for (store, role, want) in [
-        ("file", "member", "file"),
-        ("hardware", "member", "hardware"),
-        ("proven", "phone", "proven"),
-        ("rootless", "member", "rootless"),
-        ("", "phone", "hardware"),
-        ("", "watch", "hardware"),
-        ("", "member", "file"),
-        ("disk", "member", "file"),
-    ] {
-        assert_eq!(store_of(store, role), want, "{store:?} {role:?}");
-    }
-}
-
 /// A hello's device keeps only its valid fields.
 #[test]
 fn device_cleaned() {
@@ -335,8 +317,8 @@ fn go_zxnext() {
     }
 }
 
-/// The strict form of signed bodies (strict.json): the core takes
-/// exactly the commands and manifests the Go member does.
+/// The strict form of manifests (strict.json): the core takes exactly
+/// the manifests the Go member does.
 #[test]
 fn strict() {
     let v = vectors("strict.json");
@@ -348,35 +330,29 @@ fn strict() {
             .map(|c| (c["name"].as_str().unwrap().to_string(), bytes(&c["body"]), c["valid"].as_bool().unwrap()))
             .collect::<Vec<_>>()
     };
-    for (name, body, valid) in cases("commands") {
-        let got = crate::command::Command::parse(&body);
-        assert_eq!(got.is_ok(), valid, "command {name:?}: {:?}", got.err());
-    }
     for (name, body, valid) in cases("manifests") {
         let got = crate::media::Manifest::parse(&body);
         assert_eq!(got.is_ok(), valid, "manifest {name:?}: {:?}", got.err());
     }
 }
 
-/// The vectors the tables of docs/protocol.md give (strict-generated-*.json,
-/// as Go's TestStrictGenerated writes them): the core takes exactly
-/// the bodies the tables take, and says which row it reads otherwise.
+/// The vectors the manifest table of docs/protocol.md gives
+/// (strict-generated-*.json): the core takes exactly the bodies the table
+/// takes, and says which row it reads otherwise.
 #[test]
 fn strict_generated() {
     let mut wrong = Vec::new();
-    let mut n = [0; 2];
+    let mut n = 0;
     for i in 1.. {
         let name = format!("strict-generated-{i}.json");
         if !PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop").join(&name).exists() {
             break;
         }
         let v = vectors(&name);
-        for (j, kind) in ["commands", "manifests"].iter().enumerate() {
-            n[j] += v[kind].as_array().unwrap().len();
-        }
+        n += v["manifests"].as_array().unwrap().len();
         wrong.extend(strict_wrong(&v));
     }
-    assert!(n.iter().all(|&k| k > 0), "no vectors of a kind: {n:?}");
+    assert!(n > 0, "no manifest vectors");
     assert!(wrong.is_empty(), "{} vectors read otherwise:\n{}", wrong.len(), wrong.join("\n"));
 }
 
@@ -384,22 +360,18 @@ fn strict_generated() {
 /// strict-generated-*.json that the core reads otherwise.
 fn strict_wrong(v: &Value) -> Vec<String> {
     let mut wrong = Vec::new();
-    for kind in ["commands", "manifests"] {
-        let Some(cases) = v[kind].as_array() else { continue };
+    if let Some(cases) = v["manifests"].as_array() {
         for c in cases {
             let mut body = bytes(&c["body"]);
             if let Some(pad) = c["pad"].as_u64() {
                 let at = c["pad_at"].as_u64().unwrap() as usize;
                 body.splice(at..at, std::iter::repeat_n(b'a', pad as usize));
             }
-            let got = match kind {
-                "commands" => crate::command::Command::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
-                _ => crate::media::Manifest::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
-            };
+            let got = crate::media::Manifest::parse(&body).map(|_| ()).map_err(|e| e.to_string());
             let valid = c["valid"].as_bool().unwrap();
             if got.is_ok() != valid {
                 wrong.push(format!(
-                    "{kind} {:?} ({}): valid {}, got {got:?}",
+                    "manifest {:?} ({}): valid {}, got {got:?}",
                     c["name"].as_str().unwrap(),
                     c["rule"].as_str().unwrap(),
                     c["valid"]

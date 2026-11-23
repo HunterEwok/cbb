@@ -274,13 +274,11 @@ after the header, and an operation that answers more than once marks the last an
 | `recover` | computer | payload = the recovery sheet's text or QR code, or `name` `yubikey` and the YubiKey's PIN as the payload | `{done}`: this device becomes the group's root by its recovery key (protocol.md, section 10, "The recovery key"). Only on the admin socket. It becomes the root at once by a change of root (rule 33) with a new root key, every device staying but those `leave` names (names or device IDs; never this device), and the service restarts to sign with that key; "the group's root already" on the root; with `yubikey` it opens the recovery key sealed on the one YubiKey with a key in slot 95 (protocol.md, "The recovery key on a YubiKey (0.6)") |
 | `hand_over` | computer | `device`: the admin, a device ID or a name (case-insensitive) | an error that points to `recover` (protocol.md section 10, "A change of root"; D-117). Only on the admin socket |
 
-A phone's node passes on a command for another device when it is connected to it, as
-protocol.md section 15 says: once until it expires, never one that has expired or claims to live
-longer than a command may. For itself it carries out the `mute` and `unmute` commands an
-admin sends, keeps both in `mute.json` as `cbb` does, and tells the app (the `mute`
-event); every other command for the phone goes to the app as a `command` event, as `cbb`
-refuses it. A phone takes tunnel offers and hub shares only from a device the records
-let be a hub, by the chain it proved. It keeps the sealed blobsof the copies with images or files it made or fetched in `content/` of its data directory,
+A phone's member carries out the commands for it as protocol.md section 15 says: the `mute` and
+`unmute` commands an admin sends, kept in `mute.json` as `cbb` does and told to the app (the
+`mute` event), `mode`, and the root's `hub` command, and answers the others as that section
+says. A phone takes tunnel offers and hub shares only from a device the records
+let be a hub, by the chain it proved. It keeps the sealed blobs of the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join by the
 home window, sync both ways, a pause and an admin's mute against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
@@ -369,7 +367,7 @@ names they share.
 | `copy_verdict` | `receives`, `kind`, `mark`, `unread`, `has_text`, `has_media`, `takes_media`, `held` (booleans, false when left out but `receives`), `age_ms`, `window_ms`, `secret_ttl_ms` | `{"verdict"}`: whether the group's current copy goes into the member's clipboard (`write`), or why not: `mode`, `unread`, `secret_gone`, `no_text`, `held` or `old` (`cbb_core::rule`; the cases of `testdata/interop/copy-verdicts.json`) |
 | `open_copy` | `event`, `me` (the reader's device), `secret` (base64, its secret for sealed messages) | `{"kind", "via", "text", "media", "key"}`: what the copy holds, and the copy's key (base64), which opens its blob; code 17 when it is not sealed to `me`, does not open or breaks a rule of its content. It does not check the origin |
 | `seal_segment`, `open_segment` | `key` (base64, the copy's key), `index` (from 0), `last` (the blob's last segment), `data` (base64: at most 64 KiB to seal, 65 552 bytes to open) | `{"data"}`: the segment sealed or opened ([protocol.md](protocol.md), section 4, "The blob"); a segment that does not open is code 17 |
-| `parse_body` | `kind` (`command`, `credential`, `keys`, `release`, `channel`, `attest-status`, `entries`, `zxnext` or `manifest`), `body` (base64) | `{"kind", "value"}`: the body's fields as an object, once it checks; see "Signed bodies" |
+| `parse_body` | `kind` (`credential`, `keys`, `release`, `channel`, `attest-status`, `entries`, `zxnext` or `manifest`), `body` (base64) | `{"kind", "value"}`: the body's fields as an object, once it checks; see "Signed bodies" |
 | `release_check` | `keys`, `channel`, `release` (each a release file's bytes as fetched, base64), `name` (the channel), `now_ms`, `seen` (what the device kept, optional), `roots` (optional, `[{alg, key, name, use}]`: other roots, for tests; the pinned ones when left out) | `{"value", "seen"}`: release.json's fields and the Seen to keep; a file refused, or one that does not read, is code 16. See "Release files" |
 | `release_check_status` | `keys`, `status` (attest-status.json), each its bytes in base64, `now_ms`, `seen`, `roots` as `release_check` | `{"value", "seen"}`: the revocation list's fields and the Seen to keep |
 | `release_check_entries` | `keys` and `entries` (entries.json), each its bytes in base64, or in their place `set`: the signed entry points as members pass them (`{"keys", "entries"}`), its bytes in base64; `now_ms`, `seen`, `roots` as `release_check` | `{"value", "seen"}`: the entry points' fields and the Seen to keep |
@@ -379,7 +377,6 @@ names they share.
 | `why` | `facts` (what a member knows: `in_group`, `removed`, `frozen`, `stop`, `admins_conflict`, `root_two_histories`, `recovery_fork`, `change_arriving`, `checkpoint_stuck`, `owner_disagrees`, `no_secrets_here`, `nothing_here`, `copy_waits`, `update_needed`, `sync_off`, `sync_until_ms`, `muted`, `muted_until_ms`, `newer`, `update`, `connected`, `devices: [{name, online, sync_off, muted}]`, `quiet`, `unreached`, `away`, each optional), `now_ms` | `{"why"}`: the reasons, as the member's `why` gives them (`cbb_core::why`, checked against `testdata/why/vectors.json`); on the group of 0.6 a driver fills the group's part with `why::group_facts` from the state (removed, frozen, the stop, `admins_conflict` from a conflict of admins, `root_two_histories` from `root_pair`, `recovery_fork` from `fork`, `change_arriving` from `first_missing` or `list_missing`, `no_secrets_here` and `nothing_here` from `no_secrets_to` and `nothing_to`, `update_needed` from `update_needed` or `too_old`, `newer`) and adds `owner_disagrees` (peers whose chain parts from its own, `State::disagrees`), `copy_waits` (senders whose copies wait for their records) and `checkpoint_stuck` (`RecordSet::stuck_checkpoints`) |
 | `keyboard` | `layout` (`us` or `ru`, the host's), `text` | `{"reports", "untypeable", "map"}`: the HID boot keyboard's reports that type `text` (each 8 bytes, base64; a key down, then all keys up), the characters the layout has no key for (no reports then), and the report map (base64), for a phone that is a Bluetooth LE keyboard (`cbb_core::keyboard`); an unknown layout is code 1 |
 | `seal_public` | `secret` (base64, 32 random bytes the device keeps) | `{"key"}`: its public key for sealed messages (base64, 1216 bytes), the `seal` its pairing and device record carry |
-| `seal_command` | `body` (base64, a command in the open), `key` (base64, the receiver's `seal` key) | `{"body"}`: the same command with its orders sealed to the key (`v` `2`, `sealed`), canonical, for the sender to sign; see "Signed bodies" |
 | `bug_report` | `input` (`{kind, code, name, message, details, app, version, build, os, os_version, model, arch, log, names, now_ms}`: `kind` `panic` or `error`, `app` `ios`, `android`, `aurora`, `mac`, `tray` or `cbb`, `log` CBB's own log, oldest first, `names` the words that must not leave the device), `state` (as the last bug call gave it, optional) | `{"report", "fingerprint", "post", "url", "action", "offer_always", "fixed_in"}`: the report, filtered, as "Technical details" shows it, the break's fingerprint, the body to post to `url` (empty when this build has no key to seal to), what the app does (`ask`, `send` or `skip`), whether the dialog offers "Always allow", and the version the server said fixes this break; see "Bug reports" |
 | `bug_allow` | `state`, `always` | `{"state"}`: the user allowed a report, and maybe always |
 | `bug_sent` | `state`, `fingerprint`, `version`, `post`, `ok`, `fixed_in` (what the server answered, optional), `now_ms` | `{"state"}`: the report went (`ok`), or it waits to be sent again |
@@ -408,7 +405,7 @@ The numbers and names never change meaning; new codes are added at the end of th
 | 11 | `cert` | a certificate is refused |
 | 14 | `saved` | the group's saved set file cannot be read, is of another version, or its pin does not hold under the local key |
 | 15 | `command` | a command is refused: its signer, its target, its time or its limits |
-| 16 | `signed` | a signed body that is not a record (a command, a server credential, a release file or a manifest) is refused: its size, form or a field |
+| 16 | `signed` | a signed body that is not a record (a server credential, a release file or a manifest) is refused: its size, form or a field |
 | 17 | `copy` | a copy is refused or cannot be sealed: its origin, its signature or a field, or it does not open with the device's key |
 | 18 | `push` | a push registration cannot be made from its fields, or a push body does not open with any of the phone's push keys |
 
@@ -728,23 +725,17 @@ in through a change of root).
 ## Signed bodies
 
 `parse_body` reads the signed bodies other than records as every program reads them
-([protocol.md](protocol.md): commands in section 15, server credentials in section 13, the
+([protocol.md](protocol.md): server credentials in section 13, the
 release files in section 16, manifests in section 7): the strict form of signed bodies, then
 each field against its row. A release file's body is refused above 256 KiB, as its envelope
-allows. It checks the body alone; the signature, the signer and the time are the caller's, or
-the member's for a command. Go reads the bodies with its own code, which the strict vectors
+allows. It checks the body alone; the signature, the signer and the time are the caller's. Go reads the bodies with its own code, which the strict vectors
 keep the same. The phone kits call it for
-each command, credential and release file they take. A manifest comes inside a copy's sealed
+each credential and release file they take. A manifest comes inside a copy's sealed
 Content, in the canonical form, and `open_copy` reads it there for the phones; Go reads it with
 `clip.ParseManifest`, and the kits'
 `Media.Manifest.parse` asks it for a manifest given as bytes.
 
-`seal_command` seals a command's orders to its receiver (protocol.md, section 15, "Sealed
-commands"): it checks the command in the open as `parse_body` does, moves `mode`, `hub`,
-`enter`, `kind`, `text` and `action` into the sealed part with the header as associated data,
-and writes the body with `v` `2` in the canonical form. The phone kits call it for each command
-to a device whose record has a `seal` key; Go seals with its own `group.SealCommand`, and both
-open each other's. A phone keeps a secret for sealed messages of its own (32 random bytes in
+A phone keeps a secret for sealed messages of its own (32 random bytes in
 the keychain, or under a key of the Android Keystore), gives its public key from `seal_public`
 when it makes a group or joins one, and its member in the core opens the commands sealed to it
 with that secret.

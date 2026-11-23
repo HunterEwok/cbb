@@ -14,7 +14,7 @@ implementation gives each changed body the same verdict.
 
 - `tools/difffuzz gen` writes a **corpus**, one case to a line, from a seed: the same seed
   gives the same corpus. It starts from every body of `testdata/interop/strict-generated-*.json`
-  (commands and manifests) and `strict-files.json` (`keys.json`, `release.json`, channel
+  (manifests) and `strict-files.json` (`keys.json`, `release.json`, channel
   files and `attest-status.json`), and changes them: bits and bytes,
   bytes that JSON treats specially, members twice, missing, in another place or with their
   names in another case or escaped, values of another JSON type, integers at the edges of
@@ -24,7 +24,7 @@ implementation gives each changed body the same verdict.
   core alone; their reader is fuzzed by the `format` target below and its vectors in
   `testdata/format`.
 - Each implementation has a **verdict test** that reads a corpus and writes one line per
-  case: Go's `TestVerdicts` in `internal/release` (the release files), the Rust core's `command::verdicts` and the Kotlin kit's `VerdictTest`. The
+  case: Go's `TestVerdicts` in `internal/release` (the release files), the Rust core's `verdicts::verdicts` and the Kotlin kit's `VerdictTest`. The
   iPhone kit has no verdict test: it reads what comes from the network only through the
   Rust core (D-126). Without a corpus each runs on a small one of its own, so the normal
   test runs keep it working.
@@ -38,13 +38,8 @@ implementation gives each changed body the same verdict.
 A verdict is one line:
 
 - `refused` when the implementation refuses the body;
-- `skip` when it does not read bodies of that kind: the Kotlin kit reads commands only
-  through the Rust core (D-126, docs/core-api.md), which the comparison reads as the Rust
-  core's;
-- `taken` and, for commands, every field the body gives, as
-  ` name=value` in a fixed order (`tools/difffuzz/main.go` lists them): strings as the hex of
-  their UTF-8 bytes, integers in decimal, booleans as 0 or 1, bytes in hex, lists joined by
-  `.`, and a command's text as its SHA-256.
+- `skip` when it does not read bodies of that kind, which agrees with any other verdict;
+- `taken` when it takes the body.
 
 An exception that is not the reader's own refusal is a verdict of its own (`threw ...` in the
 kits), so a reader that fails in another way also shows as a difference.
@@ -60,8 +55,8 @@ kits), so a reader that fails in another way also shows as a difference.
   `testdata/format/messages3.json`), `FuzzCredential` (`internal/blind`, the forwarder's
   reader of the format's profile, frames and credentials, seeded from
   `testdata/format/credentials.json` and `frames.json`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
-  `cargo fuzz` targets in `core/fuzz` (`command`,
-  `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,
+  `cargo fuzz` targets in `core/fuzz` (`command` (a command of format section 6, each one
+  taken written back the same, and the orders of every type), `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,
   which no bytes may pass), `sheet` (the recovery sheet's text and QR code, each one taken
   written again and read back the same), `yubikey_object` (the hardware key's object, which
   nothing unsealed opens), `welcome_parts` (the Welcome's assembly from its parts in either

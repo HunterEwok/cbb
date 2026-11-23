@@ -416,7 +416,7 @@ pub(crate) fn flag(a: &str) -> Option<&str> {
 pub(crate) fn host_name() -> String {
     let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
-    if records::valid_name(&name) { name } else { "member".into() }
+    if cbb_core::join::info::valid_name(&name) { name } else { "member".into() }
 }
 
 pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
@@ -829,7 +829,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         }
         i += 2;
     }
-    if !records::valid_name(&cfg.name) {
+    if !cbb_core::join::info::valid_name(&cfg.name) {
         return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
     }
     if let Some(u) = run_user {

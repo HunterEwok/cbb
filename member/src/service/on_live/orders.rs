@@ -90,17 +90,19 @@ impl Service {
                 Ok(())
             }
             Order::Paste { way, enter, what } => {
-                let mut body = crate::records::Command::default();
-                body.kind = "paste".into();
-                body.id = crate::certs::hex(&t.id);
-                body.by = by.id.clone();
-                body.time_ms = uptime::wall_ms();
-                body.mode = if way == Way::Type { "type" } else { "paste" }.into();
-                body.enter = enter;
-                (body.paste_kind, body.text) = match what {
+                let (paste_kind, text) = match what {
                     What::Text(t) => ("text".into(), t),
                     What::Secret(t) => ("secret".into(), t),
                     What::Media(id) => ("media".into(), crate::certs::hex(&id)),
+                };
+                let body = crate::records::Command {
+                    id: crate::certs::hex(&t.id),
+                    by: by.id.clone(),
+                    mode: if way == Way::Type { "type" } else { "paste" }.into(),
+                    enter,
+                    paste_kind,
+                    text,
+                    ..Default::default()
                 };
                 let from = Sender { key: crate::certs::hex(&t.signer.0), verified: true, name: by.name.clone() };
                 let secrets_stopped = st.stop != cbb_core::records::eval::Stop::None;
@@ -114,12 +116,12 @@ impl Service {
                 outcome(&res.status, &res.reason)
             }
             Order::Action(name) => {
-                let mut body = crate::records::Command::default();
-                body.kind = "action".into();
-                body.id = crate::certs::hex(&t.id);
-                body.by = by.id.clone();
-                body.time_ms = uptime::wall_ms();
-                body.action = name;
+                let body = crate::records::Command {
+                    id: crate::certs::hex(&t.id),
+                    by: by.id.clone(),
+                    action: name,
+                    ..Default::default()
+                };
                 let from = Sender { key: crate::certs::hex(&t.signer.0), verified: true, name: by.name.clone() };
                 let res = self.act_from(&from, &body, || actions::Signer {
                     root: by.root,
@@ -440,7 +442,7 @@ impl Service {
             }
             "paste_on" => self.live_paste_on(live, h, payload).map(|()| done()),
             "action_on" => {
-                if !cbb_core::command::valid_action_name(&h.name) {
+                if !cbb_core::commands::orders::valid_action_name(&h.name) {
                     return Some(Err(Error::msg(format!("{:?} is not an action's name", h.name))));
                 }
                 if !other {

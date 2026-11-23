@@ -175,8 +175,8 @@ func TestStrictManifests(t *testing.T) {
 }
 
 // TestStrictGeneratedManifests checks the manifests of
-// testdata/interop/strict-generated-*.json, which internal/group writes from
-// the tables of docs/protocol.md.
+// testdata/interop/strict-generated-*.json, the vectors of the manifest table
+// of docs/protocol.md.
 func TestStrictGeneratedManifests(t *testing.T) {
 	type file struct {
 		Manifests []struct {

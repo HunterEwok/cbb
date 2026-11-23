@@ -2700,151 +2700,72 @@ or a member certificate.
 
 ## 15. Commands
 
-An admin orders one member to do something with a **command**: signed like a record (section
-10) and never stored. `mode` turns the receiver's sync on (`shared`) or off (`own`; design.md, "Sync on and off"); `hub`
-makes the receiver the group's hub, or a hub of the group as well, or with a stop order makes
-the receiver stop being one (section 11, "Moving the hub", "Several hubs", "Stopping a hub"); `paste` puts a text where
-the receiver's focus is, and `paste-off` turns remote paste off on the receiver (design.md,
-"Remote paste"); `action` runs one of the receiver's quick actions, and `actions-off` turns
-them all off there (design.md, "Quick actions"); `away-off` turns sync away from home off on
-the receiver (section 11), which only its own user turns on again (D-45); `mute` keeps the
-receiver's copies from the group for a while or until `unmute` ends it (design.md, "Muting a
-device").
-
-On the records of 0.6 a computer sends and carries out `mode`, `paste`, `paste-off`, `action`,
-`actions-off`, `away-off`, `mute` and `unmute` as commands of [format](format.md) section 6
-(`member/src/service/on_live/orders.rs`), signed by its root or admin key; the receiver's
-checks of its user's switches are the same as above. Its `result` says `refused` (2) when the
-receiver's user or settings say no, such as remote paste being off, and `failed` (3) when
-carrying the command out went wrong. A small device's own command (`device`, type 10: a
-name and its arguments) is refused with "this device has no command NAME", since no computer
-or Pi defines commands of its own; the leaves that do, and a way to send one, come with 0.7; `away-off` turns sync away from home off on the receiver, which only
-its own user turns on again; `hub` makes the receiver a hub or stops it being one (below).
-
-A `hub` command of 0.6 orders field 10 (the hub: its address away from home and the hash of
-its member key, the format's 32-byte reference to a signer, so that every reader knows which
-device the hub is), 11 (the
-forwarders, 1 to 8, each `[address, pin]`, an address once: the pin of the forwarder's key, 32
-bytes, comes signed by the root with its address, so the hub takes no forwarder's key on first
-use) or 13 (stop being a hub, alone). Field 12, the clients with their keys and
-pre-shared keys, is retired and refused (`orders/hub`), and its number is not used again: a
-client gives each hub its key in message `tunnel` (t 15), and the pre-shared key is never sent,
-since both ends export it from their own connection (`core/src/hubkey.rs`).
-The receiver, a computer the records make a hub with sync away from home on, refuses a command
-whose field 10 names another device's key, and otherwise becomes a hub at that address with
-the first forwarder of field 11, as `cbb global hub` makes it one (`cbb global hub -on DEVICE`
-sends it, with one address on 0.6); with field 13 it stops being a hub (`cbb global hub off -on
-DEVICE`). `cbb global move DEVICE` sends the new hub its command, by default with this hub's
-forwarder, and once it is done stops this hub. A hub that stops sends each client connected an
-offer with `moved` and the tag of that connection's key; the client forgets the hub, ends a
-connection through its tunnel and takes the next hub in the order.
+An admin orders one member to do something with a **command**, signed and never stored. `mode`
+turns the receiver's sync on (shared) or off (own; design.md, "Sync on and off"); `hub` makes
+the receiver a hub of the group, or with its stop order makes the receiver stop being one
+(section 11, "Moving the hub", "Several hubs", "Stopping a hub"); `paste` puts a text where the
+receiver's focus is, and `paste-off` turns remote paste off on the receiver (design.md, "Remote
+paste"); `action` runs one of the receiver's quick actions, and `actions-off` turns them all off
+there (design.md, "Quick actions"); `away-off` turns sync away from home off on the receiver
+(section 11), which only its own user turns on again (D-45); `mute` keeps the receiver's copies
+from the group for a while or until `unmute` ends it (design.md, "Muting a device"); `device`
+is a small device's own command, a name and its arguments that its firmware declares.
 
 ### The command
 
-It has the form of a record, `{body, sig, chain?}`. Its body is JSON, in the strict form of
-signed bodies (Conventions):
+A command is an envelope of [format](format.md) section 6 (`core/src/commands`): its body names
+the type, the group, the signer's key, the signer's counter, the times, the receiver's device ID
+and a random ID, and its orders are sealed to the receiver's `seal` key (X-Wing HPKE), so that
+the members in between read only the header. It is signed by the group's root key or an admin
+key whose `commands` bit allows the type, or, at a leaf, by a commander its grant names. Every
+0.6 writer gives it a lifetime of 30 s. A receiver refuses a command whose counter is not above
+the last one it kept of that signer, so a command is carried out once, also across restarts.
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `v` | integer | `1`, or `2` for a sealed command (below) |
-| `type` | string | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off`, `mute` or `unmute` |
-| `group` | string | the group tag |
-| `by` | string | the signer's device ID (32 of `0`-`9` and `a`-`f`): a receiver refuses a command whose `by` is no device ID, or, when its records show which device holds the signing key (the root's own device for the root's key, the device whose record names the admin CA), names another device, or, when they show none, names a device they show |
-| `to` | string | the receiver's device ID (32 of `0`-`9` and `a`-`f`) |
-| `id` | string | 128 random bits as 32 lowercase hex characters; IDs compare as byte strings |
-| `time_ms` | integer | when it was signed, milliseconds since the Unix epoch, not negative |
-| `expires_ms` | integer | after `time_ms`, at most 30 000 ms later: from `time_ms` + 1 to `time_ms` + 30 000 |
-| `mode` | string | in a `mode` command: `shared` (sync on) or `own` (sync off); in a `paste` command: `paste` (the clipboard and the paste keys) or `type` (key by key) |
-| `enter` | bool | in a `paste` command: press Enter after the text |
-| `kind` | string | in a `paste` command: `text`, `secret` or `media` (the group's copy of images or files that `text` names, below) |
-| `text` | string | in a `paste` command: the text, not empty, at most 1 MiB of UTF-8 for `paste` and 4 KiB for `type`; in one of kind `media`, the event ID of the copy (32 of `0`-`9` and `a`-`f`), with `mode` `paste` |
-| `action` | string | in an `action` command: the action's name, 1 to 32 of `a`-`z`, `0`-`9` and `-`, starting with a letter; in no other command |
-| `hub` | object | in a `hub` command: `forwarder` (`endpoint`, `key`) or absent, `endpoints` (at most 8 with the forwarder's) or absent, at least one of the two, and `clients`, at most 256 of `{device, key, psk}` (base64, 32 bytes each, no device twice); or `{"stop":true}` with none of the others, which makes the receiver stop being a hub |
-| `for_ms` | integer | in a `mute` command: how long the mute lasts, from 1 to 2 592 000 000 (30 days) on the receiver's clock from when it takes the command; absent or 0 for until an `unmute` command or the receiver's user ends it |
-| `sealed` | string | in a command of `v` `2` only: the orders, sealed to the receiver (below), base64 |
-
-The exact rule, after the strict form: each field of this table has its JSON type in every
-command. A command is refused without `mode` in `mode` and `paste`, `hub` in `hub`, `kind`
-and `text` in `paste`, and `action` in `action`. In a command of another type these fields
-are absent or empty: `mode`, `kind`, `text` and `action` `""`, `enter` `false`, `for_ms` `0`,
-and `hub` absent, since even `{}` is an order. `mode` in a `mode` command is any string that is not
-empty here; the receiver answers a mode it does not know with an error. `paste`'s `mode`
-and `kind` are exactly the values above, and one of kind `media` has `mode` `paste` and an event ID as its `text`. The 1 MiB and 4 KiB of `text` count the bytes of
-UTF-8 once its escapes are read. In `hub`, `forwarder` has `endpoint` and `key`, strings
-that are not empty; `endpoints` holds at most 8 strings (the forwarder does not count among
-them) and, without a forwarder, one at least; each of `clients` has `device`, a device ID,
-and `key` and `psk`, 32 bytes each in base64. A body is at most 64 KiB, or 2 MiB for
-`paste` (`size/commands`), checked before anything else. The vectors cite a row as
-`commands/<type>/<field>`.
-
-`sig` is ECDSA P-256 with SHA-256 over the body's exact bytes, by a root's own key (no `chain`)
-or by an admin CA's key (`chain` holds that admin CA, DER), as for records.
-
-A receiver's limits per sender (remote paste, quick actions) and its logs count a command for
-its `by` when the records show that this device holds the signing key, and otherwise for the
-signing key itself, with the log entry marked `unverified`: `by` is then only the signer's word.
+A computer sends and carries out `mode`, `paste`, `paste-off`, `action`, `actions-off`,
+`away-off`, `mute`, `unmute` and `hub` (`member/src/service/on_live/orders.rs`). A `device`
+command is refused with "this device has no command NAME", since no computer or Pi defines
+commands of its own; the leaves that do, and a way to send one, come with 0.7. The phones carry
+out `mode`, `mute` and `unmute` through their member in the core (`ffi/src/member/live.rs`),
+take `paste-off`, `actions-off` and `away-off` as done, since a phone of 0.6 has none of these
+on, refuse `action` and `device`, answer `paste` that it does not work on a phone yet, and take
+a `hub` command only from the root, as the forwarder of a phone that is a hub.
 
 ### In the member protocol
 
-```
-{"t":"command","command":{"body":"...","sig":"...","chain":["..."]}}
-{"t":"result","result":{"id":"...","by":"...","status":"done"}}
-```
+The sender sends message `command` (t 9) with the envelope on its own connection to the
+receiver, which answers with `result` (t 10, [format](format.md) section 9): the command's ID,
+the receiver's device ID, the status, 1 `done`, 2 `refused` (the receiver does not take it, or
+its user or settings say no, such as remote paste being off) or 3 `failed` (it took it and
+could not carry it out), and for the last two the reason. A refusal before the signature
+verifies gets no answer. The reason is a peer's text: a member that shows it, or passes it to a
+program, first turns each control character (C0, DEL, C1) into a space and cuts it to 256 bytes
+at a character boundary. A `hub` command's `done` carries the new hub's offer. The sender gives
+up after 30 s; a sender that has no connection to the receiver says that the device is not
+connected.
 
-The sender sends the command on its own connection to the receiver, which answers with a
-`result`: its `id` is the command's, its `status` `done`, `refused` (the receiver does not take
-it) or `failed` (it took it and could not carry it out), and `reason` says why for the last
-two. The reason is a peer's text: a member that shows it, or passes it to a program, first
-turns each control character (C0, DEL, C1) into a space and cuts it to 256 bytes at a
-character boundary. A `hub` command's `done` carries `tunnel`, the new hub's offer. A member without
-commands ignores the message, so the sender gives up after 10 s (20 s for `hub`). A member
-carries out at most 4 commands of one connection at once and takes at most 32 from it in
-10 s; it answers the others `refused` at once, without reading them.
+A `hub` command orders field 10 (the hub: its address away from home and the hash of its
+member key, the format's 32-byte reference to a signer, so that every reader knows which device
+the hub is), 11 (the forwarders, 1 to 8, each `[address, pin]`, an address once: the pin of the
+forwarder's key, 32 bytes, comes signed by the root with its address, so the hub takes no
+forwarder's key on first use) or 13 (stop being a hub, alone). Field 12 is retired and refused
+(`orders/hub`), and its number is not used again: a client gives each hub its key in message
+`tunnel` (t 15), and the pre-shared key is never sent, since both ends export it from their own
+connection (`core/src/hubkey.rs`). The receiver, a computer the records make a hub with sync
+away from home on, refuses a command whose field 10 names another device's key, and otherwise
+becomes a hub at that address with the first forwarder of field 11, as `cbb global hub` makes it
+one (`cbb global hub -on DEVICE` sends it, with one address on 0.6); with field 13 it stops
+being a hub (`cbb global hub off -on DEVICE`). `cbb global move DEVICE` sends the new hub its
+command, by default with this hub's forwarder, and once it is done stops this hub. A hub that
+stops sends each client connected an offer with `moved` and the tag of that connection's key;
+the client forgets the hub, ends a connection through its tunnel and takes the next hub in the
+order.
 
-Each computer and small device keeps a secret for sealed messages in `seal.json` next to its
-identity (sealed by the TPM where a computer has one, as the WireGuard key) and offers its public key in its hello
-(`seal`, section 4) and in its pairing info (ADa, section 5); a root computer records it in
-the device's record, as it records a changed system, a member that admits it records it at
-once, and the phones keep it when they sign the record again. A command for it is sealed
-(below, "Sealed commands").
-
-A sender that has no connection to the receiver sends a `mode`, `paste`, `paste-off`,
-`action`, `actions-off`, `away-off`, `mute` or `unmute` command to the group's hubs it is connected to (the
-root and the admins, "Several hubs" in section 11), and to no other member: a command's body,
-a paste's text among it, is signed but encrypted only when sealed (below), and the hubs are
-the devices the user gave admin powers. A `hub` command only goes directly. A member
-that gets a command whose `to` is another device passes it on, unchanged, only when it is
-connected to that device and has not passed that `id` before (it keeps the IDs until the
-command expires, at most 4096), and passes the receiver's `result` back to the member it
-came from, once; a member not connected to `to` drops it. The receiver names itself in the
-result's `by`, so that a sender takes a result from a member in between only when `by` is
-the receiver: `cbb` refuses a command for another device
-for itself instead of passing it on. The signature, not the
-connection, says who sent a command, so the member in between can neither forge nor change
-it; it could withhold a command or forge a `result`, as any member could drop messages.
-
-The receiver MUST take a command only when:
-
-- its body decodes, with a known `type` and a lifetime of at most 30 s;
-- `group` is its group and `to` its own device ID;
-- the signature verifies under a root on the path of the group's records, and the signer is
-  that root or an admin CA under it that is neither revoked nor frozen; a watch's admin CA
-  (section 10, "Watches") signs only `paste-off`, `actions-off`, `away-off` and `action`;
-- `expires_ms` is after its clock and `time_ms` at most 60 s ahead of it;
-- its `id` is not in its replay cache, which keeps the IDs of the commands it carried out
-  until they expire (at most 4096 at a time);
-- `time_ms` is not before the time the receiver started. The replay cache lives in memory
-  and starts empty, so a command carried out before a restart would otherwise be taken
-  again; a refused one is sent again with a new `id`.
-
-A body is at most 64 KiB, a `paste` command's 2 MiB (the sender writes the text without
-JSON's escapes of `<`, `>` and `&`). A `mode` command with an unknown mode is refused. One that is taken sets the mode, saves it
-and logs who sent it. Every member takes `mode` commands; only a computer takes `hub`, and the
-phones and `cbb` refuse it.
+A `mode` command sets the mode, saves it, logs who sent it and tells the members connected in a
+new hello.
 
 A `paste` command MUST be refused unless the receiver's user turned remote paste on there,
-and, with `enter`, allowed Enter; and beyond one a second and 30 a minute from one sender
-(the limits per sender, above). The switches MUST be set only on the device itself, never by a command. The receiver MUST
+and, with `enter`, allowed Enter; and beyond one a second and 30 a minute from one sender.
+The switches MUST be set only on the device itself, never by a command. The receiver MUST
 clean the text (newlines and tabs stay; other control characters, terminal escape
 sequences and bytes that are not UTF-8 go; CR LF and CR become LF), hands it to a target
 (the watcher protocol's `inject`, section 8: a desktop session first, then tmux, then a text
@@ -2852,45 +2773,40 @@ console only where the user allowed consoles). A line break may run what comes b
 wherever the focused program does not take a paste bracketed, which no target can tell (a
 shell or console window on a desktop may not ask for it), so unless the user allowed Enter,
 the receiver MUST refuse a text with a line break on each of these targets, and when it
-types the text on a Bluetooth keyboard or a TV. An Android phone that puts it into the
-focused text field through its accessibility service takes it: a line break there is a
-character of the field. The receiver answers `done` when the target put it
-in, `refused` with its reason (for example a locked session) or `failed`. It keeps the last
-100 pastes in a log (sender, time, length, way, result, never the text), but no `secret`
+types the text on a Bluetooth keyboard or a TV. The receiver answers `done` when the target
+put it in, `refused` with its reason (for example a locked session) or `failed`. It keeps the
+last 100 pastes in a log (sender, time, length, way, result, never the text), but no `secret`
 one.
 
 A `paste` command of kind `media` pastes images or files: its sender first makes a copy of
-them in the group as any copy ([format](format.md), section 10.3), then signs the command with that copy's
-event ID as its `text`. The receiver waits up to 20 s for that copy to be its group's current
-copy, and refuses it unless it reads the copy, the copy is a `media` copy, and the copy has a
-wrap for the signer's device (`by`), so that a paste never puts in a copy its sender could not
-read. It fetches the copy's blob within its limits (section 4, "Content"), then hands the
-paste to a desktop watcher whose clipboard takes the copy whole (the watcher protocol's
-`inject` of kind `media`, section 8), which writes it into the clipboard (an image, formatted
-text, or the files as a file manager copies them) and presses the paste keys, and Enter when
-`enter` is set. The clipboard keeps the copy, which is the group's anyway. tmux, a text
-console, a Bluetooth keyboard and a TV take only text, so a receiver with only those refuses
-it. The receiver answers within the command's lifetime, after which the members in between no
-longer pass the result back; the sender waits 33 s for it. A `paste-off` command turns remote paste off, Enter and consoles too; only the
-device's own user turns it on again.
+them in the group as any copy ([format](format.md), section 10.3), then signs the command with
+that copy's ID in place of the text. The receiver waits up to 20 s for that copy to be its
+group's current copy, and refuses it unless it reads the copy and the copy is one of images or
+files, so that a paste never puts in a copy its sender could not read. It fetches the copy's
+blob within its limits (section 4, "Content"), then hands the paste to a desktop watcher whose
+clipboard takes the copy whole (the watcher protocol's `inject` of kind `media`, section 8),
+which writes it into the clipboard (an image, formatted text, or the files as a file manager
+copies them) and presses the paste keys, and Enter when `enter` is set. The clipboard keeps the
+copy, which is the group's anyway. tmux, a text console, a Bluetooth keyboard and a TV take
+only text, so a receiver with only those refuses it. A `paste-off` command turns remote paste
+off, Enter and consoles too; only the device's own user turns it on again.
 
 An `action` command carries only the action's name: what it does is defined on the receiver,
 which knows the presets `lock` (lock the screen), `sleep`, `reboot` and `shutdown` (both a
 minute after the command, so that `cancel-shutdown` can stop them), `cancel-shutdown` and
 `restart` (the service ends and its service manager starts it again, after the result is
 sent), `keyboard-layout` (the computer's Bluetooth keyboard types in the next of its layouts,
-`us` then `ru`; refused where it is off or there is none), and the actions its user added there, each a program with fixed arguments that the
-agent of the user signed in runs; nothing in the command reaches its arguments, and only
-the exit status comes back. The receiver MUST refuse it unless its user turned that action
-on there, and then:
+`us` then `ru`; refused where it is off or there is none), and the actions its user added
+there, each a program with fixed arguments that the agent of the user signed in runs; nothing
+in the command reaches its arguments, and only the exit status comes back. The receiver MUST
+refuse it unless its user turned that action on there, and then:
 
 - unless the signer is of a kind the user allowed for it, when the user named kinds: `root`
-  (the root's own key signed it), `phone`, `computer` or `watch` (the role of the signer's
-  device, the device record whose `admin` is the signer's admin CA, or the root's own device;
-  only a record a known root's own key signed says either: section 10, the devices list);
+  (the root's own key signed it), `phone`, `computer` or `watch` (the role of the device whose
+  key or admin key signed it, as the records show);
 - for `reboot` and `shutdown`, unless that device's record says its keys are in hardware
   (`store` `hardware` or `proven`), or the user allowed keys in files for that action;
-- beyond one a second and 30 a minute from one sender (the limits per sender, above).
+- beyond one a second and 30 a minute from one sender.
 
 It answers `done` when the system took the action (a reboot that is scheduled counts),
 `refused` with the reason (the action is off, the signer is not allowed, the system refused
@@ -2898,57 +2814,22 @@ it) or `failed`, and keeps the last 100 actions in a log (sender, time, action, 
 `actions-off` command turns every action off on the receiver, keeping who may run each; only
 the device's own user turns them on again.
 
-An `away-off` command turns sync away from home off on the receiver as its user's own
-`off` does (section 11, the control operation `away`): its tunnel keys go, and once the
-result is sent it tells the members connected in a new hello (section 4,
-"Hello"). It answers `done` also when sync away from home was
-off already.
+An `away-off` command turns sync away from home off on the receiver as its user's own `off`
+does (section 11, the control operation `away`): its tunnel keys go, and it tells the members
+connected in a new hello (section 4, "Hello"). It answers `done` also when sync away from home
+was off already.
 
-A `mute` command mutes the receiver until `for_ms` from when it takes the command, or until
-an admin lifts it; the commands of several admins simply follow each other, the last one
-taken counts. It makes no events, not even
-from a deliberate copy (which it refuses), and takes the group's copies as before; its sync
-mode stays as its user set it. It saves the mute, so that it lasts across restarts, answers
-`done`, and tells the members connected in a new hello, so that they show it
-(section 4, "Hello") without the connection ending. An `unmute` command ends it the same way; the device's own
-user ends it only where the device is itself an admin or the root (section 8, `unmute`), and
-a mute that ends by its time ends without a message. Every member takes both: computers,
-small devices and the phones. A device that does not take the command (an older one, or one
-that is broken) is removed instead; each device's user may also pause receiving there
-(section 8, `mute`).
-
-### Sealed commands
-
-A sender seals a command's orders to its receiver when the receiver's device record has a
-`seal` key, so that the members in between see only the header:
-
-- The **orders** are the fields `mode`, `hub`, `enter`, `kind`, `text`, `action` and `for_ms`, as a JSON
-  object in the strict form of signed bodies, with only those of them the command has.
-- The **associated data** is the header: the context `cbb command v2`, then
-  `type`, `group`, `by`, `to` and `id`, each of these six strings as its length in 4 bytes and
-  its bytes, then `time_ms` and `expires_ms`, 8 bytes each; every number big-endian.
-- `sealed` is the orders sealed to the `seal` key with that associated data: X-Wing HPKE,
-  the encapsulated key (1120 bytes) and then the ciphertext with its tag (`internal/seal`).
-- The body is the header with `v` `2` and `sealed`, and none of the orders; the signature
-  covers it as any command's.
-
-A receiver refuses a body of `v` `2` without `sealed`, with any of the orders beside it, or
-with an unknown `type`, and one of `v` `1` with `sealed`; `sealed` is base64 in its standard
-form. It checks the signature and the header as for any command, then opens `sealed` with
-its own secret and the header as associated data, and refuses the command when it does not
-open, when the orders are not in the strict form, or when they fail the checks of the table
-for the command's `type`. Its orders then count as those of a command in the open. Sealed
-orders open only under the header they were sealed with, so no other signer can send them
-again under an `id` or a time of its own. The limits of a body (64 KiB, 2 MiB for `paste`)
-hold for the body as sent and for the orders once opened. The members in between pass a
-sealed command on as any other. Every sender seals to a receiver whose record has a `seal`
-key: computers, small devices and both phone apps (the kits through the core's
-`seal_command`), and every one of them has a key of its own, which it opens the commands for
-it with (the phones through their member in the core). So a receiver whose own record has one refuses a `paste` command in the
-open, whose text was read on its way; it takes the other types in the open, as a watch signs
-them (a watch checks what it signs and cannot read sealed orders). A receiver without a key
-in its record takes commands in the open, and a member without a key of its own refuses a
-sealed one. The vectors are `go-sealed-commands.json`.
+A `mute` command mutes the receiver until `for_ms` from when it takes the command, or until an
+admin lifts it; the commands of several admins simply follow each other, the last one taken
+counts. It makes no events, not even from a deliberate copy (which it refuses), and takes the
+group's copies as before; its sync mode stays as its user set it. It saves the mute, so that it
+lasts across restarts, answers `done`, and tells the members connected in a new hello, so that
+they show it (section 4, "Hello") without the connection ending. An `unmute` command ends it
+the same way; the device's own user ends it only where the device is itself an admin or the
+root (section 8, `unmute`), and a mute that ends by its time ends without a message. Every
+member takes both: computers, small devices and the phones. A device that does not take the
+command is removed instead; each device's user may also pause receiving there (section 8,
+`mute`).
 
 ## 16. Signed releases
 

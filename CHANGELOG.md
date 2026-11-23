@@ -2983,6 +2983,12 @@ with 0.5 is set up again once. The details follow.
   `cbb_core::recovery` and its entries `recovery_sheet` and `read_recovery_sheet`, the kits'
   calls of them and their vectors (`testdata/interop/recovery-sheet.json`). The sheet of 0.6
   is the core's `cbb_core::sheet`, which refuses one of 0.5 as earlier (D-130).
+- The JSON commands of 0.5 (`cbb_core::command`, with their sealing of `v` `2`): the core's
+  `parse_body` kind `command` and its entry `seal_command`, the kit's `sealCommand`, the
+  vectors (`testdata/interop/go-sealed-commands.json` and the commands of `strict.json` and
+  `strict-generated-*.json`) and the field list of `tools/difffuzz`'s verdicts.
+  `docs/protocol.md`, section 15, describes the commands of 0.6 alone ([format](docs/format.md),
+  section 6), and the `command` fuzz target reads them (D-130).
 - The specification of the records of 0.5 (`docs/records-v2.md`, and the part of
   `docs/protocol.md`, section 10, that described them); section 10 now gives for the records of
   0.6 who signs what, the admins and watches, the hubs table, the copies setting, voiding two

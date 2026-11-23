@@ -162,10 +162,10 @@ pub fn hardware_by_default(name: &str) -> bool {
 /// name that is not a preset, and a program by its full path, so that
 /// nothing in PATH or a shell decides what runs (Go's CheckOwn).
 pub fn check_own(name: &str, command: &[String]) -> Option<String> {
-    if !cbb_core::command::valid_action_name(name) {
+    if !cbb_core::commands::orders::valid_action_name(name) {
         return Some(format!(
             "{name:?} is not an action's name: 1 to {} of a-z, 0-9 and -, starting with a letter",
-            cbb_core::command::MAX_ACTION_NAME
+            cbb_core::msg::member::MAX_ACTION_NAME
         ));
     }
     if PRESETS.contains(&name) {

@@ -492,12 +492,6 @@ fn version() -> Vec<u8> {
     json(Value::Object(m))
 }
 
-fn body_answer(bytes: &[u8]) -> Value {
-    let mut m = serde_json::Map::new();
-    m.insert("body".into(), b64_value(bytes));
-    Value::Object(m)
-}
-
 /// The arguments of `read_invite`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

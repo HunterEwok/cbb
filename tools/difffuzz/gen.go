@@ -96,7 +96,7 @@ func seeds(dir string) ([]Case, error) {
 			generated[s] = append(generated[s], l...)
 		}
 	}
-	if err := take("strict-generated-*.json", generated, map[string]string{"commands": "command", "manifests": "manifest"}); err != nil {
+	if err := take("strict-generated-*.json", generated, map[string]string{"manifests": "manifest"}); err != nil {
 		return nil, err
 	}
 	if err := read("strict-files.json", map[string]string{"releases": ""}); err != nil {
@@ -195,8 +195,8 @@ var b64 = base64.StdEncoding
 
 // fuzzTargets names the cargo fuzz target of each kind of body.
 var fuzzTargets = map[string]string{
-	"command": "command", "manifest": "wire",
-	"keys": "release", "release": "release", "channel": "release",
+	"manifest": "wire",
+	"keys":     "release", "release": "release", "channel": "release",
 }
 
 // writeSeeds writes every seed body to out/<target>/<n>.
@@ -228,7 +228,7 @@ func writeSeeds(dir, out string) error {
 // writeFormatSeeds writes the seeds of the 0.6 readers' targets from the
 // vectors of testdata/format: sheet (each sheet's text and QR code, and the
 // inputs read and refused), yubikey_object (the objects sealed and
-// refused), welcome_fields (the Welcome a good tag covers) and
+// refused), command (the commands and orders of wave4.json), welcome_fields (the Welcome a good tag covers) and
 // welcome_parts (that Welcome with its length in front, then the `records`
 // frame of frames.json once for each part it announces, each with a step
 // of one second and its length; the target tries them in both orders).
@@ -263,7 +263,11 @@ func writeFormatSeeds(dir string, out string) error {
 			Frame string `json:"frame"`
 		} `json:"take"`
 	}
-	for name, v := range map[string]any{"sheet.json": &sheet, "messages3.json": &msgs, "frames.json": &frames} {
+	var wave4 struct {
+		Commands []struct{ Envelope string } `json:"commands"`
+		Orders   []struct{ Orders string }   `json:"orders"`
+	}
+	for name, v := range map[string]any{"sheet.json": &sheet, "messages3.json": &msgs, "frames.json": &frames, "wave4.json": &wave4} {
 		if err := load(name, v); err != nil {
 			return err
 		}
@@ -286,6 +290,20 @@ func writeFormatSeeds(dir string, out string) error {
 			return err
 		}
 		add("yubikey_object", b)
+	}
+	for _, c := range wave4.Commands {
+		b, err := hex.DecodeString(c.Envelope)
+		if err != nil {
+			return err
+		}
+		add("command", b)
+	}
+	for _, o := range wave4.Orders {
+		b, err := hex.DecodeString(o.Orders)
+		if err != nil {
+			return err
+		}
+		add("command", b)
 	}
 	var part []byte
 	for _, f := range frames.Take {
