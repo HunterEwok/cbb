@@ -2149,31 +2149,6 @@ and keeps it with its key; it learns the rest from the forwarder's answer when i
   member that may be a hub, starts the handshake at once over every way of the hub,
   and runs TCP inside the tunnel with an MTU of 1280, so no packet is fragmented on the way.
 
-### Until the phones move to the records of 0.6
-
-The phones' member of 0.5 (`member/src/phone.rs`, through ffi; the kits' `TunnelOffer`)
-still reads and writes the tunnel's messages of 0.5 until the old code goes (D-122); the
-apps act on none of them, since a phone in a group of 0.5 syncs at home only (D-123), and a
-service of 0.6 starts no tunnel in a group of 0.5 and never sends them.
-
-- Each member's hello carries `tunnel_key`, its WireGuard public key, and `tunnel_psk`, a
-  preshared key of 32 random bytes it made with the key pair. A member where sync away from
-  home is off sends neither, and tells its peers of a change in a `presence` message.
-- A hub admits a peer whose hello carries `tunnel_key` and answers with
-  `{"t":"tunnel","tunnel":{...}}`: `hub_key` (32 bytes), `psk` (the one the hello offered),
-  `endpoints` (at most 8), `obfuscation` (AmneziaWG's names: `jc` 0 to 16, `jmin` and `jmax`
-  at most 1000, `s1` to `s4` 16 to 64, `h1` to `h4` as `"min-max"`,
-  `header_protection_key`), `vless` (`transport` `xhttp`, `endpoint`, `server_name`, `path`,
-  `id`), `hub` (in an offer passed on for another hub), `moved`, and `next_key`,
-  `next_obfuscation` and `next_vless` for the next period.
-- A hub sends each peer that may be a hub `{"t":"hubs","hubs":{...}}` with `stopped`,
-  `serving`, its `offer` without `psk` and its `clients` (`device`, `key`, `psk`, at most
-  256), and passes the other hubs' offers on to its clients.
-- A member keeps an offer only from a device that may be a hub by its records (the root, an
-  admin, or a device with `forward_only`), one per hub by device ID; `moved` makes it forget
-  the sender's. A phone that is the hub ignores offers, and shares its clients but does not
-  stand by for a hub above it.
-
 ## 12. Remote invitations
 
 A device that shares no network with the group joins through the hub's tunnel with a remote
