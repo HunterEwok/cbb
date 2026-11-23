@@ -249,10 +249,22 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9sLfrcGBi23XveQN8dK8Z+lbEuxT
 LOgnQ9s/gzp/k7xx88IFvkdMuyoL2K7j1necQGYLmq3ifie9wDrF69AO/A==
 -----END PUBLIC KEY-----
 -----BEGIN PUBLIC KEY-----
+Name: root-1
+
+MDAwCwYJYIZIAWUDBAMUAyEANzRDPOgfJaKB7I6MBd9iE5hqFkHTFyIqVUXJcJmH
+0+s=
+-----END PUBLIC KEY-----
+-----BEGIN PUBLIC KEY-----
 Name: root-2
 
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExGbAq55XGXip3Dtq6jsM2bOYUeoY
 fDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg==
+-----END PUBLIC KEY-----
+-----BEGIN PUBLIC KEY-----
+Name: root-2
+
+MDAwCwYJYIZIAWUDBAMUAyEAqBxx34OIZhqBz2S5Zbfjhi7S2ucEyQfJf1+iQWDX
+5W8=
 -----END PUBLIC KEY-----'
 
 # Where the current keys.json and stable.json are: the branch channel, since

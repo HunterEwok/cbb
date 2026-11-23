@@ -16,6 +16,9 @@ the same release ([versions and compatibility](docs/reference/compatibility.md))
 with 0.5 is set up again once. The details follow.
 
 ### Added
+- The two release roots pinned in `cbb`, the phone apps and `get.sh` carry both their
+  halves, ES256 and SLH-DSA-SHA2-128s, so a release's `keys.json` is checked with both
+  signatures of a root.
 - An admin phone makes an admin computer of the group a hub, and freezes a stolen one: the
   device page of the iPhone, Android, HarmonyOS and Aurora apps offers "Make it a hub" and
   "Freeze". ffi's manage action `hub` sends the computer a `hub` command with the project's
