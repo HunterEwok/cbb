@@ -110,9 +110,8 @@ fn pair() {
 #[cfg(feature = "tls")]
 fn tls() {
     use alloc::sync::Arc;
-    use cbb_core::certs::{Cert, DeviceId};
-    use cbb_core::identity::Identity;
-    use cbb_core::tls::{self, Session};
+    use cbb_core::alpn;
+    use cbb_core::tls::{self, Session, bykey};
 
     #[derive(Debug)]
     struct Never;
@@ -122,28 +121,20 @@ fn tls() {
         }
     }
 
-    let (Ok(cert), Ok(id)) = (Cert::parse(input()), DeviceId::parse("0123456789abcdef0123456789abcdef")) else {
+    // A member's TLS by key (docs/protocol.md, section 4): its own key
+    // container, the peer judged by its key alone.
+    let Ok(own) = bykey::OwnKey::pkcs8(input()) else {
         return;
     };
-    let me = Identity {
-        id,
-        key: input().to_vec(),
-        external: None,
-        cert: cert.clone(),
-        issuer: None,
-        group_ca: cert,
-        roots: Vec::new(),
-    };
     let clock: tls::Clock = Arc::new(Never);
-    let refused: tls::Refused = Arc::new(|_| None);
-    if let Ok(cfg) = tls::member_client(&me, None, refused.clone(), &clock)
-        && let Ok(mut s) = Session::client(Arc::new(cfg), tls::server_name(None))
+    if let Ok(cfg) = bykey::client(&own, None, bykey::any_key(), alpn::MEMBER, &clock)
+        && let Ok(mut s) = Session::client(Arc::new(cfg), bykey::unsent_name())
     {
         black_box(s.feed(input()).is_ok());
         black_box(s.write(input()).is_ok());
         black_box(s.take_outgoing());
     }
-    if let Ok(cfg) = tls::member_server(&me, refused, &clock)
+    if let Ok(cfg) = bykey::server(&own, bykey::any_key(), alpn::MEMBER, &clock)
         && let Ok(mut s) = Session::server(Arc::new(cfg))
     {
         black_box(s.feed(input()).is_ok());
