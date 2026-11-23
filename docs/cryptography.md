@@ -80,7 +80,7 @@ X-Wing, KEM `0x647a`) against the vector of draft-ietf-hpke-pq-05 for the same s
 | Release and status keys | ECDSA P-256 | the maintainer | the maintainer's Secure Enclave, never CI | named in `keys.json`, at most 100 days per signature |
 | Pairing secrets | the six-digit code, CPace's scalars | for one attempt | memory only | the window, 5 minutes |
 | Invitation secret | 32 random bytes | the hub, for `cbb invite` or an admin phone | the invitation (`cbb://join#...`: a QR code, or the file `cbb.cbbinvite`, mode 0600) and the hub's memory | the invitation, 1 hour by default, at most 24 hours |
-| Key for sealed messages | X-Wing: a 32-byte secret, a 1216-byte public key that the root puts in the device record (`seal`, section 10) | each device that reads copies or takes commands | on a computer `seal.json` beside the identity, sealed by the TPM where there is one, else readable only by the service; the phone's protected app storage | until the device leaves the group |
+| Sealing keys | X-Wing, one per epoch: a 32-byte secret and a 1216-byte public key, which the device's keys statement carries (format section 10) | each device that reads copies or takes commands | on a computer `epochs.json`, each secret sealed under the device's local key (`local.json`, sealed by the TPM or the Secure Enclave where there is one); the phone's protected app storage | until the core erases the epoch (`keystore::rotate`) |
 | A copy's key | 32 random bytes | the device that copies, for each copy | only sealed to each reader, in the copy's wraps | the copy |
 | The robot's key | X-Wing, as above | the maintainer (`cbb-bug keygen`) | the secret on the robot's computer, never on cbb.tools; the public key in the build (`ROBOT_KEY_B64`) | until replaced in a release |
 

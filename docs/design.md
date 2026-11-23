@@ -189,14 +189,14 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   when `cbb` is killed. If the helper stops, `cbb` starts it again at the next request, at
   most once in two seconds.
 - **Keys in hardware.** `key-new` makes a device key in the TPM or a Mac's Secure Enclave
-  where the Go member would (not with `CBB_TPM=off`); its answer has no blob, and says why,
-  where the key would go into a file, which `cbb` then makes itself. `identity.json` keeps
-  the blob as the Go member's file does (`key_tpm`, `key_se`); `key-public` loads it by the
+  where the machine has one (not with `CBB_TPM=off`); its answer has no blob, and says why,
+  where the key would go into a file, which `cbb` then makes itself. `keys.json` keeps the
+  blob (`tpm`, `se`); `key-public` loads it by the
   blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
   records are signed in the hardware and the key never leaves it. `seal` and `unseal`
   seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
-  the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
-  hub's fields Go writes) sealed in the same fields as the Go member. On a Mac, which has no
+  the device's local key (`local.json`, which seals the sealing keys of each epoch in
+  `epochs.json`) and the tunnel's keys (`tunnel.json`) sealed this way. On a Mac, which has no
   TPM, `cbb` does all of this with the Secure Enclave itself (`member/src/sekey.rs`, through
   Security.framework, the same blobs and the same sealed format as Go's `internal/sekey`,
   checked against `testdata/interop/go-sekey-seal.json`), so there the helper holds no key.
@@ -740,9 +740,10 @@ sync away from home, the admins, and remote paste.
   described in "Admin phones, the devices list and revocation" below.
 - **Leaving the group** (D-83): `sudo cbb leave` takes a computer out of its group. The
   service stops the group, deletes the group's files from its state directory
-  (`identity.json` with the keys, or the TPM's and the Secure Enclave's blobs of them, which
-  open nothing without the file; the records, the credentials and the keys for the servers,
-  `seal.json`, `tunnel.json`, the entry points, the known networks, the cache of images and
+  (`group.cbor` with the records, `keys.json` with the device's keys, or the TPM's and the
+  Secure Enclave's blobs of them, which open nothing without the file; `local.json` and the
+  sealing keys of `epochs.json`, the credentials and the keys for the servers,
+  `tunnel.json`, the entry points, the known networks, the cache of images and
   files, the logs of remote pastes and actions, `attest-status.json`, a group left before
   0.6), turns remote paste and the quick actions off, and restarts in no group, from which
   `cbb pair` or `cbb new` goes on. Sync on or off, the limits, the TVs and the update

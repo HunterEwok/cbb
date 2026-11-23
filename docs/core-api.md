@@ -226,7 +226,7 @@ after the header, and an operation that answers more than once marks the last an
 | `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off`, `port` (the UDP port) and `addrs` (`ip:port`, reached from afar without the forwarder) for `hub` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, which the records must give an admin key, is one of the group's hubs, the Live hub the computers run (`member/src/live/away.rs`), which also serves the guests of invitations, or stops being one, handing its clients to the next hub in the order (protocol.md, section 11, "Stopping a hub"); only with the feature `tunnel`. With no `forwarder` the hub serves through the one the root set, and every away op answers it beside `away` as `root_forwarder` `{endpoint, key}`, null while the root set none |
 | `attest_status`, `attest` | phone | `keys` and `status` for `attest_status`: the mirror's `keys.json` and `attest-status.json` as the app fetched them | `{"pending", "revoked"?}`: `attest_status` takes the revocation list of Android attestations when it checks out against the release keys and is not older than the one kept (`attest-status.json`, protocol.md section 17, "Revoked attestations"), and answers how many certificates it revokes; `pending` is how many Android peers' evidence waits for the root key, which `cbb_member_manage`'s `attest` records (`member/src/phone_attest.rs`, the core's `cbb_core::attest`); only with the feature `tunnel` |
 | `paste` | computer | none | `{kind}` + payload = the member's own clipboard text; error `the clipboard is empty` when unknown or an expired secret, and one that names `cbb paste -o` for images or files without a text |
-| `copied_media` | computer | as `copy_media` | as `copy_media`, but a watcher's report that its clipboard changed: the copy goes to the group as an event when the engine decides so (protocol.md section 5) and is not written back to the member's own clipboard |
+| `copied_media` | computer | as `copy_media` | as `copy_media`, but a watcher's report that its clipboard changed: the copy goes to the group when the service decides so (protocol.md section 5) and is not written back to the member's own clipboard |
 | `paste_media` | computer | `{value?}` | with `value`, the event ID of a remote paste's copy (protocol.md section 15), while it is the group's current copy and its parts are here: the same answers for that copy. Without it, once every part of the member's own images or files (with sync off the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
 | `config` | computer | `{name?, value?}`: `max-copy` or `max-copy-away` and a size such as `200MiB` | `{status}`, with the setting saved first when `name` is given; `status.media` = `{max_copy, max_copy_away, fetching?, fetched?, from?, failed?}`, in bytes, also in `status` |
 | `status` | computer | none | `{status}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, ttl_ms, secret_ttl_ms, away?, version, why?}`; `why` is why this device does not sync, as the phone's `why` answers it; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `ttl_ms` and `secret_ttl_ms` are how long a copy and a secret live in the group (protocol.md section 10, "The copies setting"); `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (protocol.md section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (protocol.md section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (protocol.md section 14) |
@@ -280,7 +280,7 @@ A phone's member carries out the commands for it as protocol.md section 15 says:
 says. A phone takes tunnel offers and hub shares only from a device the records
 let be a hub, by the chain it proved. It keeps the sealed blobs of the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join by the
-home window, sync both ways, a pause and an admin's mute against a Go member through the example `phone-on-linux`,
+home window, sync both ways, a pause and an admin's mute against a computer's service through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
 `cbb`'s (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
@@ -354,8 +354,8 @@ home, the hub and the relay link (decisions.md, D-123). The feature `tunnel` bui
 into the library (`cbb-member/tunnel`).
 
 The Go programs (`cbb-helper`, `cbb-forward` and the tests) do not link the core and keep
-no group state of their own: Go's `internal/clip`, which the interop vectors keep byte for
-byte the same as the core's, reads the copies, and `internal/group` holds only the keys and
+no group state of their own: Go's `internal/clip` holds the kinds and manifests the
+helper's and the desktop's clipboards share, and `internal/group` holds only the keys and
 names they share.
 
 ## Operations
@@ -584,9 +584,8 @@ The secrets the core holds itself are wiped when it lets them go (`zeroize`, or 
 libraries' own wiping types: p256's keys, x25519-dalek's secrets, HPKE's and ML-KEM's
 private keys, the ciphers' key schedules): the CPace password, its scalar, its shared point
 and the keys made from them, the TLS exporter's master secret and what it derives, a copy's
-derived keys, the recovery key and its text while they are read, an invitation's secrets, the
-clipboard engine's local key, the secrets in the arguments of a call (`secret`, `key`,
-`pkcs8`) and their base64 text. No `Debug` of the core prints a secret: such fields show as
+derived keys, the recovery key and its text while they are read, an invitation's secrets, and
+the secrets in the arguments of a call (`secret`, `key`, `pkcs8`) and their base64 text. No `Debug` of the core prints a secret: such fields show as
 `<N secret bytes>` or `<hidden>`, and no error text carries one. `ffi/` wipes each answer in
 `cbb_free`, and copies an answer to its exact length rather than leave a shorter copy behind.
 

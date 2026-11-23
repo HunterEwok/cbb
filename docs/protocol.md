@@ -230,7 +230,7 @@ so are the texts a person or a server reads (a link, a pin).
 | Item | Value | Source |
 |------|-------|--------|
 | Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `core/src/certs.rs` |
-| Event ID | same format as a device ID, random per event | `internal/clip/clip.go` |
+| Copy ID | 16 random bytes per copy | `cbb_core::copies` |
 | Group tag | the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters | `member::live::tag` |
 | Member host name | `cb-<device ID>.local` (the mDNS host name) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
@@ -1129,14 +1129,14 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
   an event. If a write was pending (decided while no watcher was connected) and is still the
   member's own text, the watcher gets that write instead.
 - Watcher to service, any number, no answers:
-  - `copied` (payload, `kind`, `via`): the clipboard changed; the engine decides whether it is
+  - `copied` (payload, `kind`, `via`): the clipboard changed; the service decides whether it is
     an event (section 5). A watcher reports `via` `universal-clipboard` for items that came
     through Universal Clipboard.
   - `clipboard` (payload, `kind`): what the clipboard holds, without a change; used for items
-    that a password manager marked (`kind` `secret`), which the engine remembers as secrets.
+    that a password manager marked (`kind` `secret`), which the service remembers as secrets.
     The Go connector sends marked items only this way, never as `copied`.
 - Service to watcher: `write` (payload, `kind`, `via`, `seq`, and for a secret `ttl_ms`).
-  `seq` grows with every write the engine decides on (starting at 1 per service run); the
+  `seq` grows with every write the service decides on (starting at 1 per service run); the
   service sends each write to every connected watcher, dropping the oldest queued write for
   one that falls 16 behind. A watcher MUST ignore a write whose `seq` is not greater than the
   last one it applied. `ttl_ms` is the secret's remaining lifetime (its own `ttl`, 60 s by default, minus its
@@ -3168,8 +3168,8 @@ far.
   crosses to and from the TPM in a session salted with the storage root key that encrypts
   it, so it never shows on the chip's bus. A key in the file moves into the TPM when the
   service next reads the state; WireGuard itself still uses it in memory. The hub's keys
-  for its clients (`serving_tpm`, `next_tpm`) and the secret for sealed commands
-  (`seal.json`, `tpm`, section 15) are sealed the same way.
+  for its clients (`serving_tpm`, `next_tpm`) and the device's local key (`local.json`),
+  which seals the sealing keys of each epoch in `epochs.json`, are sealed the same way.
 - **Sealed by the Secure Enclave.** On a Mac the same secrets are sealed to a new P-256 key
   in the enclave, which cannot hold an X25519 key itself: an ephemeral P-256 key agrees on
   a secret with the enclave's key (ECDH), and AES-256-GCM, keyed with HKDF-SHA256 of that
@@ -3177,8 +3177,8 @@ far.
   `cbb sekey seal v1`), seals the secret with a random 12-byte nonce and the info as
   associated data. The file keeps `{"v":1,"key":…,"eph":…,"box":…}`: the enclave key's
   encrypted copy, the ephemeral public key and the nonce followed by the sealed secret,
-  each in base64, as `key_se`, `serving_se` and `next_se` in `tunnel.json` and `se` in
-  `seal.json`.
+  each in base64, as `key_se`, `serving_se` and `next_se` in `tunnel.json` and as the
+  local key in `local.json`.
   `CBB_TPM_SIMULATOR=host:port` points the service at a software TPM (swtpm), for tests.
 - A **device record** says it in `store`: `file`, `hardware`, `rootless`, or `proven` once the group's
   root checked a proof of hardware (an attestation, "Evidence" below), with `kind`, the kind

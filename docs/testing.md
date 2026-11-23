@@ -71,7 +71,7 @@ becomes a vector here.
 - The Swift and Kotlin kits join groups of 0.6 through the core and sync through its member
   (`CoreMemberTests`, `CorePairingTests`, `WindowTests`; `CoreMemberTest`, `CorePairingTest`).
 - `TestAloneMember`, `TestAloneRemotePaste` and `TestAloneQuickActions` run the built cbb
-  without its helper (`CBB_TEST_ALONE`) among Go members at home. Sync away from home runs only in
+  without its helper (`CBB_TEST_ALONE`) among other services at home. Sync away from home runs only in
   a group of 0.6 (D-122): `member/tests/away_live.rs` and `away_hubs.rs` (the latter with
   `--features testhooks`) run real services of such a group through the hub's tunnel.
 
