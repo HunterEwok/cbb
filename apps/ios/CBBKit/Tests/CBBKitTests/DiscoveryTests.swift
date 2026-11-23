@@ -62,7 +62,7 @@ final class DiscoveryTests: XCTestCase {
         XCTAssertTrue(addrs.allSatisfy { $0.hasSuffix(":\(port)") }, "\(addrs)")
         let none = await browser.addresses(of: "none")
         XCTAssertEqual(none, [])
-        // A phone that is the hub publishes itself, and is found too.
+        // A phone's announcement (r=phone) is found too.
         let hubPhone = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         let published = try BonjourPublisher(name: hubPhone, port: port, txt: ["v": "1", "g": "0011223344556677", "r": "phone"])
         for _ in 0..<200 where !seen.has(hubPhone) {

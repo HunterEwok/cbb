@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Sync away from home without a computer, as the iPhone's and Android's
-// (docs/apps.md, "Away from home"): this phone as the group's hub, reached
-// from afar through the forwarder the group's root set, its tunnel
-// hidden for strict networks; and, for a group without a hub, the devices
-// meeting at a blind relay, once the user read what a relay learns.
+// The group's blind relay, as the iPhone's and Android's (docs/apps.md,
+// "Away from home"): where the devices meet when the group has no hub, a
+// computer, a router or a board; the root sets it once the user read what
+// a relay learns, and the others see where it stands.
 
 import { router } from '@kit.ArkUI';
 import { t } from '../core/Text';
@@ -17,26 +16,17 @@ const KEY_LENGTH: number = 44;
 
 @Entry
 @ComponentV2
-struct Hub {
-  @Local strictVpn: boolean = false;
-  @Local strictWeb: boolean = false;
+struct Relay {
   @Local relay: string = '';
   @Local relayKey: string = '';
   @Local busy: boolean = false;
   @Local error: string = '';
 
   aboutToAppear(): void {
-    const disguise = app.hubDisguise();
-    this.strictWeb = disguise === 'vless';
-    this.strictVpn = disguise !== 'plain';
     // The relay is the group's, as the member meets it.
     this.relay = app.member.relayAt;
     this.relayKey = '';
     app.show('');
-  }
-
-  disguise(): string {
-    return this.strictWeb ? 'vless' : this.strictVpn ? 'obfuscate' : 'plain';
   }
 
   // An address with its port and a key, or both empty.
@@ -47,23 +37,6 @@ struct Hub {
       return true;
     }
     return a.includes(':') && k.length === KEY_LENGTH;
-  }
-
-  hubLine(): string {
-    switch (app.member.hubStatus) {
-      case 'home':
-        return t('hub_home_only');
-      case 'registering':
-        return t('hub_registering');
-      case 'registered':
-        return t('hub_registered');
-      case 'failed':
-        return t('hub_failed');
-      case 'off':
-        return t('hub_off');
-      default:
-        return t('hub_on_home');
-    }
   }
 
   relayLine(): string {
@@ -77,31 +50,6 @@ struct Hub {
       return t('relay_connecting');
     }
     return app.member.relayOnline === 0 ? t('relay_alone') : t('relay_with', app.member.relayOnline);
-  }
-
-  async hub(on: boolean, anyway: boolean): Promise<void> {
-    this.error = '';
-    this.busy = true;
-    await app.setHub(on, this.disguise(), anyway);
-    this.busy = false;
-  }
-
-  // Stopping the group's only hub leaves the devices away from home
-  // without one: the core refuses, and the user decides.
-  async hubOff(): Promise<void> {
-    this.busy = true;
-    const failure = await app.setHub(false, '', false);
-    this.busy = false;
-    if (!app.onlyHub(failure)) {
-      return;
-    }
-    this.getUIContext().showAlertDialog({
-      message: t('hub_stop_only'),
-      primaryButton: { value: t('cancel'), action: () => {} },
-      secondaryButton: { value: t('hub_stop'), fontColor: $r('app.color.error'), action: () => {
-        this.hub(false, true);
-      } }
-    });
   }
 
   meet(): void {
@@ -145,68 +93,13 @@ struct Hub {
     Text(text).fontSize(12).fontColor($r('app.color.secondary'))
   }
 
-  @Builder
-  switchRow(label: string, on: boolean, change: (on: boolean) => void) {
-    Row() {
-      Text(label).fontColor($r('app.color.text')).layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: on })
-        .selectedColor($r('app.color.accent'))
-        .enabled(!this.busy && !app.busy)
-        .onChange(change)
-    }
-    .width('100%')
-  }
-
   build() {
     Scroll() {
       Column({ space: 12 }) {
-        PageTitle({ title: $r('app.string.hub_title'), back: () => {
+        PageTitle({ title: $r('app.string.relay_title'), back: () => {
           router.back();
         } })
 
-        if (app.isAdmin()) {
-          this.note(t('hub_body'))
-          this.switchRow(t('hub_switch'), app.member.hubOn, (on: boolean) => {
-            if (on) {
-              this.hub(true, false);
-            } else {
-              this.hubOff();
-            }
-          })
-          Text(this.hubLine()).fontSize(13).fontColor($r('app.color.secondary'))
-          ErrorText({ text: app.member.hubError })
-
-          this.section(t('hub_forwarder'))
-          // The forwarder is the root's setting: shown, not edited.
-          this.note(t(app.member.rootForwarder.length > 0 ? 'hub_forwarder_by_root' : 'hub_forwarder_none_by_root'))
-          if (app.member.rootForwarder.length > 0) {
-            Text(app.member.rootForwarder).fontSize(15)
-            Text(app.member.rootForwarderKey).fontSize(13).fontFamily('monospace').fontColor($r('app.color.secondary'))
-          }
-
-          this.section(t('hub_disguise'))
-          this.note(t('hub_disguise_body'))
-          this.switchRow(t('hub_strict_vpn'), this.strictVpn, (on: boolean) => {
-            this.strictVpn = on;
-            if (!on) {
-              this.strictWeb = false;
-            }
-          })
-          this.switchRow(t('hub_strict_web'), this.strictWeb, (on: boolean) => {
-            this.strictWeb = on;
-            if (on) {
-              this.strictVpn = true;
-            }
-          })
-          Button($r('app.string.hub_forwarder_save'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
-            .width('100%')
-            .enabled(!this.busy && !app.busy && app.member.running)
-            .onClick(() => {
-              this.hub(true, false);
-            })
-        }
-
-        this.section(t('relay_title'))
         // The root's key renews the group's server credentials when the app
         // opens; until it does, the relay and the hubs' forwarders take nobody.
         if (app.member.periodOverdue) {

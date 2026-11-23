@@ -74,8 +74,8 @@ function settingsLabel(key: string): string {
       return t('recovery_title');
     case 'p:change_root':
       return t('change_root');
-    case 'p:hub':
-      return t('hub_title');
+    case 'p:relay':
+      return t('relay_title');
     case 's:group':
       return t('settings_group');
     case 's:lab':
@@ -153,7 +153,7 @@ struct Main {
       rows.push('p:change_root');
     }
     if (app.member.running) {
-      rows.push('p:hub');
+      rows.push('p:relay');
     }
     if (app.membership !== undefined) {
       rows.push('s:group');
@@ -185,8 +185,8 @@ struct Main {
       router.pushUrl({ url: 'pages/Recovery' });
     } else if (section === 'p:change_root') {
       router.pushUrl({ url: 'pages/ChangeRoot' });
-    } else if (section === 'p:hub') {
-      router.pushUrl({ url: 'pages/Hub' });
+    } else if (section === 'p:relay') {
+      router.pushUrl({ url: 'pages/Relay' });
     } else if (section !== this.section) {
       this.section = section;
       this.selected = '';

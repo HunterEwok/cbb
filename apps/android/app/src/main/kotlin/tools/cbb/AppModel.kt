@@ -173,35 +173,6 @@ class AppModel(private val app: Context) {
         private set
 
     /**
-     * The phone as the group's hub as Settings and Home show it: null on a
-     * phone that cannot be the hub. home tells whether the phone is on one
-     * of the hub's home networks now.
-     */
-    data class Hub(
-        val on: Boolean,
-        val status: HubOnPhone.Status,
-        val error: Note? = null,
-        val forwarder: HubState.Forwarder? = null,
-        val background: Boolean = false,
-        val home: Boolean = false,
-        val clients: Int = 0,
-        /** How its tunnel hides. */
-        val disguise: HubOnPhone.Disguise = HubOnPhone.Disguise.PLAIN,
-        /** The project's forwarder does not take it and the phone holds no signed entry points that have not expired: a new list may be what it needs. */
-        val entriesStale: Boolean = false,
-    )
-
-    var hub by mutableStateOf<Hub?>(null)
-        private set
-
-    /** What the last change to the hub said, when it failed. */
-    var hubNote by mutableStateOf<Note?>(null)
-        private set
-
-    /** The registration's last error, logged once. */
-    private var hubError: String? = null
-
-    /**
      * The phone at a blind relay as Settings shows it (docs/design.md,
      * "Blind relay"): where it stands, why the relay does not take it, the
      * relay, and the group's devices there and the connections through it.
@@ -631,32 +602,17 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * Away from home, the hub and the relay on a group of 0.6, as the Live
+     * Away from home and the relay on a group of 0.6, as the Live
      * member runs them (AwayOn06), from where the member says they stand.
      * The relay is the group's, which the root sets.
      */
     private suspend fun update06(root: Boolean) {
-        val (a, prefs) = withContext(Dispatchers.IO) { group.awayState06 to group.hub06 }
-        val byRoot = prefs?.let { withContext(Dispatchers.IO) { group.rootForwarder06 } }
+        val a = withContext(Dispatchers.IO) { group.awayState06 }
         val awayStatus = withContext(Dispatchers.IO) { AwayOn06.awayStatus(a) { group.reaches(it) } }
         val awayError = a?.takeIf { awayStatus == AwayFromHome.Status.CONNECTING && it.error.isNotEmpty() }?.let { Exception(if (it.detail.isEmpty()) it.error else "${it.error} (${it.detail})") }
         notifier.away(awayError != null)
         if (awayError != null) Log.w(TAG, "sync away from home: ${awayError.message}")
         away = Away(a != null && !a.hub && awayStatus != AwayFromHome.Status.OFF, awayStatus, awayError?.let { describe(it, R.string.away_error, log = false) })
-        hub = prefs?.let { p ->
-            val (status, error) = AwayOn06.hubStatus(p, a, paused = !group.inForeground && !p.background, forwarder = byRoot != null)
-            if (error != hubError) {
-                hubError = error
-                if (error != null) Log.w(TAG, "the hub: $error")
-            }
-            Hub(
-                p.on, status,
-                error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
-                byRoot?.let { HubState.Forwarder(it.endpoint, it.key) }, p.background, withContext(Dispatchers.IO) { group.onHomeNetwork }, a?.clients ?: 0,
-                disguise = p.disguise,
-                entriesStale = status == HubOnPhone.Status.FAILED && a?.forwarder?.entriesStale == true,
-            )
-        }
         val (relayStatus, relayErr) = AwayOn06.relayStatus(a)
         if (relayErr != relayError) {
             relayError = relayErr
@@ -687,39 +643,6 @@ class AppModel(private val app: Context) {
             throw e
         } catch (e: IllegalArgumentException) {
             describe(e, R.string.relay_bad)
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
-    }
-
-    /** Makes this phone the group's hub, or stops it being the hub. */
-    suspend fun setHub(on: Boolean) = hubChange { group.setPhoneHub(on) }
-
-    /** Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS. */
-    suspend fun setHubDisguise(d: HubOnPhone.Disguise) = hubChange { group.setHubDisguise(d) }
-
-    /** Lets the hub run in the background, at the battery's cost. */
-    suspend fun setHubInBackground(on: Boolean) = hubChange { group.setHubInBackground(on) }
-
-    /** Remembers the network the phone is on as home. */
-    suspend fun addHomeNetwork() {
-        hubChange { if (!group.addHomeNetwork()) throw NoHomeNetwork() }
-    }
-
-    /** The phone is on no Wi-Fi or Ethernet network to call home. */
-    private class NoHomeNetwork : Exception("the phone is on no Wi-Fi or Ethernet network with an address")
-
-    private suspend fun hubChange(f: () -> Unit) {
-        hubNote = try {
-            withContext(Dispatchers.IO) { f() }
-            null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: NoHomeNetwork) {
-            describe(e, R.string.hub_no_network)
-        } catch (e: IllegalArgumentException) {
-            describe(e, R.string.hub_bad_forwarder)
         } catch (e: Exception) {
             describe(e)
         }

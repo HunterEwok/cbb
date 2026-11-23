@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // The phone is the group's hub while the app is open (D-64).
+        // A copy that arrives goes on the clipboard while the app is in front.
         model.group.setForeground(true)
         // Turning the screen makes the activity again; that is no opening (D-128).
         if (!model.turning) model.sentOnOpen = false

@@ -5,8 +5,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // Send an invitation (docs/protocol.md, section 12), as an admin: the
-// invitation opens on this phone when it is the group's hub, else through a
-// hub of the group, and its QR code is shown for the person who joins from
+// invitation opens through a hub of the group, and its QR code is shown for the person who joins from
 // afar; its text can be copied when the QR code goes another way. A device
 // that uses it is admitted only once the user sees the same words on it.
 Page {

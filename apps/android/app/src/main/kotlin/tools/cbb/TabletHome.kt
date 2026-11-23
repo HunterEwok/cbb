@@ -102,7 +102,7 @@ internal enum class SettingsPart(@StringRes val title: Int, val symbol: String) 
             NOTIFICATIONS, GROUP, WHY -> home
             SHARE -> home && !model.isTv
             RECOVERY -> home
-            AWAY -> home && (model.hub != null || model.blindRelay != null)
+            AWAY -> home && model.blindRelay != null
         }
     }
 }

@@ -4,10 +4,6 @@
 package tools.cbb
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Build
 import android.provider.Settings as SystemSettings
 import android.util.Log
@@ -52,7 +48,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.io.IOException
-import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.SecureRandom
@@ -60,8 +55,6 @@ import java.security.Signature
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -162,7 +155,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
-    /** A device as one of the group's hubs: this phone while it is the hub, or a hub whose offer the phone keeps. */
+    /** A computer as one of the group's hubs, as this phone knows: a hub of the records, or one whose offer the phone keeps. */
     enum class HubMark {
         HUB,
 
@@ -235,19 +228,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** When browsing first found each member, as System.nanoTime. */
     private var foundAt: Map<String, Long> = emptyMap()
 
-    /** The hub's mDNS service while it runs on a home network. */
-    private var publisher: NsdPublisher? = null
-
-    /** What the user chose for the hub; the Live member runs away, the hub and the relay (AwayOn06). */
-    private val away06 = AwayOn06(SealedFile(File(file.parentFile, "hub06.bin"), "cbb.hub")) { what, e -> Log.w(TAG, what, e) }
-
-    /** Waits out the hub's grace in the background before it stops (updateHub06). */
-    private val hubGrace = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "hub grace").apply { isDaemon = true } }
-
-    /** The hub's work, one change at a time, off the main thread. */
-    private val hubWork = Executors.newSingleThreadExecutor { r -> Thread(r, "phone hub").apply { isDaemon = true } }
-
-    /** Whether the app is in front: the phone is the hub only then, unless the user lets it run in the background. */
+    /** Whether the app is in front: a copy that arrives is put on the clipboard only then. */
     @Volatile private var foreground = false
     private var started = 0 // under lock: the app's started activities
 
@@ -375,7 +356,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 keysInFile = p?.keyStore == KitRecords.FILE, frozen = it.frozen,
                 device = if (self) ownDevice.cleaned else null, mode = if (self) syncMode else p?.mode?.ifEmpty { null },
                 hub = when {
-                    self && a?.hub == true -> HubMark.HUB
                     away?.hubDevice == it.device && (away.through || p != null) -> HubMark.IN_USE
                     it.hub || away?.hubDevice == it.device -> HubMark.HUB
                     else -> null
@@ -497,29 +477,19 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Sync away from home as the Live member runs it: a hub, a client and
-     * its hub, the link to the group's relay; null while the phone does not
+     * Sync away from home as the Live member runs it: the hub the phone
+     * reaches and the link to the group's relay; null while the phone does not
      * sync or away was never on.
      */
     val awayState06: CoreMember.AwayState?
         get() = currentNode?.let { n -> runCatching { n.awayStatus() }.onFailure { Log.w(TAG, "reading where sync away from home stands", it) }.getOrNull() }
 
-    /** The forwarder the group's root set for this phone as a hub; null while it set none. */
-    val rootForwarder06: CoreMember.RootForwarder?
-        get() = currentNode?.let { n -> runCatching { n.rootForwarder() }.onFailure { Log.w(TAG, "reading the root's forwarder", it) }.getOrNull() }
-
-    /** What the user chose for the hub; null on a phone that is no admin, which cannot be a hub. */
-    val hub06: AwayOn06.Prefs? get() = if (isAdmin) away06.hub else null
-
     /** Whether the member reaches device now, at home or by any way. */
     fun reaches(device: String): Boolean = currentNode?.let { n -> runCatching { n.peers() }.getOrNull() }.orEmpty().any { it.device == device }
 
-    /** Whether the app is in front now, so the hub's status says it waits for it. */
-    val inForeground: Boolean get() = foreground
-
     /**
      * Tells the group an activity of the app came to the front (on) or
-     * stopped; the hub follows. It counts them: a finished activity may
+     * stopped. It counts them: a finished activity may
      * stop after the next one started, and the app is in front while one is.
      */
     fun setForeground(on: Boolean) {
@@ -527,139 +497,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             started = maxOf(0, started + if (on) 1 else -1)
             started > 0
         }
-        refreshHub()
-    }
-
-    /** Makes this phone a hub of the group, or stops it being one. */
-    fun setPhoneHub(on: Boolean) {
-        if (!isAdmin) return
-        away06.setOn(on, currentNetwork())
-        if (!on) unhub06() else updateHub06(throwing = true)
-    }
-
-    /** Sets how the hub's tunnel hides, for the member of 0.6 to serve with; on the caller's IO thread. */
-    fun setHubDisguise(d: HubOnPhone.Disguise) {
-        if (!isAdmin) return
-        away06.setDisguise(d)
-        updateHub06(throwing = true)
-    }
-
-    /** Lets the hub run in the foreground service while the app is in the background. */
-    fun setHubInBackground(on: Boolean) {
-        if (isAdmin) away06.setBackground(on)
-        refreshHub()
-    }
-
-    /**
-     * Remembers the network the phone is on as a home network of the hub;
-     * false when the phone is on no Wi-Fi or Ethernet network with an
-     * address now, so there is none to remember.
-     */
-    fun addHomeNetwork(): Boolean {
-        val n = currentNetwork() ?: return false
-        if (isAdmin) away06.addHome(n)
-        refreshHub()
-        return true
-    }
-
-    /** Whether the phone is on one of the hub's home networks now. */
-    val onHomeNetwork: Boolean get() = away06.isHome(currentNetwork())
-
-    /**
-     * The network the phone is on, as the hub remembers home networks
-     * (HubOnPhone.networkKey): Wi-Fi or Ethernet with a gateway, never a
-     * mobile network.
-     */
-    private fun currentNetwork(): String? {
-        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return null
-        val net = cm.activeNetwork ?: return null
-        val caps = cm.getNetworkCapabilities(net) ?: return null
-        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return null
-        val lp = cm.getLinkProperties(net) ?: return null
-        val gw = lp.routes.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }?.gateway
-            ?: lp.routes.firstOrNull { it.isDefaultRoute && it.hasGateway() }?.gateway
-        val la = lp.linkAddresses.firstOrNull { it.address is Inet4Address } ?: lp.linkAddresses.firstOrNull() ?: return null
-        return HubOnPhone.networkKey(gw, la.address, la.prefixLength)
-    }
-
-    private fun refreshHub() = hubWork.execute {
-        runCatching { updateHub06(throwing = false) }
-    }
-
-    /**
-     * Has the Live member serve as a hub while the user
-     * turned it on and the app is in front, or in the background when the
-     * user lets it; otherwise the hub stops, and its clients move to the
-     * group's next hub. On a home network of the hub it publishes itself
-     * there. A change the user made throws its failure, for the screen.
-     */
-    private fun updateHub06(throwing: Boolean) {
-        val (n, g) = synchronized(lock) { (node ?: return) to (state ?: return) }
-        val p = away06.hub
-        if (!g.isAdmin || !p.on) {
-            cancelUnhub06()
-            unhub06()
-            return
-        }
-        // The app went to the background on its own, with no leave to run
-        // there: the hub stops only once it stayed there a while, so that
-        // a short trip away hands no clients over; meanwhile the clients
-        // wait out the gap as they do for any hub that goes quiet.
-        if (!(foreground || p.background)) {
-            synchronized(lock) {
-                if (unhubLater == null) unhubLater = hubGrace.schedule({ hubWork.execute { unhubAfterGrace06() } }, HUB_GRACE_MS, TimeUnit.MILLISECONDS)
-            }
-            return
-        }
-        cancelUnhub06()
-        try {
-            away06.serve(n, homeAddrs(), runCatching { n.rootForwarder() }.getOrNull())
-        } catch (e: Exception) {
-            Log.w(TAG, "the hub did not start", e)
-            if (throwing) throw e
-            return
-        }
-        if (!away06.isHome(currentNetwork())) {
-            stopHome()
-            return
-        }
-        if (synchronized(lock) { publisher } != null) return
-        val home = listen(n, CoreMember.Listen.HOME) ?: return
-        val pub = NsdPublisher.hub(context, g.device, g.tag, home)
-        synchronized(lock) { publisher = pub }
-        pub.start()
-    }
-
-    /** The pending stop of the hub while the app is in the background; guarded by lock. */
-    private var unhubLater: ScheduledFuture<*>? = null
-
-    /** Stops the hub after its grace in the background, unless the app came back meanwhile. */
-    private fun unhubAfterGrace06() {
-        synchronized(lock) { unhubLater = null }
-        val p = away06.hub
-        if (p.on && (foreground || p.background)) return
-        Log.i(TAG, "the app stayed in the background: the hub stops and hands its clients to the next hub")
-        unhub06()
-    }
-
-    private fun cancelUnhub06() {
-        synchronized(lock) { unhubLater.also { unhubLater = null } }?.cancel(false)
-    }
-
-    /** Stops the Live member serving as a hub, when it does. */
-    private fun unhub06() {
-        stopHome()
-        val n = currentNode ?: return
-        if (runCatching { n.awayStatus()?.hub }.getOrNull() == true) {
-            runCatching { n.stopHub() }.onFailure { Log.w(TAG, "the hub did not stop", it) }
-        }
-    }
-
-    /** The phone's addresses on the network it is on, "ip:port" on the hub's UDP port, for a hub at home only. */
-    private fun homeAddrs(): List<String> {
-        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return emptyList()
-        val lp = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return emptyList()
-        return lp.linkAddresses.map { it.address }.filterIsInstance<Inet4Address>().mapNotNull { it.hostAddress }.map { "$it:${AwayOn06.HOME_PORT}" }
     }
 
     /**
@@ -688,12 +525,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         synchronized(lock) { node }?.let { runCatching { it.unlisten(what) } }
     }
 
-    private fun stopHome() {
-        val p = synchronized(lock) { publisher.also { publisher = null } }
-        p?.stop()
-        unlisten(CoreMember.Listen.HOME)
-    }
-
     /** Turns sync away from home on or off in the member. */
     fun setAwayFromHome(on: Boolean) {
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
@@ -702,16 +533,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     init {
         startSync()
-        // A new network may be a home network of the hub, or no longer be one.
-        runCatching {
-            context.getSystemService(ConnectivityManager::class.java)?.registerNetworkCallback(
-                NetworkRequest.Builder().build(),
-                object : ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: Network) = refreshHub()
-                    override fun onLost(network: Network) = refreshHub()
-                },
-            )
-        }
     }
 
     /** This phone's name for the other devices: the one in the system's settings, else the model. */
@@ -927,7 +748,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (g == null && !before06) throw Failure(Failure.Kind.NO_GROUP)
         val others = devices.filter { !it.isSelf }.map { it.role }
         if (g?.isRoot == true && others.any { it != "watch" }) throw Failure(Failure.Kind.ROOT_LEAVES)
-        hubWork.submit { stopHome() }.get()
+        unlisten(CoreMember.Listen.HOME)
         val (b, n) = synchronized(lock) {
             (browser to node).also {
                 browser = null
@@ -1303,15 +1124,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val b = startBrowsing() ?: return
         b.start()
         relay()
-        refreshHub()
     }
 
     private fun startBrowsing(): NsdBrowser? = synchronized(lock) {
         val g = state ?: return null
         if (node != null) return null
         val member = runCatching { memberSigner() }.getOrNull() ?: return null
-        // The Live member runs sync away from home, the hub and the relay
-        // itself (AwayOn06).
+        // The Live member runs sync away from home and the relay itself
+        // (AwayOn06).
         val number = nodeCount + 1
         nodeDir.mkdirs()
         synchronized(nodeLog) { nodeLog.clear() }
@@ -1347,8 +1167,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         nodeMadeBy = Throwable().stackTrace.drop(1).take(6).joinToString(" < ") { "${it.methodName}:${it.lineNumber}" }
         Log.i(TAG, "node #$nodeCount started by $nodeMadeBy")
         browser = b
-        // The member serves as the hub again if the user left it on.
-        refreshHub()
         // Push: the member sends the group's registration to every member it connects to.
         PushSetup.sink = { f -> currentNode?.setPush(f) }
         runCatching { n.setPush(PushSetup.frame(context)) }.onFailure { Log.w(TAG, "handing the member the push registration", it) }
@@ -1816,11 +1634,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How long the button waits for a computer to connect before it says none is. */
         const val CONNECT_WAIT_MS = 5_000L
 
-        /** The member port the hub takes members on at home, as the computers'; another when it is taken. */
+        /** The member port the phone takes members on at home, as the computers'; another when it is taken. */
         const val MEMBER_PORT = 8764
-
-        /** How long the hub of 0.6 keeps serving after the app went to the background without leave to run there. */
-        const val HUB_GRACE_MS = 60_000L
 
         fun defaultFile(context: Context) = File(context.filesDir, "cbb/group.json")
 

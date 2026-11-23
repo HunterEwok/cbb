@@ -20,7 +20,6 @@ struct SettingsView: View {
     @Environment(\.palette) private var palette
     @EnvironmentObject private var model: AppModel
     @State private var switching = false
-    @State private var disguiseTo: HubOnPhone.Disguise?
     @State private var relayAddress = ""
     @State private var relayKey = ""
     /// Whether the question about what a relay learns is showing.
@@ -80,10 +79,7 @@ struct SettingsView: View {
                 .listRowBackground(palette.surface)
             }
             if part == nil ? advanced : part == .away {
-                if let hub = model.hub {
-                    hubSection(hub)
-                }
-                if let away = model.away, model.hub?.on != true {
+                if let away = model.away {
                     awaySection(away)
                 }
                 if let relay = model.blindRelay {
@@ -233,100 +229,6 @@ struct SettingsView: View {
 
     private static func lifetime(_ ms: Int64) -> String {
         Duration.milliseconds(ms).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
-    }
-
-    /// The phone as the group's hub: the switch, where it stands, the
-    /// forwarder and the home networks.
-    private func hubSection(_ hub: AppModel.Hub) -> some View {
-        Section {
-            Toggle(isOn: Binding(get: { hub.on }, set: { on in
-                switching = true
-                Task {
-                    await model.setHub(on)
-                    switching = false
-                }
-            })) {
-                Text("This phone is the group's hub")
-            }
-            .disabled(switching)
-            TipView(SettingTip.hub)
-            hubStatus(hub)
-                .foregroundStyle(hub.status == .registered ? palette.accent : palette.textDim)
-            // The registration's error underneath, when details are on.
-            if let error = hub.error, AppModel.showsErrorDetails {
-                Text(verbatim: error).font(.caption).foregroundStyle(palette.textDim)
-            }
-            if hub.entriesStale {
-                Label {
-                    Text("The list of the project's entry points is out of date, and the forwarder does not answer on the ways this phone knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on when this phone meets it.")
-                } icon: { Image(systemName: "exclamationmark.triangle") }
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
-            }
-            if hub.on {
-                Text(hub.home ? "On a home network: devices here connect to this phone."
-                     : "This network is not one of the hub's home networks: devices here do not see this phone.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
-                if !hub.home {
-                    Button { Task { await model.addHomeNetwork() } } label: { Text("This is my home network") }
-                }
-                // The forwarder is the group's root's setting: shown, not edited.
-                Text(hub.forwarder != nil
-                     ? "The group's main device sets this hub's forwarder; devices away from home reach this phone through it."
-                     : "The group's main device set no forwarder for this phone, so it serves as the hub at home only.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
-                if let fw = hub.forwarder {
-                    Text(verbatim: fw.endpoint)
-                    Text(verbatim: fw.pin)
-                        .font(.system(.footnote, design: .monospaced))
-                        .foregroundStyle(palette.textDim)
-                }
-                // Strict networks: AmneziaWG for networks that block VPNs,
-                // and VLESS over it for those that let only the web through.
-                Toggle(isOn: Binding(get: { hub.disguise != .plain }, set: { disguiseTo = $0 ? .obfuscate : .plain })) {
-                    Text("Networks that block VPNs (AmneziaWG)")
-                }
-                .disabled(switching)
-                Toggle(isOn: Binding(get: { hub.disguise == .vless }, set: { disguiseTo = $0 ? .vless : .obfuscate })) {
-                    Text("Networks that let only the web through (VLESS)")
-                }
-                .disabled(switching || hub.disguise == .plain)
-                TipView(SettingTip.disguise)
-            }
-            if let note = model.hubNote {
-                Text(verbatim: note).font(.caption).foregroundStyle(palette.danger)
-            }
-        } header: {
-            Text("Away from home: hub")
-        }
-        .listRowBackground(palette.surface)
-        .alert(Text("Change how the hub's tunnel hides?"), isPresented: Binding(get: { disguiseTo != nil }, set: { if !$0 { disguiseTo = nil } })) {
-            Button {
-                if let d = disguiseTo {
-                    switching = true
-                    Task {
-                        await model.setHubDisguise(d)
-                        switching = false
-                    }
-                }
-            } label: { Text("Change") }
-            Button(role: .cancel) {} label: { Text("Cancel") }
-        } message: {
-            Text("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
-        }
-    }
-
-    private func hubStatus(_ hub: AppModel.Hub) -> Text {
-        switch hub.status {
-        case .off: return Text("Off: this phone is no hub.")
-        case .paused: return Text("Waiting for the app: the hub works while the app is open.")
-        case .homeOnly: return Text("The hub at home only: add a forwarder for sync away from home.")
-        case .registering: return Text("Registering with the forwarder…")
-        case .registered: return Text("Registered with the forwarder: devices away from home reach this phone.")
-        case .failed: return Text("The forwarder does not take this phone. Check its address and key.")
-        }
     }
 
     /// Sync away from home: the switch, where it stands, and what it does.
@@ -592,7 +494,7 @@ enum SettingsPart: String, CaseIterable, Hashable {
     @MainActor func shown(_ model: AppModel) -> Bool {
         switch self {
         case .recovery: model.isRoot
-        case .away: model.hub != nil || model.away != nil || model.blindRelay != nil
+        case .away: model.away != nil || model.blindRelay != nil
         case .group: (model.isAdmin && model.phase == .home) || model.keyLevel != nil
         default: true
         }
@@ -683,10 +585,6 @@ struct SettingTip: Tip {
     let title: Text
     let message: Text?
 
-    static let hub = SettingTip(id: "hub", title: Text("The phone as the hub"),
-        message: Text("While the app is open, the other devices at home connect to this phone, and with a forwarder from afar too. The forwarder passes only encrypted packets."))
-    static let disguise = SettingTip(id: "disguise", title: Text("Strict networks"),
-        message: Text("For networks that block VPNs or let only the web through; the second needs a connection server that takes VLESS."))
     static let relay = SettingTip(id: "relay", title: Text("Blind relay"),
         message: Text("For a group without a hub: the devices meet at a relay. It cannot read the clipboard, but it sees which devices are online and talk to each other."))
     static let copyLifetime = SettingTip(id: "copyLifetime", title: Text("Copy lifetime"),

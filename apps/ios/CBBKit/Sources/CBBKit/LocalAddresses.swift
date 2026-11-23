@@ -70,29 +70,6 @@ public enum LocalAddresses {
         #endif
     }
 
-    /// The IPv4 address of the interface named name, such as en0, and the
-    /// length of its network's prefix, for the hub's home networks
-    /// (HubState.networkKey); nil when it has none.
-    public static func ipv4(interface name: String) -> (address: String, prefixLength: Int)? {
-        #if canImport(Darwin)
-        var head: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&head) == 0, let first = head else { return nil }
-        defer { freeifaddrs(head) }
-        for p in sequence(first: first, next: { $0.pointee.ifa_next }) {
-            guard String(cString: p.pointee.ifa_name) == name, let sa = p.pointee.ifa_addr, Int32(sa.pointee.sa_family) == AF_INET,
-                  let mask = p.pointee.ifa_netmask else { continue }
-            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            guard getnameinfo(sa, socklen_t(MemoryLayout<sockaddr_in>.size), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0
-            else { continue }
-            let bits = mask.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt32(bigEndian: $0.pointee.sin_addr.s_addr).nonzeroBitCount }
-            return (String(cString: host), bits)
-        }
-        return nil
-        #else
-        return nil
-        #endif
-    }
-
     /// Whether an IPv4 address is a private one (RFC 1918). Only an address
     /// in its one spelling is judged (`octets`).
     static func isHome(ipv4 s: String) -> Bool {

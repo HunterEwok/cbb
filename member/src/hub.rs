@@ -90,7 +90,7 @@ pub struct Limits {
 }
 
 /// A device's hub: its clients each open one or two connections, and a
-/// guest one; a phone or a computer holds a few hundred clients at most.
+/// guest one; a computer or a board holds a few hundred clients at most.
 pub const DEVICE_LIMITS: Limits = Limits {
     bridges: 1024,
     per_client: 8,

@@ -7,10 +7,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.net.InetAddress
 
-/** What the hub of a group of 0.6 takes from the user and the network (HubState, HubOnPhone.networkKey). */
-class HubOnPhoneTest {
+/** A forwarder's or a relay's address and key as the user gives them (HubState). */
+class HubStateTest {
     private val pin = "A".repeat(43) + "="
 
     @Test
@@ -28,15 +27,5 @@ class HubOnPhoneTest {
         assertNull(HubState.resolve("203.0.113.9"))
         assertNull(HubState.resolve("203.0.113.9:0"))
         assertNull(HubState.resolve(":8764"))
-    }
-
-    @Test
-    fun networkKeys() {
-        val gw = InetAddress.getByName("192.168.0.1")
-        assertEquals("192.168.0.1 192.168.0.0/24", HubOnPhone.networkKey(gw, InetAddress.getByName("192.168.0.57"), 24))
-        assertEquals("192.168.0.1 192.168.0.0/23", HubOnPhone.networkKey(gw, InetAddress.getByName("192.168.1.57"), 23))
-        assertEquals("192.168.0.1 10.1.2.3/32", HubOnPhone.networkKey(gw, InetAddress.getByName("10.1.2.3"), 32))
-        assertNull(HubOnPhone.networkKey(null, InetAddress.getByName("192.168.0.57"), 24))
-        assertNull(HubOnPhone.networkKey(gw, InetAddress.getByName("192.168.0.57"), 33))
     }
 }

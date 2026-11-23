@@ -372,10 +372,6 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(try m.periods(), CoreMember.Periods(), "the relay's root key renewed the credentials")
         XCTAssertEqual(try m.renewPeriod(public: pub, sign: root), CoreMember.Periods())
         refused("the root names no forwarder for its own phone") { _ = try m.nameForwarder("Root phone", forwarder: "127.0.0.1:1", key: pin, public: pub, sign: root) }
-        XCTAssertNil(try m.rootForwarder())
-        XCTAssertEqual(try m.serveAsHub(port: 0, addrs: ["127.0.0.1:9"])?.hub, true, "the root's phone may be a hub")
-        XCTAssertNotEqual(try m.stopHub()?.hub, true, "the root's phone stops being a hub")
-        refused("a phone that is no hub cannot stop being one") { _ = try m.stopHub() }
         let on = try m.setAway(true)
         XCTAssertEqual(try m.awayStatus()?.isOn, on?.isOn)
         let off = try m.setAway(false)

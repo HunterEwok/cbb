@@ -4,9 +4,8 @@
 import Foundation
 import XCTest
 
-/// What the phone as the group's hub works with: the forwarder's address
-/// and key as the user gives them, and its home networks.
-final class HubOnPhoneTests: XCTestCase {
+/// A forwarder's or a relay's address and key as the user gives them.
+final class HubStateTests: XCTestCase {
     let pin = String(repeating: "A", count: 43) + "="
 
     func testForwarderInput() {
@@ -25,13 +24,5 @@ final class HubOnPhoneTests: XCTestCase {
         XCTAssertNil(HubState.endpoint("203.0.113.9:0"))
         XCTAssertNil(HubState.endpoint("cbb.tools:8764"))
         XCTAssertNil(HubState.endpoint("1.2.3:8764"))
-    }
-
-    func testNetworkKeys() {
-        XCTAssertEqual(HubState.networkKey(gateway: "192.168.0.1", address: "192.168.0.57", prefixLength: 24), "192.168.0.1 192.168.0.0/24")
-        XCTAssertEqual(HubState.networkKey(gateway: "192.168.0.1", address: "192.168.1.57", prefixLength: 23), "192.168.0.1 192.168.0.0/23")
-        XCTAssertEqual(HubState.networkKey(gateway: "192.168.0.1", address: "10.1.2.3", prefixLength: 32), "192.168.0.1 10.1.2.3/32")
-        XCTAssertNil(HubState.networkKey(gateway: nil, address: "192.168.0.57", prefixLength: 24))
-        XCTAssertNil(HubState.networkKey(gateway: "192.168.0.1", address: "192.168.0.57", prefixLength: 33))
     }
 }

@@ -2300,8 +2300,8 @@ jobs:
             "$adb" shell settings put global "$s" 0
           done
           # The emulator has a mobile network beside its Wi-Fi, and the
-          # default network can stay on it, while the tests that make the
-          # phone's network home (c1_phoneHub) need the Wi-Fi. Mobile data
+          # default network can stay on it, while the tests that pair at
+          # home (the window's addresses) need the Wi-Fi. Mobile data
           # goes off in the emulated modem and in Android; right after boot
           # telephony can drop the request, so it is asked again until the
           # Wi-Fi carries the default route, with the Wi-Fi turned off and

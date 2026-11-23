@@ -210,7 +210,7 @@ extension Optional where Wrapped == DeviceFilter {
 }
 
 /// How many devices are online, of how many, with the two switches; under
-/// it what holds now: this phone as the hub, an admin's mute.
+/// it what holds now: an admin's mute.
 struct GroupHeader: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -230,12 +230,6 @@ struct GroupHeader: View {
                     Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
                     SyncSwitches()
                 }
-            }
-            // The phone as the hub works while the app is open: Home says so, as a fact, not a fault.
-            if model.hub?.on == true {
-                Text("This phone is the hub: sync works while the app is open.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
             }
             // An admin's mute of this phone, which an admin ends.
             if let m = model.devices.first(where: \.isSelf)?.muted {
@@ -311,7 +305,7 @@ struct SyncSwitches: View {
     var body: some View {
         HStack(spacing: Tokens.spacingSmall) {
             house
-            if let away = model.away, model.hub?.on != true { globe(away.on) }
+            if let away = model.away { globe(away.on) }
         }
         .alert(Text("Turn Everywhere on?"), isPresented: $askingAway) {
             Button { Task { await model.setAway(true) } } label: { Text("Turn on") }

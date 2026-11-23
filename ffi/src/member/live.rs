@@ -916,7 +916,7 @@ impl Phone {
         let d = writers::find(&st, &a.device)?.clone();
         if !st.may_be_hub(&d.id) {
             return Err(Error::msg(format!(
-                "the group's records do not make {} a hub; only an admin or a hub the root names can be one",
+                "the group's records do not make {} a hub; only a computer with an admin key or one the root names can be one",
                 d.name
             )));
         }

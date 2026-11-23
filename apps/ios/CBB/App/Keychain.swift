@@ -41,14 +41,3 @@ enum KeychainData {
         guard status == errSecSuccess else { throw Failure.keychain(status) }
     }
 }
-
-/// What the user chose for the hub on a group of 0.6 (AwayOn06.Prefs) in
-/// the keychain; the Live member keeps the hub's keys and clients itself.
-enum Hub06Keychain {
-    static let service = "tools.cbb.hub06"
-
-    static func load() -> AwayOn06.Prefs? { KeychainData.load(service).flatMap(AwayOn06.Prefs.decode) }
-
-    /// Keeps p; nil deletes it.
-    static func save(_ p: AwayOn06.Prefs?) throws { try KeychainData.save(service, try p.map { try $0.encoded() }) }
-}

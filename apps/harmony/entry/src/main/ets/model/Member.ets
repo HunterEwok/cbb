@@ -140,7 +140,6 @@ interface Swap {
 
 interface Server {
   endpoint?: string;
-  registered?: boolean;
   connected?: boolean;
   online?: string[];
   error?: string;
@@ -153,10 +152,7 @@ interface Away {
   through?: boolean;
   error?: string;
   detail?: string;
-  // This phone is one of the group's hubs, with its forwarder; or it meets
-  // the group at a blind relay.
-  hub?: boolean;
-  forwarder?: Server;
+  // The blind relay it meets the group at.
   relay?: Server;
 }
 
@@ -172,15 +168,8 @@ const ATTEST_EVERY_MS: number = 24 * 3600 * 1000;
 // A signed file of the mirror is far smaller.
 const ATTEST_MAX: number = 2 * 1024 * 1024;
 
-// The forwarder the group's root set for this phone as a hub (a group of 0.6).
-interface RootForwarder {
-  endpoint: string;
-  key: string;
-}
-
 interface AwayAnswer {
   away?: Away;
-  root_forwarder?: RootForwarder;
   // On the root phone of a group of 0.6: the group's server credentials
   // need its root key, or expired already.
   period_due?: boolean;
@@ -276,19 +265,9 @@ export class Member {
   @Trace awayStatus: string = 'off';
   @Trace awayHub: string = '';
   @Trace awayError: string = '';
-  // The phone as one of the group's hubs (docs/apps.md, "The phone as the
-  // hub"): on, where its forwarder stands ("off", "home", "registering",
-  // "registered", "failed") and why it failed.
-  @Trace hubOn: boolean = false;
-  @Trace hubStatus: string = 'off';
-  @Trace hubError: string = '';
   // The blind relay the phone meets the group at, "" for none, and whether
   // the link is up.
   @Trace relayAt: string = '';
-  // On a group of 0.6, the forwarder the group's root set for this phone as
-  // a hub and its key's pin, "" while it set none.
-  @Trace rootForwarder: string = '';
-  @Trace rootForwarderKey: string = '';
   // On the root phone of a group of 0.6, the group's server credentials
   // expired: its relay and its hubs' forwarders take nobody until the root
   // key renews them.
@@ -824,30 +803,6 @@ export class Member {
     }
   }
 
-  // Makes this phone one of the group's hubs, reached away from home
-  // through the forwarder at forwarder whose key's pin is key ('default'
-  // for the project's; both empty on a group of 0.6: the one the root set),
-  // hidden as disguise says ('plain' WireGuard,
-  // 'obfuscate' AmneziaWG, 'vless' AmneziaWG with VLESS at the forwarder);
-  // or stops it being one. Answers why it failed.
-  async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
-    const a = on
-      ? await this.call<AwayAnswer>('hub', {
-        'forwarder': forwarder,
-        'key': key,
-        'obfuscate_off': disguise === 'plain',
-        'vless_off': disguise !== 'vless'
-      } as Record<string, Object>)
-      : await this.call<AwayAnswer>('hub_off', { 'anyway': anyway } as Record<string, Object>);
-    if (a.ok === undefined) {
-      return a.failure;
-    }
-    const through = forwarder.length > 0 ? forwarder : (a.ok.root_forwarder?.endpoint ?? '');
-    Errors.log(on ? `member: this phone is a hub of the group, through ${through}` : 'member: this phone is no hub any more');
-    this.readAway(a.ok.away);
-    return undefined;
-  }
-
   private attestFetched: number = 0;
 
   // On the root: fetches the revocation list of Android attestations from
@@ -925,8 +880,6 @@ export class Member {
       Errors.log(`member: sync away from home: ${f.message} (${f.details})`);
       return;
     }
-    this.rootForwarder = a.ok.root_forwarder?.endpoint ?? '';
-    this.rootForwarderKey = a.ok.root_forwarder?.key ?? '';
     this.periodDueAway = a.ok.period_due === true;
     if (this.periodOverdue !== (a.ok.period_overdue === true)) {
       this.periodOverdue = a.ok.period_overdue === true;
@@ -971,19 +924,6 @@ export class Member {
     }
     if (hubName !== this.awayHub) {
       this.awayHub = hubName;
-    }
-    const hubOn = away?.hub === true;
-    const fw = away?.forwarder;
-    let hubStatus = 'off';
-    if (hubOn) {
-      hubStatus = fw === undefined ? 'home' : fw.registered === true ? 'registered' :
-        (fw.error ?? '').length > 0 ? 'failed' : 'registering';
-    }
-    const hubError = hubStatus === 'failed' ? Errors.shown(new Failure(fw?.error ?? '', fw?.detail ?? '')) : '';
-    if (hubOn !== this.hubOn || hubStatus !== this.hubStatus || hubError !== this.hubError) {
-      this.hubOn = hubOn;
-      this.hubStatus = hubStatus;
-      this.hubError = hubError;
     }
     const r = away?.relay;
     const relayAt = r?.endpoint ?? '';

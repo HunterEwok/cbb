@@ -3,11 +3,9 @@
 
 import Foundation
 
-/// What the phone as the group's hub works with (docs/design.md, "The phone
-/// as the hub", D-64): the forwarder the group's root sets for it, and the
-/// home networks where it takes members and publishes itself. On a group
-/// of 0.6 the Live member runs the hub (AwayOn06); a phone in a group of
-/// 0.5 is no hub (D-123).
+/// The forwarder of a computer that is the group's hub, which the root
+/// names from the phone, and the relay's address and key, as the user gives
+/// them. A phone is no hub (D-134).
 public enum HubState {
     /// The forwarder: its endpoint, "ip:port", and the pin of its key:
     /// SHA-256 of its key in standard base64.
@@ -46,28 +44,4 @@ public enum HubState {
         let b = host.split(separator: ".", omittingEmptySubsequences: false)
         return b.count == 4 && b.allSatisfy { UInt8($0) != nil } ? t : nil
     }
-
-    /// A network as the hub remembers it: its gateway's address and the
-    /// network of the phone's IPv4 address on it, as "192.168.0.1
-    /// 192.168.0.0/24". Wi-Fi in a café has another, so the phone neither
-    /// takes members nor publishes itself there (as D-63 on the computers).
-    public static func networkKey(gateway: String?, address: String?, prefixLength: Int) -> String? {
-        guard let gateway, let address, (0...32).contains(prefixLength) else { return nil }
-        let b = address.split(separator: ".").compactMap { UInt8($0) }
-        guard b.count == 4 else { return nil }
-        var v = b.reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
-        v &= prefixLength == 0 ? 0 : ~UInt32(0) << (32 - prefixLength)
-        let net = (0..<4).map { String((v >> (24 - 8 * $0)) & 0xff) }.joined(separator: ".")
-        return "\(gateway) \(net)/\(prefixLength)"
-    }
-}
-
-/// The phone as the group's hub, as the screens show it.
-public enum HubOnPhone {
-    /// What the screens show.
-    public enum Status: Sendable, Equatable { case off, paused, homeOnly, registering, registered, failed }
-
-    /// How the hub's tunnel hides (docs/design.md, "Blocked networks"):
-    /// plain WireGuard, AmneziaWG, or AmneziaWG with VLESS to the forwarder.
-    public enum Disguise: String, Sendable, CaseIterable { case plain, obfuscate, vless }
 }

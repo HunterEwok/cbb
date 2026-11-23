@@ -1346,3 +1346,16 @@ apps/harmony/entry/src/ohosTest/ets/test/Lab.test.ets keeps_the_last_pastes D-13
 apps/harmony/entry/src/ohosTest/ets/test/Lab.test.ets answers_pastes D-132: it tested the HarmonyOS app's receiver of remote pastes, which went with the Paste model; the cleaning of a paste on a computer is tested in core/src/remotepaste.rs and its limits per sender in member/src/remotepaste.rs
 core/src/records/tests/hub_order.rs a_root_phone_without_an_admin_key_may_be_a_hub D-134: a phone is no hub now, the root's phone neither; only_computers_are_hubs tests that
 ffi/src/member/live.rs a_hub_command_on_a_phone_sets_its_forwarder_and_does_not_switch_the_hub_on D-134: a phone is no hub, so it keeps no forwarder of the root's; a_phone_refuses_to_be_a_hub tests the refusal
+apps/ios/CBBKit/Tests/CBBKitTests/AwayOn06Tests.swift testSettingsRoundTrip D-134: a phone is no hub, so the app keeps no hub settings
+apps/ios/CBBKit/Tests/CBBKitTests/AwayOn06Tests.swift testHubStatus D-134: a phone is no hub, so it shows no hub's status
+apps/ios/CBBKit/Tests/CBBKitTests/HubOnPhoneTests.swift testNetworkKeys D-134: a phone is no hub, so it remembers no home networks of a hub
+apps/android/app/src/test/kotlin/tools/cbb/AwayOn06Test.kt settingsRoundTrip D-134: a phone is no hub, so the app keeps no hub settings
+apps/android/app/src/test/kotlin/tools/cbb/AwayOn06Test.kt hubStatus D-134: a phone is no hub, so it shows no hub's status
+apps/android/app/src/test/kotlin/tools/cbb/HubOnPhoneTest.kt networkKeys D-134: a phone is no hub, so it remembers no home networks of a hub
+apps/android/kit/src/test/kotlin/tools/cbb/kit/AwayKitTest.kt aPhoneSyncsThroughTheTunnelOfAnAdminPhoneHub D-134: a phone is no hub; a phone through a computer hub's tunnel is tested in GroupTest.c2_awayThroughHub and in Go (internal/service)
+apps/android/kit/src/test/kotlin/tools/cbb/kit/AwayKitTest.kt theHubsTunnelHidesAsTheUserChose D-134: a phone is no hub, so it hides no hub's tunnel; a computer hub's disguise is tested in member/src/live/tests.rs and internal/service/tunnel_test.go
+apps/android/kit/src/test/kotlin/tools/cbb/kit/AwayKitTest.kt theRootNamesAnAdminPhonesForwarder D-134: a phone is no hub; theRootNamesNoForwarderForAPhone tests that the root names none for it
+apps/android/kit/src/test/kotlin/tools/cbb/kit/AwayKitTest.kt theMemberRefusesABadHub D-134: a phone is no hub, so the kit has no hub to start; ffi's a_phone_refuses_to_be_a_hub tests the refusal
+apps/android/kit/src/test/kotlin/tools/cbb/kit/InviteKitTest.kt joinsThroughTheGuestTunnel D-134: its hub was an admin phone, and a phone is no hub; a phone that joins through a computer hub's guest tunnel is tested in Go (TestFFIJoinInvite)
+apps/android/app/src/androidTest/kotlin/tools/cbb/GroupTest.kt c1_phoneHubAtHome D-134: a phone is no hub, so it serves no invitation and keeps no home network
+internal/service/phone_servers_test.go TestFFIPhoneHub D-134: a phone is no hub; TestFFIPhoneIsNoHub tests that the root names no forwarder for it and its member starts no hub

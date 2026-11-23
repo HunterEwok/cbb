@@ -2853,52 +2853,6 @@
         }
       }
     },
-    "Away from home: hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "خارج المنزل: محور"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fuera de casa: hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מחוץ לבית: רכזת"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "घर से बाहर: हब"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Вне дома: хаб"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mbali na nyumbani: kitovu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "离家：中心节点"
-          }
-        }
-      }
-    },
     "Away from home: through your hub": {
       "localizations": {
         "ar": {
@@ -3634,52 +3588,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "更改副本和秘密的有效期"
-          }
-        }
-      }
-    },
-    "Change how the hub's tunnel hides?": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تغيير طريقة إخفاء نفق المحور؟"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Cambiar cómo se oculta el túnel del hub?"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "לשנות את האופן שבו מנהרת הרכזת מוסתרת?"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "हब की सुरंग के छिपने का तरीका बदलें?"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Изменить маскировку туннеля хаба?"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kubadilisha jinsi handaki la kitovu linavyojificha?"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更改中心节点隧道的隐藏方式？"
           }
         }
       }
@@ -6440,52 +6348,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "1 小时"
-          }
-        }
-      }
-    },
-    "For networks that block VPNs or let only the web through; the second needs a connection server that takes VLESS.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "للشبكات التي تحجب VPN أو لا تسمح إلا بالويب؛ والثانية تحتاج إلى خادم اتصال يقبل VLESS."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Para redes que bloquean las VPN o solo dejan pasar la web; lo segundo necesita un servidor de conexión que acepte VLESS."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "לרשתות שחוסמות VPN או מעבירות רק תעבורת אינטרנט; האפשרות השנייה דורשת שרת חיבור שמקבל VLESS."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "VPN रोकने वाले या केवल वेब चलने देने वाले नेटवर्क के लिए; दूसरे के लिए VLESS लेने वाला कनेक्शन सर्वर चाहिए।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Для сетей, которые блокируют VPN или пропускают только веб; для второго нужен сервер связи, который принимает VLESS."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwa mitandao inayozuia VPN au inayoruhusu wavuti pekee; la pili linahitaji seva ya muunganisho inayokubali VLESS."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "用于屏蔽 VPN 或只允许网页通行的网络；后者需要支持 VLESS 的连接服务器。"
           }
         }
       }
@@ -11044,98 +10906,6 @@
         }
       }
     },
-    "Networks that block VPNs (AmneziaWG)": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الشبكات التي تحجب VPN (AmneziaWG)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Redes que bloquean las VPN (AmneziaWG)"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רשתות שחוסמות VPN (AmneziaWG)"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "VPN रोकने वाले नेटवर्क (AmneziaWG)"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сети, которые блокируют VPN (AmneziaWG)"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mitandao inayozuia VPN (AmneziaWG)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "屏蔽 VPN 的网络 (AmneziaWG)"
-          }
-        }
-      }
-    },
-    "Networks that let only the web through (VLESS)": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الشبكات التي لا تسمح إلا بالويب (VLESS)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Redes que solo dejan pasar la web (VLESS)"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רשתות שמעבירות רק תעבורת אינטרנט (VLESS)"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "केवल वेब चलने देने वाले नेटवर्क (VLESS)"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сети, где открыт только веб (VLESS)"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mitandao inayoruhusu wavuti pekee (VLESS)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "只允许网页通行的网络 (VLESS)"
-          }
-        }
-      }
-    },
     "New collection": {
       "localizations": {
         "ar": {
@@ -12194,52 +11964,6 @@
         }
       }
     },
-    "Off: this phone is no hub.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "متوقف: هذا الهاتف ليس محورًا."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desactivado: este teléfono no es un hub."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כבוי: הטלפון הזה אינו רכזת."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "बंद: यह फ़ोन हब नहीं है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Выключено: этот телефон не хаб."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kimezimwa: simu hii si kitovu."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭：这部手机不是中心节点。"
-          }
-        }
-      }
-    },
     "Off: this phone meets nobody at a relay.": {
       "localizations": {
         "ar": {
@@ -12374,52 +12098,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在电脑上运行 cbb pair，并扫描它显示的代码。"
-          }
-        }
-      }
-    },
-    "On a home network: devices here connect to this phone.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على شبكة منزلية: تتصل الأجهزة هنا بهذا الهاتف."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En una red de casa: los dispositivos de aquí se conectan a este teléfono."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ברשת ביתית: המכשירים כאן מתחברים לטלפון הזה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "घर के नेटवर्क पर: यहाँ के डिवाइस इस फ़ोन से जुड़ते हैं।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Домашняя сеть: устройства здесь подключаются к этому телефону."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwenye mtandao wa nyumbani: vifaa vilivyo hapa huunganishwa na simu hii."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在家庭网络中：这里的设备连接到这部手机。"
           }
         }
       }
@@ -14582,98 +14260,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "恢复密钥"
-          }
-        }
-      }
-    },
-    "Registered with the forwarder: devices away from home reach this phone.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مسجّل لدى مُعيد التوجيه: تصل الأجهزة البعيدة عن المنزل إلى هذا الهاتف."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registrado en el reenviador: los dispositivos fuera de casa llegan a este teléfono."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רשום אצל המעביר: מכשירים מחוץ לבית מגיעים לטלפון הזה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ॉरवर्डर पर पंजीकृत: घर से दूर के डिवाइस इस फ़ोन तक पहुँचते हैं।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Зарегистрирован на сервере пересылки: устройства вне дома видят этот телефон."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imesajiliwa na kisambazaji: vifaa vilivyo mbali na nyumbani hufikia simu hii."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已在转发器注册：离家的设备可以连接到这部手机。"
-          }
-        }
-      }
-    },
-    "Registering with the forwarder…": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جارٍ التسجيل لدى مُعيد التوجيه…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registrándose en el reenviador…"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "נרשם אצל המעביר…"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ॉरवर्डर पर पंजीकरण हो रहा है…"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Регистрация на сервере пересылки…"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inajisajili na kisambazaji…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在向转发器注册…"
           }
         }
       }
@@ -20520,52 +20106,6 @@
         }
       }
     },
-    "The forwarder does not take this phone. Check its address and key.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يقبل مُعيد التوجيه هذا الهاتف. تحقق من عنوانه ومفتاحه."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El reenviador no acepta este teléfono. Revisa su dirección y su clave."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המעביר לא מקבל את הטלפון הזה. בדקו את הכתובת והמפתח שלו."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ॉरवर्डर इस फ़ोन को स्वीकार नहीं करता। उसका पता और कुंजी जाँचें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сервер пересылки не принимает этот телефон. Проверьте его адрес и ключ."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kisambazaji hakiikubali simu hii. Kagua anwani na ufunguo wake."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "转发器不接受这部手机。请检查它的地址和密钥。"
-          }
-        }
-      }
-    },
     "The frozen admin %@ holds removals back: unfreeze it or remove it.": {
       "localizations": {
         "ar": {
@@ -21394,52 +20934,6 @@
         }
       }
     },
-    "The group's main device set no forwarder for this phone, so it serves as the hub at home only.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يعيّن الجهاز الرئيسي للمجموعة مُعيد توجيه لهذا الهاتف، لذا يعمل محورًا في المنزل فقط."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El dispositivo principal del grupo no configuró ningún reenviador para este teléfono, así que funciona como hub solo en casa."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המכשיר הראשי של הקבוצה לא הגדיר מעביר לטלפון הזה, ולכן הוא משמש רכזת בבית בלבד."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह के मुख्य डिवाइस ने इस फ़ोन के लिए कोई फ़ॉरवर्डर सेट नहीं किया, इसलिए यह केवल घर पर हब के रूप में काम करता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Главное устройство группы не задало сервер пересылки для этого телефона, поэтому он работает хабом только дома."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kifaa kikuu cha kikundi hakikuweka kisambazaji kwa simu hii, kwa hivyo inatumika kama kitovu cha nyumbani pekee."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "群组的主设备没有为这部手机设置转发器，因此它只在家中充当中心节点。"
-          }
-        }
-      }
-    },
     "The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.": {
       "localizations": {
         "ar": {
@@ -21482,52 +20976,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组的主设备为所有设备设置中继；离家同步开启时，这部手机在那里与其他设备会合。"
-          }
-        }
-      }
-    },
-    "The group's main device sets this hub's forwarder; devices away from home reach this phone through it.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يعيّن الجهاز الرئيسي للمجموعة مُعيد التوجيه لهذا المحور؛ وتصل الأجهزة البعيدة عن المنزل إلى هذا الهاتف من خلاله."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El dispositivo principal del grupo configura el reenviador de este hub; los dispositivos fuera de casa llegan a este teléfono a través de él."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המכשיר הראשי של הקבוצה מגדיר את המעביר של הרכזת הזו; מכשירים מחוץ לבית מגיעים לטלפון הזה דרכו."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह का मुख्य डिवाइस इस हब का फ़ॉरवर्डर सेट करता है; घर से दूर के डिवाइस इसी के ज़रिए इस फ़ोन तक पहुँचते हैं।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сервер пересылки этого хаба задаёт главное устройство группы; устройства вне дома видят этот телефон через него."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kifaa kikuu cha kikundi huweka kisambazaji cha kitovu hiki; vifaa vilivyo mbali na nyumbani hufikia simu hii kupitia kisambazaji hicho."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "群组的主设备为这个中心节点设置转发器；离家的设备通过它连接到这部手机。"
           }
         }
       }
@@ -21712,52 +21160,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组的恢复密钥被使用了两次，因此群组已永久停止。"
-          }
-        }
-      }
-    },
-    "The hub at home only: add a forwarder for sync away from home.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المحور في المنزل فقط: أضف مُعيد توجيه للمزامنة بعيدًا عن المنزل."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo el hub de casa: añade un reenviador para sincronizar fuera de casa."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רק הרכזת בבית: הוסיפו מעביר לסנכרון מחוץ לבית."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "केवल घर का हब: घर से दूर सिंक के लिए फ़ॉरवर्डर जोड़ें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Хаб только дома: добавьте сервер пересылки для синхронизации вне дома."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kitovu cha nyumbani pekee: ongeza kisambazaji ili kusawazisha ukiwa mbali na nyumbani."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅限家中的中心节点：添加转发器即可离家同步。"
           }
         }
       }
@@ -22130,52 +21532,6 @@
         }
       }
     },
-    "The list of the project's entry points is out of date, and the forwarder does not answer on the ways this phone knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on when this phone meets it.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قائمة نقاط دخول المشروع قديمة، ولا يُجيب مُعيد التوجيه على الطرق التي يعرفها هذا الهاتف. حدّث CBB على حاسوب من المجموعة، أو استورد قائمة جديدة هناك باستخدام cbb global entries import؛ وتنقلها المجموعة عندما يلتقي بها هذا الهاتف."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La lista de puntos de entrada del proyecto está desactualizada, y el reenviador no responde por las vías que conoce este teléfono. Actualiza CBB en un ordenador del grupo, o importa allí una lista nueva con cbb global entries import; el grupo la transmite cuando este teléfono se encuentra con él."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רשימת נקודות הכניסה של הפרויקט מיושנת, והמעביר לא עונה בדרכים שהטלפון הזה מכיר. עדכנו את CBB במחשב של הקבוצה, או ייבאו שם רשימה חדשה עם cbb global entries import; הקבוצה מעבירה אותה כשהטלפון הזה פוגש אותה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "प्रोजेक्ट के प्रवेश बिंदुओं की सूची पुरानी है, और फ़ॉरवर्डर उन तरीकों पर जवाब नहीं देता जिन्हें यह फ़ोन जानता है। समूह के किसी कंप्यूटर पर CBB अपडेट करें, या वहाँ cbb global entries import से नई सूची आयात करें; जब यह फ़ोन समूह से मिलता है तो समूह उसे आगे पहुँचा देता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Список точек входа проекта устарел, а сервер пересылки не отвечает ни одним путём, известным этому телефону. Обновите CBB на компьютере группы или импортируйте там новый список командой cbb global entries import: группа передаст его телефону, когда он с ней встретится."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Orodha ya milango ya kuingilia ya mradi imepitwa na wakati, na kisambazaji hakijibu kwa njia ambazo simu hii inazijua. Sasisha CBB kwenye kompyuta ya kikundi, au ingiza orodha mpya huko kwa cbb global entries import; kikundi huipitisha simu hii inapokutana nacho."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "项目的入口列表已过期，转发器在这部手机已知的方式上都没有响应。请在群组的电脑上更新 CBB，或在那里用 cbb global entries import 导入新列表；这部手机与群组相遇时，群组会将其传递过来。"
-          }
-        }
-      }
-    },
     "The main device's key signed two different histories, so the group stopped.": {
       "localizations": {
         "ar": {
@@ -22310,52 +21666,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法加入另一部手机的群组。请重试。"
-          }
-        }
-      }
-    },
-    "The phone as the hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الهاتف كمحور"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El teléfono como hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הטלפון כרכזת"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ोन हब के रूप में"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Телефон как хаб"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Simu kama kitovu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "手机作为中心节点"
           }
         }
       }
@@ -24108,52 +23418,6 @@
         }
       }
     },
-    "This network is not one of the hub's home networks: devices here do not see this phone.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذه الشبكة ليست من الشبكات المنزلية للمحور: لا ترى الأجهزة هنا هذا الهاتف."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta red no es una de las redes de casa del hub: los dispositivos de aquí no ven este teléfono."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הרשת הזו אינה אחת מהרשתות הביתיות של הרכזת: המכשירים כאן לא רואים את הטלפון הזה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह नेटवर्क हब के घर के नेटवर्कों में से नहीं है: यहाँ के डिवाइस इस फ़ोन को नहीं देखते।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Эта сеть не входит в домашние сети хаба: устройства здесь не видят этот телефон."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mtandao huu si mmoja wa mitandao ya nyumbani ya kitovu: vifaa vilivyo hapa havioni simu hii."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此网络不是中心节点的家庭网络之一：这里的设备看不到这部手机。"
-          }
-        }
-      }
-    },
     "This network may block tunnels: turn on Strict networks on the base.": {
       "localizations": {
         "ar": {
@@ -24752,52 +24016,6 @@
         }
       }
     },
-    "This phone is the group's hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الهاتف هو محور المجموعة"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este teléfono es el hub del grupo"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הטלפון הזה הוא הרכזת של הקבוצה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह फ़ोन समूह का हब है"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот телефон — хаб группы"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Simu hii ndiyo kitovu cha kikundi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这部手机是群组的中心节点"
-          }
-        }
-      }
-    },
     "This phone is the group's main device, and the group has other devices: %@. Remove them first, or let an admin phone move the group to itself.": {
       "localizations": {
         "ar": {
@@ -24840,52 +24058,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "这部手机是群组的主设备，而群组还有其他设备：%@。请先移除它们，或让管理员手机把群组移到自己这里。"
-          }
-        }
-      }
-    },
-    "This phone is the hub: sync works while the app is open.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الهاتف هو المحور: تعمل المزامنة ما دام التطبيق مفتوحًا."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este teléfono es el hub: la sincronización funciona mientras la app está abierta."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הטלפון הזה הוא הרכזת: הסנכרון עובד כל עוד היישום פתוח."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह फ़ोन हब है: ऐप खुला रहने तक सिंक काम करता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот телефон — хаб: синхронизация работает, пока приложение открыто."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Simu hii ndiyo kitovu: usawazishaji hufanya kazi wakati programu iko wazi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这部手机是中心节点：应用打开时同步正常工作。"
           }
         }
       }
@@ -26960,52 +26132,6 @@
         }
       }
     },
-    "Waiting for the app: the hub works while the app is open.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "في انتظار التطبيق: يعمل المحور ما دام التطبيق مفتوحًا."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esperando a la app: el hub funciona mientras la app está abierta."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ממתין ליישום: הרכזת עובדת כל עוד היישום פתוח."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ऐप का इंतज़ार: ऐप खुला रहने तक हब काम करता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ждём приложение: хаб работает, пока приложение открыто."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inasubiri programu: kitovu hufanya kazi wakati programu iko wazi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等待应用：应用打开时中心节点才工作。"
-          }
-        }
-      }
-    },
     "Waiting for the app: the relay works while the app is open.": {
       "localizations": {
         "ar": {
@@ -27370,52 +26496,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "哪些设备可以成为群组的管理员和中心节点。硬件中的密钥永远不会离开设备；任何获得文件中密钥的人都能复制它。已在群组中的管理员会保留，直到你移除他们。"
-          }
-        }
-      }
-    },
-    "While the app is open, the other devices at home connect to this phone, and with a forwarder from afar too. The forwarder passes only encrypted packets.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ما دام التطبيق مفتوحًا، تتصل الأجهزة الأخرى في المنزل بهذا الهاتف، ومن بعيد أيضًا مع مُعيد توجيه. لا يمرّر مُعيد التوجيه إلا حزمًا مشفّرة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mientras la app está abierta, los demás dispositivos de casa se conectan a este teléfono, y con un reenviador también desde lejos. El reenviador solo transmite paquetes cifrados."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כל עוד היישום פתוח, המכשירים האחרים בבית מתחברים לטלפון הזה, ועם מעביר גם מרחוק. המעביר מעביר רק מנות מוצפנות."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ऐप खुला रहने तक, घर के बाकी डिवाइस इस फ़ोन से जुड़ते हैं, और फ़ॉरवर्डर के साथ दूर से भी। फ़ॉरवर्डर केवल एन्क्रिप्टेड पैकेट आगे बढ़ाता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Пока приложение открыто, другие устройства дома подключаются к этому телефону, а с сервером пересылки — и издалека. Сервер пересылки передаёт только зашифрованные пакеты."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wakati programu iko wazi, vifaa vingine vya nyumbani huunganishwa na simu hii, na ukiwa na kisambazaji pia kutoka mbali. Kisambazaji hupitisha pakiti zilizosimbwa tu."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用打开时，家中的其他设备会连接到这部手机，有转发器时远方的设备也可以。转发器只传递加密数据包。"
           }
         }
       }
@@ -27968,52 +27048,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "你被邀请加入一个群组"
-          }
-        }
-      }
-    },
-    "Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحصل أجهزتك على الإعدادات الجديدة في المرة التالية التي تلتقي فيها بهذا المحور في المنزل؛ وحتى ذلك الحين لا تصل إليه بعيدًا عن المنزل."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus dispositivos reciben los ajustes nuevos la próxima vez que se encuentren con este hub en casa; hasta entonces no llegan a él fuera de casa."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המכשירים שלכם מקבלים את ההגדרות החדשות בפעם הבאה שהם פוגשים את הרכזת הזו בבית; עד אז הם לא מגיעים אליה מחוץ לבית."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "आपके डिवाइस अगली बार घर पर इस हब से मिलने पर नई सेटिंग्स पाते हैं; तब तक वे घर से दूर इस तक नहीं पहुँचते।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vifaa vyako hupata mipangilio mipya wakati ujao vitakapokutana na kitovu hiki nyumbani; hadi wakati huo havikifikii ukiwa mbali na nyumbani."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你的设备会在下次在家遇到此中心节点时获得新设置；在那之前，它们离家时无法连接它。"
           }
         }
       }

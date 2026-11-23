@@ -99,15 +99,7 @@ protocol GroupController: AnyObject {
     func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])?
     /// Turns sync away from home on or off.
     func setAwayFromHome(_ on: Bool) async throws
-    /// The phone as the group's hub; nil on a phone that cannot be it.
-    func hubStatus() async -> AppModel.Hub?
-    /// Makes this phone the group's hub, or stops it being the hub.
-    func setPhoneHub(_ on: Bool) async throws
-    /// Sets how the hub's tunnel hides.
-    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws
-    /// Remembers the network the phone is on as a home network of the hub.
-    func addHomeNetwork() async throws
-    /// Tells the group whether the app is in front, where the hub works.
+    /// Tells the group whether the app is in front.
     func setForeground(_ on: Bool)
     /// The app went to the background (true) or came back from it.
     func setBackground(_ on: Bool)
@@ -195,10 +187,6 @@ extension GroupController {
     func actionsOff(_ id: String) async throws {}
     func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? { nil }
     func setAwayFromHome(_ on: Bool) async throws {}
-    func hubStatus() async -> AppModel.Hub? { nil }
-    func setPhoneHub(_ on: Bool) async throws {}
-    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {}
-    func addHomeNetwork() async throws {}
     func setForeground(_ on: Bool) {}
     func setBackground(_ on: Bool) {}
     func backgroundPass(_ running: Bool) {}
@@ -441,10 +429,9 @@ final class AppModel: ObservableObject {
         case inUse
     }
 
-    /// Whether d is one of the group's hubs, as this phone knows: this phone
-    /// while it is the hub, or a hub whose offer it keeps; nil otherwise.
+    /// Whether d is one of the group's hubs, as this phone knows: a hub
+    /// whose offer it keeps; nil otherwise.
     func hubMark(_ d: Computer) -> HubMark? {
-        if d.isSelf { return hub?.on == true ? .hub : nil }
         guard let a = away, a.on else { return nil }
         if a.hub == d.id, a.status == .connected || a.status == .atHome { return .inUse }
         return a.hubs.contains(d.id) ? .hub : nil
@@ -453,27 +440,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var away: Away?
     /// What turning it on or off said, when it failed.
     @Published private(set) var awayNote: String?
-
-    /// The phone as the group's hub as Settings and Home show it: nil on a
-    /// phone that cannot be the hub. home tells whether the phone is on
-    /// one of the hub's home networks now.
-    struct Hub: Equatable {
-        var on: Bool
-        var status: HubOnPhone.Status
-        /// Why the forwarder does not take it, as the hub says.
-        var error: String?
-        var forwarder: HubState.Forwarder?
-        /// The project's forwarder does not take it and the phone holds no
-        /// signed entry points that have not expired (docs/protocol.md,
-        /// section 16): a new list may be what it needs.
-        var entriesStale = false
-        var home = false
-        var clients = 0
-        /// How its tunnel hides.
-        var disguise = HubOnPhone.Disguise.plain
-    }
-
-    @Published private(set) var hub: Hub?
 
     /// The phone at a blind relay as Settings shows it (docs/design.md,
     /// "Blind relay"): where it stands, why the relay does not take it, the
@@ -498,8 +464,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var relayNote: String?
     /// The relay's last error, logged once.
     private var relayError: String?
-    /// What the last change to the hub said, when it failed.
-    @Published private(set) var hubNote: String?
 
     /// An open remote invitation: its text, when it expires, and how to
     /// cancel it.
@@ -527,8 +491,6 @@ final class AppModel: ObservableObject {
     /// How long an invitation from the phone is valid: an hour, as cbb
     /// invite's default.
     static let inviteLifetime = 3600
-    /// The registration's last error, logged once.
-    private var hubError: String?
 
     let group: GroupController
     private let defaults: UserDefaults
@@ -1021,7 +983,6 @@ final class AppModel: ObservableObject {
         keyLevel = group.keyLevel
         (ttlMS, secretTtlMS) = group.ttlMS
         await refreshAway()
-        await refreshHub()
         await refreshRelay()
         if notifies {
             Notifier.shared.observe(devices)
@@ -1050,15 +1011,6 @@ final class AppModel: ObservableObject {
         }, hub: a.hub, hubs: a.hubs)
     }
 
-    private func refreshHub() async {
-        let h = await group.hubStatus()
-        if h?.error != hubError {
-            hubError = h?.error
-            if let e = hubError { log.error("the hub: \(e, privacy: .public)") }
-        }
-        hub = h
-    }
-
     private func refreshRelay() async {
         let r = await group.relayStatus()
         if r?.error != relayError {
@@ -1083,25 +1035,6 @@ final class AppModel: ObservableObject {
             relayNote = Self.describe(error)
         }
         await refreshRelay()
-    }
-
-    /// Makes this phone the group's hub, or stops it being the hub.
-    func setHub(_ on: Bool) async { await hubChange { try await self.group.setPhoneHub(on) } }
-
-    /// Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
-    func setHubDisguise(_ d: HubOnPhone.Disguise) async { await hubChange { try await self.group.setHubDisguise(d) } }
-
-    /// Remembers the network the phone is on as home.
-    func addHomeNetwork() async { await hubChange { try await self.group.addHomeNetwork() } }
-
-    private func hubChange(_ f: () async throws -> Void) async {
-        do {
-            try await f()
-            hubNote = nil
-        } catch {
-            hubNote = Self.describe(error)
-        }
-        await refreshHub()
     }
 
     /// Opens a remote invitation for a device far away (docs/protocol.md,

@@ -40,8 +40,8 @@ public struct WhyReason: Codable, Equatable, Hashable, Sendable {
     public var until: Date? { untilMS.flatMap { $0 > 0 ? Date(timeIntervalSince1970: Double($0) / 1000) : nil } }
 }
 
-/// Where a tunnel the app runs itself stands, for the member's `why`: the
-/// phone as the hub, its sync away from home and its relay, which the member
+/// Where a tunnel the app runs itself stands, for the member's `why`: its
+/// sync away from home and its relay, which the member
 /// does not see (`cbb_core::why::AwayFacts`).
 public struct WhyAway: Codable, Equatable, Sendable {
     public var hub = false

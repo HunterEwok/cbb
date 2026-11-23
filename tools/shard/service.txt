@@ -65,7 +65,7 @@ TestFFIMember 10.0
 TestFFIPhoneAttest 9.6
 TestFFIPhoneAway 8.0
 TestFFIPhoneChangeRoot 16.2
-TestFFIPhoneHub 18.8
+TestFFIPhoneIsNoHub 8.0
 TestFFIPhoneOwnEvidence 0.2
 TestFFIPhoneReach 8.0
 TestFFIPhoneRemoves 6.4

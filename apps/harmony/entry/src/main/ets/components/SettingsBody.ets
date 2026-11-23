@@ -201,13 +201,13 @@ export struct SettingsBody {
           this.section(t('settings_group'))
           if (this.part.length === 0 && app.member.running) {
             Row() {
-              Text($r('app.string.hub_title')).fontColor($r('app.color.text')).layoutWeight(1)
-              Text(app.member.hubOn ? t('hub_switch') : app.member.relayAt.length > 0 ? t('relay_title') : '')
+              Text($r('app.string.relay_title')).fontColor($r('app.color.text')).layoutWeight(1)
+              Text(app.member.relayAt)
                 .fontSize(13).fontColor($r('app.color.secondary'))
             }
             .width('100%')
             .onClick(() => {
-              router.pushUrl({ url: 'pages/Hub' });
+              router.pushUrl({ url: 'pages/Relay' });
             })
           }
           if (app.isRoot() && app.member.running) {

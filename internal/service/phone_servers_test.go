@@ -4,18 +4,16 @@
 package service
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/forward"
 )
 
 // phoneOnLinuxBin is the phone app's example phone-on-linux, as
@@ -108,31 +106,11 @@ func TestFFIPhoneServersRelay(t *testing.T) {
 	})
 }
 
-// TestFFIPhoneHub: an admin phone is a hub of the group (on the records of
-// 0.6 a phone is one only with an admin key), registered with the
-// forwarder the root named for it, and the root computer keeps its offer at the forwarder's
-// address; stopping the hub hands its clients to the group's next hub, so
-// the group's only hub stops without anyway (D-122).
-func TestFFIPhoneHub(t *testing.T) {
-	cert, err := forward.NewCert()
-	if err != nil {
-		t.Fatal(err)
-	}
-	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
-	go func() {
-		defer close(served)
-		f.Serve(ctx)
-	}()
-	defer func() {
-		cancel()
-		<-served
-	}()
-
+// TestFFIPhoneIsNoHub: a hub is a computer, a router or a board, never a
+// phone (D-134). The root names no forwarder for an admin phone, the
+// group's records make it no hub, and the phone's member knows no hub
+// command to start one.
+func TestFFIPhoneIsNoHub(t *testing.T) {
 	var h hub
 	pi, next, in := adminPhone(t, phoneOnLinuxBin(t), &h)
 	var phoneID string
@@ -141,40 +119,36 @@ func TestFFIPhoneHub(t *testing.T) {
 			phoneID = d.ID
 		}
 	}
-	call := phoneCall(t, next, in)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
-		t.Fatal(err)
+	if phoneID == "" {
+		t.Fatal("the admin phone is not in the group")
 	}
-	// The root names the phone's forwarder, which makes the group's
-	// credentials for it; the phone keeps it as its setting and serves
-	// through it once its own switch is on, never before.
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "member phone", Forwarder: f.Addr().String(),
-		ForwarderKey: forward.Pin(cert.Leaf)}, ""); err != nil {
-		t.Fatal(err)
+	_, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "member phone", Forwarder: "127.0.0.1:1",
+		ForwarderKey: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="}, "")
+	if err == nil || !strings.Contains(err.Error(), "hub") {
+		t.Fatalf("the root named a forwarder for a phone: %v", err)
 	}
-	var set map[string]any
-	waitUpTo(t, 30*time.Second, "the phone keeps the root's forwarder", func() bool {
-		set = call("away_status", nil)
-		rf, _ := set["root_forwarder"].(map[string]any)
-		return rf["endpoint"] == f.Addr().String()
-	})
-	if a, _ := set["away"].(map[string]any); a["hub"] == true {
-		t.Fatalf("the root's command switched the phone's hub on: %v", set)
+	if hl := tunnelState(t, pi).Hub(phoneID); hl != nil {
+		t.Fatalf("the root keeps an offer of the phone as a hub: %+v", hl)
 	}
-	call("hub", map[string]any{"vless_off": true})
-	waitUpTo(t, 30*time.Second, "the phone registered with the forwarder", func() bool {
-		a, _ := call("away_status", nil)["away"].(map[string]any)
-		fw, _ := a["forwarder"].(map[string]any)
-		return a["hub"] == true && fw["registered"] == true
-	})
-	waitUpTo(t, 30*time.Second, "the root keeps the phone's offer at the forwarder", func() bool {
-		hl := tunnelState(t, pi).Hub(phoneID)
-		return hl != nil && len(hl.Endpoints) == 1 && hl.Endpoints[0].String() == f.Addr().String()
-	})
-
-	// The group's only hub stops: its clients go to the next hub in the
-	// order, as on every hub of 0.6, so no anyway is asked for.
-	if a := call("hub_off", nil)["away"].(map[string]any); a["hub"] == true {
-		t.Fatalf("the phone is still a hub: %v", a)
+	for _, op := range []string{"hub", "hub_off"} {
+		req, err := json.Marshal(map[string]any{"op": op, "args": map[string]any{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(in, "CALL %s\n", req)
+		var ans struct {
+			OK    map[string]any `json:"ok"`
+			Error map[string]any `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
+			t.Fatalf("%s: %v", op, err)
+		}
+		if ans.Error == nil {
+			t.Fatalf("the phone took %s: %v", op, ans.OK)
+		}
+	}
+	a, _ := phoneCall(t, next, in)("away_status", nil)["away"].(map[string]any)
+	if a["hub"] == true {
+		t.Fatalf("the phone says it is a hub: %v", a)
 	}
 }

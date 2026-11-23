@@ -172,11 +172,6 @@ final class KitValuesTests: XCTestCase {
         let mine = LocalAddresses.current()
         XCTAssertLessThanOrEqual(mine.count, LocalAddresses.maxAddrs)
         XCTAssertTrue(mine.allSatisfy { LocalAddresses.isHome(ipv4: $0) || LocalAddresses.isHome(ipv6: $0) })
-        XCTAssertNil(LocalAddresses.ipv4(interface: "no such interface"))
-        if let lo = LocalAddresses.ipv4(interface: "lo0") {
-            XCTAssertEqual(lo.address, "127.0.0.1")
-            XCTAssertEqual(lo.prefixLength, 8)
-        }
     }
 
     func testKeysThatSign() throws {

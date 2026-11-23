@@ -3,8 +3,8 @@
 
 // A remote invitation (docs/protocol.md, section 12), both sides of it on
 // this phone. As an admin: the core (ffi's cbb_invite_*) opens the
-// invitation's guest tunnel on this phone when it is the group's hub, else
-// through a hub of the group it reaches, and runs the pairing window; the
+// invitation's guest tunnel through a hub of the group it reaches, and runs
+// the pairing window; the
 // page shows the invitation's QR code, and asks the user about each device
 // that uses it by the fingerprint the device shows. As a phone without a
 // group: reads an invitation the user scanned or pasted, for the page that

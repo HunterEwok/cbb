@@ -529,7 +529,6 @@ internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
         }
         if (more(SettingsPart.WHY)) WhySection(model, model.settings.showsErrorDetails)
         if (more(SettingsPart.AWAY)) {
-            model.hub?.let { HubSection(model, it) }
             model.blindRelay?.let { BlindRelaySection(model, it) }
         }
         if (more(SettingsPart.SHARE) && !model.isTv) ShareAsk(model)
@@ -812,116 +811,8 @@ private fun BlindRelaySection(model: AppModel, relay: AppModel.BlindRelay) {
 }
 
 /**
- * The phone as the group's hub: the switch, where it stands, the
- * forwarder, the home networks and, on Android, the background.
- */
-@Composable
-private fun HubSection(model: AppModel, hub: AppModel.Hub) {
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    fun act(f: suspend () -> Unit) {
-        busy = true
-        scope.launch {
-            f()
-            busy = false
-        }
-    }
-    Section(stringResource(R.string.hub_title)) {
-        Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Row(
-                Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) { act { model.setHub(!hub.on) } },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.hub_switch), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                Switch(checked = hub.on, onCheckedChange = null, enabled = !busy)
-            }
-            val status = when (hub.status) {
-                HubOnPhone.Status.OFF -> R.string.hub_off
-                HubOnPhone.Status.PAUSED -> R.string.hub_paused
-                HubOnPhone.Status.HOME_ONLY -> R.string.hub_home_only
-                HubOnPhone.Status.REGISTERING -> R.string.hub_registering
-                HubOnPhone.Status.REGISTERED -> R.string.hub_registered
-                HubOnPhone.Status.FAILED -> R.string.hub_failed
-            }
-            Text(stringResource(status), color = if (hub.status == HubOnPhone.Status.REGISTERED) palette.accent else palette.textDim)
-            // The registration's error underneath, when details are on.
-            hub.error?.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.textDim) }
-            if (hub.entriesStale) {
-                Text("⚠ " + stringResource(R.string.hub_entries_stale), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
-            }
-            if (hub.on) {
-                Text(
-                    stringResource(if (hub.home) R.string.hub_on_home else R.string.hub_not_home),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = palette.textDim,
-                )
-                if (!hub.home) QuietButton(stringResource(R.string.hub_add_home), onClick = { if (!busy) act { model.addHomeNetwork() } })
-                // The forwarder is the group's root's setting: shown, not edited.
-                Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
-                val fw = hub.forwarder
-                Text(
-                    stringResource(if (fw != null) R.string.hub_forwarder_by_root else R.string.hub_forwarder_none_by_root),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textDim,
-                )
-                if (fw != null) {
-                    Text(fw.endpoint, style = MaterialTheme.typography.bodyMedium)
-                    Text(fw.pin, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = palette.textDim)
-                }
-                Text(stringResource(R.string.hub_disguise), fontWeight = FontWeight.SemiBold)
-                // Strict networks: AmneziaWG for networks that block VPNs,
-                // and VLESS over it for those that let only the web through.
-                var disguiseTo by remember { mutableStateOf<HubOnPhone.Disguise?>(null) }
-                val vpn = hub.disguise != HubOnPhone.Disguise.PLAIN
-                val web = hub.disguise == HubOnPhone.Disguise.VLESS
-                StrictSwitch(stringResource(R.string.hub_strict_vpn), vpn, !busy) {
-                    disguiseTo = if (vpn) HubOnPhone.Disguise.PLAIN else HubOnPhone.Disguise.OBFUSCATE
-                }
-                StrictSwitch(stringResource(R.string.hub_strict_web), web, !busy && vpn) {
-                    disguiseTo = if (web) HubOnPhone.Disguise.OBFUSCATE else HubOnPhone.Disguise.VLESS
-                }
-                Tip(R.string.hub_disguise_body)
-                disguiseTo?.let { d ->
-                    Confirm(
-                        stringResource(R.string.hub_disguise_title), stringResource(R.string.hub_disguise_confirm), stringResource(R.string.hub_disguise_change),
-                        dismiss = { disguiseTo = null },
-                        confirm = {
-                            disguiseTo = null
-                            act { model.setHubDisguise(d) }
-                        },
-                    )
-                }
-                Row(
-                    Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) { act { model.setHubInBackground(!hub.background) } },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(R.string.hub_background), modifier = Modifier.weight(1f))
-                    Switch(checked = hub.background, onCheckedChange = null, enabled = !busy)
-                }
-            }
-            model.hubNote?.let { NoteText(it) }
-            Tip(R.string.hub_body)
-        }
-    }
-}
-
-/** One switch of strict networks, which asks before it changes the hub. */
-@Composable
-private fun StrictSwitch(label: String, on: Boolean, enabled: Boolean, flip: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = enabled, onClick = flip),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = on, onCheckedChange = null, enabled = enabled)
-    }
-}
-
-/**
- * Home's + "Send an invitation": any admin makes one, on this phone while it
- * is the group's hub, else through a hub of the group it reaches; a phone
- * that is no admin says where to make one.
+ * Home's + "Send an invitation": any admin makes one through a hub of the
+ * group it reaches; a phone that is no admin says where to make one.
  */
 @Composable
 internal fun InviteSection(model: AppModel) {

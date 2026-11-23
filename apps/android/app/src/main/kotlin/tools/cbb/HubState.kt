@@ -9,8 +9,9 @@ import java.net.InetAddress
 import java.util.Base64
 
 /**
- * The forwarder and the home networks of the phone as a hub of the group,
- * which the Live member runs (AwayOn06).
+ * The forwarder of a computer that is the group's hub, which the root
+ * names from the phone, and the relay's address and key, as the user gives
+ * them. A phone is no hub (D-134).
  */
 object HubState {
     /** The forwarder: its endpoint, "ip:port", and the pin of its key: SHA-256 of its key in standard base64. */
@@ -27,9 +28,6 @@ object HubState {
             fun project(): Forwarder? = HubState.resolve(PROJECT_HOST)?.let { Forwarder(it, PROJECT_PIN) }
         }
     }
-
-    /** The most home networks the phone remembers; the oldest goes first. */
-    const val MAX_HOMES = 8
 
     /** Whether pin is the pin of a forwarder's key, as `cbb forward` prints it. */
     fun validPin(pin: String): Boolean = runCatching {
@@ -52,33 +50,5 @@ object HubState {
         val a = addrs.firstOrNull { it is Inet4Address } ?: addrs.firstOrNull() ?: return null
         val ip = a.hostAddress ?: return null
         return if (a is Inet6Address) "[${ip.substringBefore('%')}]:$port" else "$ip:$port"
-    }
-}
-
-/** The phone as a hub of a group of 0.6, as the screens show it (AwayOn06). */
-object HubOnPhone {
-    /** What the screens show. */
-    enum class Status { OFF, PAUSED, HOME_ONLY, REGISTERING, REGISTERED, FAILED }
-
-    /** How the hub's tunnel hides (docs/design.md, "Blocked networks"): plain WireGuard, AmneziaWG, or AmneziaWG with VLESS to the forwarder. */
-    enum class Disguise { PLAIN, OBFUSCATE, VLESS }
-
-    /**
-     * A network as the hub remembers it: its gateway's address and the
-     * network of the phone's address on it, as "192.168.0.1 192.168.0.0/24".
-     * Wi-Fi in a café has another, so the phone neither takes members
-     * nor publishes itself there (as D-63 on the computers).
-     */
-    fun networkKey(gateway: InetAddress?, address: InetAddress?, prefixLength: Int): String? {
-        val g = gateway?.hostAddress ?: return null
-        val a = address?.address ?: return null
-        if (prefixLength !in 0..a.size * 8) return null
-        val n = a.copyOf()
-        for (i in n.indices) {
-            val bits = (prefixLength - i * 8).coerceIn(0, 8)
-            n[i] = (n[i].toInt() and (0xff shl (8 - bits)).toByte().toInt()).toByte()
-        }
-        val net = InetAddress.getByAddress(n).hostAddress ?: return null
-        return "${g.substringBefore('%')} $net/$prefixLength"
     }
 }
