@@ -406,7 +406,8 @@ job prints the table, coverage by kind, in the run's summary. `tools/coverage` a
 reports up and fails when a row falls more than one point below its floor in
 `tools/coverage/floor.json`. The project aims at 90% of the lines in every part
 (`-target 90`): a part below that is marked in the table and gets a warning, without failing
-the run, and the tests are written up to 90 again before it reaches its floor of 85.
+the run. A floor only rises: it is set at the whole percent under the part's last measure
+whenever tests raise it, so coverage once won is not lost again.
 
 Branches are rows of their own (`PART/branches` in the table and in `floor.json`) where the
 report counts them: JaCoCo for the Kotlin kit, llvm-cov for the Swift kit, and for the Rust
