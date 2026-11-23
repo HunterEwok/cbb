@@ -21,6 +21,14 @@ with 0.5 is set up again once. The details follow.
   "Freeze". ffi's manage action `hub` sends the computer a `hub` command with the project's
   forwarder or one named, as `cbb global hub -on` does on an admin computer
   ([core API](docs/core-api.md), [apps](docs/apps.md)).
+- The Aurora and HarmonyOS apps' Home shows that the group removed this phone, with Leave, as
+  the iPhone and Android apps do; the HarmonyOS app also shows the member's notices and that the
+  main device changed, with "This wasn't me", and Aurora's "OK" on that card is kept by the
+  member (`root_change_seen`), so it does not come back when the app starts again
+  ([apps](docs/apps.md), "Notices").
+- The apps' plan describes the phones' invitation screen as it is: it warns to join only an
+  invitation one asked for, since an invitation of 0.6 names no group, hub or expiry before
+  the phone joins ([apps](docs/apps.md)).
 - Muting from a device's page is the same on the four phones, as on the iPhone: "Unmute" for a
   muted device, else "Mute" for a connected one, which asks how long (15 minutes, an hour,
   8 hours or until an admin unmutes it). The Aurora and HarmonyOS apps no longer show the mutes

@@ -5,7 +5,8 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // The group's notices on Home (docs/apps.md, "Notices" and "Changing the
-// main device"), as the other phones show them: that the main device
+// main device"), as the other phones show them: that the group removed
+// this phone, with Leave; that the main device
 // changed, with "This wasn't me", until the person saw it; then the
 // member's notices, each in a sentence, with a button that hides one that
 // may be hidden.
@@ -13,11 +14,18 @@ Column {
     id: card
     width: parent.width
     spacing: Theme.paddingSmall
-    visible: changed || shown.length > 0
+    visible: removed || changed || shown.length > 0
 
     property var changed: app.member.rootChanged && app.member.rootChanged.to ? app.member.rootChanged : null
     property var shown: app.member.notices.filter(function(n) { return text(n) !== "" })
     property bool notMe: false
+    // The group's records, once it has some, no longer list this phone.
+    property bool removed: {
+        var g = app.member.groupState
+        var me = g.me ? g.me.device : ""
+        var listed = g.devices || []
+        return listed.length > 0 && me !== "" && !listed.some(function(d) { return d.device === me })
+    }
 
     RemorsePopup { id: remorse }
 
@@ -49,6 +57,30 @@ Column {
             return qsTr("The group's recovery key is not saved yet: without it, losing this phone means making the group again.")
         }
         return ""
+    }
+
+    Column {
+        visible: card.removed
+        width: card.width
+        spacing: Theme.paddingSmall
+
+        SectionHeader { text: qsTr("This phone was removed from the group") }
+        Label {
+            x: Theme.horizontalPageMargin
+            width: parent.width - 2 * Theme.horizontalPageMargin
+            wrapMode: Text.Wrap
+            color: Theme.highlightColor
+            text: qsTr("The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.")
+        }
+        Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            enabled: !app.busy
+            text: qsTr("Leave the group")
+            onClicked: remorse.execute(qsTr("Leaving the group"), function() {
+                app.member.rootChangeSeen()
+                app.leave()
+            })
+        }
     }
 
     Column {

@@ -763,6 +763,10 @@
         <translation>المشرف المجمّد %1 يؤخر عمليات الإزالة: ألغِ تجميده أو أزله.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>ترفضه أجهزة المجموعة الآن. غادر المجموعة لحذف مفاتيحه هنا؛ ثم يمكنه الانضمام إلى مجموعة مرة أخرى.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>تغيّر الجهاز الرئيسي للمجموعة</translation>
     </message>
@@ -777,6 +781,10 @@
     <message>
         <source>This phone has a removal to confirm; it does so with your next admin action.</source>
         <translation>لدى هذا الهاتف إزالة ليؤكدها؛ وسيفعل ذلك مع إجرائك التالي كمشرف.</translation>
+    </message>
+    <message>
+        <source>This phone was removed from the group</source>
+        <translation>أُزيل هذا الهاتف من المجموعة</translation>
     </message>
     <message>
         <source>This wasn't me</source>

@@ -797,6 +797,16 @@ void Member::rootChangeSeen()
         return;
     m_rootChanged.clear();
     emit devicesChanged();
+    // The member remembers it too, so the card does not come back when
+    // the app starts again.
+    if (m_member) {
+        Failure failure;
+        call(m_member, QStringLiteral("root_change_seen"), QJsonObject{}, &failure);
+        if (!failure.isNull()) {
+            m_error = Errors::shown(failure);
+            emit changed();
+        }
+    }
 }
 
 QString Member::deviceName(const QString &id) const

@@ -25,6 +25,7 @@ import { glyph, line, mark, nameOf } from '../common/Devices';
 import { app, Tile } from '../model/AppModel';
 import { Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
+import { GroupCards } from '../components/GroupCards';
 import { BusyLine, ErrorText, NORMAL_BUTTON } from '../components/Common';
 import { DeviceDetail, isMuted, muteMenu, takesPastes } from '../components/DeviceDetail';
 import { Orbit } from '../components/Orbit';
@@ -675,6 +676,7 @@ struct Main {
     }
 
     BugCard({ bugs: app.bugs })
+    GroupCards()
 
     // "Lost phone?" on the group's only admin: how a second phone
     // becomes one. Closed once, it stays closed.

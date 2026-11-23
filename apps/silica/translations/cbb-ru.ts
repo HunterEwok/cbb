@@ -763,6 +763,10 @@
         <translation>Замороженный администратор %1 задерживает удаления: разморозьте его или удалите.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>Устройства группы его больше не принимают. Выйдите из группы, чтобы удалить его ключи; потом он сможет снова вступить в группу.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>Главное устройство группы сменилось</translation>
     </message>
@@ -777,6 +781,10 @@
     <message>
         <source>This phone has a removal to confirm; it does so with your next admin action.</source>
         <translation>Этому телефону нужно подтвердить удаление; он сделает это при вашем следующем действии администратора.</translation>
+    </message>
+    <message>
+        <source>This phone was removed from the group</source>
+        <translation>Этот телефон удалён из группы</translation>
     </message>
     <message>
         <source>This wasn't me</source>

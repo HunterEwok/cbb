@@ -763,6 +763,10 @@
         <translation>Msimamizi aliyegandishwa %1 anazuia uondoaji: kiyeyushe au kiondoe.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>Vifaa vya kikundi vinakikataa sasa. Ondoka kwenye kikundi ili kufuta funguo zake hapa; kisha kinaweza kujiunga na kikundi tena.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>Kifaa kikuu cha kikundi kimebadilika</translation>
     </message>
@@ -777,6 +781,10 @@
     <message>
         <source>This phone has a removal to confirm; it does so with your next admin action.</source>
         <translation>Simu hii ina uondoaji wa kuthibitisha; itafanya hivyo kwa hatua yako ijayo ya msimamizi.</translation>
+    </message>
+    <message>
+        <source>This phone was removed from the group</source>
+        <translation>Simu hii imeondolewa kwenye kikundi</translation>
     </message>
     <message>
         <source>This wasn't me</source>

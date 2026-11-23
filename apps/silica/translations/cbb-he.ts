@@ -763,6 +763,10 @@
         <translation>המנהל המוקפא %1 מעכב הסרות: הפשירו אותו או הסירו אותו.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>מכשירי הקבוצה דוחים אותו עכשיו. עזבו את הקבוצה כדי למחוק את המפתחות שלו כאן; אחר כך הוא יוכל להצטרף שוב לקבוצה.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>המכשיר הראשי של הקבוצה השתנה</translation>
     </message>
@@ -777,6 +781,10 @@
     <message>
         <source>This phone has a removal to confirm; it does so with your next admin action.</source>
         <translation>לטלפון הזה יש הסרה לאשר; הוא יעשה זאת בפעולת הניהול הבאה שלכם.</translation>
+    </message>
+    <message>
+        <source>This phone was removed from the group</source>
+        <translation>הטלפון הזה הוסר מהקבוצה</translation>
     </message>
     <message>
         <source>This wasn't me</source>

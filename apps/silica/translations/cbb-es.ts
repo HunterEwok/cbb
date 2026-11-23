@@ -763,6 +763,10 @@
         <translation>El administrador congelado %1 retiene las eliminaciones: descongélalo o quítalo.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>Los dispositivos del grupo lo rechazan ahora. Abandona el grupo para borrar sus claves aquí; después podrá unirse de nuevo a un grupo.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>El dispositivo principal del grupo cambió</translation>
     </message>
@@ -777,6 +781,10 @@
     <message>
         <source>This phone has a removal to confirm; it does so with your next admin action.</source>
         <translation>Este teléfono tiene una eliminación que confirmar; lo hace con tu próxima acción de administrador.</translation>
+    </message>
+    <message>
+        <source>This phone was removed from the group</source>
+        <translation>Este teléfono se quitó del grupo</translation>
     </message>
     <message>
         <source>This wasn't me</source>

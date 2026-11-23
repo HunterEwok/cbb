@@ -763,6 +763,10 @@
         <translation>被冻结的管理员 %1 阻碍了移除操作：请解冻或移除它。</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>群组的主设备已更换</translation>
     </message>
@@ -777,6 +781,10 @@
     <message>
         <source>This phone has a removal to confirm; it does so with your next admin action.</source>
         <translation>这部手机有一项移除待确认；它会在你下一次管理操作时确认。</translation>
+    </message>
+    <message>
+        <source>This phone was removed from the group</source>
+        <translation>这部手机已从群组中移除</translation>
     </message>
     <message>
         <source>This wasn't me</source>

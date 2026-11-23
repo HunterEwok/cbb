@@ -763,6 +763,10 @@
         <translation>फ़्रीज़ किया गया एडमिन %1 हटाने को रोक रहा है: उसे अनफ़्रीज़ करें या हटाएँ।</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>समूह के डिवाइस अब इसे ठुकराते हैं। यहाँ इसकी कुंजियाँ मिटाने के लिए समूह छोड़ें; फिर यह फिर से किसी समूह से जुड़ सकता है।</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>समूह का मुख्य डिवाइस बदल गया</translation>
     </message>
@@ -777,6 +781,10 @@
     <message>
         <source>This phone has a removal to confirm; it does so with your next admin action.</source>
         <translation>इस फ़ोन को एक हटाने की पुष्टि करनी है; यह आपकी अगली एडमिन कार्रवाई के साथ होगी।</translation>
+    </message>
+    <message>
+        <source>This phone was removed from the group</source>
+        <translation>यह फ़ोन समूह से हटा दिया गया</translation>
     </message>
     <message>
         <source>This wasn't me</source>

@@ -33,8 +33,9 @@ they look, so both apps are built to the same plan.
    code, a computer of the group types the digits after "+", docs/protocol.md, section 6),
    **Join with an invitation** (for a phone far from the group: the camera reads the
    invitation's QR code, or its text is pasted or its file opened; the invitation then
-   waits on a screen of its own, with its group, its hub and when it expires, to be joined
-   or declined, and declining sends nothing; joined, the phone shows the words the inviting
+   waits on a screen of its own, which warns to join only an invitation one asked for, to be
+   joined or declined, and declining sends nothing (the invitation names no group, hub or
+   expiry the phone could show before it joins, format.md section 11.3); joined, the phone shows the words the inviting
    admin compares, docs/protocol.md, section 12); restoring the group on a phone in no group
    comes with 0.7 (D-125). A phone always joins as a member; the root makes it an admin later from the
    phone's device page ("Make it an admin"), with the admin key its hellos offer
@@ -243,7 +244,7 @@ they look, so both apps are built to the same plan.
    The sync mode and the other settings stay, and the app goes back to Start with a new
    member key. The root leaves only when the group has no other devices than its watch.
    When the records no longer list the phone, Home shows "This phone was removed from the
-   group" with the same button. The watch hears that its phone is in no group, or in
+   group" with the same button, on all four phones. The watch hears that its phone is in no group, or in
    another one than its admin key's, and deletes the key.
 
 The lost phone case is one path, and the app says so in plain words: "Lost a phone? Open
@@ -256,9 +257,8 @@ the group", not a status code), never a dialog that must be dismissed.
 ### Notices
 
 The member keeps a short list of things the person should know about the group's records
-(its `notices`), and Home shows each in a sentence of the app's own, under the alerts, on the iPhone, Android
-and Aurora: a
-change of the main device on its way, an admin that has been silent so long that its admin
+(its `notices`), and Home shows each in a sentence of the app's own, above the devices, on the
+iPhone, Android, Aurora and HarmonyOS: a change of the main device on its way, an admin that has been silent so long that its admin
 rights end soon (35 days in all), removals waiting until every admin has seen them and how
 much of the main device's room they take, a removal this phone still has to confirm, a frozen
 admin that holds removals back, a checkpoint waiting for records no device passed on, a device
