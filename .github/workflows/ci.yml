@@ -667,10 +667,9 @@ jobs:
           cp "$dir/cbb" freebsd-bin/cbb
           CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath -o freebsd-bin/cbb-helper ./cmd/cbb-helper
       - name: go test in a FreeBSD 15.1 virtual machine
-        # v1.6.0 (anyvm 0.7.7) gave the machine a processor on which Go's
-        # SHA-256 ran 20 to 45 times slower on some hosts, and the packages
-        # that sign with SLH-DSA met the 25 minutes; v1.5.9 runs them in
-        # under a minute. Dependabot leaves it until a newer one is tried.
+        # With v1.6.0 (anyvm 0.7.7) one run's machine ran every CPU-bound
+        # package 20 to 40 times slower, as if without KVM, and those that
+        # sign with SLH-DSA met the 25 minutes; main runs v1.5.9.
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
         with:
           release: "15.1"

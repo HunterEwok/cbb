@@ -28,11 +28,6 @@ updates:
       timezone: "UTC"
     cooldown:
       default-days: 7
-    ignore:
-      # 1.6.0 slowed the FreeBSD machine's hashing 20 to 45 times on some hosts
-      # (ci.yml, job freebsd); a newer version is tried by hand.
-      - dependency-name: "vmactions/freebsd-vm"
-        versions: [">= 1.6.0"]
     groups:
       github-actions:
         patterns: ["*"]
