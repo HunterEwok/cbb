@@ -2315,6 +2315,86 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// cbb sync and cbb paste-receive ask the service what their words say,
+    /// refuse the words that do not go together, and say how things stand.
+    #[cfg(unix)]
+    #[test]
+    fn sync_and_paste_receive_through_the_service() {
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::<control::Header>::new()));
+        let seen = asked.clone();
+        let g = fake_service("sync", move |m| {
+            seen.lock().unwrap().push(m.header.clone());
+            let paste = control::Paste { on: true, enter: true, ..Default::default() };
+            let status =
+                control::Status { group: "g".into(), mode: "shared".into(), paste: Some(paste), ..Default::default() };
+            vec![control::reply(control::Header { status: Some(status), ..Default::default() }, Vec::new())]
+        });
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let last = || asked.lock().unwrap().iter().rev().find(|h| h.op != "status").cloned();
+
+        super::cmd_sync(&g, &a(&["off", "-for", "15m"])).unwrap();
+        let h = last().unwrap();
+        assert_eq!((h.op.as_str(), h.on, h.for_ms), ("sync", Some(false), 900_000));
+        super::cmd_sync(&g, &a(&["-on", "pi", "on"])).unwrap();
+        let h = last().unwrap();
+        assert_eq!((h.on, h.device.as_str()), (Some(true), "pi"));
+        super::cmd_sync(&g, &[]).unwrap();
+        for bad in
+            [&["-on", "pi"][..], &["on", "-for", "1h"], &["off", "-for", "0s"], &["off", "-for", "x"], &["maybe"]]
+        {
+            assert!(super::cmd_sync(&g, &a(bad)).is_err(), "{bad:?}");
+        }
+
+        super::cmd_paste_receive(&g, &a(&["on", "-enter"])).unwrap();
+        let h = last().unwrap();
+        assert_eq!((h.op.as_str(), h.name.as_str(), h.enter), ("paste_receive", "on", true));
+        super::cmd_paste_receive(&g, &a(&["off", "-all"])).unwrap();
+        assert!(last().unwrap().all);
+        super::cmd_paste_receive(&g, &a(&["off", "-on", "pi"])).unwrap();
+        assert_eq!(last().unwrap().device, "pi");
+        super::cmd_paste_receive(&g, &[]).unwrap();
+        for bad in [&["off", "-enter"][..], &["on", "-all"], &["off", "-all", "-on", "pi"], &["-what"]] {
+            assert!(super::cmd_paste_receive(&g, &a(bad)).is_err(), "{bad:?}");
+        }
+        std::fs::remove_dir_all(&g.state).unwrap();
+    }
+
+    /// The durations as Go writes them, the remote paste line for each
+    /// switch, and the update log's time stamps.
+    #[test]
+    fn durations_paste_lines_and_stamps() {
+        use super::go_duration_ms as d;
+        assert_eq!(d("1h30m"), Some(5_400_000));
+        assert_eq!(d("90s"), Some(90_000));
+        assert_eq!(d("250ms"), Some(250));
+        assert_eq!(d("0s"), Some(0));
+        for bad in ["", "5", "1d", "h", "9223372036854775807h"] {
+            assert_eq!(d(bad), None, "{bad}");
+        }
+
+        let line = |p: control::Paste| super::paste_line(&p);
+        let on = |enter, console| control::Paste {
+            on: true,
+            enter,
+            console,
+            targets: vec!["tmux".into()],
+            ..Default::default()
+        };
+        assert!(line(control::Paste::default()).contains("is off"));
+        assert!(line(on(true, true)).contains("press Enter, and reach text consoles"));
+        assert!(line(on(true, false)).ends_with("and press Enter."));
+        assert!(line(on(false, true)).contains("text consoles, without Enter"));
+        assert!(line(on(false, false)).ends_with("paste here, without Enter."));
+        let unlocked = control::Paste { no_lock_check: true, targets: Vec::new(), ..on(false, false) };
+        let l = line(unlocked);
+        assert!(l.contains("whether the session is locked") && l.contains("Nothing here can paste yet"), "{l}");
+
+        assert_eq!(super::stamp(0), "1970-01-01T00:00:00Z");
+        assert_eq!(super::stamp(951_782_400_000), "2000-02-29T00:00:00Z");
+        assert_eq!(super::stamp(1_795_444_496_789), "2026-11-23T14:34:56Z");
+        assert_eq!(super::stamp(-1000), "1969-12-31T23:59:59Z");
+    }
+
     /// cbb watch prints each new text once, in order, and ends when the
     /// service stops.
     #[cfg(unix)]
