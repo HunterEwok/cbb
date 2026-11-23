@@ -292,14 +292,11 @@ groups.
 
 One member of each stand is never killed, so that a slow leak inside one long-lived process shows.
 
-A release candidate's build runs seven days on the shared bench's Raspberry Pi 4, the calm and
-the load stand side by side, before the release (a release condition), and goes on to thirty.
-Both stands run the candidate's build, and the count of days starts again with any change to the
-code in the candidate: a fix makes a new candidate and a new seven days. Only changes to the
-documents and the site leave the count running. A counted run reports, for each stand: the days, the commit, the hardware (`soak start` writes
-the machine and its cores), copies sent, checked and missed, kills and broken starts, the
-delivery times, the memory and open files with their growth, and the verdict. The documents
-give only numbers measured that way.
+A run reports, for each stand: the days, the commit, the hardware (`soak start` writes the
+machine and its cores), copies sent, checked and missed, kills and broken starts, the delivery
+times, the memory and open files with their growth, and the verdict. The documents give only
+numbers measured that way. A soak is not a condition of a release in 0.6; seven days on a
+release candidate's build is planned for 0.7 ([roadmap](roadmap.md), item 70).
 
 ## Bench scenarios
 
