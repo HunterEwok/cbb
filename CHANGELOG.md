@@ -26,6 +26,11 @@ with 0.5 is set up again once. The details follow.
   main device changed, with "This wasn't me", and Aurora's "OK" on that card is kept by the
   member (`root_change_seen`), so it does not come back when the app starts again
   ([apps](docs/apps.md), "Notices").
+- The Aurora app has the blind relay page the other phones have (Settings, "Blind relay"):
+  where the phone stands at the group's relay, and on the root the relay's address and key,
+  set after what a relay learns, and "Renew the group's keys for sync away from home" while
+  they are due or expired. Its device list now marks a muted device and names devices in the
+  notices by their names, which it looked up under a wrong field.
 - On the iPhone and iPad, "Move the group to this phone" shows why a step failed (a key that
   does not fit, a YubiKey refused) in its own sheet, and the iPad's sidebar offers it on a
   phone that is not the main device. The iPad and Android tablets show the last copy that came,

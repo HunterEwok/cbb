@@ -30,7 +30,7 @@ Column {
     RemorsePopup { id: remorse }
 
     function name(id) {
-        var ds = app.member.devices.filter(function(d) { return d.device === id })
+        var ds = app.member.devices.filter(function(d) { return d.id === id })
         return ds.length > 0 && ds[0].name ? ds[0].name : id
     }
 

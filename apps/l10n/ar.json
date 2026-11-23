@@ -200,6 +200,7 @@
   "At the relay with %lld devices of the group.": "عند المُرحِّل مع %lld من أجهزة المجموعة.",
   "At the relay: no other device of the group is there now.": "عند المُرحِّل: لا يوجد جهاز آخر من المجموعة هناك الآن.",
   "At the relay; devices of the group there: %1$d.": "عند المُرحِّل؛ أجهزة المجموعة هناك: %1$d.",
+  "At the relay; devices of the group there: %1.": "عند المُرحِّل؛ أجهزة المجموعة هناك: %1.",
   "Away from home": "خارج المنزل",
   "Away from home: hub and tunnel": "خارج المنزل: محور ونفق",
   "Away from home: through your hub": "خارج المنزل: عبر محورك",

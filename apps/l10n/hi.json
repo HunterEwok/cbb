@@ -200,6 +200,7 @@
   "At the relay with %lld devices of the group.": "रिले पर समूह के %lld डिवाइसों के साथ।",
   "At the relay: no other device of the group is there now.": "रिले पर: अभी समूह का कोई दूसरा डिवाइस वहाँ नहीं है।",
   "At the relay; devices of the group there: %1$d.": "रिले पर; वहाँ समूह के डिवाइस: %1$d।",
+  "At the relay; devices of the group there: %1.": "रिले पर; वहाँ समूह के डिवाइस: %1।",
   "Away from home": "घर से बाहर",
   "Away from home: hub and tunnel": "घर से बाहर: हब और सुरंग",
   "Away from home: through your hub": "घर से बाहर: आपके हब से होकर",

@@ -203,6 +203,13 @@ public:
     // How long a copy (ttlMs) or a secret (secretTtlMs) lives for the whole
     // group (D-129), in milliseconds; 0 leaves it as it is.
     Q_INVOKABLE void setGroupTtl(double ttlMs, double secretTtlMs);
+    // The root sets the group's blind relay (manage relay), where every
+    // device meets the others: the address with its key's pin, or none with
+    // both empty; relaySet tells whether it took. Setting it also signs the
+    // period of the group's server keys when one is due. renewPeriod signs
+    // that period alone (docs/protocol.md, section 18).
+    Q_INVOKABLE void setRelay(const QString &address, const QString &key);
+    Q_INVOKABLE void renewPeriod();
     Q_INVOKABLE void forgetRecovery();
     QString recoveryText() const { return m_recoveryText; }
     QStringList recoveryModules() const { return m_recoveryModules; }
@@ -239,6 +246,7 @@ signals:
     // fresh: no PIN yet, so the user chooses one and types it twice;
     // reason: why it is asked, when the dialog should say.
     void pinNeeded(bool fresh, const QString &reason);
+    void relaySet(bool ok);
     // A wrong PIN, with the tries left, or locked for good.
     void pinRefused(bool locked, int triesLeft);
     void pinAccepted();

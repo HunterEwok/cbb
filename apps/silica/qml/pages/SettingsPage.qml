@@ -111,6 +111,14 @@ Page {
                 visible: app.group !== ""
                 text: qsTr("Group")
             }
+            // Where the devices meet away from home when the group has no
+            // hub: the root sets it, the others see where it stands.
+            ValueButton {
+                visible: app.member.running
+                label: qsTr("Blind relay")
+                value: app.member.relayAt !== "" ? app.member.relayAt : qsTr("Off")
+                onClicked: pageStack.push(Qt.resolvedUrl("RelayPage.qml"))
+            }
             // The root's settings, each signed with the root key: which keys
             // may be admins, and the recovery key.
             ComboBox {

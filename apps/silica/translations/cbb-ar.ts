@@ -1491,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>الالتقاء عند هذا المُرحِّل</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>الالتقاء عند هذا المُرحِّل؟</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>تبقى الحافظة مشفّرة من طرف إلى طرف بين الأجهزة: لا يستطيع المُرحِّل قراءتها أو انتحال صفة جهاز. لكنه يعرف، ما دامت الأجهزة تستخدمه، أيّ أجهزة المجموعة متصلة وعناوينها على الإنترنت، وأيّها يتحدث مع الآخر، ومتى وكم يُرسل. محور المجموعة الخاص لا يُسرّب شيئًا من هذا. استخدم مُرحِّلًا تديره بنفسك، أو مُرحِّلًا تثق بمشغّله في هذا.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>عند المُرحِّل: لا يوجد جهاز آخر من المجموعة هناك الآن.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>عند المُرحِّل؛ أجهزة المجموعة هناك: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>مُرحِّل أعمى</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>جارٍ الاتصال بالمُرحِّل…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>لمجموعة ليس لها محور خاص بها: تلتقي الأجهزة عند مُرحِّل، مثل مُرحِّل مُعدّ باستخدام cbb relay، أثناء مزامنة التطبيق. تبقى الحافظة مشفّرة بين الأجهزة، لكن المُرحِّل يعرف أيّها متصل وعناوينها، وأيّها يتحدث مع الآخر، ومتى وبأي قدر. اترك الحقلين فارغين للإيقاف.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>أدخل عنوان المُرحِّل مع منفذه ومفتاحه، كما يطبعهما cbb relay، أو اترك الاثنين فارغين.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>مغادرة المُرحِّل</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>الالتقاء عند هذا المُرحِّل</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>متوقف: لا يلتقي هذا الهاتف بأحد عند مُرحِّل.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>عنوان المُرحِّل، مثل 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>مفتاح المُرحِّل، 44 حرفًا</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>تجديد مفاتيح المجموعة للمزامنة بعيدًا عن المنزل</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجهاز الرئيسي.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>يعيّن الجهاز الرئيسي للمجموعة المُرحِّل لكل الأجهزة؛ ويلتقي هذا الهاتف بالأجهزة الأخرى هناك ما دامت المزامنة خارج المنزل مفعّلة.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>في الانتظار: يعمل المُرحِّل أثناء مزامنة التطبيق.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1550,6 +1628,10 @@
     <message>
         <source>As the phone</source>
         <translation>مثل الهاتف</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>مُرحِّل أعمى</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>

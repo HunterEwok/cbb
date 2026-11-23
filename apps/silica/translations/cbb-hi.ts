@@ -1491,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>इस रिले पर मिलें</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>इस रिले पर मिलें?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>क्लिपबोर्ड डिवाइसों के बीच एंड-टू-एंड एन्क्रिप्टेड रहता है: रिले उसे पढ़ नहीं सकता और न ही किसी डिवाइस का रूप ले सकता है। पर जब तक डिवाइस उसका इस्तेमाल करते हैं, वह जानता है कि समूह के कौन-से डिवाइस ऑनलाइन हैं और उनके इंटरनेट पते क्या हैं, और कौन किससे बात करता है, कब और कितना भेजता है। समूह का अपना हब इसमें से कुछ भी बाहर नहीं जाने देता। ऐसा रिले इस्तेमाल करें जिसे आप खुद चलाते हैं, या जिसके संचालक पर आप इसके लिए भरोसा करते हैं।</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>रिले पर: अभी समूह का कोई दूसरा डिवाइस वहाँ नहीं है।</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>रिले पर; वहाँ समूह के डिवाइस: %1।</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>ब्लाइंड रिले</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>रिले से जुड़ रहा है…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>ऐसे समूह के लिए जिसका अपना हब नहीं है: ऐप के सिंक करते समय डिवाइस एक रिले पर मिलते हैं, जैसे cbb relay से बनाया गया रिले। क्लिपबोर्ड डिवाइसों के बीच एन्क्रिप्टेड रहता है, पर रिले जानता है कि कौन-से डिवाइस ऑनलाइन हैं और उनके पते क्या हैं, और कौन किससे, कब और कितनी बात करता है। रोकने के लिए दोनों फ़ील्ड खाली छोड़ें।</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>रिले का पता उसके पोर्ट के साथ और उसकी कुंजी दें, जैसे cbb relay उन्हें छापता है, या दोनों खाली छोड़ें।</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>रिले छोड़ें</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>इस रिले पर मिलें</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>बंद: यह फ़ोन किसी रिले पर किसी से नहीं मिलता।</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>रिले का पता, जैसे 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>रिले की कुंजी, 44 अक्षर</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>घर से दूर सिंक के लिए समूह की कुंजियाँ नवीनीकृत करें</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>घर से दूर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन मुख्य डिवाइस की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>समूह का मुख्य डिवाइस हर डिवाइस के लिए रिले सेट करता है; घर से बाहर सिंक चालू रहने तक यह फ़ोन बाकी डिवाइसों से वहीं मिलता है।</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>इंतज़ार: ऐप के सिंक करते समय रिले काम करता है।</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1550,6 +1628,10 @@
     <message>
         <source>As the phone</source>
         <translation>फ़ोन के अनुसार</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>ब्लाइंड रिले</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>

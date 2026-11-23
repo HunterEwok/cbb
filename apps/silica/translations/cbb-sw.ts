@@ -1491,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Kutana kwenye kipitishi hiki</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>Mkutane kwenye kipitishi hiki?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>Ubao wa kunakili unabaki umesimbwa mwisho hadi mwisho kati ya vifaa: kipitishi hakiwezi kuusoma wala kujifanya kifaa. Lakini, wakati vifaa vinakitumia, hujua vifaa vipi vya kikundi viko mtandaoni na anwani zao za intaneti, na vipi vinazungumza, lini na kiasi gani vinatuma. Kitovu cha kikundi chenyewe hakivujishi chochote kati ya haya. Tumia kipitishi unachoendesha mwenyewe, au ambacho unamwamini mwendeshaji wake kwa hili.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>Kwenye relei: hakuna kifaa kingine cha kikundi hapo sasa.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>Kwenye relei; vifaa vya kikundi vilivyopo: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Relei pofu</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>Inaunganisha na kipitishi…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye kipitishi, kama kile kilichowekwa kwa cbb relay, wakati programu inasawazisha. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini kipitishi hujua vipi viko mtandaoni na anwani zake, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>Weka anwani ya kipitishi pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>Ondoka kwenye kipitishi</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Kutana kwenye kipitishi hiki</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>Kimezimwa: simu hii haikutani na yeyote kwenye kipitishi.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>Anwani ya kipitishi, kama 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>Ufunguo wa kipitishi, herufi 44</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>Fanya upya funguo za kikundi za kusawazisha ukiwa mbali na nyumbani</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>Funguo za kikundi za usawazishaji ukiwa mbali na nyumbani zimeisha muda: relei na vitovu vyake havipokei kifaa chochote hadi simu hii izisasishe kwa ufunguo wa kifaa kikuu.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>Kifaa kikuu cha kikundi huweka relei kwa kila kifaa; simu hii hukutana na vingine huko wakati usawazishaji ukiwa mbali na nyumbani umewashwa.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>Inasubiri: kipitishi hufanya kazi wakati programu inasawazisha.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1550,6 +1628,10 @@
     <message>
         <source>As the phone</source>
         <translation>Kama simu</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Relei pofu</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>

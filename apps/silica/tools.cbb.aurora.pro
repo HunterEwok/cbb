@@ -110,6 +110,8 @@ DISTFILES += \
     qml/pages/WhySection.qml \
     qml/pages/RenameDevicePage.qml \
     qml/pages/MutePage.qml \
+    qml/pages/RelayDialog.qml \
+    qml/pages/RelayPage.qml \
     qml/pages/PinDialog.qml \
     qml/pages/ChangePinDialog.qml \
     qml/pages/RecoveryPage.qml \

@@ -200,6 +200,7 @@
   "At the relay with %lld devices of the group.": "在中继处，与群组的 %lld 台设备在一起。",
   "At the relay: no other device of the group is there now.": "在中继处：现在没有群组的其他设备。",
   "At the relay; devices of the group there: %1$d.": "在中继处；群组在那里的设备：%1$d。",
+  "At the relay; devices of the group there: %1.": "在中继处；群组在那里的设备：%1。",
   "Away from home": "离家",
   "Away from home: hub and tunnel": "离家：中心节点和隧道",
   "Away from home: through your hub": "离家：经由你的中心节点",

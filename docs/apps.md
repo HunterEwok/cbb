@@ -226,11 +226,14 @@ they look, so both apps are built to the same plan.
    (docs/core-api.md). On the root phone the group's server credentials need the root key
    every 30 days: the app renews them when it comes to the front, asking with "Renew the
    group's keys for sync away from home", and a root action (the relay, a forwarder, the
-   hubs) renews them with its key; once they expired, the relay card says so.
-   The relay is the group's setting: the root sets it withThe relay is the group's setting: the root sets it with
-   the fingerprint, the face or the screen lock (the manage action `relay`), and the other
-   devices show where their link to it stands, with "The group's root sets the relay for
-   every device".
+   hubs) renews them with its key; once they expired, the relay card says so. On Aurora,
+   whose root key signs after the admin PIN, the relay page offers that button instead while
+   they are due or expired.
+   The relay is the group's setting: the root sets it with
+   the fingerprint, the face, the screen lock or Aurora's admin PIN (the manage action
+   `relay`), after what a relay learns, and the other devices show where their link to it
+   stands, with "The group's main device sets the relay for every device"; on Aurora it is
+   Settings, "Blind relay".
    On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
    (docs/protocol.md, section 12) through a hub of the group it is connected to. The phone shows the invitation's QR
    code, which a new phone scans in Join with an invitation, and shares the file

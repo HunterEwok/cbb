@@ -1491,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Encontrarse en este relé</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>¿Encontrarse en este relé?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>El portapapeles sigue cifrado de extremo a extremo entre los dispositivos: el relé no puede leerlo ni hacerse pasar por un dispositivo. Pero sí sabe, mientras los dispositivos lo usan, qué dispositivos del grupo están en línea y sus direcciones de internet, y cuáles hablan entre sí, cuándo y cuánto envían. Un hub propio del grupo no deja salir nada de esto. Usa un relé que gestiones tú, o uno cuyo operador te merezca esa confianza.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>En el relé: ahora no hay ningún otro dispositivo del grupo.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>En el relé; dispositivos del grupo allí: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Relé ciego</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>Conectando con el relé…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>Para un grupo sin hub propio: los dispositivos se encuentran en un relé, como uno montado con cbb relay, mientras la app sincroniza. El portapapeles sigue cifrado entre los dispositivos, pero el relé sabe cuáles están en línea y sus direcciones, y cuáles hablan entre sí, cuándo y cuánto. Deja ambos campos vacíos para dejar de usarlo.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>Indica la dirección del relé con su puerto y su clave, tal como los imprime cbb relay, o deja ambos vacíos.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>Dejar el relé</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Encontrarse en este relé</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>Desactivado: este teléfono no se encuentra con nadie en un relé.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>Dirección del relé, como 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>Clave del relé, 44 caracteres</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>Renovar las claves del grupo para sincronizar fuera de casa</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>Las claves del grupo para sincronizar fuera de casa han caducado: su relé y sus hubs no aceptan ningún dispositivo hasta que este teléfono las renueve con la clave del dispositivo principal.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>El dispositivo principal del grupo configura el relé para todos los dispositivos; este teléfono se encuentra allí con los demás mientras la sincronización fuera de casa está activada.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>Esperando: el relé funciona mientras la app sincroniza.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1550,6 +1628,10 @@
     <message>
         <source>As the phone</source>
         <translation>Como el teléfono</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Relé ciego</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>

@@ -200,6 +200,7 @@
   "At the relay with %lld devices of the group.": "Kwenye relei pamoja na vifaa %lld vya kikundi.",
   "At the relay: no other device of the group is there now.": "Kwenye relei: hakuna kifaa kingine cha kikundi hapo sasa.",
   "At the relay; devices of the group there: %1$d.": "Kwenye relei; vifaa vya kikundi vilivyopo: %1$d.",
+  "At the relay; devices of the group there: %1.": "Kwenye relei; vifaa vya kikundi vilivyopo: %1.",
   "Away from home": "Mbali na nyumbani",
   "Away from home: hub and tunnel": "Mbali na nyumbani: kitovu na handaki",
   "Away from home: through your hub": "Mbali na nyumbani: kupitia kitovu chako",

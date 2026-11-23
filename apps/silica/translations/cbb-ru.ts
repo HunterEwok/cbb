@@ -1491,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Встречаться на этом ретрансляторе</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>Встречаться на этом ретрансляторе?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>Буфер обмена остаётся зашифрованным от устройства до устройства: ретранслятор не может его прочитать или выдать себя за устройство. Но пока устройства им пользуются, он узнаёт, какие устройства группы в сети и их интернет-адреса, а также какие из них общаются друг с другом, когда и сколько передают. Собственный хаб группы ничего из этого не раскрывает. Используйте свой ретранслятор или тот, чьему владельцу вы это доверяете.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>На ретрансляторе: других устройств группы там сейчас нет.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>На ретрансляторе, устройств группы там: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Слепой ретранслятор</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>Подключение к ретранслятору…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>Для группы без собственного хаба: устройства встречаются на ретрансляторе, например запущенном командой cbb relay, пока приложение синхронизирует. Буфер обмена остаётся зашифрованным между устройствами, но ретранслятор узнаёт, какие из них в сети, их адреса, и какие из них общаются друг с другом, когда и сколько. Чтобы перестать, оставьте оба поля пустыми.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>Укажите адрес ретранслятора с портом и его ключ, как их выводит cbb relay, или оставьте оба поля пустыми.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>Покинуть ретранслятор</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Встречаться на этом ретрансляторе</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>Выключено: этот телефон ни с кем не встречается на ретрансляторе.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>Адрес ретранслятора, например 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>Ключ ретранслятора, 44 символа</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>Обновить ключи группы для синхронизации вне дома</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>Срок ключей группы для синхронизации вне дома истёк: её ретранслятор и хабы не принимают устройства, пока этот телефон не обновит их ключом главного устройства.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>Ретранслятор для всех устройств задаёт главное устройство группы; этот телефон встречает остальных там, пока включена синхронизация вне дома.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>Ожидание: ретранслятор работает, пока приложение синхронизирует.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1550,6 +1628,10 @@
     <message>
         <source>As the phone</source>
         <translation>Как на телефоне</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Слепой ретранслятор</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>

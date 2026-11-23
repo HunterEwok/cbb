@@ -1491,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>在此中继相遇</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>在此中继相遇？</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>剪贴板在设备之间保持端到端加密：中继无法读取它，也无法冒充设备。但在设备使用中继时，它确实会知道群组中哪些设备在线及其互联网地址，以及哪些设备彼此通信、何时以及发送多少。群组自己的中心节点不会泄露这些信息。请使用你自己运行的中继，或其运营者值得你托付这些信息的中继。</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>在中继处：现在没有群组的其他设备。</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>在中继处；群组在那里的设备：%1。</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>盲中继</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>正在连接中继…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>用于没有自己中心节点的群组：应用同步时，设备在中继处相遇，例如用 cbb relay 搭建的中继。剪贴板在设备之间保持加密，但中继会知道哪些设备在线及其地址，以及哪些设备彼此通信、何时以及通信多少。两个字段都留空即可停止。</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>按 cbb relay 打印的格式填写中继的地址（含端口）和密钥，或两者都留空。</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>离开中继</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>在此中继相遇</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>关闭：这部手机不在中继处与任何设备相遇。</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>中继地址，例如 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>中继密钥，44 个字符</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>续订群组用于离家同步的密钥</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>群组用于离家同步的密钥已过期：在这部手机用主设备密钥续期之前，它的中继和中心节点不接受任何设备。</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>群组的主设备为所有设备设置中继；离家同步开启时，这部手机在那里与其他设备会合。</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>等待中：应用同步时中继才工作。</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1550,6 +1628,10 @@
     <message>
         <source>As the phone</source>
         <translation>跟随手机</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>盲中继</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>

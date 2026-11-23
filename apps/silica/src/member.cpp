@@ -155,7 +155,9 @@ void Member::stop()
     m_groupState.clear();
     emit devicesChanged();
     m_paused = m_muted = false;
+    m_periodDue = m_periodOverdue = false;
     readAway(QJsonValue());
+    emit awayChanged();
     Errors::log(QStringLiteral("member: stopped"));
     emit changed();
 }
@@ -688,6 +690,13 @@ void Member::pollAway()
         Errors::log(QStringLiteral("member: sync away from home: %1 (%2)").arg(failure.message, failure.details));
         return;
     }
+    const bool due = a.value(QStringLiteral("period_due")).toBool();
+    const bool overdue = a.value(QStringLiteral("period_overdue")).toBool();
+    if (due != m_periodDue || overdue != m_periodOverdue) {
+        m_periodDue = due;
+        m_periodOverdue = overdue;
+        emit awayChanged();
+    }
     readAway(a.value(QStringLiteral("away")));
 }
 
@@ -727,6 +736,22 @@ void Member::readAway(const QJsonValue &away)
     m_awayOn = on;
     m_awayStatus = status;
     m_awayHub = hubName;
+    // The relay the phone meets the group at, null while it meets none.
+    const QJsonObject r = o.value(QStringLiteral("relay")).toObject();
+    const QString relayAt = r.value(QStringLiteral("endpoint")).toString();
+    const bool relayConnected = r.value(QStringLiteral("connected")).toBool();
+    const int relayOnline = r.value(QStringLiteral("online")).toArray().size();
+    const Failure relayFailure{r.value(QStringLiteral("error")).toString(), r.value(QStringLiteral("detail")).toString()};
+    if (relayAt != m_relayAt || relayConnected != m_relayConnected || relayOnline != m_relayOnline)
+        changed = true;
+    m_relayAt = relayAt;
+    m_relayConnected = relayConnected;
+    m_relayOnline = relayOnline;
+    if (relayFailure.message != m_relayFailure) {
+        m_relayFailure = relayFailure.message;
+        m_relayError = relayFailure.isNull() ? QString() : Errors::shown(relayFailure);
+        changed = true;
+    }
     if (changed)
         emit awayChanged();
 }
@@ -745,7 +770,7 @@ void Member::pollDevices()
     // A connected device's mute, as its hello says, for its tile's button.
     for (QVariant &v : devices) {
         QVariantMap d = v.toMap();
-        d.insert(QStringLiteral("muted"), m_mutedPeers.contains(d.value(QStringLiteral("device")).toString()));
+        d.insert(QStringLiteral("muted"), m_mutedPeers.contains(d.value(QStringLiteral("id")).toString()));
         v = d;
     }
     const QJsonObject w = call(m_member, QStringLiteral("why"), QJsonObject(), &failure);
@@ -813,7 +838,7 @@ QString Member::deviceName(const QString &id) const
 {
     for (const QVariant &v : m_devices) {
         const QVariantMap d = v.toMap();
-        if (d.value(QStringLiteral("device")).toString() == id) {
+        if (d.value(QStringLiteral("id")).toString() == id) {
             const QString name = d.value(QStringLiteral("name")).toString();
             return name.isEmpty() ? id : name;
         }

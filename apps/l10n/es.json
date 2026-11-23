@@ -200,6 +200,7 @@
   "At the relay with %lld devices of the group.": "En el relé con %lld dispositivos del grupo.",
   "At the relay: no other device of the group is there now.": "En el relé: ahora no hay ningún otro dispositivo del grupo.",
   "At the relay; devices of the group there: %1$d.": "En el relé; dispositivos del grupo allí: %1$d.",
+  "At the relay; devices of the group there: %1.": "En el relé; dispositivos del grupo allí: %1.",
   "Away from home": "Fuera de casa",
   "Away from home: hub and tunnel": "Fuera de casa: hub y túnel",
   "Away from home: through your hub": "Fuera de casa: a través de tu hub",

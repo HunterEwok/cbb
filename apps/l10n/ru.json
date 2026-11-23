@@ -200,6 +200,7 @@
   "At the relay with %lld devices of the group.": "На ретрансляторе, устройств группы там: %lld.",
   "At the relay: no other device of the group is there now.": "На ретрансляторе: других устройств группы там сейчас нет.",
   "At the relay; devices of the group there: %1$d.": "На ретрансляторе, устройств группы там: %1$d.",
+  "At the relay; devices of the group there: %1.": "На ретрансляторе, устройств группы там: %1.",
   "Away from home": "Вне дома",
   "Away from home: hub and tunnel": "Вне дома: хаб и туннель",
   "Away from home: through your hub": "Вне дома: через ваш хаб",

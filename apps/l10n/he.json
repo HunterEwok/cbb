@@ -200,6 +200,7 @@
   "At the relay with %lld devices of the group.": "בממסר עם %lld מכשירים של הקבוצה.",
   "At the relay: no other device of the group is there now.": "בממסר: אין שם עכשיו מכשיר אחר של הקבוצה.",
   "At the relay; devices of the group there: %1$d.": "בממסר; מכשירי הקבוצה שם: %1$d.",
+  "At the relay; devices of the group there: %1.": "בממסר; מכשירי הקבוצה שם: %1.",
   "Away from home": "מחוץ לבית",
   "Away from home: hub and tunnel": "מחוץ לבית: רכזת ומנהרה",
   "Away from home: through your hub": "מחוץ לבית: דרך הרכזת שלכם",
