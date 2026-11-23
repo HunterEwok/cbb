@@ -218,6 +218,32 @@ final class ReadersUITests: XCTestCase {
         }
     }
 
+    /// Home's cards about the group itself, with the debug build's made-up
+    /// group (-showcase -showcaseAlerts): a group from before 0.6 with its
+    /// Leave, and the member's notices, each in its sentence, pass the
+    /// audit in English and in Arabic; Hide hides the notice that may be
+    /// hidden and only it.
+    func testGroupCards() {
+        for language in ["en", "ar"] {
+            let app = launch(language: language, extra: ["-showcase", "-showcaseAlerts", "-PasteChoice", "button"])
+            let before = app.staticTexts[tr("A group from before 0.6", language)]
+            XCTAssertTrue(before.waitForExistence(timeout: 30), "\(language): no card about a group from before 0.6 in \(app.debugDescription)")
+            let recovery = app.staticTexts[tr("The group's recovery key is not saved yet: without it, losing this phone means making the group again.", language)]
+            XCTAssertTrue(recovery.exists, "\(language): no notice of the recovery key")
+            let silent = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'steamdeck'")).firstMatch
+            XCTAssertTrue(silent.exists, "\(language): no notice of the silent admin")
+            picture("group-cards-\(language)")
+            audit(app, checks, "Home's cards about the group in \(language)")
+
+            let hide = app.buttons[tr("Hide", language)]
+            XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", tr("Hide", language))).count, 1, "\(language): only the recovery key's notice may be hidden")
+            hide.tap()
+            XCTAssertTrue(recovery.waitForNonExistence(timeout: 10), "\(language): Hide did not hide the notice")
+            XCTAssertTrue(silent.exists, "\(language): Hide hid the notice that may not be hidden")
+            app.terminate()
+        }
+    }
+
     /// Every text on the screen with a label and its height, from one
     /// snapshot of the app; a text the window does not hold whole is left
     /// out.

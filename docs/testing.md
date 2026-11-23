@@ -331,7 +331,10 @@ A9 and U14 to U18).
   the texts checked against the app's catalog, the iPhone's top row swapping sides from right
   to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets; on the
   iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
-  Hindi) passing; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`), and the English ones
+  Hindi) passing, and on the iPhone and the iPad also Home's cards about the group itself (a
+  group from before 0.6 and the member's notices, from the made-up group with
+  `-showcase -showcaseAlerts`) in English and Arabic, with Hide hiding only the notice that may
+  be hidden; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`), and the English ones
   are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
   of each element the audit fails and of the screen a lost tap met (the test taps Settings
   again and says so in its output). For each failed iPhone test CI also keeps its activities,

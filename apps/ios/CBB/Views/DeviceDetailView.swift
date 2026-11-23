@@ -173,11 +173,11 @@ struct DeviceDetailView: View {
         }
     }
 
-    /// Its badges: this phone, root or admin, hub, frozen.
+    /// Its badges: this phone, main device or admin, hub, frozen.
     static func badges(_ d: AppModel.Computer, hub: Bool) -> [String] {
         var out: [String] = []
         if d.isSelf { out.append(String(localized: "This phone", bundle: .app)) }
-        if d.isRoot { out.append(String(localized: "root", bundle: .app)) } else if d.admin { out.append(String(localized: "admin", bundle: .app)) }
+        if d.isRoot { out.append(String(localized: "main device", bundle: .app)) } else if d.admin { out.append(String(localized: "admin", bundle: .app)) }
         if hub { out.append(String(localized: "hub", bundle: .app)) }
         if d.frozen { out.append(String(localized: "frozen", bundle: .app)) }
         return out

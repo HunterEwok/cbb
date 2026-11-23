@@ -1059,6 +1059,52 @@
         }
       }
     },
+    "A group from before 0.6": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مجموعة من قبل الإصدار 0.6"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un grupo anterior a 0.6"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קבוצה מלפני 0.6"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0.6 से पहले का समूह"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группа до версии 0.6"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kikundi cha kabla ya 0.6"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0.6 之前的群组"
+          }
+        }
+      }
+    },
     "A name has 1 to 64 characters.": {
       "localizations": {
         "ar": {
@@ -24472,6 +24518,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "这部手机已在一个群组中。请先退出，再加入其他群组。"
+          }
+        }
+      }
+    },
+    "This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الهاتف في مجموعة أُنشئت قبل الإصدار 0.6، وهذا الإصدار لم يعد يشغّلها. غادرها على هذا الهاتف، ثم أنشئ مجموعة جديدة أو انضم إلى واحدة. لا يُحذف شيء حتى تغادر."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono está en un grupo creado antes de 0.6, que esta versión ya no ejecuta. Sal de él en este teléfono y luego crea un grupo nuevo o únete a uno. No se borra nada hasta que salgas."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטלפון הזה נמצא בקבוצה שנוצרה לפני 0.6, וגרסה זו כבר לא מריצה אותה. צא ממנה בטלפון הזה, ואז צור קבוצה חדשה או הצטרף לאחת. שום דבר לא נמחק עד שתצא."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह फ़ोन 0.6 से पहले बने समूह में है, जिसे यह संस्करण अब नहीं चलाता। इस फ़ोन पर उससे बाहर निकलें, फिर नया समूह बनाएँ या किसी में शामिल हों। जब तक आप बाहर नहीं निकलते, कुछ भी नहीं हटता।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон в группе, созданной до версии 0.6, а эта версия её больше не запускает. Выйдите из неё на этом телефоне, затем создайте новую группу или вступите в другую. Пока вы не выйдете, ничего не удаляется."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simu hii iko katika kikundi kilichoundwa kabla ya 0.6, ambacho toleo hili halikiendeshi tena. Kiondoke kwenye simu hii, kisha unda kikundi kipya au ujiunge na kimoja. Hakuna kinachofutwa hadi uondoke."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此手机所在的群组创建于 0.6 之前，此版本已不再运行它。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。"
           }
         }
       }

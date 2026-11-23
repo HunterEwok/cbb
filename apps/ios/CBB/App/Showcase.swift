@@ -7,13 +7,31 @@ import Foundation
 /// A group made up for screenshots and the UI tests of Home, in debug
 /// builds only: the app starts with it when launched with -showcase
 /// (docs/testing.md, "The apps' languages, accessibility and screenshots").
-/// Nothing leaves the app; every change only changes these devices.
+/// With -showcaseAlerts too, Home also shows the cards about the group
+/// itself: a group from before 0.6 and the member's notices. Nothing leaves
+/// the app; every change only changes these devices.
 @MainActor
 final class ShowcaseGroup: GroupController {
     /// The group for the launch arguments, if they ask for it.
     static func requested(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> ShowcaseGroup? {
-        arguments.contains("-showcase") ? ShowcaseGroup() : nil
+        arguments.contains("-showcase") ? ShowcaseGroup(alerts: arguments.contains("-showcaseAlerts")) : nil
     }
+
+    init(alerts: Bool = false) {
+        before06 = alerts
+        notices = alerts ? Self.someNotices : []
+    }
+
+    /// A notice that may be hidden and one that may not, as the member
+    /// tells them.
+    private static let someNotices: [Notice] = (try? JSONDecoder().decode([Notice].self, from: Data("""
+        [{"id": "recovery", "kind": "recovery_not_saved", "args": {}, "dismissable": true},
+         {"id": "silent", "kind": "admins_silent", "args": {"device": "deck", "days_left": 12}, "dismissable": false}]
+        """.utf8))) ?? []
+
+    let before06: Bool
+    private(set) var notices: [Notice]
+    func dismissNotice(_ id: String) async throws { notices.removeAll { $0.id == id } }
 
     var hasGroup: Bool { true }
     var isAdmin: Bool { true }
