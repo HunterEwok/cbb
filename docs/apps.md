@@ -178,7 +178,7 @@ they look, so both apps are built to the same plan.
    computer becomes a hub of the group as well; it refuses while sync away from home is off
    there, which only its own user turns on.
    With sync away from home on, the list marks the group's hubs whose offers the phone keeps
-   ("hub", or "hub in use" for the one it reaches now; this phone too while it is the hub), a
+   ("hub", or "hub in use" for the one it reaches now), a
    device's page says "The group's hub", and Settings, "Away from home", names the hub the
    phone is connected to through the tunnel. The Mac app and the tray app say the same on a
    device's page, from `hub` in the service's device list.
@@ -202,9 +202,8 @@ they look, so both apps are built to the same plan.
    switch "Show error details", which puts the error itself under each error message; it is
    on in debug builds, and the launch argument `ShowErrorDetails` sets it too; Android takes the
    extra in debug builds only, since any app can start the activity with one).
-   The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
-   computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
-   networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Security level": root,
+   The advanced ones: why it does not sync (below), away from home (where it stands and the
+   blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Security level": root,
    admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
    two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
    away from home is turned on by the globe on Home (docs/design.md, "Sync away from
@@ -215,45 +214,16 @@ they look, so both apps are built to the same plan.
    tunnel in the app's process, in user space: it tries a hub's endpoints in AmneziaWG over
    UDP first and VLESS after them, in turn, keeping to the way that works. Nothing changes
    on the screen.
-   On a root or admin phone, "This phone as the hub" comes first (docs/design.md, "The
-   phone as the hub"): a switch, on from the start in a group the phone made; where it
-   stands (at home only without a forwarder, registering, registered, or why the forwarder
-   refuses it, with the error underneath when details are on); whether the network the
-   phone is on is one of the hub's home networks, with "This is my home network" when it
-   is not; the forwarder the group's root set; how the hub's tunnel hides (WireGuard,
-   AmneziaWG, or VLESS to a forwarder that takes it, which comes with AmneziaWG: the Live
-   member makes the AmneziaWG settings and the VLESS user ID and keeps them while that
-   choice stays, and the clients get them the next time they meet the hub at home); and on Android
-   "Keep the hub running in the background", which lets the foreground service keep it.
-   The switch stays in Settings, and the phone's own page in the device list has no "Make it
-   a hub", unlike the computers' apps: a phone is the hub only while its app is open (on
-   Android also in the background, at the cost of the battery), so a computer that is always
-   on is the better hub, and the apps do not put the phone forward for it.
-   While the phone is the hub, the switch for its own sync away from home is hidden: a hub
-   is nobody's client. Home says "This phone is the hub: sync works while the app is open".
-   On a home network the hub takes members on a port on every address, which it publishes
-   with `r=phone` (docs/protocol.md, section 3).
-   The Live member runs all of it in the app's process, in user space: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
-   port and the addresses, and how its tunnel hides) and the link to the group's relay, and
-   it keeps their keys and the hub's clients itself; the cards read where they stand from
-   `away_status` (docs/core-api.md). The hub's forwarder is the root's setting: the root names
-   it with a hub command (from a computer, `cbb global hub -on`; from the root phone, the
-   manage action `forwarder`), which also makes the group's credentials for it; the phone keeps
-   it and serves through it once its own switch is on, and Settings shows it with "The group's
-   root sets this hub's forwarder", without fields, or that the hub serves at home only while
-   the root set none. On the root phone the group's server credentials need the root key
+   No phone is a hub, not even the root's (D-134): a hub is a computer, a router or a board,
+   which an admin phone makes one with "Make it a hub" on its page (above), so sync away
+   from home works with every app closed. The Live member runs sync away from home (`away`)
+   and the link to the group's relay in the app's process, in user space, keeps their keys
+   itself and refuses a hub command; the cards read where they stand from `away_status`
+   (docs/core-api.md). On the root phone the group's server credentials need the root key
    every 30 days: the app renews them when it comes to the front, asking with "Renew the
    group's keys for sync away from home", and a root action (the relay, a forwarder, the
-   hubs) renews them with its key; once they expired, the relay card says so. The apps keep only what the user chose for the hub (on,
-   disguise, home networks, and on Android the background): Android's `AwayOn06`
-   in a sealed file, the Swift kit's `AwayOn06.Prefs` in the keychain; they serve while the
-   app is in front (on Android also in the background when allowed). Turning the switch off
-   stops the hub at once, which hands its clients to the group's next hub. The app going to
-   the background on its own does not: on Android, without leave to run there, the hub stops
-   after a minute there; on the iPhone the member pauses and the hub stays one. So a short
-   trip away hands nobody over, and the clients wait out the gap as for any hub that goes
-   quiet, then move on to the next hub.
-   A hub without a forwarder is reached at the phone's addresses on the home network. The relay is the group's setting: the root sets it with
+   hubs) renews them with its key; once they expired, the relay card says so.
+   The relay is the group's setting: the root sets it withThe relay is the group's setting: the root sets it with
    the fingerprint, the face or the screen lock (the manage action `relay`), and the other
    devices show where their link to it stands, with "The group's root sets the relay for
    every device".
@@ -322,7 +292,7 @@ stops the most first and large, the others under it. The Rust core decides the r
 home it gives each a stable code, a level (stop: nothing syncs here; warn: some copies or
 devices do not; info) and its parameters, and the apps only say each code in their words;
 `testdata/why/vectors.json` holds the cases. A computer's status carries them, a phone's member
-answers `why` (docs/core-api.md), with where the phone's own hub, tunnel and relay stand, and
+answers `why` (docs/core-api.md), with where the phone's tunnel and relay stand, and
 `cbb status` prints the first that stops sync. With "Show error details" on, each reason also
 shows its code and the member's own words.
 
@@ -468,7 +438,7 @@ is in software gets the same big-screen layout with a computer's rights.
   - **The sidebar** (280 vp, ArkUI's `SideBarContainer`): the group's line; **Devices**: "All
     devices", "Needs attention" while a device does, each collection, each with its count;
     **Settings**: the language and the error details, notifications, the recovery key (on the
-    root) and this phone as the hub (each its own page), the group, the lab, why it does not
+    root) and the blind relay (each its own page), the group, the lab, why it does not
     sync, and About; a part opens beside the sidebar (`components/SettingsBody.ets`, which the
     phone's Settings page shows whole, the advanced parts behind their switch). It stands from
     1040 vp (the sidebar, 360 of devices and the details); narrower it slides in behind ☰. A
@@ -664,8 +634,8 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   device that may be a hub it is "Make it a hub"; on this Mac with sync away from home off,
   its question says that a hub needs it and turns it on in the same step (`cbb global hub
   -away-on`): the consent to sync away from home is given on this Mac. Elsewhere the line is
-  dimmed with the reason: a phone is a hub only from its own app's Settings, a member without
-  `hub` among its capabilities, a watch and a computer without root never, a frozen device once the root unfreezes it, and
+  dimmed with the reason: a phone, a watch and a leaf never (D-134), a member without
+  `hub` among its capabilities and a computer without root never, a frozen device once the root unfreezes it, and
   a computer that is no admin once the root makes it one.
 - **Remote paste**: only an app may press keys on a Mac, once its user allowed it in
   Accessibility, so the app is the Mac's paste target (`PasteTarget`), not the service or its
@@ -1209,11 +1179,9 @@ offers Leave, which alone deletes its files (D-126).
   page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
   system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
   signs the paste command (`cbb_member_manage`, `paste`).
-- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
-  group without a computer the root or an admin phone is the hub itself (Settings, "This phone
-  as the hub"), registered with the forwarder the group's root set, its tunnel hidden for
-  strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
-  user read what it learns. That relay is the group's, which the root phone sets (the manage
+- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, a
+  computer, a router or a board (D-134); a group without a hub meets at a blind relay once
+  the user read what it learns. That relay is the group's, which the root phone sets (the manage
   action `relay`) and the other phones show read-only. The member of 0.6 runs both and keeps
   the group's server credentials itself; the root phone signs the next period of the group's
   server credentials (docs/protocol.md, section 18) with the root key when it is due, after

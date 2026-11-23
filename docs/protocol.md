@@ -234,7 +234,7 @@ so are the texts a person or a server reads (a link, a pin).
 | Group tag | the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters | `member::live::tag` |
 | Member host name | `cb-<device ID>.local` (the mDNS host name) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
-| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves the pairing windows | `member/src/lib.rs`, `member/src/discovery.rs` |
+| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while their pairing window is open. CBB's only port: it also serves the pairing windows | `member/src/lib.rs`, `member/src/discovery.rs` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
 | Member ALPN | `cbb/4` | `cbb_core::alpn`, `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/3` | `cbb_core::alpn` |
@@ -274,9 +274,7 @@ certificates of the ESP32 firmware (section 7).
 ## 3. Discovery (mDNS)
 
 Members (computers, boards and routers with the service or the firmware) publish and browse;
-phones and joining devices only browse, except a phone that is the group's hub, which
-publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
-hub"), and a phone whose pairing window is open (section 6, "The window and who dials"), which
+phones and joining devices only browse, except a phone whose pairing window is open (section 6, "The window and who dials"), which
 publishes `v=1`, `g=<tag>`, `p=1`, `f=<fingerprint>` while the window is open.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns` (Go, for the tests); `cbb`
@@ -288,7 +286,7 @@ within the last second no more) it neither dials nor drops: it browses again fro
 daemon, whose first query carries no known answers, after 1.5 s and then every 5 s, doubled up
 to 60 s, until the TXT comes. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
 resolve the members to their addresses and hand those to the member in the Rust core, which
-starts with its own mDNS off; a phone that is the hub publishes its home port the same way
+starts with its own mDNS off; a phone whose pairing window is open publishes it the same way
 (`BonjourPublisher`, `NsdPublisher`).
 
 A member SHOULD publish, answer queries and take connections on the member port only on
@@ -316,7 +314,7 @@ TXT strings (each at most 255 bytes):
 | `p` | `1` | present only while a pairing window is open (a computer's or a phone's) |
 | `f` | fingerprint | with `p`: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the window's QR code's `fp` (section 7), which the new device checks before it sends anything |
 | `i` | window ID | with `p`: the home window's ID, 32 lowercase hex characters, by which a new device that has only the six digits typed into it finds the window and builds its password (section 6, "Pairing in 0.6"); never the digits |
-| `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
+| `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` names a phone, which the members do not dial, since it dials them; no app publishes it, since no phone is a hub (D-134) |
 
 A computer or a phone whose pairing window of 0.6 is open publishes `v=1`, `g=<tag>`, `p=1`,
 `f=<key hash>`, `i=<window ID>` (`member/src/discovery.rs`), so that a new device whose person
@@ -421,10 +419,8 @@ version number.
 - A member without `dials` (TXT `r=listen`) dials no one; every member with `dials` that
   finds it dials it, whatever the device IDs. It accepts the members and the phones.
 - A phone app MUST dial every found member with a matching `g`. Phones accept nothing and
-  never connect to each other; so a phone syncs with any one member with no other on. A
-  phone that is the group's hub is the exception: while its app is open it accepts members
-  on the home network and through the tunnel, publishes `r=phone`, and the other phones
-  dial it; the members do not, since it dials them.
+  never connect to each other; so a phone syncs with any one member with no other on. No
+  phone is a hub (D-134).
 - Members on another network than the home one (another subnet, where mDNS does not reach)
   reach the hub through the group's WireGuard tunnel (section 11; design.md, "Sync away from
   home"); so do the phone apps, as clients. A member can be given a member's address with
@@ -567,8 +563,8 @@ Rules for the receiver:
 - A member passes each new copy on once to every other connection; it remembers the last 4096
   copies' IDs for that.
 
-Roles: a phone dials every member, publishes nothing and is never dialed, except while it is
-the group's hub: it then publishes `r=phone` (section 3) and other phones dial it. A member is
+Roles: a phone dials every member and is never dialed; it publishes only its pairing window
+(section 3). A member is
 any device with the service or the firmware: a computer (a Mac included), a Raspberry Pi, a
 router or a board. What it can do beyond syncing its capabilities say (below); any member with
 `admin` can create a group and be its root, or be made an admin. Only the root and the admins
@@ -586,7 +582,7 @@ A member's capabilities are bits ([format](format.md), section 4.1, `caps`):
 
 A member says them in its hello (`caps`) and its joiner Info when it pairs (section 6), and its
 device record names them (section 10), which is what counts. Only the role member has them; a
-phone and a watch have none, and the phone's hub needs no capability. Computers, Raspberry Pis
+phone and a watch have none, and neither is ever a hub (D-134). Computers, Raspberry Pis
 and routers have all three. A board such as the ESP32 has none. A Raspberry Pi inside a ZX
 Spectrum Next, which reaches the network only through the Next's UART and is on only while the
 Next is, has `admin` and `dials` but not `hub`. A hello's bits this version does not know are
@@ -1224,8 +1220,7 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   role `phone`, and speaks the member protocol of section 4. It dials and never listens for
   members (a phone cannot accept connections in the background), so members MUST NOT dial a
   `phone` member; it publishes no mDNS records, except while its pairing window is open
-  and while it is the group's hub, when other phones dial it (section 3, `p=1` and
-  `r=phone`).
+  (section 3, `p=1`).
 - **Pairing direction.** The joiner always dials: the root phone, or a phone that may admit,
   opens a pairing window and shows its QR code, and the new device dials it (section 6,
   "The window and who dials").
@@ -1920,8 +1915,7 @@ carries what goes to the client from then on. The key a handshake took is kept a
 
 ### Moving the hub
 
-The hub, a computer or a phone, hands its role to another of the group's hubs ([design.md](design.md),
-"The phone as the hub"): `cbb global move DEVICE [-forwarder ADDR -forwarder-key KEY]
+The hub, a computer, a router or a board, hands its role to another of the group's hubs: `cbb global move DEVICE [-forwarder ADDR -forwarder-key KEY]
 [address:port...]` on a computer, "Move the hub to a computer" in the apps. On the records
 of 0.6 no hub passes on another's offer or clients, and no wire is added for a move (D-122);
 `TestMoveHub` moves a hub with a client away from home that has the group's relay.
@@ -2122,10 +2116,6 @@ and keeps it with its key; it learns the rest from the forwarder's answer when i
 - After the member TLS handshake the hub MUST check that the device ID of the client
   certificate gives the tunnel address the connection came from, and close it otherwise,
   so a device cannot use another device's tunnel key.
-  Note: a phone that is a hub does not check this yet. Its tunnel (`ffi/src/tunnel.rs`) hands
-  each connection to the app through a loopback port, which does not say from which tunnel
-  peer it came, so such a hub knows the client by its member certificate alone. This is
-  planned for 0.7, with a call in the phones' tunnel that names the peer of a loopback connection.
 - A member that keeps hubs' offers runs the other end, with the hub it tries as its only
   peer and a keepalive every 25 s. It dials the hub's tunnel address, TCP 8764, with member
   TLS whenever no hub is connected on the home network, trying the hubs in order, each over
@@ -2243,13 +2233,12 @@ fingerprint the admin compares. Once admitted it keeps the set with the invitati
 member, once started, reaches the hub through the guest tunnel and offers its own tunnel key
 until the hub's offer comes, as a computer that joined by an invitation does.
 
-### On a phone that is the hub
+### On a phone
 
-A phone that is a hub of a group of 0.6 is the Live member's hub, which serves the guests of
-invitations as the computers' does. An admin phone makes its invitation through a hub of the
-group, as "Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows as a QR code,
-and its file goes through the phone's share sheet. `TestFFIInviteThroughHub` and the Kotlin
-kit's `InviteKitTest` run it.
+No phone is a hub (D-134). An admin phone makes its invitation through a hub of the group, as
+"Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows
+as a QR code, and its file goes through the phone's share sheet. `TestFFIInviteThroughHub`
+runs it.
 
 
 ## 13. The forwarder
@@ -2289,8 +2278,7 @@ newest credential and a hash of its period key ("What it keeps").
 ### The project's forwarder
 
 The project runs a forwarder at `cbb.tools:8764`, which every program knows: `cbb global hub`
-without addresses, or with `-forwarder default`, and a phone that is the hub without a
-forwarder of the user's own take its address, looked up when the hub is set, and its pin,
+without addresses, or with `-forwarder default`, takes its address, looked up when the hub is set, and its pin,
 so that nobody types either. The control request carries the address the command line
 looked up and `forwarder_key` `default`; the service fills in the pin. The pins a hub
 accepts from it are those of the newest `keys.json` the group passed around, with a release
@@ -2727,8 +2715,8 @@ command is refused with "this device has no command NAME", since no computer or 
 commands of its own; the leaves that do, and a way to send one, come with 0.7. The phones carry
 out `mode`, `mute` and `unmute` through their member in the core (`ffi/src/member/live.rs`),
 take `paste-off`, `actions-off` and `away-off` as done, since a phone of 0.6 has none of these
-on, refuse `action` and `device`, answer `paste` that it does not work on a phone yet, and take
-a `hub` command only from the root, as the forwarder of a phone that is a hub.
+on, refuse `action` and `device`, answer `paste` that it does not work on a phone yet, and refuse
+`hub`, since a phone is no hub (D-134).
 
 ### In the member protocol
 

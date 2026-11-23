@@ -72,7 +72,6 @@ var automated = map[string][]string{
 	// The Android app on an emulator in a group with the fleet (the phone suite).
 	"A1": {"phone"}, "M7": {"phone"}, "T16": {"phone"}, "Q8": {"phone"}, "A6": {"phone"},
 	"A12": {"phone"}, "O11": {"phone"}, "Y35": {"phone"}, "W5": {"phone"}, "W42": {"phone"},
-	"W16": {"phone"}, "G14": {"phone"},
 	"A2": {"ci"}, "A4": {"ci"}, "A5": {"ci"}, "A8": {"ci"}, "A9": {"ci"}, "A14": {"ci"}, "A15": {"ci"}, "A16": {"ci"}, "U12": {"ci"},
 	// CI's OpenWrt job (the apk feed, procd, UCI, fw4, the NTP wait, a
 	// sysupgrade's kept files) and the mips tests under qemu, its FreeBSD
@@ -85,6 +84,8 @@ var automated = map[string][]string{
 	// CI's upgrade job moves members of the latest release to the build under
 	// test (tools/e2e/upgrade.sh), and a Go test admits a device by the code it shows.
 	"I26": {"ci"}, "I27": {"ci"}, "G44": {"ci"},
+	// The kits' tests and the core's: no phone is a hub, and a phone invites through a computer hub.
+	"W16": {"ci"}, "G14": {"ci"},
 	// The phone kits' tests and the Go tests that read what they sign: the
 	// Swift and Kotlin phones admit a Go joiner by its QR code (G10), a takeover (G28), a computer made an admin (G36), the
 	// watch's shared vectors (G38), the attestation and EK chains (K10).

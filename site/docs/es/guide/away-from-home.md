@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1abdaa297166 -->
+<!-- source: b61fb28e5395 -->
 # Fuera de casa
 
 En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
@@ -56,7 +56,7 @@ En la app de Mac o en la app de la bandeja, abre la página del propio ordenador
 En casa, con el hub encendido:
 
 - **Ordenadores**: `sudo cbb global on` (en Windows, en una terminal de administrador).
-- **Teléfonos**: en la app, Ajustes, **Sync away from home**. Después deja la app abierta un momento en casa, para que se encuentre con el hub. Un iPhone sincroniza fuera de casa mientras la app está abierta; Android también en segundo plano. En un grupo creado en un teléfono, ese teléfono empieza siendo el hub, y el interruptor aparece cuando deja de serlo: en **Move the hub to a computer** haz hub al ordenador (guardando antes el reenviador en el teléfono), o apaga **This phone as the hub**.
+- **Teléfonos**: en la app, Ajustes, **Sync away from home**. Después deja la app abierta un momento en casa, para que se encuentre con el hub. Un iPhone sincroniza fuera de casa mientras la app está abierta; Android también en segundo plano.
 - **Un dispositivo pequeño** (un router, una Raspberry Pi): `sudo cbb global on` en el dispositivo ([dispositivos pequeños](../../member/README.md#sync-away-from-home)).
 
 ## 4. Compruébalo
@@ -79,7 +79,7 @@ Tras un NAT de operador, el hub se registra en cambio en un **reenviador** de in
 sudo cbb global hub
 ```
 
-Sin direcciones propias, el hub pasa por el reenviador del proyecto en `cbb.tools`: cbb conoce su dirección y su clave, y un teléfono que hace de hub también lo usa. `-forwarder default` lo añade a un hub que además tiene sus propias direcciones. Para [tu propio reenviador](../admin/self-hosting.md#a-forwarder), en cualquier servidor pequeño, da en su lugar su dirección y su clave: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`; en un teléfono, en **This phone as the hub**.
+Sin direcciones propias, el hub pasa por el reenviador del proyecto en `cbb.tools`: cbb conoce su dirección y su clave. `-forwarder default` lo añade a un hub que además tiene sus propias direcciones. Para [tu propio reenviador](../admin/self-hosting.md#a-forwarder), en cualquier servidor pequeño, da en su lugar su dirección y su clave: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`.
 
 El hub puede tener a la vez su propia dirección y un reenviador: los dispositivos prueban primero el hub y el reenviador en último lugar.
 
@@ -101,11 +101,9 @@ Otras formas de unirse desde lejos, por SSH o con tu propia VPN, están en [Sin 
 
 ## Sin ordenador para el hub
 
-Un teléfono puede ser el hub mientras su app está abierta (Ajustes, **This phone as the hub**). O los dispositivos se encuentran en un **relé ciego** de tu propio servidor en lugar de un hub: los ordenadores con `cbb global relay`, los teléfonos en **Blind relay** de Ajustes. El relé no puede leer el portapapeles, pero ve qué dispositivos se comunican, cuándo y cuánto. Consulta [cómo ejecutar tus propios servidores](../admin/self-hosting.md#a-blind-relay).
+Un teléfono nunca es el hub: un hub es un ordenador, un router o una placa pequeña como una Raspberry Pi. Sin uno, los dispositivos se encuentran en un **relé ciego** en lugar de un hub, el del proyecto o uno en tu propio servidor: los ordenadores con `cbb global relay`, los teléfonos en **Blind relay** de Ajustes. El relé no puede leer el portapapeles, pero ve qué dispositivos se comunican, cuándo y cuánto. Consulta [cómo ejecutar tus propios servidores](../admin/self-hosting.md#a-blind-relay).
 
-El interruptor **This phone as the hub** está solo en Ajustes, no en la página del teléfono en la lista de dispositivos como en un ordenador: un teléfono hace de hub solo mientras su app está abierta (un Android también en segundo plano, a costa de la batería), así que un ordenador siempre encendido es mejor hub.
-
-Más adelante: un relé ciego en `cbb.tools` que cualquier grupo podrá usar.
+El proyecto mantiene un relé ciego en `cbb.tools` que cualquier grupo puede usar: `sudo cbb global relay default` conoce su dirección y su clave, y se mantiene al día solo cuando el proyecto las cambia.
 
 ## Desactivarlo
 

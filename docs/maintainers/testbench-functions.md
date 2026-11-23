@@ -117,7 +117,7 @@ line here with every new function, and a case for it in the catalogue.
 | G.34 | Fingerprints on both sides, `yes` | G12 |
 | G.35 | Invitations refused (no, reuse, expiry, hub off, failures, cancelled, other group) | G13 |
 | G.36 | Nothing left on the hub after an invitation | G13 |
-| G.37 | Invitations on a phone that is the hub | G14 |
+| G.37 | Invitations from a phone through a computer hub | G14 |
 | G.38 | The hub's addresses allowed for a join and taken back | G15 |
 | G.39 | The identity replaced in one step | G16 |
 | G.40 | `cbb admin` and `-allow-file-key` | G20 |
@@ -196,7 +196,7 @@ line here with every new function, and a case for it in the catalogue.
 | D.6 | The 30 s fallback dial | D2 |
 | D.7 | One connection per pair | D2 |
 | D.8 | Who dials: a member without `dials` (`r=listen`) is dialed; of two that dial, the lower device ID first, the other after 30 s | D3, D17 |
-| D.9 | Phones dial; a phone hub listens | D3 |
+| D.9 | Phones dial; no member dials a phone | D3 |
 | D.13 | Known networks and quiet interfaces | D6 |
 | D.14 | `cbb network` | D6 |
 | D.15 | Only private addresses published and accepted | D7 |
@@ -390,8 +390,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.19 | The hub down or hung | W13 |
 | W.20 | Several hubs, failover and back | W14 |
 | W.21 | `cbb global move` | W15 |
-| W.22 | The phone as the hub | W16 |
-| W.23 | "This is my home network" | W16 |
+| W.22 | No phone is a hub | W16 |
 | W.24 | cbb without its helper as a client | W17 |
 | W.25 | A client behind on obfuscation | W18 |
 | W.26 | Client isolation | W19, S3 |

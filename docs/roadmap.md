@@ -39,8 +39,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **23.** Docker, in 0.5 ([design](design.md#docker)).
 - **24.** FreeBSD and OPNsense, in 0.6 ([design](design.md#freebsd)).
 - **27.** Quick actions, in 0.6 ([design](design.md#quick-actions)).
-- **30.** The phone as the hub while its app is open, in 0.5
-    ([design](design.md#the-phone-as-the-hub-while-its-app-is-open)).
+- **30.** No phone is a hub: a hub is a computer, a router or a board (D-134), in 0.6
+    ([design](design.md#groups-without-a-computer)).
 - **32.** What the forwarder and the relay learn, cut to short server credentials, in 0.6
     ([design](design.md#what-the-servers-learn)).
 - **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
@@ -186,8 +186,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     record ([protocol.md](protocol.md), section 10), which the state carries, `cbb keys` with
     its checks on a root computer, and the phone apps' setting (Settings, Admin keys) with
     theirs. Level 1's outside checks (App Attest, the TPM makers' services) are next. See "Key levels" below.
-- **33.** **Researched; not built (D-73).** The iPhone as a hub in the background, as a Network
-    Extension. See "Research: the iPhone hub in a Network Extension" below.
+- **33.** **Researched; not built (D-73), and void since no phone is a hub (D-134).** The
+    iPhone as a hub in the background, as a Network Extension. See "Research: the iPhone hub
+    in a Network Extension" below.
 - **36.** **Russian versions of the documentation for users**, postponed: the README, the guide
     and the reference pages for users, in `docs/ru/` and `README.ru.md`; the documents for
     developers stay in English. The rule of D-8 then allows Cyrillic in those two places as
@@ -415,8 +416,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
     Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
     with this item, on the same server.
-- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and `cbb` take, keep and (`cbb`) pass on the list, a phone hub registers over VLESS through its ways, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
-    only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
+- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and `cbb` take, keep and (`cbb`) pass on the list, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
+    only over VLESS, in a network that lets nothing else through.
     The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
     into `cbb` and the kits beside its key, as they are no secret the design relies on; a
     forwarder of one's own prints them with its key (`cbb forward`), and the user enters
@@ -1161,7 +1162,7 @@ from their apps, at home or away from home.
    consent the device refuses it and says so. A watch never signs it.
 3. A `hub` command to a device with the consent turns sync away from home on there first,
    then makes it a hub. Who may be a hub does not change: an admin, at the group's key level
-   (D-66), never a rootless install (D-79), never a member without `hub` among its capabilities; phones only as D-64 says.
+   (D-66), never a rootless install (D-79), never a member without `hub` among its capabilities, never a phone (D-134).
 4. A device turned off by `away-off` or by its own `cbb global off` does not turn itself on
    again at the next start; only `away-on`, a `hub` command or its user do.
 
@@ -1292,8 +1293,8 @@ Questions to study before anything is planned for them.
 
 ### Research: the iPhone hub in a Network Extension
 
-Researched for 0.6 and not built (D-73). Today the iPhone is the hub only while its app is
-open, and that stays. The one way known to keep it running in the background is a Network
+Researched for 0.6 and not built (D-73); no phone is a hub at all (D-134). The one way known
+to keep an iPhone hub running in the background is a Network
 Extension, a packet tunnel provider, and each condition for it fails or is doubtful:
 
 1. **Apple's rules.** Guideline 5.4 allows VPN apps only from developers enrolled as an

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1abdaa297166 -->
+<!-- source: b61fb28e5395 -->
 # 离家使用
 
 在家时，你的设备会自动同步。要让笔记本或手机在别处也能继续同步，需要让家里的一台电脑成为群组的**中枢**，外出的设备通过群组自己的加密隧道连接到它。各种情形的图示见[工作原理](how-it-works.md#away-from-home-the-hub)。
@@ -43,7 +43,7 @@ sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches you
 在家里，中枢开机的状态下：
 
 - **电脑**：`sudo cbb global on`（在 Windows 上，在管理员终端中）。
-- **手机**：在应用中，设置，**Sync away from home**。然后在家里让应用保持打开片刻，让它与中枢碰面。iPhone 只在应用打开时才进行离家同步；Android 在后台也可以。在手机上创建的群组中，这部手机一开始就是中枢，等它不再是中枢时才会出现这个开关：在 **Move the hub to a computer** 下把电脑设为中枢（先在手机上保存转发器），或关闭 **This phone as the hub**。
+- **手机**：在应用中，设置，**Sync away from home**。然后在家里让应用保持打开片刻，让它与中枢碰面。iPhone 只在应用打开时才进行离家同步；Android 在后台也可以。
 - **小设备**（路由器、Raspberry Pi）：在该设备上运行 `sudo cbb global on`（[小设备](../../member/README.md#sync-away-from-home)）。
 
 ## 4. 检查
@@ -66,7 +66,7 @@ cbb global
 sudo cbb global hub
 ```
 
-中枢没有自己的地址时，会经由项目在 `cbb.tools` 的转发器：cbb 知道它的地址和密钥，充当中枢的手机也会使用它。`-forwarder default` 会把它加到同时拥有自己地址的中枢上。若要使用在任何小型服务器上运行的[自己的转发器](../admin/self-hosting.md#a-forwarder)，请改为给出它的地址和密钥：`sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`；在手机上则在 **This phone as the hub** 中填写。
+中枢没有自己的地址时，会经由项目在 `cbb.tools` 的转发器：cbb 知道它的地址和密钥。`-forwarder default` 会把它加到同时拥有自己地址的中枢上。若要使用在任何小型服务器上运行的[自己的转发器](../admin/self-hosting.md#a-forwarder)，请改为给出它的地址和密钥：`sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`。
 
 中枢可以同时拥有自己的地址和一个转发器：设备先尝试中枢，最后才尝试转发器。
 
@@ -88,11 +88,9 @@ sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 
 ## 没有电脑可以当中枢
 
-手机在应用打开期间可以当中枢（设置，**This phone as the hub**）。或者，让设备在你自己服务器上的**盲中继**碰面，而不用中枢：电脑使用 `cbb global relay`，手机在设置的 **Blind relay** 下设置。中继无法读取剪贴板，但能看到哪些设备在通信、何时通信以及通信量。参见[运行自己的服务器](../admin/self-hosting.md#a-blind-relay)。
+手机永远不会是中枢：中枢是一台电脑、路由器或像 Raspberry Pi 这样的小型开发板。没有中枢时，设备改为在**盲中继**上碰面，可以是项目的，也可以是你自己服务器上的：电脑使用 `cbb global relay`，手机在设置的 **Blind relay** 下设置。中继无法读取剪贴板，但能看到哪些设备在通信、何时通信以及通信量。参见[运行自己的服务器](../admin/self-hosting.md#a-blind-relay)。
 
-**This phone as the hub** 开关只在设置里，而不像电脑那样出现在设备列表中手机的页面上：手机只在应用打开期间当中枢（Android 手机也可在后台，但耗电），所以一直开着的电脑是更好的中枢。
-
-以后将提供：`cbb.tools` 上任何群组都能使用的盲中继。
+项目在 `cbb.tools` 上运行一个任何群组都能使用的盲中继：`sudo cbb global relay default` 知道它的地址和密钥，项目更换它们时也会自动跟上。
 
 ## 关闭
 

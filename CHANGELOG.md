@@ -104,11 +104,9 @@ with 0.5 is set up again once. The details follow.
 - A computer of 0.6 tells each phone connected to it the other members it reaches, so a
   phone away from home shows the members behind its hub as online
   ([protocol](docs/protocol.md), section 4, "Reach").
-- The iPhone and Android apps of 0.6 run sync away from home, the phone as a hub and the
-  link to the group's relay through the Live member, with the same cards as before; the
-  root phone sets the group's relay, which every device meets at, on HarmonyOS too; an
-  admin phone's forwarder as a hub is the root's setting, named with a hub command, which the
-  phone shows and serves through; the root phone renews the group's server credentials with
+- The iPhone and Android apps of 0.6 run sync away from home and the link to the group's
+  relay through the Live member, with the same cards as before; the root phone sets the
+  group's relay, which every device meets at, on HarmonyOS too; the root phone renews the group's server credentials with
   its root key when the app opens ([phone apps](docs/apps.md), "Screens").
 - A new phone joins a group of 0.6 by a window's QR code, or by the six digits its person types
   (the window found by mDNS) (`cbb_joiner_new`): it dials the member whose key the code names,
@@ -2997,6 +2995,12 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The phone as the hub: a hub is a computer, a router or a board, never a phone, not even the
+  root's (D-134, which replaces D-64). The core makes no phone, watch or leaf a hub, the
+  phones' member refuses a hub command and serves no tunnel, the root names no forwarder for a
+  phone, and the iPhone, Android and HarmonyOS apps drop "This phone as the hub" and Home's
+  note about it; HarmonyOS's page of it becomes "Blind relay". An admin phone still makes a
+  computer a hub. A group without a computer meets at a blind relay.
 - The remote invitation of 0.5 (`cbb://invite#`): its readers in the core (`cbb_core::invite`)
   and in Go (`internal/invite`) and their vectors (`testdata/interop/invites.json`); `cbb pair
   -invite` and the apps take the invitation of 0.6 alone, and `docs/protocol.md`, section 12,

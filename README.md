@@ -47,7 +47,7 @@ grep ' get.sh$' SHA256SUMS | sha256sum -c - && sudo sh get.sh
 On a Mac, `shasum -a 256 -c -` takes the place of `sha256sum -c -`. The installer then checks
 everything it downloads against the same file ([checking a download](docs/guide/install.md#checking-a-download)).
 
-No computer? A group of phones only works too: the phone is the hub while its app is open.
+No computer? A group of phones only works too: its devices meet at a blind relay.
 We recommend a computer that is often on, though, since it keeps sync away from home going at
 any time ([two kinds of group](docs/guide/how-it-works.md#two-kinds-of-group)).
 

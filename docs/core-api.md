@@ -100,16 +100,15 @@ sent to every member connected now and to each one that connects later; no `fram
 sending one) and `push_renewals` (`{renewals: [{slot, ahead}]}`: the `push-renew` messages
 members sent since the last call, one per slot, which the app answers with a new registration).
 The root also names its `hubs` (1 to 16 devices, by name or device ID), which the records
-judge: a phone is a hub only with an admin key; and the group's `relay` (`relays`, each
+judge: no phone, watch or leaf is a hub (D-134); and the group's `relay` (`relays`, each
 `address pin`, or `default` alone for the project's relay; none meets at no relay; `{relays}`:
 their addresses), written in the group's settings, where every device of the group meets the
 others while sync away from home is on (protocol.md section 14). The root names the
-`forwarder` of a device that may be a hub (`device`, `forwarder` `host:port` or `default`,
+`forwarder` of a computer that may be a hub (`device`, `forwarder` `host:port` or `default`,
 `key` its pin; the device's `{status, reason}`) with a `hub` command whose field 11 lists it,
-and makes the group's credentials for that forwarder, as `cbb global hub -on` does; a phone
-takes the root's `hub` command only as that setting: it keeps the forwarder in
-`root_forwarder.json` and serves through it again while it is a hub, never turns its hub on
-or off by the command, and refuses one from another key or one to stop. A root phone keeps the
+and makes the group's credentials for that forwarder, as `cbb global hub -on` does; it
+refuses a device the records make no hub, a phone among them. A phone refuses every `hub`
+command. A root phone keeps the
 period keys of the group's server credentials, which sign the hubs' and the members'
 credentials, but its root key stays with the app: `period` hands it over to sign the periods
 that are due (protocol.md section 18; `{period_due, period_overdue}` after), and `relay`,
@@ -213,7 +212,7 @@ after the header, and an operation that answers more than once marks the last an
 | `took` | phone | `id` | `{}`: the app took that copy into the clipboard, or saved its files; what it wrote itself is no copy to send back |
 | `fetch` | phone | `id`, `max` (bytes of the sealed blob), `out` (a new folder) | `{"parts"}`: each part with `file`, where it is, each checked against its hash |
 | `found`, `lost` | phone | `key` (the app's name for the member), `addrs` (`host:port`, loopback too for the tunnel), `device` (optional) | `{}`: dial it again and again, or stop |
-| `listen`, `unlisten` | phone | `port` (0 for any), `kind`: `home` (the default and the only kind: every address, for the members that dial this phone, and as the group's hub at home, which the app publishes with `r=phone`) | `{"port"}`: the member port; a port already open is closed first |
+| `listen`, `unlisten` | phone | `port` (0 for any), `kind`: `home` (the default and the only kind: every address, for the devices that dial this phone's pairing window) | `{"port"}`: the member port; a port already open is closed first |
 | `pause`, `resume`, `wait` | phone | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `pause` |
 | `set_mute` | phone | `until_ms` (null unmutes) | `{}`: the phone's own mute, as the app keeps it |
 | `peers` | phone | `all` (optional: the members offline too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, reach}]`, the connected members as the records and their hellos name them, `reach` the members each says it reaches |
@@ -223,7 +222,6 @@ after the header, and an operation that answers more than once marks the last an
 | `root_change_seen` | phone | none | `{}`: the person saw the change of root the event `root_changed` told of; it is not told again |
 | `dismiss` | phone | `id`: a notice's record ID, base64 | `{}`: the set keeps the notice dismissed (`RecordSet::dismiss`), saved with the group's records |
 | `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
-| `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off`, `port` (the UDP port) and `addrs` (`ip:port`, reached from afar without the forwarder) for `hub` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, which the records must give an admin key, is one of the group's hubs, the Live hub the computers run (`member/src/live/away.rs`), which also serves the guests of invitations, or stops being one, handing its clients to the next hub in the order (protocol.md, section 11, "Stopping a hub"); only with the feature `tunnel`. With no `forwarder` the hub serves through the one the root set, and every away op answers it beside `away` as `root_forwarder` `{endpoint, key}`, null while the root set none |
 | `attest_status`, `attest` | phone | `keys` and `status` for `attest_status`: the mirror's `keys.json` and `attest-status.json` as the app fetched them | `{"pending", "revoked"?}`: `attest_status` takes the revocation list of Android attestations when it checks out against the release keys and is not older than the one kept (`attest-status.json`, protocol.md section 17, "Revoked attestations"), and answers how many certificates it revokes; `pending` is how many Android peers' evidence waits for the root key, which `cbb_member_manage`'s `attest` records (`member/src/phone_attest.rs`, the core's `cbb_core::attest`); only with the feature `tunnel` |
 | `paste` | computer | none | `{kind}` + payload = the member's own clipboard text; error `the clipboard is empty` when unknown or an expired secret, and one that names `cbb paste -o` for images or files without a text |
 | `copied_media` | computer | as `copy_media` | as `copy_media`, but a watcher's report that its clipboard changed: the copy goes to the group when the service decides so (protocol.md section 5) and is not written back to the member's own clipboard |
@@ -267,7 +265,7 @@ after the header, and an operation that answers more than once marks the last an
 | `takeover_delay` | computer | `{value}`: a duration | an error that points to `recover`: no claim waits (D-117) |
 | `key_level` | computer | `{value}`: `proven`, `hardware` or `files` | `{below}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the rest of its newest one; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (protocol.md section 17) |
 | `ttl` | computer | `{value}`: `COPY [SECRET]`, durations, a copy from `1m` to `1h` and a secret from `5s` to `1m`, `-` keeping one | `{}` or an error. On the group's root or any admin: signs a `copies` record with `ttl_ms` and `secret_ttl_ms`, how long a copy and a secret live in the group, which every member stamps on the copies it makes (protocol.md section 10, "The copies setting") |
-| `hubs` | computer | `{hubs}`: 1 to 16 names or device IDs of computers and phones, in the order they serve | `{}` or an error. On the group's root or an admin with `hub`: signs a `hubs` record, the group's main hubs |
+| `hubs` | computer | `{hubs}`: 1 to 16 names or device IDs of computers, routers and boards, in the order they serve | `{}` or an error. On the group's root or an admin with `hub`: signs a `hubs` record, the group's main hubs |
 | `freeze` | computer | `device`: a device ID, or a name (case-insensitive) | `{name}`, the device's name, or an error. Only on an admin that is not frozen: freezes another admin without `remove-admins`, never the root or an admin phone (protocol.md section 10, "Removals and freezes keep what the author saw") |
 | `thaw` | computer | `device` | `{name}`, the device's name, or an error. Only on the root computer (a computer's admin has no `thaw`): ends every freeze of that admin (protocol.md section 10, "Removals and freezes keep what the author saw") |
 | `resolve` | computer | none | `{name}`: on the root, voids both histories of every key that signed two; `name` lists whose. Only on the admin socket |
@@ -276,7 +274,7 @@ after the header, and an operation that answers more than once marks the last an
 
 A phone's member carries out the commands for it as protocol.md section 15 says: the `mute` and
 `unmute` commands an admin sends, kept in `mute.json` as `cbb` does and told to the app (the
-`mute` event), `mode`, and the root's `hub` command, and answers the others as that section
+`mute` event) and `mode`, refuses `hub`, and answers the others as that section
 says. A phone takes tunnel offers and hub shares only from a device the records
 let be a hub, by the chain it proved. It keeps the sealed blobs of the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join by the

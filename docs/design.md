@@ -109,7 +109,7 @@ apps" below).
   compares the same way everywhere.
 - **Member port**: CBB's one port, TCP 8764 unless the installer was given another,
   advertised in the mDNS SRV record. Every computer and small device listens there for mutual
-  TLS (Macs too, D-50); phones only dial, except a phone that is the hub. The ALPN protocol of a connection picks
+  TLS (Macs too, D-50); phones only dial. The ALPN protocol of a connection picks
   what it gets (docs/protocol.md, section 4):
   - members and the phone app, with the member ALPN protocol and mutual TLS;
   - pairing, with its own ALPN protocol.
@@ -762,7 +762,7 @@ sync away from home, the admins, and remote paste.
   version `v=1`; the group tag `g=`, a short fingerprint of the group CA, so the members of
   another group, or of a replaced CA, are ignored; and `p=1` while a pairing window is open)
   and A/AAAA records under their own host label `cb-<device ID>.local`, never the system
-  host name. Members that do not dial publish with `r=listen`, phones that are the hub with `r=phone`.
+  host name. Members that do not dial publish with `r=listen`.
 - Computers run CBB's own small mDNS responder, which shares UDP port 5353 with
   avahi-daemon or systemd-resolved; a CI job checks that avahi browses and resolves it. On
   FreeBSD a socket shares a port only with the sockets of its own user unless root opened
@@ -1269,10 +1269,10 @@ forwarder's own site. Where a network admits only listed addresses (allow-lists)
   among themselves. The user chooses: a computer that is always on, one that is turned on
   when sync away from home is needed (for example to copy codes from afar for an hour), or
   no hub and sync at home only. `cbb global hub` and the documentation say so. Any
-  computer can be the hub: Linux, FreeBSD, a router, a Raspberry Pi, Windows or a Mac. Phones
-  are clients: a phone is not always on
-  and cannot accept connections in the background. A
-  group with no computer has its phone as the hub while the app is open (below).
+  computer can be the hub: Linux, FreeBSD, a router, a Raspberry Pi, Windows or a Mac. A
+  phone is never the hub, not even the root's (D-134): it is not always on, cannot accept
+  connections in the background, and nobody reaches it from afar. A group with no computer
+  meets at a blind relay (below).
 - Why sync over the internet needs a computer of the user's: the hub must be on and
   reachable all the time, it must be at home so that the devices hand it their keys there
   (below), and it is a member of the group, so it must be the user's own device. Copies are
@@ -1310,101 +1310,41 @@ forwarder's own site. Where a network admits only listed addresses (allow-lists)
   tunnel cannot be built, nothing is sent, and the app or `cbb status` says why, with the
   real cause in debug builds.
 
-#### The phone as the hub while its app is open
+#### Groups without a computer
 
 Everyone in a group has a phone; not everyone has a computer. A group made on a phone with
-TVs, set-top boxes, other phones or small devices and no computer has nothing to be its hub,
-and without a small device nothing in it accepts connections even at home: phones never do,
-and the Android app on a TV is a phone app. So the phone takes on the hub's work as far as it
-can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
+TVs, set-top boxes, other phones or small devices and no computer has no hub, and phones and
+the Android app on a TV only dial (D-134).
 
-- **What the user gets.** A group made on a phone has that phone as its hub from the start;
-  sync away from home is still turned on by the user, step by step as above. While the app
-  is in the foreground the group syncs, at home and from afar; when the app goes to the
-  background, the hub stops. The app says so where sync away from home is turned on and on
-  Home ("Sync away from home works while this app is open"). Some users want exactly this,
-  so it is a choice the user may keep, not a fault the app keeps pointing out.
-- **At home** the open app accepts member connections on the home network, as its
-  `TLSListener` already does for a joining phone, and publishes itself by mDNS while it is
-  open. The devices that only dial (phones, TVs, and small devices dialing out) find it and
-  connect, so a group of phones and TVs syncs at home too.
-- **From afar** nobody reaches the phone directly (carrier-grade NAT on mobile networks, an
-  address that changes, iOS closing sockets in the background), so it registers with the
-  forwarder over an outgoing connection, as a hub behind carrier-grade NAT does, and keeps
-  the registration and its hellos while the app is open. The forwarder finds a hub by its
-  key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
-  hub. The hub's WireGuard runs in the app's process, in the Live member (`ffi/src/member.rs`,
-  on `cbb_member::Live`): `cbb`'s own member and tunnel, one for the computers, small devices
-  and every phone, rather than a tunnel in Go for the phones, which would keep a second
-  WireGuard, AmneziaWG and VLESS to maintain and Go in the apps' builds (D-87, D-122). The
-  phones then reach a forwarder over VLESS with XHTTP, the only transport (D-91).
-- **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
-  keep trying it every few seconds while their own app or service runs, instead of backing
-  off to 30 s and more; a handshake initiation to the forwarder costs one small packet, and
-  the forwarder drops it while the hub is not registered. The interval is to be measured
-  (phone batteries, the forwarder's load); the forwarder's per-group limits apply as to any
-  group.
-- **Keys.** The hub's WireGuard key lives in the phone's keychain or Keystore for this device
-  only (Curve25519 does not fit the Secure Enclave), and the clients hand their keys to it in
-  their hellos at home, as with any hub. The hub registers with the forwarder by its server
-  key of the period, which signs without the user, and the period's hubs' credential that
-  lists it (docs/protocol.md, section 13); asking for Face ID on every registration (each
-  time the app opens or the network changes) would make the phone hub useless. Stealing the
-  server key would let someone displace the registration until the period ends, and
-  nothing more: the clients take only the hub key of the offer they met at home. A device far away joins with a remote invitation
-  made on the phone, which is then both the admin who confirms the device and the hub that
-  serves the guest tunnel, so no invitation has to be handed over.
-- **Android** may keep the hub running in its foreground service while the app is in the
-  background, if the user turns it on and accepts the battery cost; iOS gives an app no way
-  to do that.
-- **Moving the hub to a computer.** When a computer that can be the hub joins (Linux,
-  FreeBSD, Windows, a Mac), above all one that is always on (a desktop, a
-  server, a board or a router, by the form its hello gives), the app suggests making it the
-  hub in Settings, with the reason in plain words: sync away from home then works with the
-  app closed. The user may keep the phone as the hub; the app then does not ask again, and
-  can still move the hub to any computer there. A computer that is no admin yet is made one
-  first, on the root phone, or marked as a hub that only passes copies on (`cbb global hub
-  -forward-only`, which only the root signs). A hub's offer comes only from that hub: the
-  hub that moves keeps serving its clients until the new one serves, they meet the new hub
-  at home or at the group's relay and take its offer there, and then the old hub tells them
-  it moved (`cbb global move` on a computer); a client away with neither home nor a relay
-  loses the hub until it meets the new one (D-122; docs/protocol.md, section 11).
-- **Losing the phone.** When the phone that is the hub is lost, another hub of the group
-  serves, or another admin phone becomes the hub, and the clients take its offer when they
-  meet it at home or at the group's relay; once the lost phone is removed, the records no
-  longer let it serve. A client far away that meets neither joins again with a new remote
-  invitation. That is one more reason for a second phone as an admin, which the app already
-  suggests. A lost root phone is replaced with the recovery key (D-117).
-- **What it does not change.** The rules above hold: a star around the hub, the member TLS
-  inside the tunnel, the project's forwarder only passing packets. The phone reads the copies
-  as the group's reader it is, and the copies it passes on stay sealed to the others.
+- **At home** the devices sync wherever one listens: a small device (`cbb` on a board or a
+  router) accepts connections as every member does, and can be the group's hub.
+- **At a blind relay.** The group's root sets a relay, the project's or the user's own
+  (`cbb relay`, below), and every device meets the others there while its app or service
+  runs, at home and from afar. The relay passes sealed packets and learns only which devices
+  talk and when.
+- **Making a computer the hub.** When a computer that can be the hub joins (Linux, FreeBSD,
+  Windows, a Mac, a board or a router), above all one that is always on, an admin phone
+  offers "Make it a hub" on its page (docs/apps.md, "Screens"): sync away from home then
+  works with every app closed. A computer that is no admin yet is made one first, on the
+  root phone, or marked as a hub that only passes copies on (`cbb global hub
+  -forward-only`, which only the root signs).
 
 ##### Groups without a working hub
 
 | Situation | What happens | Still open |
 |---|---|---|
-| Phones only, or phones and Android TVs or other Android devices | a phone with its app open is the hub; the others sync while they run (Android in its foreground service, an iPhone with its app open) | |
-| A phone and small devices | syncs at home, where small devices listen; from afar, the phone with its app open is the hub | |
-| The whole group away together (a trip, a hotel Wi-Fi that isolates its clients, mobile data) | the phone hub, through the forwarder | |
-| A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, the computers first, then the phones (D-96; docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
+| Phones only, or phones and Android TVs or other Android devices | they meet at the group's blind relay while they run (Android in its foreground service, an iPhone with its app open) | |
+| A phone and small devices | syncs at home, where small devices listen; a small device can be the hub, else the blind relay from afar | |
+| A computer is the hub but is off, broken or offline | another hub of the group serves: the root's computer and every admin computer with a hub set up (D-96; docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
 | The hub's home has no public address and the project's forwarder is not reached | nothing syncs away from home, unless the group has a forwarder or relay of the user's own (`cbb forward`, `cbb relay`) | |
-| A network blocks WireGuard | AmneziaWG, then VLESS; the hub's setting in every app, the phone hub's too | VLESS for the phone hub's own registration is not yet tried against a real forwarder |
-| The phone that is the hub is lost | another hub, or another admin phone, serves; a lost root is replaced with the recovery key; devices far away that meet neither are invited again | |
+| A network blocks WireGuard | AmneziaWG, then VLESS; the hub's setting in every app | |
 
-##### What runs
+##### What runs on a phone
 
-The Live member is the phone's hub and its client (D-122): the guest tunnel and the hub's
-side of the tunnel, the listening member on one port for the tunnel, the relay and the home
-network, the registration with the forwarder by the period's server key, publishing the
-member port (`r=phone`) on the home networks the phone remembers, remote invitations made
-and served on the phone, several hubs in the order of the records' `hubs` table (D-65), and
-clients that try a hub whose device record says `phone` at least every 5 s instead of up to
-30 s. Still to do: the phone hub yielding to a hub above it, setting the table of hubs from
-the apps, and bench runs of a computer and a small device through the forwarder to a phone.
-
-Not yet verified on real devices: how long iOS keeps the forwarder registration and the
-tunnel up while the app is open and the screen locks, the battery cost of the clients'
-retries, and the Android foreground service as a hub across battery savers.
+The Live member is the phone's client (D-122): the guest tunnel of a remote invitation,
+sync away from home through a computer hub's tunnel, the link to the group's blind relay and
+remote invitations an admin phone makes through a hub of the group. It refuses a hub
+command, and the records make no phone a hub (D-134).
 
 #### Reaching the hub
 
@@ -1485,7 +1425,7 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   and, on disk, under a keyed hash of each period's tag, the version of the newest
   credential and a hash of the period key, so an older credential is refused even after a
   restart. Built in Go (the forwarder, with its own reader of the format, `internal/blind`)
-  and in the Rust hub, which the phones run too; a hub registers once the credential lists
+  and in the Rust hub; a hub registers once the credential lists
   its server key, and shows that credential alone (`cbb-forward/3`, D-106).
 - **No interference.** Limits per group: packets and bytes per second, at most 16 clients,
   memory. A group that reaches a limit is slowed down alone. Limits per source: registrations
@@ -1664,7 +1604,7 @@ relay, or a hub.
 1. **AmneziaWG**, a fork of wireguard-go that randomises message headers, adds junk and
    imitation packets before the handshake and pads messages. Same keys and code; a hub
    speaks it unless the user switches it off (`cbb global hub -no-obfuscate -no-vless`, or the hub's setting
-   in the apps: `cbb global hub -keep` on the computers, the phone hub's own on the phones). `cbb` and the phones'
+   in the apps, which `cbb global hub -keep` keeps on the computers). `cbb` and the phones'
    tunnel run on amneziawg-go always; without settings it is plain WireGuard on the wire.
    - The hub makes the group's settings at random and keeps them for a period of the
      group's server credentials, while obfuscation stays on, then the next ones it gave its
@@ -1759,9 +1699,9 @@ sing-box is not used (GPL).
   guideline 5.4 and Google Play's VpnService rules concern apps that create a device VPN).
 - The phones' member in the Rust core dials the tunnel with its member TLS: the app opens a
   port on the loopback address that leads into the tunnel and hands it to the member. Another
-  app that connects to that port reaches only the hub's member TLS. A phone that is the hub
-  takes the tunnel's connections on a member port on the loopback address too, and a blind
-  relay's calls on another, each only from the device the relay announced.
+  app that connects to that port reaches only the hub's member TLS. A phone takes a blind
+  relay's calls on a member port on the loopback address too, only from the device the relay
+  announced.
 - `cbb` does the same: GotaTun's WireGuard over a UDP socket and smoltcp's TCP run
   in one thread of `cbb`, behind a port on the loopback address that its member TLS dials, so
   no TUN device, no root and no capability is needed. GotaTun takes its AEAD from ring, whose
@@ -1830,8 +1770,8 @@ only adds to it.
    making and opening remote invitations. Done: the tunnel, in the Rust core's library
    (`ffi/src/tunnel.rs`) that both apps link; the tunnel offer in both kits; both apps'
    switch, which keeps the hub's offer and reaches the hub through the tunnel while it is not
-   found at home; remote invitations made and served on a phone that is the hub. Using an
-   invitation on a phone follows.
+   found at home; remote invitations an admin phone makes through a hub of the group, and
+   using one on a phone.
 8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` runs on amneziawg-go, and the
    phones' and `cbb`'s tunnel on GotaTun with AmneziaWG of its own (`awg.rs`);
    obfuscation per group between computers (on by default, `cbb global hub -no-obfuscate` with
