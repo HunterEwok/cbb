@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import UIKit
 import XCTest
 
 /// The app in each of the project's eight languages and for every reader
@@ -224,6 +225,10 @@ final class ReadersUITests: XCTestCase {
     /// audit in English and in Arabic; Hide hides the notice that may be
     /// hidden and only it.
     func testGroupCards() {
+        // Text on the clipboard, so that the system's paste button under
+        // the cards is on and is audited as a person sees it, not dimmed
+        // for a clipboard with nothing it takes.
+        UIPasteboard.general.string = "cbb"
         for language in ["en", "ar"] {
             let app = launch(language: language, extra: ["-showcase", "-showcaseAlerts", "-PasteChoice", "button"])
             let before = app.staticTexts[tr("A group from before 0.6", language)]

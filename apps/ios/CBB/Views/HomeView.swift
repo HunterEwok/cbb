@@ -223,11 +223,14 @@ struct GroupHeader: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Tokens.spacingMedium) {
                     Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
+                        // Wraps instead of standing on one clipped line.
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     SyncSwitches()
                 }
                 VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
                     Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
                     SyncSwitches()
                 }
             }

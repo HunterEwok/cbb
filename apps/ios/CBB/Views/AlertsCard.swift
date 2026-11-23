@@ -35,6 +35,8 @@ struct Before06Card: View {
             Text("This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.")
                 .font(.subheadline)
                 .foregroundStyle(palette.textDim)
+                // Wraps to its full height instead of being clipped.
+                .fixedSize(horizontal: false, vertical: true)
             LeaveButton()
                 .buttonStyle(GlassButtonStyle())
         }

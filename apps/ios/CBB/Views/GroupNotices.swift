@@ -18,6 +18,8 @@ struct NoticesCard: View {
                     HStack(alignment: .firstTextBaseline) {
                         Label {
                             Text(verbatim: Self.text(n, names: names) ?? "")
+                                // Wraps to its full height instead of being clipped.
+                                .fixedSize(horizontal: false, vertical: true)
                         } icon: {
                             Image(systemName: "info.circle")
                         }
@@ -25,7 +27,11 @@ struct NoticesCard: View {
                         Spacer()
                         if n.dismissable {
                             Button { Task { await model.dismiss(notice: n) } } label: {
-                                Image(systemName: "xmark").accessibilityLabel(Text("Hide"))
+                                Image(systemName: "xmark")
+                                    // A target a finger hits: 44 points square.
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .contentShape(Rectangle())
+                                    .accessibilityLabel(Text("Hide"))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(palette.textDim)

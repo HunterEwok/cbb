@@ -18,9 +18,12 @@ import (
 )
 
 // service listens on a socket in a temporary folder and gives what one
-// client sends, in order. Its dial connects that client and returns once
-// the service took the connection: on Windows a connection closed before
-// it is accepted can leave the accepted end waiting for ever.
+// client sends, in order, once that client closed the connection or the
+// test ended. Its dial connects that client and returns once the service
+// took the connection. On Windows the accepted end of a Unix socket does
+// not always see the client's close and can read for ever, so the service
+// closes its own end when the test ends: a test that needs what was sent
+// waits for it, a test that only needs Send's error does not.
 func service(t *testing.T) (func() *control.Client, <-chan []*control.Message) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "s")
@@ -29,15 +32,23 @@ func service(t *testing.T) (func() *control.Client, <-chan []*control.Message) {
 		t.Skip("no Unix sockets:", err)
 	}
 	t.Cleanup(func() { l.Close() })
-	accepted := make(chan struct{})
+	accepted := make(chan net.Conn, 1)
 	got := make(chan []*control.Message, 1)
+	t.Cleanup(func() {
+		select {
+		case c := <-accepted:
+			c.Close()
+		default:
+		}
+	})
 	go func() {
 		c, err := l.Accept()
-		close(accepted)
 		if err != nil {
+			close(accepted)
 			got <- nil
 			return
 		}
+		accepted <- c
 		defer c.Close()
 		r := control.NewReader(c)
 		var ms []*control.Message
@@ -57,7 +68,10 @@ func service(t *testing.T) (func() *control.Client, <-chan []*control.Message) {
 			t.Fatal(err)
 		}
 		select {
-		case <-accepted:
+		case a, ok := <-accepted:
+			if ok {
+				accepted <- a
+			}
 		case <-time.After(10 * time.Second):
 			t.Fatal("the service did not take the connection")
 		}
@@ -123,19 +137,17 @@ func TestSendFails(t *testing.T) {
 		"a file that is gone":     {Part: control.Part{Path: "x", Size: 2}, File: filepath.Join(dir, "gone")},
 		"a file that got shorter": {Part: control.Part{Path: "x", Size: 10}, File: short},
 	} {
-		dial, got := service(t)
+		dial, _ := service(t)
 		c := dial()
 		if err := Send(c, control.OpCopyMedia, []Part{part}, ""); err == nil {
 			t.Errorf("%s was sent", name)
 		}
 		c.Close()
-		<-got
 	}
 	// A closed connection fails at once.
-	dial, got := service(t)
+	dial, _ := service(t)
 	c := dial()
 	c.Close()
-	<-got
 	if err := Send(c, control.OpCopyMedia, nil, ""); err == nil {
 		t.Error("sent over a closed connection")
 	}
