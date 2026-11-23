@@ -24,7 +24,9 @@ fi
 
 moc=$(pkg-config --variable=host_bins Qt5Core)/moc
 "$moc" "$here/tst_silica.cpp" -o "$out/tst_silica.moc"
-"$moc" "$src/events.h" -o "$out/moc_events.cpp"
+# Included by its name, found through -I: the path moc would write
+# goes up from $out, which gcov cannot follow back.
+"$moc" -f events.h "$src/events.h" -o "$out/moc_events.cpp"
 
 cover=
 [ $# -ge 1 ] && cover=--coverage
