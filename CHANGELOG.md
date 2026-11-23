@@ -2198,6 +2198,9 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- CI's Rust tests run their two longest tests, the power cut at every byte of every save and
+  the record sets' differential check, in two different parts: the hash of their names had put
+  both into the first part, which ran minutes after the others.
 - The apps call the group's root the main device on every screen, in every language, and a
   move by the recovery key "moving the group" rather than taking it over. The Russian
   strings drop their colloquial words for an admin, the relay, the forwarder, joining a group

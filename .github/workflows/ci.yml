@@ -2984,11 +2984,31 @@ jobs:
           CBB_FULL_SIZE: "1" # the records' tests at real size too
           PART: ${{ matrix.part }}
         # nextest unpacks the archive into target/llvm-cov-target, which
-        # has to be there already.
+        # has to be there already, empty. The two longest tests (minutes
+        # each) are left out of the shares and run after them in parts of
+        # their own, 1 and 4: the hash put both into part 1. That second
+        # run unpacks the archive again into an emptied directory, with
+        # the first run's profiles kept aside.
         run: |
-          mkdir -p target/llvm-cov-target
-          cargo llvm-cov nextest --archive-file "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" --no-report \
-            --partition "hash:$PART/$RUST_PARTS"
+          long_1='test(=powerloss::a_power_cut_at_every_byte_of_every_save)'
+          long_4='test(=records::tests::differential::a_set_agrees_with_evaluate)'
+          tests() {
+            rm -rf target/llvm-cov-target
+            mkdir -p target/llvm-cov-target
+            cargo llvm-cov nextest --archive-file "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" --no-report "$@"
+          }
+          tests --partition "hash:$PART/$RUST_PARTS" -E "not ($long_1 | $long_4)"
+          long=
+          case $PART in
+          1) long=$long_1 ;;
+          4) long=$long_4 ;;
+          esac
+          if [ -n "$long" ]; then
+            mkdir -p "$RUNNER_TEMP/profiles"
+            mv target/llvm-cov-target/*.profraw "$RUNNER_TEMP/profiles/"
+            tests -E "$long"
+            mv "$RUNNER_TEMP"/profiles/*.profraw target/llvm-cov-target/
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: success() || failure()
         with:

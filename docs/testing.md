@@ -135,7 +135,8 @@ simulator are two jobs, the Rust workspace's checks and Raspberry Pi builds
 which run as the service tests do: one job builds them once into a cargo-nextest archive,
 four parts run a share of its tests each (`--partition`; within a part cargo-nextest runs the
 test binaries side by side, `.config/nextest.toml`, and the tests that time their own run
-run alone), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
+run alone; the two longest, the power cut at every byte and the record sets' differential
+check, run after the shares, one in part 1 and one in part 4), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
 and the Kotlin kit's tests (`Android kit`) beside the Android apps' build (`Android app`).
 
 The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
