@@ -2999,6 +2999,10 @@ with 0.5 is set up again once. The details follow.
   `copies-rust.json`, `member.json`, `swift-member.json`). The board of 0.6 and
   `cbb_core::copies` keep and seal the group's copies; `seal-go.json` stays as a fixed vector
   of Go's `crypto/hpke` that the core opens (D-130).
+- The core's TLS configurations for the members of 0.5, on the group's certificates
+  (`member_client`, `member_server`, `member_or_pair_server`, `restore_client`,
+  `pair_admitter`, the external pairing configurations and `check_member`); members of 0.6
+  speak TLS by key (`cbb_core::tls::bykey`) (D-130).
 - Remote paste onto the phones until 0.7: the member of 0.6 hands a phone no paste, so the
   Android, Aurora and HarmonyOS apps no longer offer the switches "Let the group's admins
   paste" and "Let a paste press Enter", the log of pastes or the keyboard's "Type remote
