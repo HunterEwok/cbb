@@ -335,7 +335,9 @@ impl State {
         let mut rest: Vec<(bool, DeviceId)> = self
             .devices
             .iter()
-            .filter(|d| self.may_be_hub(&d.id) && (d.admin.is_some() || self.root_device == Some(d.id)) && !out.contains(&d.id))
+            .filter(|d| {
+                self.may_be_hub(&d.id) && (d.admin.is_some() || self.root_device == Some(d.id)) && !out.contains(&d.id)
+            })
             .map(|d| (self.root_device != Some(d.id), d.id))
             .collect();
         rest.sort();

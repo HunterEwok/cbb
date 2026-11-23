@@ -1065,15 +1065,13 @@ pub fn new_key() -> Result<Vec<u8>> {
     random_key()
 }
 
-/// New AmneziaWG settings for a group whose hub is a phone, as the offers
-/// carry them (ffi/).
+/// New AmneziaWG settings for a hub, as the offers carry them.
 pub fn new_obfuscation() -> Result<serde_json::Value> {
     Ok(crate::awg::Obfuscation::random()?.to_value())
 }
 
-/// A new VLESS user ID for a group whose clients reach a phone's hub only
-/// over VLESS, a random UUID as internal/tunnel's NewVLESSID makes it
-/// (ffi/).
+/// A new VLESS user ID for a hub, a random UUID as internal/tunnel's
+/// NewVLESSID makes it.
 pub fn new_vless_id() -> String {
     crate::vless::random_uuid()
 }

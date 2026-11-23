@@ -7,7 +7,7 @@
 //! forwarder's face, the proof of the hub's WireGuard key and the face's
 //! hubs' credential in the format's messages (`v3`), then hellos from the
 //! hub's WireGuard port so that the forwarder learns where that port is
-//! reached. The phones' hub in Rust (ffi/) registers through it.
+//! reached.
 //!
 //! When the forwarder's TCP port does not answer and the group's clients
 //! come over VLESS, the registration goes inside VLESS with XHTTP, as the Go
@@ -88,7 +88,7 @@ pub struct Config {
 
 /// Whether the hub's forwarder is the project's, and the ways in over VLESS
 /// that the newest signed entry points name for it (docs/protocol.md,
-/// section 16, "Entry points"), as the phones' hub_set_project_ways takes them.
+/// section 16, "Entry points").
 #[derive(Clone, Default, Debug)]
 pub struct Ways {
     pub project: bool,

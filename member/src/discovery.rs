@@ -1204,8 +1204,8 @@ fn browse_with<P: Peers>(
                 if id == me || info.get_property_val_str("g") != Some(tag) {
                     continue;
                 }
-                // A phone that is the hub publishes itself while its app is
-                // open; it dials this member, as every phone does.
+                // A phone listens for no member: one that publishes itself
+                // dials this member, as every phone does.
                 if phone(r) {
                     if !as_phone {
                         node.found(&id, true);
@@ -1354,8 +1354,7 @@ fn listens_only(r: Option<&str>) -> bool {
     r.is_some_and(|v| v.eq_ignore_ascii_case("listen"))
 }
 
-/// Reports whether a TXT `r` value names a phone, the group's hub while its
-/// app is open.
+/// Reports whether a TXT `r` value names a phone, which no member dials.
 fn phone(r: Option<&str>) -> bool {
     r.is_some_and(|v| v.eq_ignore_ascii_case("phone"))
 }
