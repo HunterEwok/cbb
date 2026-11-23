@@ -2979,6 +2979,10 @@ with 0.5 is set up again once. The details follow.
   and in Go (`internal/invite`) and their vectors (`testdata/interop/invites.json`); `cbb pair
   -invite` and the apps take the invitation of 0.6 alone, and `docs/protocol.md`, section 12,
   describes it alone (D-130).
+- The recovery sheet of 0.5 (`cbb://recover?`, with its admin CA): the core's
+  `cbb_core::recovery` and its entries `recovery_sheet` and `read_recovery_sheet`, the kits'
+  calls of them and their vectors (`testdata/interop/recovery-sheet.json`). The sheet of 0.6
+  is the core's `cbb_core::sheet`, which refuses one of 0.5 as earlier (D-130).
 - The specification of the records of 0.5 (`docs/records-v2.md`, and the part of
   `docs/protocol.md`, section 10, that described them); section 10 now gives for the records of
   0.6 who signs what, the admins and watches, the hubs table, the copies setting, voiding two

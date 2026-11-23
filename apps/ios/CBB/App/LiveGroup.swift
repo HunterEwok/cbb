@@ -309,7 +309,7 @@ final class LiveGroup: GroupController {
         try startSync()
         await refresh()
         let text = made.recovery.text.flatMap { $0.split(separator: " ").map(String.init) }.joined(separator: "-")
-        return Core.RecoverySheet(qr: made.recovery.qr, text: text, admin: Data())
+        return Core.RecoverySheet(qr: made.recovery.qr, text: text)
     }
 
     /// Opens this phone's home window on a group of 0.6 (docs/protocol.md,

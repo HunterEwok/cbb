@@ -69,7 +69,7 @@ kits), so a reader that fails in another way also shows as a difference.
   (message 67's Welcome with fields of a later version, written again in one form) and `api`,
   the core's entry point of [core-api.md](core-api.md)), seeded by
   `go run ./tools/difffuzz seeds` (the 0.6 targets from the vectors of `testdata/format`). `api` starts from the version, the seed bodies through
-  `parse_body`, a few invitations' shapes and the recovery sheet, and checks that any bytes get one answer of the
+  `parse_body` and a few invitations' shapes, and checks that any bytes get one answer of the
   ABI, with `ok` or a listed error code, and that a request answered twice gets the same
   answer. `vless` reads the forwarder's VLESS and XHTTP answers in pieces of every size and
   checks that the packets do not depend on how the bytes came. The service's targets in

@@ -409,7 +409,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             )
             adopt(PhoneGroup.of(made.device, made.group, root = true))
             Log.i(TAG, "made the group")
-            Core.RecoverySheet(made.recoveryQR, made.recoveryText.flatMap { it.split(" ") }.joinToString("-"), ByteArray(0))
+            Core.RecoverySheet(made.recoveryQR, made.recoveryText.flatMap { it.split(" ") }.joinToString("-"))
         }
     }
 

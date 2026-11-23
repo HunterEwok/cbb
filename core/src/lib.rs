@@ -81,7 +81,6 @@ pub mod peer;
 mod powerloss;
 pub mod push;
 pub mod records;
-pub mod recovery;
 pub mod release;
 pub mod remotepaste;
 pub mod rule;
