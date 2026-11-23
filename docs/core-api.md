@@ -107,8 +107,10 @@ others while sync away from home is on (protocol.md section 14). The root names 
 `forwarder` of a computer that may be a hub (`device`, `forwarder` `host:port` or `default`,
 `key` its pin; the device's `{status, reason}`) with a `hub` command whose field 11 lists it,
 and makes the group's credentials for that forwarder, as `cbb global hub -on` does; it
-refuses a device the records make no hub, a phone among them. A phone refuses every `hub`
-command. A root phone keeps the
+refuses a device the records make no hub, a phone among them. The root or an admin makes a
+computer a hub with `hub` (`device`, and `forwarder` with `key`, or neither for the project's
+forwarder; the device's `{status, reason}`), the apps' "Make it a hub", as `cbb global hub -on
+NAME` does on an admin computer. A phone refuses every `hub` command. A root phone keeps the
 period keys of the group's server credentials, which sign the hubs' and the members'
 credentials, but its root key stays with the app: `period` hands it over to sign the periods
 that are due (protocol.md section 18; `{period_due, period_overdue}` after), and `relay`,

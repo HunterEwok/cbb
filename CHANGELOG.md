@@ -16,6 +16,9 @@ the same release ([versions and compatibility](docs/reference/compatibility.md))
 with 0.5 is set up again once. The details follow.
 
 ### Added
+- An admin phone makes a computer of the group a hub: ffi's manage action `hub` sends the
+  computer a `hub` command with the project's forwarder or one named, as `cbb global hub -on`
+  does on an admin computer ([core API](docs/core-api.md)).
 - The apps' words follow a termbase, `apps/l10n/terms.json`, and `go run ./tools/strings -lint`
   checks them in CI: a translation names each concept the English names by the termbase's word,
   Vale's rules (the termbase's banned words, one-character ellipses, the language's quotes) pass

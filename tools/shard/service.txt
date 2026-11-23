@@ -56,6 +56,7 @@ TestDrillRemovedStaysOut 35.2
 TestDrillRestoreFromYesterday 29.4
 TestEntriesSpread 14.1
 TestEvidence 11.8
+TestFFIAdminPhoneMakesAHubAndFreezes 9.0
 TestFFIInviteThroughHub 6.0
 TestFFIJoinInvite 9.0
 TestFFIJoiner 4.0

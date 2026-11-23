@@ -4,16 +4,19 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/forward"
 )
 
 // phoneOnLinuxBin is the phone app's example phone-on-linux, as
@@ -151,4 +154,119 @@ func TestFFIPhoneIsNoHub(t *testing.T) {
 	if a["hub"] == true {
 		t.Fatalf("the phone says it is a hub: %v", a)
 	}
+}
+
+// TestFFIAdminPhoneMakesAHubAndFreezes: an admin phone's "Make it a hub"
+// and "Freeze" (docs/apps.md, "Screens"). The phone sends an admin computer
+// the hub command through the forwarder it names, and the computer, with
+// sync away from home on, becomes a hub of the group; the phone then
+// freezes it and unfreezes it, which every member learns.
+func TestFFIAdminPhoneMakesAHubAndFreezes(t *testing.T) {
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	var h hub
+	pi, next, in := adminPhone(t, phoneOnLinuxBin(t), &h)
+	box := startService(t, &h, "box")
+	// By the link of pi's QR code, which names the window.
+	c, _, link := openWindowLink(t, pi)
+	if _, err := box.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
+		t.Fatalf("box joining pi: %v", err)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "box" {
+		t.Fatalf("pi's window ended with %+v, %v", m, err)
+	}
+	c.Close()
+	makeAdmin(t, pi, box)
+	manage := func(req map[string]any) map[string]any {
+		t.Helper()
+		b, err := json.Marshal(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(in, "MANAGE %s\n", b)
+		var ans struct {
+			OK    map[string]any `json:"ok"`
+			Error map[string]any `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(next("MANAGED ")), &ans); err != nil {
+			t.Fatal(err)
+		}
+		if ans.Error != nil {
+			return map[string]any{"error": ans.Error}
+		}
+		return ans.OK
+	}
+	self := func(s *testService) control.Device {
+		for _, d := range s.devices(t) {
+			if d.Self {
+				return d
+			}
+		}
+		return control.Device{}
+	}
+
+	// Commands go over a connection to the computer: the phone dials the
+	// address it is handed, as the app hands in what DNS-SD finds.
+	found, _ := json.Marshal(map[string]any{"op": "found", "args": map[string]any{
+		"key": "box", "addrs": []string{box.addr()}, "device": self(box).ID,
+	}})
+	fmt.Fprintf(in, "CALL %s\n", found)
+	next("ANSWER ")
+	waitFor(t, "the phone connected to box", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+
+	// With sync away from home off on the computer, it refuses.
+	hubReq := map[string]any{"action": "hub", "device": "box", "forwarder": f.Addr().String(), "key": forward.Pin(cert.Leaf)}
+	var got map[string]any
+	waitUpTo(t, 30*time.Second, "the phone knows box as an admin", func() bool {
+		got = manage(hubReq)
+		return got["status"] != nil
+	})
+	if got["status"] == "done" {
+		t.Fatalf("box became a hub with sync away from home off: %v", got)
+	}
+	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got = manage(hubReq); got["status"] != "done" {
+		t.Fatalf("make box a hub: %v", got)
+	}
+	waitUpTo(t, 30*time.Second, "box serves as a hub", func() bool { return self(box).Hub })
+
+	// Freeze, then unfreeze: the root learns both.
+	if got = manage(map[string]any{"action": "freeze", "device": "box"}); got["name"] != "box" {
+		t.Fatalf("freeze box: %v", got)
+	}
+	frozen := func() bool {
+		for _, d := range pi.devices(t) {
+			if d.Name == "box" {
+				return d.Frozen
+			}
+		}
+		return false
+	}
+	waitUpTo(t, 30*time.Second, "the root learns box is frozen", frozen)
+	if got = manage(map[string]any{"action": "thaw", "device": "box"}); got["name"] != "box" {
+		t.Fatalf("unfreeze box: %v", got)
+	}
+	waitUpTo(t, 30*time.Second, "the root learns box is unfrozen", func() bool { return !frozen() })
 }

@@ -145,8 +145,10 @@ struct ManageArgs {
     /// keeps the group's.
     #[serde(default)]
     secret_ttl_ms: Option<u64>,
-    /// With forwarder, on the root: the hub's forwarder, `host:port` or
-    /// `default` for the project's, and its key's pin in base64 (`key`).
+    /// With forwarder, on the root, and with hub, on the root or an admin:
+    /// the hub's forwarder, `host:port`, and its key's pin in base64 or
+    /// `default` for the project's (`key`); with hub, neither for the
+    /// project's forwarder.
     #[serde(default)]
     forwarder: String,
     #[serde(default)]
@@ -787,7 +789,7 @@ impl Phone {
     /// An admin's change to a device, signed with the app's admin or root
     /// key: remove, rename, freeze and thaw, or a command for another
     /// device (mute, unmute, sync_off, sync_on, paste, paste_off,
-    /// actions_off, away_off), sent as the computer's service sends it and
+    /// actions_off, away_off, hub), sent as the computer's service sends it and
     /// answered by that device (`{status, reason}`); the records judge
     /// whether the key may.
     pub fn manage(&self, request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
@@ -857,12 +859,22 @@ impl Phone {
                     let (due, overdue) = mesh.periods();
                     return Ok(json!({ "period_due": due, "period_overdue": overdue }));
                 }
-                // The root names the forwarder of an admin phone that is a
+                // The root names the forwarder of a computer that may be a
                 // hub (`forwarder`, its key's pin `key`, or `default` for the
                 // project's) with the hub command, as cbb global hub -on
                 // does, and makes the group's credentials for it there.
                 "forwarder" => {
-                    let r = self.name_forwarder(&a, &key)?;
+                    let r = self.hub_command(&a, &key, true)?;
+                    self.renew_by(&key);
+                    return Ok(r);
+                }
+                // An admin phone's "Make it a hub": the root or an admin
+                // makes a computer a hub of the group as well with the hub
+                // command, through the forwarder given or the project's, as
+                // cbb global hub -on NAME does on an admin computer; the
+                // computer refuses while its sync away from home is off.
+                "hub" => {
+                    let r = self.hub_command(&a, &key, false)?;
                     self.renew_by(&key);
                     return Ok(r);
                 }
@@ -904,13 +916,17 @@ impl Phone {
         })())
     }
 
-    /// The root's hub command that names the forwarder of the device
-    /// `a.device`, a hub of the group by the records, which takes it as its
-    /// forwarder setting: answered as a command is (`{status, reason}`).
-    fn name_forwarder(&self, a: &ManageArgs, key: &AppKey) -> Result<Value> {
+    /// The hub command to the device `a.device`, a hub of the group by the
+    /// records, with the forwarder `a.forwarder` (the project's when none is
+    /// given), which it takes as its forwarder setting and serves through:
+    /// answered as a command is (`{status, reason}`). Only the root names a
+    /// forwarder when `root_only`; otherwise the records judge whether the
+    /// key may send a hub command, as for every command.
+    fn hub_command(&self, a: &ManageArgs, key: &AppKey, root_only: bool) -> Result<Value> {
         let mesh = &self.live.mesh;
         let st = mesh.state();
-        if st.roots.last() != Some(&cbb_core::records::Key::es256(key.public.clone()).hash()) {
+        let root = st.roots.last() == Some(&cbb_core::records::Key::es256(key.public.clone()).hash());
+        if root_only && !root {
             return Err(Error::msg("only the group's root names a hub's forwarder"));
         }
         let d = writers::find(&st, &a.device)?.clone();
@@ -921,7 +937,12 @@ impl Phone {
             )));
         }
         drop(st);
-        let f = cbb_member::forwarder_named(&resolve(&a.forwarder)?, &a.key)?
+        let (fwd, fkey) = if a.forwarder.trim().is_empty() && a.key.is_empty() && !root_only {
+            (PROJECT_FORWARDER, "default")
+        } else {
+            (a.forwarder.as_str(), a.key.as_str())
+        };
+        let f = cbb_member::forwarder_named(&resolve(fwd)?, fkey)?
             .ok_or_else(|| Error::msg("name the forwarder: its address with its key's pin, or default"))?;
         let o = cbb_member::orders::Order::Hub(cbb_member::orders::Hub {
             forwarders: vec![f.clone()],
@@ -935,7 +956,7 @@ impl Phone {
             s if s == cbb_core::commands::STATUS_REFUSED => "refused",
             _ => "failed",
         };
-        if status == "done" {
+        if status == "done" && root {
             mesh.set_hub_forwarders(d.id, vec![cbb_member::faces::Server { pin: f.1, address: f.0 }])?;
         }
         Ok(json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }))
@@ -1549,6 +1570,10 @@ fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
 
 /// A forwarder's address as `ip:port`, looked up when it is a name (an IPv4
 /// address first); empty stays empty.
+/// The project's forwarder, which a hub command goes through when the app
+/// names none (protocol.md, section 13, "The project's forwarder").
+const PROJECT_FORWARDER: &str = "cbb.tools:8764";
+
 fn resolve(s: &str) -> Result<String> {
     use std::net::{SocketAddr, ToSocketAddrs as _};
     let s = s.trim();
