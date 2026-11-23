@@ -157,22 +157,13 @@ final class StartUITests: XCTestCase {
         XCTAssertTrue(bar.waitForExistence(timeout: 10), "Settings did not open")
     }
 
-    /// Whether e shows as selected within a few seconds: a tap reaches the
-    /// app's state and then the accessibility tree a moment later, more so
-    /// on a loaded simulator, so reading isSelected at once can see the
-    /// state before the tap.
-    private func selected(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
-        let done = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: e)
-        return XCTWaiter().wait(for: [done], timeout: timeout) == .completed
-    }
-
     /// Taps e and tells whether it shows as selected; a loaded simulator
     /// can lose a tap, so one that did not take is tapped once more.
     private func choose(_ e: XCUIElement) -> Bool {
         e.tap()
-        if selected(e) { return true }
+        if e.becomesSelected() { return true }
         e.tap()
-        return selected(e, timeout: 10)
+        return e.becomesSelected(timeout: 10)
     }
 
     /// Scrolls until e is inside the window. Its frame, not isHittable: a

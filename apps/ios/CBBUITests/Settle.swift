@@ -39,3 +39,14 @@ extension XCUIApplication {
         XCTFail("\(screen): the screen was still changing after 20 seconds", file: file, line: line)
     }
 }
+
+extension XCUIElement {
+    /// Whether the element shows as selected within a few seconds: a tap or
+    /// a key reaches the app's state and then the accessibility tree a
+    /// moment later, more so on a loaded simulator, so reading isSelected
+    /// at once can see the state before it.
+    func becomesSelected(timeout: TimeInterval = 5) -> Bool {
+        let done = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: self)
+        return XCTWaiter().wait(for: [done], timeout: timeout) == .completed
+    }
+}
