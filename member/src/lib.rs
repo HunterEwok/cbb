@@ -2187,4 +2187,131 @@ mod tests {
         assert!(link.held().is_err());
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    /// A fake service on a Global's sockets in a folder of its own: each
+    /// request gets `answer`'s messages.
+    #[cfg(unix)]
+    fn fake_service(
+        name: &str,
+        answer: impl Fn(&control::Message) -> Vec<control::Message> + Send + Sync + 'static,
+    ) -> super::Global {
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("cbb-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let g = super::Global { state: dir.clone(), socket: dir.join("cbb.sock") };
+        let answer = std::sync::Arc::new(answer);
+        for path in [g.socket.clone(), control::admin_socket(&g.socket)] {
+            let ln = UnixListener::bind(&path).unwrap();
+            let answer = answer.clone();
+            std::thread::spawn(move || {
+                for c in ln.incoming() {
+                    let Ok(mut c) = c else { return };
+                    let Ok(Some(m)) = control::Reader::new(c.try_clone().unwrap()).read() else { continue };
+                    for a in answer(&m) {
+                        let _ = control::write(&mut c, &a);
+                    }
+                }
+            });
+        }
+        g
+    }
+
+    /// cbb pair -invite through the running service shows the fingerprint
+    /// the service gives, ends when it says done, and waits for the hub to
+    /// take this device's key.
+    #[cfg(unix)]
+    #[test]
+    fn a_join_by_invitation_through_the_service() {
+        let joins = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = joins.clone();
+        let g = fake_service("join", move |m| {
+            let h = control::Header::default;
+            match m.header.op.as_str() {
+                "status" => {
+                    let away = control::Away { hub_device: "hub".into(), ..Default::default() };
+                    let status = control::Status { away: Some(away), ..Default::default() };
+                    vec![control::reply(control::Header { status: Some(status), ..h() }, Vec::new())]
+                }
+                "join" => {
+                    seen.lock().unwrap().push((m.header.invite.clone(), m.header.name.clone(), m.header.consent));
+                    let fp = control::Header { fingerprint: "AAAA BBBB CCCC DDDD EEEE FFFF".into(), ..h() };
+                    vec![control::partial(fp), control::reply(h(), Vec::new())]
+                }
+                _ => vec![control::failure(&super::Error::msg("unknown"))],
+            }
+        });
+        super::join_invited(&g, "pi", &[], Some("desk".into()), None, " cbb://join#x \n").unwrap();
+        assert_eq!(joins.lock().unwrap().as_slice(), [("cbb://join#x".to_string(), "desk".to_string(), true)]);
+        super::wait_for_hub(&g);
+        std::fs::remove_dir_all(&g.state).unwrap();
+
+        // A service that refuses the join says why.
+        let g = fake_service("join-refused", |m| match m.header.op.as_str() {
+            "status" => vec![control::reply(control::Header::default(), Vec::new())],
+            _ => vec![control::failure(&super::Error::msg("the invitation has expired"))],
+        });
+        let e = super::join_invited(&g, "pi", &[], None, None, "cbb://join#x").unwrap_err();
+        assert!(e.to_string().contains("expired"), "{e}");
+        std::fs::remove_dir_all(&g.state).unwrap();
+
+        // With no service the join goes into the state folder, where an
+        // invitation that is no invitation stops it.
+        let dir = std::env::temp_dir().join(format!("cbb-join-alone-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let g = super::Global { state: dir.join("state"), socket: dir.join("gone").join("cbb.sock") };
+        assert!(super::join_invited(&g, "pi", &[], None, None, "cbb://join#not-one").is_err());
+        assert!(g.state.is_dir());
+        super::wait_for_hub(&g);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// cbb status asks the service for its status and the devices, and
+    /// -relay prints the group's relay name alone; cbb leave -yes asks a
+    /// running service to leave, or leaves by itself without one.
+    #[cfg(unix)]
+    #[test]
+    fn status_and_leave_through_the_service() {
+        let left = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let seen = left.clone();
+        let g = fake_service("status", move |m| {
+            let h = control::Header::default;
+            match m.header.op.as_str() {
+                "status" => {
+                    let status =
+                        control::Status { group: "g".into(), relay_group: "a:b:c".into(), ..Default::default() };
+                    vec![control::reply(control::Header { status: Some(status), ..h() }, Vec::new())]
+                }
+                "devices" => vec![control::reply(h(), Vec::new())],
+                "leave" => {
+                    seen.store(true, std::sync::atomic::Ordering::SeqCst);
+                    vec![control::reply(h(), Vec::new())]
+                }
+                _ => vec![control::failure(&super::Error::msg("unknown"))],
+            }
+        });
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        super::cmd_status(&g, &[]).unwrap();
+        super::cmd_status(&g, &a(&["-relay"])).unwrap();
+        assert!(super::cmd_status(&g, &a(&["-what"])).is_err());
+        // In no group there is nothing to leave.
+        let e = super::cmd_leave(&g, &a(&["-yes"])).unwrap_err();
+        assert_eq!(e.to_string(), super::leave::NOTHING_TO_LEAVE);
+        assert!(super::cmd_leave(&g, &a(&["-no"])).is_err());
+        std::fs::write(g.state.join(super::identity::FILE_NAME), b"{}").unwrap();
+        super::cmd_leave(&g, &a(&["-yes"])).unwrap();
+        assert!(left.load(std::sync::atomic::Ordering::SeqCst));
+        std::fs::remove_dir_all(&g.state).unwrap();
+
+        // Without a service: it leaves by itself.
+        let dir = std::env::temp_dir().join(format!("cbb-leave-alone-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let g = super::Global { state: dir.clone(), socket: dir.join("gone").join("cbb.sock") };
+        std::fs::write(dir.join(super::identity::FILE_NAME), b"{}").unwrap();
+        super::cmd_leave(&g, &a(&["-yes"])).unwrap();
+        assert!(!super::leave::in_group(&dir));
+        assert!(super::cmd_status(&g, &[]).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
