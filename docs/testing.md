@@ -443,11 +443,13 @@ Under the table are the hard gates, which have no floor and fail the job at once
 |---|---|---|
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` jobs' tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `clip` and `hlc` | as `go` |
+| `go-tray` | statements of the tray app (`apps/desktop`, a module of its own) | `go test -coverprofile` in the `tray app (ubuntu-latest)` job, the window's tests in a headless browser among them |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov nextest` in the four `cbb (Rust)` parts, put together by `cbb (Rust), the coverage` |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
 | `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
+| `js-tray` | lines of the tray app's scripts (`apps/desktop/frontend`) | the browser's count under `TestWindow` (`CBB_JS_COVERAGE`), as LCOV, in the `tray app (ubuntu-latest)` job |
 
 A test that compares two times of its own run is not timed under `cargo llvm-cov`, which counts every step of the code under test and none of its dependencies (`cfg(coverage)`): the full group's fill against its signatures (`records::tests::insert_cost`) is ignored there and runs in the `cbb (Rust), the checks` job's plain build.
 

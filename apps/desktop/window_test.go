@@ -62,6 +62,7 @@ func TestWindow(t *testing.T) {
 	srv := httptest.NewServer(w.handler())
 	t.Cleanup(srv.Close)
 	w.page = startBrowser(t, exe)
+	w.cov = startJSCoverage(t, w.page)
 	w.url = srv.URL + "/index.html"
 	// What a subtest does not put in adminRun's place stands in too: the
 	// add dialog opens a pairing window as soon as it opens.
@@ -89,6 +90,7 @@ type window struct {
 	t    *testing.T
 	svc  *fakeService
 	page *cdpPage
+	cov  *jsCoverage
 	url  string
 	desk atomic.Pointer[Desk]
 	// dir holds each Desk's desktop.json. It is not a subtest's TempDir:
@@ -168,6 +170,7 @@ func (w *window) open(lang string) *Desk {
 	w.svc.mu.Lock()
 	w.svc.arrangement = Arrangement{}
 	w.svc.mu.Unlock()
+	w.cov.take(w.t, w.page)
 	w.page.call(w.t, "Page.navigate", map[string]any{"url": w.url}, nil)
 	w.wait(`document.readyState === "complete" && $h() !== ""`)
 	return d

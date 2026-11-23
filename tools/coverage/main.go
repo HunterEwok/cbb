@@ -13,8 +13,9 @@
 // covered it, so the runs on Linux, macOS and Windows, the desktop clipboards
 // and the e2e add up. -llvm takes llvm-cov's JSON export (cargo llvm-cov
 // --json, swift test --enable-code-coverage), -jacoco a JaCoCo XML report
-// (Gradle's jacoco plugin). A part with no input is not measured and not
-// checked, as when CI skipped its jobs.
+// (Gradle's jacoco plugin), -lcov an LCOV tracefile (the tray app's window
+// test writes its scripts' lines so, from the browser's own count). A part
+// with no input is not measured and not checked, as when CI skipped its jobs.
 //
 // It counts lines in every part, and branches where the input has them
 // (JaCoCo always, llvm-cov when the build counted them: Swift, and Rust on
@@ -69,6 +70,10 @@ var goParts = []struct {
 	{"go", goProduct},
 	{"go-core", func(rel string) bool {
 		return goProduct(rel) && slices.Contains([]string{"internal/group", "internal/clip"}, path.Dir(rel))
+	}},
+	// The tray app, a module of its own (apps/desktop).
+	{"go-tray", func(rel string) bool {
+		return strings.HasPrefix(rel, "apps/desktop/") && !strings.HasSuffix(rel, "_test.go")
 	}},
 }
 
@@ -162,23 +167,24 @@ func branchesOf(part string) string { return part + "/branches" }
 
 // options are the command's flags.
 type options struct {
-	goFiles, llvmFiles, jacocoFiles []string
-	floorFile                       string
-	slack                           float64
-	target                          float64 // lines
-	branchTarget, coreBranchTarget  float64
-	summary                         string
-	audit, root                     string // the closed findings, and where their tests' paths start
-	rules, vectors                  string // the readers' sources and the format's vectors
-	mutants, knownMutants           string // cargo mutants' missed.txt and the known list
+	goFiles, llvmFiles, jacocoFiles, lcovFiles []string
+	floorFile                                  string
+	slack                                      float64
+	target                                     float64 // lines
+	branchTarget, coreBranchTarget             float64
+	summary                                    string
+	audit, root                                string // the closed findings, and where their tests' paths start
+	rules, vectors                             string // the readers' sources and the format's vectors
+	mutants, knownMutants                      string // cargo mutants' missed.txt and the known list
 }
 
 func main() {
 	var o options
-	var goFiles, llvmFiles, jacocoFiles multi
+	var goFiles, llvmFiles, jacocoFiles, lcovFiles multi
 	flag.Var(&goFiles, "go", "a Go cover profile (repeatable)")
 	flag.Var(&llvmFiles, "llvm", "PART=FILE, llvm-cov's JSON export (repeatable)")
 	flag.Var(&jacocoFiles, "jacoco", "PART=FILE, a JaCoCo XML report (repeatable)")
+	flag.Var(&lcovFiles, "lcov", "PART=FILE, an LCOV tracefile, such as the tray app's scripts' (repeatable)")
 	flag.StringVar(&o.floorFile, "floor", "", "the floors, a JSON object of row (PART or PART/branches) to percent")
 	flag.Float64Var(&o.slack, "slack", 1, "how many points a row may fall below its floor")
 	flag.Float64Var(&o.target, "target", 0, "the line coverage aimed at above the floors: a part below it is warned of, not failed")
@@ -192,7 +198,7 @@ func main() {
 	flag.StringVar(&o.mutants, "mutants", "", "cargo mutants' missed.txt: with -known-mutants, fail on a survivor the list does not name")
 	flag.StringVar(&o.knownMutants, "known-mutants", "tools/mutants/missed.txt", "the survivors the tests do not catch yet, each with why")
 	flag.Parse()
-	o.goFiles, o.llvmFiles, o.jacocoFiles = goFiles, llvmFiles, jacocoFiles
+	o.goFiles, o.llvmFiles, o.jacocoFiles, o.lcovFiles = goFiles, llvmFiles, jacocoFiles, lcovFiles
 	if err := run(o, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "coverage:", err)
 		os.Exit(1)
@@ -256,6 +262,17 @@ func run(o options, stdout io.Writer) error {
 		if br.total > 0 {
 			parts[branchesOf(part)] = add(parts[branchesOf(part)], br)
 		}
+	}
+	for _, arg := range o.lcovFiles {
+		part, file, ok := strings.Cut(arg, "=")
+		if !ok {
+			return fmt.Errorf("-lcov %q: want PART=FILE", arg)
+		}
+		t, err := readLCOV(file)
+		if err != nil {
+			return err
+		}
+		parts[part] = add(parts[part], t)
 	}
 	floors := map[string]float64{}
 	if floorFile != "" {
@@ -455,6 +472,44 @@ type llvmCount struct {
 
 // readJaCoCo takes the lines and the branches of a JaCoCo XML report's own
 // totals.
+// readLCOV sums an LCOV tracefile's lines (DA records): a line counts
+// once however many records name it, and is covered when one of them ran it.
+func readLCOV(name string) (tally, error) {
+	data, err := os.ReadFile(name)
+	if err != nil {
+		return tally{}, err
+	}
+	ran := map[string]bool{}
+	file := ""
+	for n, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "SF:"):
+			file = strings.TrimPrefix(line, "SF:")
+		case strings.HasPrefix(line, "DA:"):
+			num, count, ok := strings.Cut(strings.TrimPrefix(line, "DA:"), ",")
+			count, _, _ = strings.Cut(count, ",")
+			c, err := strconv.Atoi(count)
+			if _, err2 := strconv.Atoi(num); !ok || err != nil || err2 != nil || file == "" {
+				return tally{}, fmt.Errorf("%s:%d: a bad line record %q", name, n+1, line)
+			}
+			key := file + ":" + num
+			ran[key] = ran[key] || c > 0
+		}
+	}
+	if len(ran) == 0 {
+		return tally{}, fmt.Errorf("%s: no line records", name)
+	}
+	var t tally
+	for _, r := range ran {
+		t.total++
+		if r {
+			t.covered++
+		}
+	}
+	return t, nil
+}
+
 func readJaCoCo(name string) (lines, branches tally, err error) {
 	f, err := os.Open(name)
 	if err != nil {

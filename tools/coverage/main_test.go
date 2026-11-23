@@ -106,6 +106,30 @@ func TestTarget(t *testing.T) {
 	}
 }
 
+// TestLCOV checks the LCOV tracefile, as the tray app's window test
+// writes it: within a file, records naming one line count it once, ran
+// when one of them ran it; files of one part add up.
+func TestLCOV(t *testing.T) {
+	a := write(t, "a.info", "TN:\nSF:apps/desktop/frontend/app.js\nDA:1,1\nDA:2,0\nDA:3,0\nDA:3,2\nend_of_record\nSF:apps/desktop/frontend/tokens.js\nDA:1,4,abc\nend_of_record\n")
+	b := write(t, "b.info", "SF:apps/desktop/frontend/app.js\nDA:2,2\nend_of_record\n")
+	var out strings.Builder
+	if err := run(options{lcovFiles: []string{"js-tray=" + a, "js-tray=" + b}, slack: 1}, &out); err != nil {
+		t.Fatal(err)
+	}
+	// 3 of 4, then 1 of 1.
+	if want := "| js-tray | lines | 4 | 5 | 80.0 |"; !strings.Contains(out.String(), want) {
+		t.Errorf("no %q in\n%s", want, out.String())
+	}
+	for _, bad := range []string{"DA:1,1\n", "SF:x\nDA:one,1\n", "SF:x\n"} {
+		if err := run(options{lcovFiles: []string{"js-tray=" + write(t, "bad.info", bad)}, slack: 1}, &out); err == nil {
+			t.Errorf("%q taken", bad)
+		}
+	}
+	if err := run(options{lcovFiles: []string{write(t, "c.info", "")}, slack: 1}, &out); err == nil {
+		t.Error("no PART taken")
+	}
+}
+
 func TestLLVMAndJaCoCo(t *testing.T) {
 	llvm := write(t, "rust.json", `{"data":[{"files":[
 {"filename":"/w/core/src/certs.rs","summary":{"lines":{"count":10,"covered":9}}},
