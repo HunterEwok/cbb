@@ -25,10 +25,31 @@ jobs:
       # scorecard API accepts only with the workflow's OIDC token.
       security-events: write
       id-token: write
+      # To wait for android-wrapper's run below.
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Binary-Artifacts lets gradle-wrapper.jar pass only when
+      # android-wrapper.yml, which checks the jar, has a successful run on
+      # this commit; a push to main starts both workflows at once, so this
+      # one waits for that run to end first, five minutes at most.
+      - name: wait for android-wrapper's check of the Gradle wrapper
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 60); do
+            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow android-wrapper.yml --commit "$GITHUB_SHA" \
+              --json status,conclusion -q '.[0] | "\(.status) \(.conclusion)"')
+            echo "android-wrapper on $GITHUB_SHA: ${state:-no run yet}"
+            case "$state" in
+              "completed success") exit 0 ;;
+              completed*) echo "::warning::android-wrapper did not pass on this commit"; exit 0 ;;
+            esac
+            sleep 5
+          done
+          echo "::warning::android-wrapper has not finished on this commit after five minutes"
       - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
         with:
           results_file: results.sarif

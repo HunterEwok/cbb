@@ -3191,6 +3191,11 @@ with 0.5 is set up again once. The details follow.
   pair` hears of it: a slow machine no longer gives the window a few seconds more.
 - A device that refuses or fails a command cleans its reason before it answers, so a reason
   with a line break or over 256 bytes reaches the sender instead of being dropped.
+- OpenSSF Scorecard waits for `android-wrapper.yml`'s check of `gradle-wrapper.jar` on the
+  same commit before it looks: both start on a push to `main`, and Scorecard counted the jar as
+  unchecked while the check still ran. The format's checker and the copy of amneziawg-go
+  require `golang.org/x/crypto` v0.59.0, as the root module does, where they still named
+  v0.58.0, which OSV lists for its old `openpgp` package (unused here).
 - The tray app's Add a device dialog closes by itself when the device joins after it was
   cancelled and opened again at once; the first close used to end the new pairing window.
 - The iPhone, Android, HarmonyOS and Aurora apps join with a remote invitation of 0.6
