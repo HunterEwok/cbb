@@ -54,3 +54,4 @@ go.work.sum
 /target/
 /esp32/target/
 __pycache__/
+*.profraw
