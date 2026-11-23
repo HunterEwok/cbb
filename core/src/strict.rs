@@ -351,6 +351,28 @@ impl Parser<'_> {
 mod tests {
     use super::*;
 
+    /// Each refusal of a number and a string says its own reason.
+    #[test]
+    fn each_refusal_says_why() {
+        for (body, why) in [
+            (r#"{"a":01}"#, "a number has a leading zero"),
+            (r#"{"a":-01}"#, "a number has a leading zero"),
+            (r#"{"a":-0}"#, "a number is a negative zero"),
+            ("{\"a\":\"x\ny\"}", "a string holds a control character"),
+            ("{\"a\":\"\x1f\"}", "a string holds a control character"),
+            (r#"{"a":"\ud800\n"}"#, "a string has half a surrogate pair"),
+            (r#"{"a":"\ud800x"}"#, "a string has half a surrogate pair"),
+            (r#"{"a":"\ud800\ud800"}"#, "a string has half a surrogate pair"),
+            (r#"{"a":"\udc00"}"#, "a string has half a surrogate pair"),
+        ] {
+            let e = check(body.as_bytes(), &[]).err().unwrap_or_else(|| panic!("{body:?} passed")).to_string();
+            assert!(e.contains(why), "{body:?}: {e}");
+        }
+        for body in [r#"{"a":0}"#, r#"{"a":-1}"#, r#"{"a":10}"#, r#"{"a":"😀  "}"#] {
+            check(body.as_bytes(), &[]).unwrap();
+        }
+    }
+
     #[test]
     fn canonical() {
         for (input, want) in [

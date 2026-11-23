@@ -276,7 +276,7 @@ impl core::fmt::Debug for Header {
             .field("keyboard", &self.keyboard)
             .field("act", &self.act)
             .field("command", &self.command)
-            .field("invite", &self.invite)
+            .field("invite", &cbb_core::secret::Redacted(self.invite.len()))
             .field("joining", &self.joining)
             .finish()
     }
@@ -921,6 +921,9 @@ mod tests {
                 (m.header.op, m.header.name, m.header.seq, m.payload)
             );
         }
+        // A request with args of null has none.
+        let got = Reader::new(&b"{\"op\":\"status\",\"args\":null}\n"[..]).read().unwrap().unwrap();
+        assert_eq!(got.header.op, "status");
         for bad in [&b"[]\n"[..], b"{\"op\":\"copy\",\"args\":[]}\n", b"{\"ok\":1}\n"] {
             assert!(Reader::new(bad).read().is_err(), "{}", String::from_utf8_lossy(bad));
         }
@@ -1017,5 +1020,26 @@ mod tests {
         assert!(!needs_admin(&h("sync", "")));
         assert!(needs_admin(&h("sync", "desk")));
         assert!(needs_admin(&h("mode", "desk")));
+    }
+
+    #[test]
+    fn this_devices_own_requests() {
+        assert!(is_own_device_op("mute") && is_own_device_op("unmute"));
+        assert!(!is_own_device_op("sync") && !is_own_device_op("remove"));
+    }
+
+    /// The debug form names the fields but never shows a pairing code or
+    /// an invitation.
+    #[test]
+    fn the_debug_form_keeps_the_secrets_out() {
+        let h = Header {
+            op: "invite".into(),
+            code: "123456".into(),
+            invite: "cbb://join#secret-part".into(),
+            ..Default::default()
+        };
+        let d = format!("{h:?}");
+        assert!(d.starts_with("Header {") && d.contains(r#"op: "invite""#), "{d}");
+        assert!(!d.contains("123456") && !d.contains("secret-part"), "{d}");
     }
 }
