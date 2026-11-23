@@ -16,7 +16,7 @@
 
 use std::io::{Read, Write};
 
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,28 +28,58 @@ use crate::error::{Context, Error, Result};
 /// A TLS connection to a platform's host.
 pub type Tls = StreamOwned<ClientConnection, TcpStream>;
 
-/// Dials `host` on port 443 with TLS that must agree on HTTP/2, and starts
-/// the HTTP/2 connection; every read and write waits at most `timeout`.
-pub fn dial(cfg: &Arc<ClientConfig>, host: &str, timeout: Duration) -> Result<Conn<Tls>> {
-    let addr = (host, 443)
-        .to_socket_addrs()
-        .context(format!("cannot look up {host}"))?
-        .next()
-        .ok_or_else(|| Error::msg(format!("{host} has no address")))?;
-    let tcp = TcpStream::connect_timeout(&addr, timeout).context(format!("cannot reach {host}"))?;
-    let _ = tcp.set_nodelay(true);
-    tcp.set_read_timeout(Some(timeout)).context("cannot set a timeout")?;
-    tcp.set_write_timeout(Some(timeout)).context("cannot set a timeout")?;
-    let name = ServerName::try_from(host.to_string()).map_err(|_| Error::msg("not a host name"))?;
-    let conn = ClientConnection::new(cfg.clone(), name).context(format!("cannot start TLS to {host}"))?;
-    let mut tls = StreamOwned::new(conn, tcp);
-    while tls.conn.is_handshaking() {
-        tls.conn.complete_io(&mut tls.sock).context(format!("TLS to {host} failed"))?;
+/// The way to a platform's hosts: TLS 1.3 that must agree on HTTP/2, to
+/// each host's own address on port 443, or to `at` for every host (a test's
+/// fake service).
+pub struct Reach {
+    tls: Arc<ClientConfig>,
+    at: Option<SocketAddr>,
+}
+
+impl Reach {
+    /// The web's way, checked against `roots`.
+    pub fn web(roots: rustls::RootCertStore, what: &str) -> Result<Reach> {
+        let mut cfg = ClientConfig::builder_with_provider(Arc::new(cbb_core::tls::web::provider()))
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .context(format!("cannot set up the TLS toward {what}"))?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        cfg.alpn_protocols = vec![b"h2".to_vec()];
+        Ok(Reach { tls: Arc::new(cfg), at: None })
     }
-    if tls.conn.alpn_protocol() != Some(b"h2") {
-        return Err(Error::msg(format!("{host} does not speak HTTP/2")));
+
+    /// Every host at `at`, over `tls`.
+    #[cfg(test)]
+    pub fn at(tls: Arc<ClientConfig>, at: SocketAddr) -> Reach {
+        Reach { tls, at: Some(at) }
     }
-    Conn::start(tls)
+
+    /// Dials `host` and starts the HTTP/2 connection; every read and write
+    /// waits at most `timeout`.
+    pub fn dial(&self, host: &str, timeout: Duration) -> Result<Conn<Tls>> {
+        let addr = match self.at {
+            Some(a) => a,
+            None => (host, 443)
+                .to_socket_addrs()
+                .context(format!("cannot look up {host}"))?
+                .next()
+                .ok_or_else(|| Error::msg(format!("{host} has no address")))?,
+        };
+        let tcp = TcpStream::connect_timeout(&addr, timeout).context(format!("cannot reach {host}"))?;
+        let _ = tcp.set_nodelay(true);
+        tcp.set_read_timeout(Some(timeout)).context("cannot set a timeout")?;
+        tcp.set_write_timeout(Some(timeout)).context("cannot set a timeout")?;
+        let name = ServerName::try_from(host.to_string()).map_err(|_| Error::msg("not a host name"))?;
+        let conn = ClientConnection::new(self.tls.clone(), name).context(format!("cannot start TLS to {host}"))?;
+        let mut tls = StreamOwned::new(conn, tcp);
+        while tls.conn.is_handshaking() {
+            tls.conn.complete_io(&mut tls.sock).context(format!("TLS to {host} failed"))?;
+        }
+        if tls.conn.alpn_protocol() != Some(b"h2") {
+            return Err(Error::msg(format!("{host} does not speak HTTP/2")));
+        }
+        Conn::start(tls)
+    }
 }
 
 const PREFACE: &[u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -275,6 +305,14 @@ impl<S: Read + Write> Conn<S> {
         })
     }
 
+    /// Writes a frame that only answers the peer (an acknowledgement, a
+    /// window given back). A peer that closed the connection after its
+    /// answer leaves that answer readable, so a failed write only marks the
+    /// connection gone: the request is not posted twice.
+    fn tell(&mut self, b: &[u8]) {
+        let _ = self.write(b);
+    }
+
     /// Answers what any frame on the connection asks: settings (acknowledged,
     /// windows and frame size taken), PING, WINDOW_UPDATE, GOAWAY.
     fn control(
@@ -300,12 +338,12 @@ impl<S: Read + Write> Conn<S> {
                         _ => {}
                     }
                 }
-                self.write(&header(0, SETTINGS, ACK, 0))?;
+                self.tell(&header(0, SETTINGS, ACK, 0));
             }
             PING if flags & ACK == 0 && p.len() == 8 => {
                 let mut out = header(8, PING, ACK, 0).to_vec();
                 out.extend_from_slice(p);
-                self.write(&out)?;
+                self.tell(&out);
             }
             WINDOW_UPDATE if p.len() == 4 => {
                 let inc = i64::from(u32::from_be_bytes([p[0], p[1], p[2], p[3]]) & 0x7fff_ffff);
@@ -399,7 +437,7 @@ impl<S: Read + Write> Conn<S> {
                     if !p.is_empty() {
                         let mut w = header(4, WINDOW_UPDATE, 0, 0).to_vec();
                         w.extend_from_slice(&(p.len() as u32).to_be_bytes());
-                        self.write(&w)?;
+                        self.tell(&w);
                     }
                 }
                 RST_STREAM => return Err(Error::msg("the push platform reset the request")),
