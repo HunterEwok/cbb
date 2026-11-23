@@ -1289,8 +1289,7 @@ forwarder's own site. Where a network admits only listed addresses (allow-lists)
   computer can be the hub: Linux, FreeBSD, a router, a Raspberry Pi, Windows or a Mac. Phones
   are clients: a phone is not always on
   and cannot accept connections in the background. A
-  group with no computer has its phone as the hub while the app is open (built in 0.5,
-  below).
+  group with no computer has its phone as the hub while the app is open (below).
 - Why sync over the internet needs a computer of the user's: the hub must be on and
   reachable all the time, it must be at home so that the devices hand it their keys there
   (below), and it is a member of the group, so it must be the user's own device. Copies are
@@ -1351,10 +1350,10 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   forwarder over an outgoing connection, as a hub behind carrier-grade NAT does, and keeps
   the registration and its hellos while the app is open. The forwarder finds a hub by its
   key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
-  hub. The hub's WireGuard runs in the app's process, in the Rust core's tunnel
-  (`ffi/src/tunnel.rs`), beside the client side: `cbb`'s tunnel, one for the computers,
-  small devices and every phone, rather than a tunnel in Go for the phones, which would keep a
-  second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
+  hub. The hub's WireGuard runs in the app's process, in the Live member (`ffi/src/member.rs`,
+  on `cbb_member::Live`): `cbb`'s own member and tunnel, one for the computers, small devices
+  and every phone, rather than a tunnel in Go for the phones, which would keep a second
+  WireGuard, AmneziaWG and VLESS to maintain and Go in the apps' builds (D-87, D-122). The
   phones then reach a forwarder over VLESS with XHTTP, the only transport (D-91).
 - **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
   keep trying it every few seconds while their own app or service runs, instead of backing
@@ -1381,17 +1380,12 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   hub in Settings, with the reason in plain words: sync away from home then works with the
   app closed. The user may keep the phone as the hub; the app then does not ask again, and
   can still move the hub to any computer there. A computer that is no admin yet is made one
-  first, on the root phone, or marked as a hub that only passes copies on. The phone, still the hub, passes the new hub its clients' tunnel
-  keys and preshared keys in a signed `hub` command inside member TLS and tells its
-  connected clients the new hub's offer through the tunnel, so devices far away (a parent's
-  TV in another city) move without coming home; then it becomes the new hub's client. The
-  new hub admits each key only for a device the group's records list. A computer that is
-  the hub moves the role the same way (`cbb global move`). Built in 0.5 (docs/protocol.md,
-  section 11, "Moving the hub"). On the records of 0.6 no hub passes on another's offer or
-  clients: the old hub keeps serving its clients until the new one serves, they meet the new
-  hub at home or at the group's relay and take its offer there, and then the old hub tells
-  them it moved; a client away with neither home nor a relay loses the hub until it meets
-  the new one (D-122).
+  first, on the root phone, or marked as a hub that only passes copies on (`cbb global hub
+  -forward-only`, which only the root signs). A hub's offer comes only from that hub: the
+  hub that moves keeps serving its clients until the new one serves, they meet the new hub
+  at home or at the group's relay and take its offer there, and then the old hub tells them
+  it moved (`cbb global move` on a computer); a client away with neither home nor a relay
+  loses the hub until it meets the new one (D-122; docs/protocol.md, section 11).
 - **Losing the phone.** When the root phone that is the hub is lost, the admin phone that
   takes the group over (the core's `take_over`, docs/core-api.md) becomes its hub too, and the clients take
   its offer because the records no longer make the lost phone an admin. Clients at home learn
@@ -1414,50 +1408,16 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 | A network blocks WireGuard | AmneziaWG, then VLESS; the hub's setting in every app, the phone hub's too | VLESS for the phone hub's own registration is not yet tried against a real forwarder |
 | The root phone that is the hub is lost | an admin phone takes over and is the hub; devices far away are invited again | |
 
-##### Steps
+##### What runs
 
-All built in 0.5, but for what each step names as still to do. In 0.6 the Live member is
-the phone's hub and its client (D-122), and the apps' own tunnel, hub, invitation window and
-hub commands are gone with the phones' groups of 0.5, which sync at home only (D-123).
-
-1. Done: the hub's side in the Rust core's tunnel (`hub_start`, `cbb_tunnel_register`): the clients' tunnels,
-   the member port leading to the kit's member listener, and the registration with the
-   forwarder and its hellos by the phone's member key, which the forwarder takes when the
-   group's records make that key the root's or an admin's (docs/protocol.md, section 13);
-   tested with the Go client through a forwarder.
-2. Done: the listening member (the phones' member in the Rust core, `listen`, its one port
-   for the tunnel, the relay and the home network) and the hub's part of the member protocol
-   (`PhoneHub`, from the member's `peer` events): it admits a client by the tunnel key its
-   hello offers, by the rules of a computer's hub, and answers with its offer; tested over
-   two members of the core in the Swift kit.
-3. Done: the phone hub in both apps: on by default in a group made on a phone, `StartHub`
-   with the member listener's port, `Register` with the forwarder set in Settings and the
-   group's authority records, its status on Home and in Settings, publishing of the member
-   port (`r=phone`) on the home networks the phone remembers, and on Android the option to
-   keep it running in the foreground service. Still to do on the bench: a computer and a
-   small device through the forwarder to a phone.
-4. Done: clients for a hub that comes and goes: a hub whose device record says `phone` is
-   tried at least every 5 s instead of up to 30 s, in `cbb` and both apps.
-   Still to measure on real phones: the battery cost and the forwarder's load.
-5. Done: remote invitations made and served on the phone (step 7 of the order of work in
-   [design.md](design.md#order-of-work)): the hub's guest tunnel (`hub_invite`), the kits'
-   `InvitationWindow`, and in both apps "Invite a device from afar", which shares the file
-   and asks the user to confirm the device; tested against `cbb`'s joiner. Still to do:
-   using an invitation on a phone or a TV, so that a parent's TV joins.
-6. Done: moving the hub to an admin computer (docs/protocol.md, section 11, "Moving the
-   hub"): the `hub` command with the clients' keys, the old hub passing the new hub's offer
-   to its clients with their own preshared keys, the clients' rules for following it in
-   `cbb` and both kits, `cbb global move`, and in both apps "Move the hub
-   to a computer" with the suggestion of a computer that is always on, and the hub moving
-   with an admin phone's takeover; `TestMoveHub` moves a hub with a client away from home.
-   Still to do on the bench: moving from a phone to the Linux desktop with a small device far away.
-7. Done: several hubs with a priority (D-65; docs/protocol.md, section 11, "Several hubs"):
-   the order of hubs from the records, the clients keeping every hub's offer with a preshared key of their own, the
-   hubs sharing their clients and passing each other's offers on, and a computer's hub
-   yielding to a higher one and serving again when it goes; `TestSeveralHubs` switches both
-   ways; the signed table of main hubs the user orders (`hubs` records, `cbb global hubs`). Still
-   to do: the phone hub yielding to a hub above it, setting the table from the apps, and a
-   bench run with two computers as hubs.
+The Live member is the phone's hub and its client (D-122): the guest tunnel and the hub's
+side of the tunnel, the listening member on one port for the tunnel, the relay and the home
+network, the registration with the forwarder by the period's server key, publishing the
+member port (`r=phone`) on the home networks the phone remembers, remote invitations made
+and served on the phone, several hubs in the order of the records' `hubs` table (D-65), and
+clients that try a hub whose device record says `phone` at least every 5 s instead of up to
+30 s. Still to do: the phone hub yielding to a hub above it, setting the table of hubs from
+the apps, and bench runs of a computer and a small device through the forwarder to a phone.
 
 Not yet verified on real devices: how long iOS keeps the forwarder registration and the
 tunnel up while the app is open and the screen locks, the battery cost of the clients'
@@ -1724,7 +1684,7 @@ relay, or a hub.
   device the members' credential does not list, and drops one a newer credential leaves out.
   A relay that serves a fixed list of groups also sees the period credential and the group's
   root key, since it knows its groups by them; an open relay never does. It speaks only
-  `cbb-relay/3`: there is no registration of 0.5.
+  `cbb-relay/3`.
 - The wire format is in docs/protocol.md, section 14.
 
 #### Blocked networks
@@ -2683,7 +2643,7 @@ Later, if wanted: a LuCI page with the status and the QR code for joining.
 
 ### Docker
 
-Built for 0.5 ([packaging/docker](../packaging/docker/README.md)).
+[packaging/docker](../packaging/docker/README.md).
 
 An image with the full service, for the machines that are always on but have no desktop: a
 NAS (Synology, QNAP, TrueNAS, Unraid), a home server, a VPS. Like a router, the container is

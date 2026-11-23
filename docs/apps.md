@@ -214,8 +214,7 @@ they look, so both apps are built to the same plan.
    The Live member keeps the phone's tunnel key and the hubs' offers itself and runs the
    tunnel in the app's process, in user space: it tries a hub's endpoints in AmneziaWG over
    UDP first and VLESS after them, in turn, keeping to the way that works. Nothing changes
-   on the screen. A phone in a group made before 0.6 syncs at home only and shows no card
-   for sync away from home, the hub or the relay (D-123).
+   on the screen.
    On a root or admin phone, "This phone as the hub" comes first (docs/design.md, "The
    phone as the hub"): a switch, on from the start in a group the phone made; where it
    stands (at home only without a forwarder, registering, registered, or why the forwarder
@@ -1262,7 +1261,7 @@ offers Leave, which alone deletes its files (D-126).
   (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`), or, for a YubiKey plugged into the
   USB-C port, moves the bytes of its CCID interface through `usbManager` after asking for the
   right to use it (`setCard`'s bulk flag, the transport `ccid_bulk`). The sheet page seals
-  onto it and the change-root screen opens it; the YubiKey of a group of 0.5 is gone from it.
+  onto it and the change-root screen opens it.
 - **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
   Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
   how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
