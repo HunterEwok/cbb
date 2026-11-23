@@ -659,6 +659,10 @@ mod tests {
             .map(|c| c.trim_matches('`'))
             .collect();
         assert!(codes.len() >= 30, "{codes:?}");
+        let mut once = codes.clone();
+        once.sort_unstable();
+        once.dedup();
+        assert_eq!(once.len(), codes.len(), "a code twice in docs/apps.md: {codes:?}");
         let reason = |code: &str, until_ms: i64| cbb_core::why::Reason {
             code: code.into(),
             level: cbb_core::why::Level::Stop,
