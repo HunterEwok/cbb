@@ -114,6 +114,7 @@ struct UpdateCard: View {
 struct StartView: View {
     @Binding var recovering: Bool
     @Binding var joining: Bool
+    @Binding var joiningByInvite: Bool
     @EnvironmentObject private var model: MacModel
     @Environment(\.palette) private var palette
 
@@ -128,6 +129,8 @@ struct StartView: View {
                 Button { Task { await model.createGroup() } } label: { Text("Create a group").frame(maxWidth: .infinity) }
                     .buttonStyle(AccentButtonStyle())
                 Button { joining = true } label: { Text("Join a group").frame(maxWidth: .infinity) }
+                    .buttonStyle(GlassButtonStyle())
+                Button { joiningByInvite = true } label: { Text("Join with an invitation").frame(maxWidth: .infinity) }
                     .buttonStyle(GlassButtonStyle())
             }
             .frame(width: 260)
@@ -145,26 +148,56 @@ struct StartView: View {
     }
 }
 
-/// Claims a group whose phones are all lost with its recovery key; this Mac
-/// must be in that group, so out of a group it says so.
+/// Moves the group to this Mac with its recovery key, for example when the
+/// phone that was its main device is lost; this Mac must be in that group,
+/// so out of a group it says so.
 struct RecoverySheet: View {
     @EnvironmentObject private var model: MacModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var key = ""
+    @State private var pin = ""
+    @State private var card = false
+    /// The devices that leave the group in the same act; the old main
+    /// device starts among them.
+    @State private var leave: Set<String> = []
+
+    private var others: [Control.Device] { model.devices.filter { !$0.isSelf } }
+    private var secret: String { (card ? pin : key).trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
-            Text("Recovery key").font(.title2.weight(.semibold))
+            Text("Move the group to this Mac").font(.title2.weight(.semibold))
             if model.inGroup {
-                Text("Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.")
+                Text("Type the key from the sheet, or paste its QR code's text. This Mac becomes the group's main device at once.")
                     .foregroundStyle(palette.textDim)
                     .fixedSize(horizontal: false, vertical: true)
-                TextField(text: $key) { Text("Recovery key") }
-                    .font(.system(.body, design: .monospaced))
-                    .textFieldStyle(.roundedBorder)
+                Text("Who stays in the group").font(.headline)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+                        ForEach(others) { d in
+                            Toggle(isOn: Binding(get: { !leave.contains(d.id) }, set: { stays in
+                                if stays { leave.remove(d.id) } else { leave.insert(d.id) }
+                            })) { Text(verbatim: d.name.isEmpty ? d.id : d.name) }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 180)
+                Text("An unticked device is removed, and joins again only as a new device.")
+                    .font(.caption).foregroundStyle(palette.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle(isOn: $card) { Text("Use a YubiKey instead") }
+                if card {
+                    SecureField(text: $pin) { Text("The YubiKey's PIN") }
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    TextField(text: $key) { Text("The recovery key's text, as on the sheet") }
+                        .font(.system(.body, design: .monospaced))
+                        .textFieldStyle(.roundedBorder)
+                }
             } else {
-                Text("The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings.")
+                Text("With the group's recovery key, this Mac becomes the main device, for example when the old one is lost. Join the group first, then move it here in Settings.")
                     .foregroundStyle(palette.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -173,17 +206,18 @@ struct RecoverySheet: View {
                 Button(role: .cancel) { dismiss() } label: { Text("Cancel") }.keyboardShortcut(.cancelAction)
                 if model.inGroup {
                     Button {
-                        let k = key
+                        let (s, out, c) = (secret, Array(leave), card)
                         dismiss()
-                        Task { await model.recover(k) }
-                    } label: { Text("Claim") }
+                        Task { await model.recover(s, leave: out, card: c) }
+                    } label: { Text("Make this Mac the main device") }
                         .keyboardShortcut(.defaultAction)
-                        .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.busy)
+                        .disabled(secret.isEmpty || model.busy)
                 }
             }
         }
         .padding(Tokens.spacingLarge)
         .frame(width: 440)
         .background(AppBackground())
+        .onAppear { leave = Set(others.filter(\.root).map(\.id)) }
     }
 }

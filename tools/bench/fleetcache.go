@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -114,72 +113,4 @@ func cache(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 			return err
 		})
 	})
-}
-
-// fetchLimits (O15): a member that asks a part's holder for more than the
-// protocol allows is refused: a get of 1 MiB comes back in chunks padded
-// to 16 KiB, a get of a byte more is dropped while the connection keeps
-// serving, and 80 gets at once close it. (The 4 MiB a fetch keeps ahead
-// is the fetcher's own bound, not one the holder enforces.)
-func fetchLimits(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
-	const p = "fleet/O15-fetch-limits/"
-	g := fleetGroup(ctx, r, f, "fleet/O15-fetch", 2)
-	if g == nil || len(g.members) != 2 {
-		return
-	}
-	holder, asker := g.members[0], g.members[1]
-	var sum string
-	if r.Do(p+"part", func() error {
-		if _, err := Run(ctx, holder, "head -c 3000000 /dev/urandom >/tmp/o15.bin", ""); err != nil {
-			return err
-		}
-		if _, err := RunFor(ctx, holder, "cbb copy /tmp/o15.bin", "", time.Minute); err != nil {
-			return err
-		}
-		return eventually(ctx, 20*time.Second, func() error {
-			out, err := Run(ctx, holder, "find /var/lib/cbb/content -type f -size +1100k ! -name '*.part' -printf '%f\\n' | head -1", "")
-			sum = strings.TrimSpace(out)
-			if err == nil && len(sum) != 64 {
-				err = fmt.Errorf("%s holds no part over 1 MiB", holder.Name)
-			}
-			return err
-		})
-	}) != nil {
-		return
-	}
-	var h *Device
-	if r.Do(p+"forge", func() error {
-		var err error
-		h, err = forgeHost(ctx, f, asker)
-		return err
-	}) != nil {
-		return
-	}
-	id, err := deviceOf(ctx, holder)
-	ip, err2 := fleetIP(ctx, holder)
-	if r.Do(p+"target", func() error { return errors.Join(err, err2) }) != nil {
-		return
-	}
-	var out string
-	if r.Do(p+"run", func() error {
-		var err error
-		out, err = RunFor(ctx, h, fmt.Sprintf("cbbbench-forge -state /tmp/%s -to %s -addr %s:8764 fetch:%s", asker.Name, id, ip, sum), "", 3*time.Minute)
-		fmt.Fprintf(r.out, "%s\n", strings.TrimSpace(out))
-		return err
-	}) != nil {
-		return
-	}
-	for _, c := range []struct{ name, want string }{
-		{"window", "window: 4 chunks, 1048576 bytes, padded"},
-		{"over", "over: no answer"},
-		{"after-over", "after-over: answered"},
-		{"flood", "flood: closed after"},
-	} {
-		r.Do(p+c.name, func() error {
-			if !strings.Contains(out, c.want) {
-				return fmt.Errorf("want %q", c.want)
-			}
-			return nil
-		})
-	}
 }

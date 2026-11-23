@@ -43,9 +43,7 @@ interface InviteState {
 }
 
 interface Invitation {
-  group?: string;
-  hub?: string;
-  expires?: number;
+  phone?: boolean;
 }
 
 interface Refused {
@@ -57,18 +55,16 @@ interface ReadInvite {
   refused?: Refused;
 }
 
-// What the user scanned or pasted, read: the group and hub to show, or the
-// error.
+// What the user scanned or pasted, read: the text to join with, or the
+// error. An invitation carries no expiry: the hub refuses one whose time is
+// over.
 export class InvitationText {
   text: string = '';
-  group: string = '';
-  hub: string = '';
-  expiresMs: number = 0;
   error: string = '';
 }
 
 export function isInvitation(text: string): boolean {
-  return text.trim().startsWith('cbb://invite#');
+  return text.trim().startsWith('cbb://join#');
 }
 
 export function readInvitation(text: string): InvitationText {
@@ -84,14 +80,10 @@ export function readInvitation(text: string): InvitationText {
     out.error = Errors.shown(new Failure(t('error_invite_not'), `invite: ${r.ok.refused?.message ?? ''}`));
     return out;
   }
-  const expiresMs = (inv.expires ?? 0) * 1000;
-  if (expiresMs <= Date.now()) {
-    out.error = Errors.shown(new Failure(t('error_invite_expired'), 'invite: expired'));
+  if (inv.phone !== true) {
+    out.error = Errors.shown(new Failure(t('error_invite_not_phone'), 'invite: the invitation is not a phone\'s'));
     return out;
   }
-  out.group = inv.group ?? '';
-  out.hub = (inv.hub ?? '').substring(0, 12);
-  out.expiresMs = expiresMs;
   return out;
 }
 
@@ -100,7 +92,7 @@ export class Invite {
   // idle, preparing (finding the admin key), opening (waiting for the hub),
   // open, joining (the user is asked), done or failed.
   @Trace state: string = 'idle';
-  // The invitation's text, cbb://invite#..., and its QR code's rows.
+  // The invitation's text, cbb://join#..., and its QR code's rows.
   @Trace text: string = '';
   @Trace modules: string[] = [];
   @Trace expiresMs: number = 0;

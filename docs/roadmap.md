@@ -39,8 +39,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **23.** Docker, in 0.5 ([design](design.md#docker)).
 - **24.** FreeBSD and OPNsense, in 0.6 ([design](design.md#freebsd)).
 - **27.** Quick actions, in 0.6 ([design](design.md#quick-actions)).
-- **30.** The phone as the hub while its app is open, in 0.5
-    ([design](design.md#the-phone-as-the-hub-while-its-app-is-open)).
+- **30.** No phone is a hub: a hub is a computer, a router or a board (D-134), in 0.6
+    ([design](design.md#groups-without-a-computer)).
 - **32.** What the forwarder and the relay learn, cut to short server credentials, in 0.6
     ([design](design.md#what-the-servers-learn)).
 - **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
@@ -86,10 +86,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **15.** **The Arduino Nano ESP32** (an ESP32-S3) as a small device, on the same `core/` as
     the other ESP32 boards, with the member protocol and TLS 1.3 on the board itself. Done:
     the firmware (`esp32/`) builds, keeps its settings in flash, joins the Wi-Fi network
-    set on its USB console, joins a group by the phone, passes its self-test in QEMU, and
-    types as a USB keyboard in the layout set for the host; its network code
-    (`embassy/`) also runs on Linux over a TAP interface, where CI has a Go member admit
-    it by the phone. Next: sync on the board, OTA updates (item 29), and a library for one's
+    set on its USB console, passes its self-test in QEMU, and types as a USB keyboard in
+    the layout set for the host. Next: joining a group of 0.6 by its home window and sync
+    on the board (0.7), OTA updates (item 29), and a library for one's
     own Arduino sketches may follow. It ships as a ready firmware flashed over USB with one
     command.
 - **22.** **A Mac app** that carries the service and a Network Extension (a content filter); the
@@ -139,7 +138,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     their phone's collections as sections. See "Collections" below.
 - **35.** The review of all the documentation against the code for 0.6: in progress.
 - **42.** **A simpler protocol for the group's authority**, so that fewer of its rules can be
-    read two ways ([protocol.md](protocol.md), section 10; [records-v2.md](records-v2.md)).
+    read two ways ([protocol.md](protocol.md), section 10).
     Done in 0.6, so that 0.7 does not change the core, without a migration from `v:1` (groups
     made before are set up again):
     1. records `v:2`: the signer inside the body, powers written down, each signer's records
@@ -172,10 +171,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 
 ### Next
 
-- **70.** **Planned for 0.6.** The core and the format before the freeze (D-92): one binary
+- **70.** **Planned for 0.6.** The core and the format of 0.6 (D-131): one binary
     format, new record rules, members without certificates, content and keys, the session
     in the core and the small device. Six waves, each with its own test of being done; the
-    format is frozen only after the last. See "The core and the format in 0.6" below.
+    format stays preliminary until 0.7. See "The core and the format in 0.6" below.
 - **10.** **Console helper and auto-paste**: the double press that injects the member's own text
     on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
     a phone through the uinput helper (design.md, "Auto-paste"). The helpers themselves are
@@ -187,8 +186,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     record ([protocol.md](protocol.md), section 10), which the state carries, `cbb keys` with
     its checks on a root computer, and the phone apps' setting (Settings, Admin keys) with
     theirs. Level 1's outside checks (App Attest, the TPM makers' services) are next. See "Key levels" below.
-- **33.** **Researched; not built (D-73).** The iPhone as a hub in the background, as a Network
-    Extension. See "Research: the iPhone hub in a Network Extension" below.
+- **33.** **Researched; not built (D-73), and void since no phone is a hub (D-134).** The
+    iPhone as a hub in the background, as a Network Extension. See "Research: the iPhone hub
+    in a Network Extension" below.
 - **36.** **Russian versions of the documentation for users**, postponed: the README, the guide
     and the reference pages for users, in `docs/ru/` and `README.ru.md`; the documents for
     developers stay in English. The rule of D-8 then allows Cyrillic in those two places as
@@ -236,7 +236,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     X25519, so a recorded paste stays closed to a later quantum computer; the keys in the
     TPM, the Secure Enclave and the Keystore only sign), published in a statement its member
     key signs; the sender seals the body to it (HPKE, RFC 9180: X-Wing, HKDF-SHA256,
-    ChaCha20-Poly1305; `internal/seal` and `cbb_core::seal`) with the open header (group, sender, receiver, ID, times) as its
+    ChaCha20-Poly1305; `cbb_core::seal`) with the open header (group, sender, receiver, ID, times) as its
     associated data, and signs the sealed command. A device that published no key gets a
     secret paste only directly. The same in Go, `cbb`, both kits, with shared
     vectors and docs/protocol.md section 15.
@@ -416,8 +416,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
     Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
     with this item, on the same server.
-- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and `cbb` take, keep and (`cbb`) pass on the list, a phone hub registers over VLESS through its ways, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
-    only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
+- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and `cbb` take, keep and (`cbb`) pass on the list, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
+    only over VLESS, in a network that lets nothing else through.
     The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
     into `cbb` and the kits beside its key, as they are no secret the design relies on; a
     forwarder of one's own prints them with its key (`cbb forward`), and the user enters
@@ -464,7 +464,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
       **release** already holds. Write its fingerprint in docs/maintainers/maintaining.md, "Android
       signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
-      in place (compatibility starts with 0.6, D-92).
+      in place (a group made with 0.5 is set up again on 0.6, D-131).
     - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
       without an update of its own and without Wear OS), not an AAB, so that RuStore never
       holds the key and its copy, the GitHub APK and F-Droid's share one certificate. The
@@ -591,6 +591,30 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       promises.
 
     Freezing and removing an admin stay two separate actions.
+- **69.** **Planned for 0.7 (the owner, 2026-11-23).** The apps and the command line as one
+    product: the same meaning and flows everywhere, each platform's own controls.
+    - An inventory of every screen on every platform (iPhone and iPad, Apple Watch, the Mac,
+      Android and Wear OS, the tray, Aurora OS, HarmonyOS and its watch, the command line)
+      with its states, against [parity.md](parity.md).
+    - The person's tasks (ten to fifteen), with how often and how much each matters, which
+      decide what Home shows and what lies deeper.
+    - One model of the product's objects (the group, a device, the main device, an admin, a
+      copy, an invitation, the recovery key) with their properties and actions, named by the
+      termbase, and a few written principles of the product.
+    - The flows' states in the core: adding a device, joining and recovery first, each a
+      state machine the core runs and the apps only draw, with tests of its moves on every
+      platform.
+    - One catalogue of messages: every error, notice and reason with a code, its text and
+      what to do, the same in the apps and in `cbb status`.
+    - One library of patterns (confirming what cannot be undone, progress, an empty state, an
+      error, pairing, a secret, no network) with how each looks on every platform and on the
+      command line, and design tokens named by role.
+    - The command line by the [Command Line Interface Guidelines](https://clig.dev): the same
+      nouns and verbs, `--json`, one form of error, meaningful exit codes.
+    - A gallery in CI: each screen on every platform, in every state and language, side by
+      side with the command line's output, a showcase for each state, pseudo-localization,
+      and a checklist for reviewing a new screen or command; then a heuristic review and a
+      walk through each task, with the taps each takes as a measure.
 
 ## Devices that are hard to type into
 
@@ -1138,7 +1162,7 @@ from their apps, at home or away from home.
    consent the device refuses it and says so. A watch never signs it.
 3. A `hub` command to a device with the consent turns sync away from home on there first,
    then makes it a hub. Who may be a hub does not change: an admin, at the group's key level
-   (D-66), never a rootless install (D-79), never a member without `hub` among its capabilities; phones only as D-64 says.
+   (D-66), never a rootless install (D-79), never a member without `hub` among its capabilities, never a phone (D-134).
 4. A device turned off by `away-off` or by its own `cbb global off` does not turn itself on
    again at the next start; only `away-on`, a `hub` command or its user do.
 
@@ -1187,9 +1211,9 @@ its translations, and design.md in place of this section.
 
 ## The core and the format in 0.6
 
-The format of the records and of the wire is frozen in 0.6 (D-92), and the groups of 0.5 are
-set up again, so everything that touches the core and the protocol is done before the freeze,
-in this order. The third and the fourth waves run side by side. The waves that change the
+The format of the records and of the wire changes in 0.6 and stays preliminary until 0.7
+(D-131), and the groups of 0.5 are set up again, so everything that touches the core and the
+protocol is done in 0.6, in this order. The third and the fourth waves run side by side. The waves that change the
 format land in `main` together, from one shared branch, since between them nothing works.
 
 1. **At once, without the format.** The firmware's size measured in CI, part by part; a
@@ -1269,8 +1293,8 @@ Questions to study before anything is planned for them.
 
 ### Research: the iPhone hub in a Network Extension
 
-Researched for 0.6 and not built (D-73). Today the iPhone is the hub only while its app is
-open, and that stays. The one way known to keep it running in the background is a Network
+Researched for 0.6 and not built (D-73); no phone is a hub at all (D-134). The one way known
+to keep an iPhone hub running in the background is a Network
 Extension, a packet tunnel provider, and each condition for it fails or is doubtful:
 
 1. **Apple's rules.** Guideline 5.4 allows VPN apps only from developers enrolled as an

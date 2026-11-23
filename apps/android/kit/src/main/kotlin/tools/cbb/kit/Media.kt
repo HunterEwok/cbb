@@ -8,8 +8,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * The manifest of a media event: images or files (docs/protocol.md,
- * section 4, "Media"), checked as Go's package clip does. The kit takes the
+ * The manifest of a media event: images or files (docs/format.md,
+ * section 10.3), checked as Go's package clip does. The kit takes the
  * event and its plain-text alternative; fetching the content comes later.
  */
 object Media {
@@ -81,7 +81,7 @@ object Media {
 
         companion object {
             /**
-             * Reads a manifest received from another member (docs/protocol.md, section 4, "Media"): the Rust core decides
+             * Reads a manifest received from another member (docs/format.md, section 10.3): the Rust core decides
              * whether it is taken, in the strict form of signed bodies and in its canonical form, with no member its table
              * does not name; null when it is not.
              */

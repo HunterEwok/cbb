@@ -92,6 +92,10 @@ pub(crate) fn listen_addr(s: &str) -> Result<SocketAddr> {
 /// fields, for the Go tests that run against this relay; the defaults
 /// without it.
 fn test_limits() -> Result<super::limits::Limits> {
+    limits_from(std::env::var("CBB_RELAY_LIMITS").ok())
+}
+
+fn limits_from(v: Option<String>) -> Result<super::limits::Limits> {
     #[derive(serde::Deserialize, Default)]
     #[serde(default, deny_unknown_fields)]
     struct L {
@@ -103,7 +107,7 @@ fn test_limits() -> Result<super::limits::Limits> {
         byte_rate: f64,
         streams: usize,
     }
-    let Ok(v) = std::env::var("CBB_RELAY_LIMITS") else { return Ok(Default::default()) };
+    let Some(v) = v else { return Ok(Default::default()) };
     let l: L = serde_json::from_str(&v).map_err(|e| Error::msg(format!("CBB_RELAY_LIMITS: {e}")))?;
     Ok(super::limits::Limits {
         groups: l.groups,
@@ -271,6 +275,67 @@ mod tests {
         let (code, _, err) = run(&["-key", bad.to_str().unwrap(), "-show-key"]);
         assert!(code == 1 && !err.is_empty(), "a damaged key: {code} {err}");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The flags take both forms and both dashes; help, an unknown flag
+    /// and a flag without its value are refused with the usage.
+    #[test]
+    fn flags() {
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let f = parse(&args(&["--listen", "127.0.0.1:1", "-refused=none", "-group", "a:b:c", "-open=false"])).unwrap();
+        assert_eq!((f.listen.as_str(), f.refused.as_str(), f.groups.as_str()), ("127.0.0.1:1", "none", "a:b:c"));
+        assert!(!f.open && !f.show_key);
+        let f = parse(&args(&["-open", "-show-key=1"])).unwrap();
+        assert!(f.open && f.show_key && f.listen == ":8764");
+        assert!(parse(&args(&["-h"])).err().unwrap().starts_with("usage:"));
+        assert!(parse(&args(&["-what"])).err().unwrap().contains("not defined: -what"));
+        assert!(parse(&args(&["-key"])).err().unwrap().contains("needs an argument: -key"));
+        assert!(parse(&args(&["-"])).err().unwrap().contains("takes only flags"));
+    }
+
+    /// A relay that cannot listen where it is told, cannot read its list of
+    /// refused groups or cannot take its port does not start.
+    #[test]
+    fn what_stops_the_start() {
+        let dir = std::env::temp_dir().join(format!("cbb-relay-start-{}", cbb_core::certs::random_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let key = dir.join("relay.pem");
+        let key = key.to_str().unwrap();
+        let (code, _, err) = run(&["-key", key, "-listen", "nowhere", "-open"]);
+        assert!(code == 1 && err.contains("not an address"), "{code} {err}");
+        let (code, _, err) = run(&["-key", key, "-listen", "127.0.0.1:0", "-refused", dir.to_str().unwrap(), "-open"]);
+        assert!(code == 1 && !err.is_empty(), "a list that is a directory: {code} {err}");
+        let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let at = taken.local_addr().unwrap().to_string();
+        let (code, _, err) = run(&["-key", key, "-listen", &at, "-refused", "none", "-open"]);
+        assert!(code == 1 && !err.is_empty(), "a port taken: {code} {err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The relay serves until a signal stops it, and then exits with 0.
+    #[cfg(unix)]
+    #[test]
+    fn it_serves_until_stopped() {
+        let dir = std::env::temp_dir().join(format!("cbb-relay-run-{}", cbb_core::certs::random_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let key = dir.join("relay.pem").to_str().unwrap().to_string();
+        let run =
+            std::thread::spawn(move || run(&["-key", &key, "-listen", "127.0.0.1:0", "-refused", "none", "-open"]));
+        std::thread::sleep(Duration::from_millis(300));
+        on_signal(libc::SIGTERM);
+        let (code, _, err) = run.join().unwrap();
+        assert_eq!(code, 0, "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// CBB_RELAY_LIMITS gives an open relay's limits for the Go tests.
+    #[test]
+    fn limits_for_the_tests() {
+        let l = limits_from(Some(r#"{"groups":3,"streams":9,"byte_rate":1.5}"#.into())).unwrap();
+        assert_eq!((l.groups, l.streams, l.byte_rate), (3, 9, 1.5));
+        assert_eq!(limits_from(None).unwrap().groups, 0);
+        let e = limits_from(Some(r#"{"what":1}"#.into())).err().unwrap().to_string();
+        assert!(e.starts_with("CBB_RELAY_LIMITS"), "{e}");
     }
 
     #[test]

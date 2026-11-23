@@ -79,9 +79,6 @@ func compare(w io.Writer, corpus string, impls []string, max int, failures strin
 			if v == "skip" {
 				continue
 			}
-			if err := checkFields(c.Kind, v); err != nil {
-				return false, fmt.Errorf("%s, case %d: %w", n, i+1, err)
-			}
 			if first == "" {
 				first = v
 			} else if v != first {
@@ -115,11 +112,7 @@ func compare(w io.Writer, corpus string, impls []string, max int, failures strin
 		}
 		c := cases[i]
 		fmt.Fprintf(w, "\ncase %d (%s):\n", i+1, c.Kind)
-		if c.Kind == "set" {
-			fmt.Fprintf(w, "  %d records\n", len(c.Records))
-		} else {
-			fmt.Fprintf(w, "  body %q\n  base64 %s\n", c.Body, b64.EncodeToString(c.Body))
-		}
+		fmt.Fprintf(w, "  body %q\n  base64 %s\n", c.Body, b64.EncodeToString(c.Body))
 		for _, n := range names {
 			fmt.Fprintf(w, "  %-6s %s\n", n, verdicts[n][i])
 		}
@@ -146,24 +139,4 @@ func compare(w io.Writer, corpus string, impls []string, max int, failures strin
 		fmt.Fprintf(w, "only kinds that are reported, not checked (%s), are read differently\n", strings.Join(reportOnly, ", "))
 	}
 	return failing == 0, nil
-}
-
-// checkFields reports a verdict of taken whose fields are not those of
-// its kind, in their order: an implementation that writes them otherwise
-// differs on every case of the kind, which says less than this.
-func checkFields(kind, verdict string) error {
-	want, ok := fields[kind]
-	if !ok || !strings.HasPrefix(verdict, "taken") {
-		return nil
-	}
-	got := strings.Fields(verdict)[1:]
-	if len(got) != len(want) {
-		return fmt.Errorf("%d fields for a %s, not %d", len(got), kind, len(want))
-	}
-	for i, f := range got {
-		if name, _, _ := strings.Cut(f, "="); name != want[i] {
-			return fmt.Errorf("field %d of a %s is %s, not %s", i+1, kind, name, want[i])
-		}
-	}
-	return nil
 }

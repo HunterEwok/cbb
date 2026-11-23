@@ -215,6 +215,9 @@ dialog p { white-space: pre-wrap; }
 #swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
 .icon-row { display: flex; gap: 12px; align-items: center; }
 .icon-row .field { width: auto; flex: 1; }
+.field-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+.field-row > span { flex: 1; }
+.field-row .field { width: auto; }
 #appearances button { width: 44px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 dialog .switch { display: flex; margin: 8px 0; }
 .field.code { font-size: 28px; text-align: center; letter-spacing: .15em; margin: 8px 0; }
@@ -268,3 +271,6 @@ button.icon[aria-pressed="true"] { background: var(--soft); color: var(--accent)
 #why-list .why { padding: 6px 0; border-bottom: 1px solid var(--line); }
 #why-list .why.main > div:first-child { font-weight: 600; font-size: 1.1em; }
 #why-list .why.stop > div:first-child { color: var(--danger); }
+#alerts .notice-line { display: flex; align-items: baseline; gap: 12px; }
+#alerts .notice-line p { flex: 1; margin: 0; }
+#join-invite-text { width: 100%; resize: vertical; word-break: break-all; }

@@ -141,7 +141,7 @@ private fun Badge(text: String) {
     )
 }
 
-/** ⋯: rename, unfreeze, make it an admin, make it the hub, remove; each asks first where it should. */
+/** ⋯: rename, freeze or unfreeze, make it an admin, make a computer a hub, remove; each asks first where it should. */
 @Composable
 private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
     val scope = rememberCoroutineScope()
@@ -149,6 +149,8 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
     var removing by remember { mutableStateOf(false) }
     var promoting by remember { mutableStateOf(false) }
     var thawing by remember { mutableStateOf(false) }
+    var freezing by remember { mutableStateOf(false) }
+    var hubbing by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     Box {
         IconText("⋯", stringResource(R.string.more)) { open = true }
@@ -165,6 +167,15 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
             item(R.string.rename) { renaming = true }()
             if (d.frozen) item(R.string.unfreeze) { thawing = true }()
             if (d.canMakeAdmin) item(R.string.make_admin) { promoting = true }()
+            // A hub is a computer, a router or a board, never a phone (D-134);
+            // an admin phone makes an admin computer one, as cbb global hub -on does.
+            if (model.isAdmin && !d.isSelf && d.role == "member" && d.admin && !d.frozen && d.hub == null) {
+                item(R.string.make_hub) { hubbing = true }()
+            }
+            // A stolen admin computer: an admin freezes it, the root unfreezes it.
+            if (model.isAdmin && !d.isSelf && d.role == "member" && d.admin && !d.isRoot && !d.frozen) {
+                item(R.string.freeze, danger = true) { freezing = true }()
+            }
             if (!d.isSelf) item(R.string.remove, danger = true) { removing = true }()
         }
     }
@@ -193,6 +204,22 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
             action = stringResource(R.string.unfreeze),
             dismiss = { thawing = false },
         ) { scope.launch { model.unfreeze(d.id) } }
+    }
+    if (freezing) {
+        Confirm(
+            title = stringResource(R.string.freeze_title, d.name),
+            body = stringResource(R.string.freeze_body),
+            action = stringResource(R.string.freeze),
+            dismiss = { freezing = false },
+        ) { scope.launch { model.freeze(d.id) } }
+    }
+    if (hubbing) {
+        Confirm(
+            title = stringResource(R.string.make_hub_title, d.name),
+            body = stringResource(R.string.make_hub_body),
+            action = stringResource(R.string.make_hub),
+            dismiss = { hubbing = false },
+        ) { scope.launch { model.makeHub(d.id) } }
     }
 }
 
@@ -228,14 +255,15 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
     var acting by remember { mutableStateOf(false) }
     var muting by remember { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-        // Members and Android and Aurora phones take pastes; iPhones cannot.
+        // Members take pastes; the phones take none in 0.6.
         if (d.takesPaste) {
             IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }
-        // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
+        // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device"):
+        // Unmute for a muted device, Mute for this phone or a connected one, as on the iPhone.
         if (d.muted != null) {
             IconLabel("🔊", stringResource(R.string.unmute)) { scope.launch { model.setMuted(d.id, false) } }
-        } else {
+        } else if (d.isSelf || d.online) {
             IconLabel("🔇", stringResource(R.string.mute)) { muting = true }
         }
         // Members run quick actions.

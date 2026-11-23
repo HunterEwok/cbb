@@ -2,7 +2,8 @@
 
 The vectors of the 0.6 wire format: the strict CBOR profile, keys, signed envelopes, records,
 keys statements, commands, grants, server credentials, frames, the copy and the TLS key
-container. `gen.py` writes them (`python3 -I testdata/format/gen.py testdata/format`); they are
+container. `gen.py` writes them (`python3 -I testdata/format/gen.py testdata/format`, with the
+Python packages of `requirements.txt`: `pip install --require-hashes -r testdata/format/requirements.txt`); they are
 deterministic, with test keys from fixed labels and RFC 6979 signatures, so writing them again
 gives the same bytes. Wraps and sealed parts are placeholder bytes of the right size.
 
@@ -21,7 +22,7 @@ Three readers check them:
 
 Field-level refusals (`records/…`, `form/default`) are for the readers of each kind.
 
-`push.json` (push to a phone whose app is closed, format section 20.4: message `push`, the push
+`push.json` (push to a phone whose app is closed, format section 9.6: message `push`, the push
 service's messages, the sealed body with its derived nonce, the send key's signatures and the
 UnifiedPush token) is written apart by
 `push_gen.py` (`python3 -I testdata/format/push_gen.py`), which borrows `gen.py`'s encoder and

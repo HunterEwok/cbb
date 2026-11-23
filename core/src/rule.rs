@@ -3,11 +3,9 @@
 
 //! The rule of incoming copies (docs/protocol.md, section 5, "Writing the
 //! member's own clipboard"): whether the group's current copy goes into a member's
-//! clipboard, and whether a mute or sync turned off holds. The core's engine
-//! (crate::clip) asks it, and the Go service asks it through the core's
-//! `copy_verdict`, so that every member keeps one rule; the cases of
-//! testdata/interop/copy-verdicts.json pin it, and Go's own copy of it,
-//! which a build without the core runs, reads the same cases.
+//! clipboard, and whether a mute or sync turned off holds. The member's
+//! board asks it, so that every member keeps one rule; the cases of
+//! testdata/interop/copy-verdicts.json pin it.
 
 use serde::{Deserialize, Serialize};
 
@@ -124,8 +122,7 @@ mod tests {
         holds: Option<bool>,
     }
 
-    /// Every case of testdata/interop/copy-verdicts.json, which Go's copy
-    /// of the rule reads too.
+    /// Every case of testdata/interop/copy-verdicts.json.
     #[test]
     fn vectors() {
         let raw = include_str!("../../testdata/interop/copy-verdicts.json");

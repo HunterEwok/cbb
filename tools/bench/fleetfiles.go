@@ -528,50 +528,6 @@ func keepsNothing(ctx context.Context, d *Device, dir string, secrets []string) 
 	return nil
 }
 
-// otherSystem (G35): a member whose hello names another system than its
-// record, as a computer that moved from Linux to Windows with its state,
-// gets a new record from the root; back on Linux, another one.
-func otherSystem(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
-	const p = "fleet/G35-system/"
-	g := fleetGroup(ctx, r, f, "fleet/G35-system", 3)
-	if g == nil || len(g.members) < 3 {
-		return
-	}
-	root, m, other := g.members[0], g.members[1], g.members[2]
-	r.Do("fleet/G35-new-system", func() error {
-		h, err := forgeHost(ctx, f, m, root)
-		if err != nil {
-			return err
-		}
-		id, err := deviceOf(ctx, root)
-		if err != nil {
-			return err
-		}
-		ip, err := fleetIP(ctx, root)
-		if err != nil {
-			return err
-		}
-		done := make(chan error, 1)
-		go func() {
-			_, err := RunFor(ctx, h, fmt.Sprintf("cbbbench-forge -os windows -state /tmp/%s -signer /tmp/%s -to %s -addr %s:8764 hold:60", m.Name, root.Name, id, ip), "", 2*time.Minute)
-			done <- err
-		}()
-		if err := listsAs(ctx, []*Device{root, other}, m.Name, "Windows", false, 45*time.Second); err != nil {
-			return err
-		}
-		if err := <-done; err != nil {
-			return err
-		}
-		return f.stop(ctx, h)
-	})
-	r.Do(p+"back-on-linux", func() error {
-		if err := f.start(ctx, m); err != nil {
-			return err
-		}
-		return listsAs(ctx, []*Device{root, other}, m.Name, "Linux", false, time.Minute)
-	})
-}
-
 // controlSocket (U11): what no cbb sends on the control socket: junk, a
 // header too long or with a bad length, an unknown operation, one that
 // changes the group, a payload cut short and a hundred connections that

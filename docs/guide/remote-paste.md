@@ -17,10 +17,11 @@ it on from afar.
 | FreeBSD | `sudo cbb paste-receive on` | the focused app on X11 and on wlroots desktops (sway, Hyprland); not GNOME, since nothing there tells whether its screen is locked |
 | Windows | `cbb paste-receive on` in a terminal opened as administrator | the window that has the focus |
 | Mac | `sudo cbb paste-receive on`, and the Mac app open, allowed in System Settings, Privacy & Security, Accessibility | the app that has the focus |
-| Android phone or TV | Settings, "Let the group's admins paste here", and the app's accessibility service on | the text field that has the focus in another app |
 | A small device without a desktop | `sudo cbb paste-receive on`; with `-console`, the text console too | the tmux pane in use |
 
-`-enter` (on a phone, "Let a paste press Enter") lets a paste press Enter after the text.
+A phone takes no remote paste in this version; it sends them.
+
+`-enter` lets a paste press Enter after the text.
 Without it a text with a line break is refused, because a line break may run what comes
 before it as a command wherever a terminal does not take the paste as one piece.
 
@@ -75,7 +76,6 @@ The answer on the sender says which one it was.
 - Whoever is an admin of your group can type into your device while remote paste is on, as
   if at your keyboard. Turn it on only where you need it, and keep the list of admins short.
 - Each device keeps a log of its last 100 pastes: who sent them and when, never the text.
-  Android also names the sender in a notification.
 - Any admin can turn remote paste off on another device or on all of them, for example
   when a phone is lost: `cbb paste-receive off -on DEVICE` or `-all`. Only the device's own
   user turns it on again.

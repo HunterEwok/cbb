@@ -455,8 +455,7 @@ public final class CoreMember: @unchecked Sendable {
 
     /// What a member port is for.
     public enum Listen: String, Encodable, Sendable {
-        /// The home network, while the phone is the hub: every address;
-        /// the app publishes the port with r=phone.
+        /// The home network: every address, as a home window publishes it.
         case home
     }
 
@@ -556,14 +555,6 @@ public final class CoreMember: @unchecked Sendable {
 
     private struct AwayAnswer: Decodable { var away: AwayState? }
 
-    /// The forwarder the group's root set for this phone as a hub: its address and its key's pin.
-    public struct RootForwarder: Codable, Equatable, Sendable {
-        public var endpoint: String
-        public var key: String
-
-        public init(endpoint: String, key: String) { (self.endpoint, self.key) = (endpoint, key) }
-    }
-
     /// Where the group's server credentials stand on the root phone of a
     /// group of 0.6: due when they need its root key (`renewPeriod`),
     /// overdue when they expired, so that the group's relay and its hubs'
@@ -626,16 +617,6 @@ public final class CoreMember: @unchecked Sendable {
         return try run("push_renewals", Optional<Empty>.none, as: R.self).renewals
     }
 
-    /// On a group of 0.6: the forwarder the group's root set for this phone
-    /// as a hub, which it serves through; nil while the root set none.
-    public func rootForwarder() throws -> RootForwarder? {
-        struct R: Decodable {
-            var rootForwarder: RootForwarder?
-            enum CodingKeys: String, CodingKey { case rootForwarder = "root_forwarder" }
-        }
-        return try run("away_status", Optional<Empty>.none, as: R.self).rootForwarder
-    }
-
     /// On a group of 0.6: sync away from home as the member runs it, nil while it is off.
     public func awayStatus() throws -> AwayState? {
         try run("away_status", Optional<Empty>.none, as: AwayAnswer.self).away
@@ -646,32 +627,6 @@ public final class CoreMember: @unchecked Sendable {
     public func setAway(_ on: Bool) throws -> AwayState? {
         struct A: Encodable { var on: Bool }
         return try run("away", A(on: on), as: AwayAnswer.self).away
-    }
-
-    /// On a group of 0.6, serves as a hub of the group (the records must
-    /// make this phone one: an admin key), as the computers' hub: reached
-    /// away from home through the forwarder at forwarder (`host:port`, its
-    /// key's pin key, or `default` for the project's), or at addrs
-    /// ("ip:port") on the UDP port (0 for any free one), hidden as
-    /// obfuscateOff and vlessOff say. Its clients and the guests of
-    /// invitations come in through its tunnel.
-    @discardableResult
-    public func serveAsHub(port: UInt16 = 0, addrs: [String] = [], forwarder: String = "", key: String = "",
-                           obfuscateOff: Bool = false, vlessOff: Bool = false) throws -> AwayState? {
-        struct A: Encodable {
-            var port: UInt16, addrs: [String], forwarder: String, key: String
-            var obfuscateOff: Bool, vlessOff: Bool
-            enum CodingKeys: String, CodingKey { case port, addrs, forwarder, key, obfuscateOff = "obfuscate_off", vlessOff = "vless_off" }
-        }
-        return try run("hub", A(port: port, addrs: addrs, forwarder: forwarder, key: key, obfuscateOff: obfuscateOff, vlessOff: vlessOff),
-                       as: AwayAnswer.self).away
-    }
-
-    /// On a group of 0.6: stops serving as a hub; its clients go to the
-    /// next hub in the group's order.
-    @discardableResult
-    public func stopHub() throws -> AwayState? {
-        try run("hub_off", Optional<Empty>.none, as: AwayAnswer.self).away
     }
 
     /// Closes the member port for what, or every one with nil.
@@ -816,7 +771,7 @@ public final class CoreMember: @unchecked Sendable {
         try P256.Signing.PublicKey(derRepresentation: der).x963Representation
     }
 
-    // The root's own records (cbb_core::root): the member builds and checks
+    // The root's own records (cbb_member_manage): the member builds and checks
     // each, signs it with the root key public (DER) through sign, adds it to
     // its records and sends it; the app then takes the member's records.
 

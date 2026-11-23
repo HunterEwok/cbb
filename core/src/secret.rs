@@ -61,7 +61,9 @@ mod tests {
 /// over the times, the slowest tenth cut off, must not tell the classes
 /// apart. They are ignored by default, being slow and sensitive to a busy
 /// machine: `cargo test -p cbb-core --release -- --ignored timing --test-threads=1`.
-#[cfg(test)]
+/// A coverage build (cargo llvm-cov sets `coverage`) leaves them out: they
+/// never run there, and their own code would count as code not covered.
+#[cfg(all(test, not(coverage)))]
 mod timing {
     use alloc::vec::Vec;
     use std::time::Instant;

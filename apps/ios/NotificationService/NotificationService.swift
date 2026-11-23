@@ -110,7 +110,7 @@ final class NotificationService: UNNotificationServiceExtension {
         case 1: String(localized: "A device joined your group. Open the app to see it.")
         case 2: String(localized: "A device was removed from your group. Open the app to check.")
         case 3: String(localized: "A device is waiting to join your group. Open the app.")
-        case 4: String(localized: "Your group's root changed. Open the app to check.")
+        case 4: String(localized: "Your group's main device changed. Open the app to check.")
         case 5: String(localized: "This device's record changed. Open the app to check.")
         case 6: String(localized: "Your group stopped. Open the app to check.")
         default: String(localized: "New in your group. Open the app.")

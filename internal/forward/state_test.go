@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/budget"
-	"github.com/HunterEwok/cbb/internal/group"
 )
 
 func testVersions(t *testing.T, file string) *versions {
@@ -61,7 +60,7 @@ func TestVersionsKeepsGroupsAgainstNewTags(t *testing.T) {
 	v := testVersions(t, "")
 	now := time.Now()
 	v.now = func() time.Time { return now }
-	expires := now.Add(group.PeriodLifetime)
+	expires := now.Add(periodLifetime)
 	victim := periodOf("victim", 5, expires)
 	genuine := netip.MustParseAddr("192.0.2.7")
 	if err := v.check(victim, genuine); err != nil {
@@ -156,7 +155,7 @@ func TestVersionsBoundsAnEntrysLife(t *testing.T) {
 	if err := v.keep(periodOf("far", 1, now.AddDate(100, 0, 0)), netip.MustParseAddr("192.0.2.7")); err != nil {
 		t.Fatal(err)
 	}
-	now = now.Add(group.PeriodLifetime + time.Hour)
+	now = now.Add(periodLifetime + time.Hour)
 	v.mu.Lock()
 	v.pruneLocked()
 	n := len(v.entries)

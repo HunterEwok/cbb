@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
@@ -160,7 +161,7 @@ object Core {
 
     /**
      * Checks a signed body that is not a record through the core's
-     * parse_body (docs/core-api.md, "Signed bodies"): [kind] is `command`,
+     * parse_body (docs/core-api.md, "Signed bodies"): [kind] is
      * `credential`, `keys`, `release`, `channel` or `attest-status`. The
      * core alone decides whether the body is taken; it answers null for a
      * body it takes and why it refused one otherwise, the message and the
@@ -174,70 +175,11 @@ object Core {
             r.details?.takeIf { it.isNotEmpty() }?.let { "${r.message}: $it" } ?: r.message
         }
 
-    /**
-     * A command in the open with its orders sealed to key, the receiver's key
-     * for sealed messages (seal_command, docs/core-api.md, "Signed bodies"),
-     * for the sender to sign.
-     */
-    internal fun sealCommand(body: ByteArray, key: ByteArray): ByteArray {
-        val ok = run("seal_command", Wire.obj("body" to Wire.bytes(body), "key" to Wire.bytes(key))) as? JsonObject
-            ?: throw Mismatch("the answer to seal_command is not an object")
-        return ok.optBytes("body") ?: throw Mismatch("the answer to seal_command has no body")
-    }
+    /** A recovery sheet (docs/protocol.md, section 9, "The recovery sheet (0.6)"), as the core made it with the group: the QR code's text and the text in groups of four. */
+    class RecoverySheet(val qr: String, val text: String)
 
-    /** The public key for sealed messages of secret, 32 random bytes the device keeps: the `seal` its pairing and device record carry. */
-    fun sealPublic(secret: ByteArray): ByteArray {
-        val ok = run("seal_public", Wire.obj("secret" to Wire.bytes(secret))) as? JsonObject
-            ?: throw Mismatch("the answer to seal_public is not an object")
-        return ok.optBytes("key") ?: throw Mismatch("the answer to seal_public has no key")
-    }
-
-    /** A recovery sheet (docs/protocol.md, section 10, "The recovery key"): the QR code's text, the key in groups of four, and the key hash the `recovery` record names. */
-    class RecoverySheet(val qr: String, val text: String, val admin: ByteArray)
-
-    /** The recovery sheet for key (its 32 bytes), its admin CA and the group's tag. */
-    fun recoverySheet(key: ByteArray, cert: ByteArray, group: String): RecoverySheet {
-        val ok = run("recovery_sheet", Wire.obj("key" to Wire.bytes(key), "cert" to Wire.bytes(cert), "group" to Wire.str(group))) as? JsonObject
-            ?: throw Mismatch("the answer to recovery_sheet is not an object")
-        return RecoverySheet(
-            ok.optString("qr") ?: throw Mismatch("the answer to recovery_sheet has no qr"),
-            ok.optString("text") ?: throw Mismatch("the answer to recovery_sheet has no text"),
-            ok.optBytes("admin") ?: throw Mismatch("the answer to recovery_sheet has no admin"),
-        )
-    }
-
-    /** A recovery key read from a sheet: [key] its 32 bytes, [public] uncompressed, [admin] its key hash; [cert] and [group] only from its QR code. */
-    class RecoveredKey(
-        val key: ByteArray,
-        val pkcs8: ByteArray,
-        val public: ByteArray,
-        val admin: ByteArray,
-        val cert: ByteArray?,
-        val group: String?,
-    )
-
-    /** What read_recovery_sheet says of a text: the key, or why it is not one. */
-    sealed class SheetReading {
-        class Key(val key: RecoveredKey) : SheetReading()
-
-        /** reason is not_sheet, damaged, check, key, cert, mismatch or group; message a sentence for the user. */
-        class Refused(val reason: String, val message: String) : SheetReading()
-    }
-
-    /** Reads what the user scanned or typed from a recovery sheet. */
-    fun readRecoverySheet(text: String): SheetReading {
-        val ok = run("read_recovery_sheet", Wire.obj("text" to Wire.str(text))) as? JsonObject
-            ?: throw Mismatch("the answer to read_recovery_sheet is not an object")
-        (ok["sheet"] as? JsonObject)?.let { s ->
-            fun need(k: String) = s.optBytes(k) ?: throw Mismatch("the answer to read_recovery_sheet has no $k")
-            return SheetReading.Key(RecoveredKey(need("key"), need("pkcs8"), need("public"), need("admin"), s.optBytes("cert"), s.optString("group")))
-        }
-        val r = ok["refused"] as? JsonObject ?: throw Mismatch("the answer to read_recovery_sheet has neither sheet nor refused")
-        return SheetReading.Refused(r.optString("reason") ?: "", r.optString("message") ?: "")
-    }
-
-    /** A remote invitation as the screen that accepts or declines it shows it: its group's tag, its hub's device ID, and when it expires, Unix seconds. */
-    data class Invitation(val group: String, val hub: String, val expires: Long)
+    /** A remote invitation the core took: phone is true when it is a phone's. It carries no expiry: the hub refuses it once its time is over. */
+    data class Invitation(val phone: Boolean)
 
     sealed class InviteReading {
         class Read(val invitation: Invitation) : InviteReading()
@@ -246,12 +188,13 @@ object Core {
         class Refused(val reason: String, val message: String) : InviteReading()
     }
 
-    /** Reads what the user scanned, opened or pasted as a remote invitation, cbb://invite#... */
+    /** Reads what the user scanned, opened or pasted as a remote invitation, cbb://join#... */
     fun readInvite(text: String): InviteReading {
         val ok = run("read_invite", Wire.obj("text" to Wire.str(text))) as? JsonObject
             ?: throw Mismatch("the answer to read_invite is not an object")
         (ok["invitation"] as? JsonObject)?.let { i ->
-            return InviteReading.Read(Invitation(i.optString("group") ?: "", i.optString("hub") ?: "", i.optLong("expires") ?: 0))
+            val phone = (i["phone"] as? JsonPrimitive)?.booleanOrNull ?: throw Mismatch("the answer to read_invite has no phone")
+            return InviteReading.Read(Invitation(phone))
         }
         val r = ok["refused"] as? JsonObject ?: throw Mismatch("the answer to read_invite has neither invitation nor refused")
         return InviteReading.Refused(r.optString("reason") ?: "", r.optString("message") ?: "")

@@ -56,6 +56,7 @@ export interface Device {
 interface Peer {
   device: string;
   name?: string;
+  muted?: boolean;
 }
 
 interface Peers {
@@ -87,15 +88,33 @@ interface GroupDevice {
 
 // The member's group of 0.6, the part the app reads: its key level and
 // how long copies and secrets live (D-129), null for the default.
+interface GroupMe {
+  device?: string;
+}
+
 interface GroupView {
   key_level?: string;
   devices?: GroupDevice[];
+  me?: GroupMe;
   ttl_ms?: number | null;
   secret_ttl_ms?: number | null;
 }
 
 interface Whys {
   why?: Why[];
+}
+
+// A notice of the member about the group (docs/apps.md, "Notices"): its
+// kind, its arguments, and whether the person may hide it.
+export interface Notice {
+  id: string;
+  kind: string;
+  args?: Record<string, string>;
+  dismissable?: boolean;
+}
+
+interface Notices {
+  notices?: Notice[];
 }
 
 // A tile of the member's view (docs/apps.md, "What the member shows").
@@ -140,7 +159,6 @@ interface Swap {
 
 interface Server {
   endpoint?: string;
-  registered?: boolean;
   connected?: boolean;
   online?: string[];
   error?: string;
@@ -153,10 +171,7 @@ interface Away {
   through?: boolean;
   error?: string;
   detail?: string;
-  // This phone is one of the group's hubs, with its forwarder; or it meets
-  // the group at a blind relay.
-  hub?: boolean;
-  forwarder?: Server;
+  // The blind relay it meets the group at.
   relay?: Server;
 }
 
@@ -172,15 +187,8 @@ const ATTEST_EVERY_MS: number = 24 * 3600 * 1000;
 // A signed file of the mirror is far smaller.
 const ATTEST_MAX: number = 2 * 1024 * 1024;
 
-// The forwarder the group's root set for this phone as a hub (a group of 0.6).
-interface RootForwarder {
-  endpoint: string;
-  key: string;
-}
-
 interface AwayAnswer {
   away?: Away;
-  root_forwarder?: RootForwarder;
   // On the root phone of a group of 0.6: the group's server credentials
   // need its root key, or expired already.
   period_due?: boolean;
@@ -217,6 +225,8 @@ interface Fetched {
 interface MemberEvent {
   type: string;
   line?: string;
+  from?: string;
+  to?: string;
   text?: string;
   kind?: string;
   ttl_ms?: number;
@@ -237,8 +247,19 @@ export class Member {
   @Trace running: boolean = false;
   // The names of the members connected now.
   @Trace peers: string[] = [];
+  // The connected devices an admin muted, as their hellos say.
+  @Trace mutedPeers: string[] = [];
   @Trace devices: Device[] = [];
   @Trace why: Why[] = [];
+  // The member's notices about the group, on Home.
+  @Trace notices: Notice[] = [];
+  // The change of root the member told of last, by the devices' names,
+  // until the person saw it; empty when there is none.
+  @Trace rootChangedFrom: string = '';
+  @Trace rootChangedTo: string = '';
+  // The group removed this phone: its records, once it has some, no
+  // longer list it. Home then offers to leave.
+  @Trace removed: boolean = false;
   // The group's key level (proven, hardware or files), as its records set it.
   @Trace keyLevel: string = 'hardware';
   // The devices that offered this phone an admin key at pairing and are no
@@ -276,19 +297,9 @@ export class Member {
   @Trace awayStatus: string = 'off';
   @Trace awayHub: string = '';
   @Trace awayError: string = '';
-  // The phone as one of the group's hubs (docs/apps.md, "The phone as the
-  // hub"): on, where its forwarder stands ("off", "home", "registering",
-  // "registered", "failed") and why it failed.
-  @Trace hubOn: boolean = false;
-  @Trace hubStatus: string = 'off';
-  @Trace hubError: string = '';
   // The blind relay the phone meets the group at, "" for none, and whether
   // the link is up.
   @Trace relayAt: string = '';
-  // On a group of 0.6, the forwarder the group's root set for this phone as
-  // a hub and its key's pin, "" while it set none.
-  @Trace rootForwarder: string = '';
-  @Trace rootForwarderKey: string = '';
   // On the root phone of a group of 0.6, the group's server credentials
   // expired: its relay and its hubs' forwarders take nobody until the root
   // key renews them.
@@ -398,6 +409,9 @@ export class Member {
     await cbb.memberStop(h);
     this.running = false;
     this.peers = [];
+    this.mutedPeers = [];
+    this.notices = [];
+    this.removed = false;
     this.devices = [];
     this.why = [];
     this.view = { tiles: [] };
@@ -757,6 +771,12 @@ export class Member {
       this.keyLevel = level;
     }
     if (g.ok !== undefined) {
+      const listed = g.ok.devices ?? [];
+      const me = g.ok.me?.device ?? '';
+      const removed = listed.length > 0 && me.length > 0 && !listed.some((d: GroupDevice) => d.device === me);
+      if (removed !== this.removed) {
+        this.removed = removed;
+      }
       const offers = (g.ok.devices ?? []).filter((d: GroupDevice) => d.offers_admin === true)
         .map((d: GroupDevice) => d.device ?? '');
       if (JSON.stringify(offers) !== JSON.stringify(this.offersAdmin)) {
@@ -772,6 +792,10 @@ export class Member {
       }
     }
     await this.readView(await this.call<Viewed>('view'));
+    const n = await this.call<Notices>('notices');
+    if (n.ok !== undefined && JSON.stringify(n.ok.notices ?? []) !== JSON.stringify(this.notices)) {
+      this.notices = n.ok.notices ?? [];
+    }
     if (JSON.stringify(why) !== JSON.stringify(this.why)) {
       this.why = why;
     }
@@ -814,6 +838,10 @@ export class Member {
       if (names.join('\n') !== this.peers.join('\n')) {
         this.peers = names;
       }
+      const muted = (a.ok.peers ?? []).filter((p: Peer) => p.muted === true).map((p: Peer) => p.device);
+      if (muted.join('\n') !== this.mutedPeers.join('\n')) {
+        this.mutedPeers = muted;
+      }
     }
     // A pause or a mute that ran out ends on its own.
     await this.pollMuted();
@@ -822,30 +850,6 @@ export class Member {
     if (this.periodDueAway !== this.periodDue) {
       this.periodDue = this.periodDueAway;
     }
-  }
-
-  // Makes this phone one of the group's hubs, reached away from home
-  // through the forwarder at forwarder whose key's pin is key ('default'
-  // for the project's; both empty on a group of 0.6: the one the root set),
-  // hidden as disguise says ('plain' WireGuard,
-  // 'obfuscate' AmneziaWG, 'vless' AmneziaWG with VLESS at the forwarder);
-  // or stops it being one. Answers why it failed.
-  async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
-    const a = on
-      ? await this.call<AwayAnswer>('hub', {
-        'forwarder': forwarder,
-        'key': key,
-        'obfuscate_off': disguise === 'plain',
-        'vless_off': disguise !== 'vless'
-      } as Record<string, Object>)
-      : await this.call<AwayAnswer>('hub_off', { 'anyway': anyway } as Record<string, Object>);
-    if (a.ok === undefined) {
-      return a.failure;
-    }
-    const through = forwarder.length > 0 ? forwarder : (a.ok.root_forwarder?.endpoint ?? '');
-    Errors.log(on ? `member: this phone is a hub of the group, through ${through}` : 'member: this phone is no hub any more');
-    this.readAway(a.ok.away);
-    return undefined;
   }
 
   private attestFetched: number = 0;
@@ -925,8 +929,6 @@ export class Member {
       Errors.log(`member: sync away from home: ${f.message} (${f.details})`);
       return;
     }
-    this.rootForwarder = a.ok.root_forwarder?.endpoint ?? '';
-    this.rootForwarderKey = a.ok.root_forwarder?.key ?? '';
     this.periodDueAway = a.ok.period_due === true;
     if (this.periodOverdue !== (a.ok.period_overdue === true)) {
       this.periodOverdue = a.ok.period_overdue === true;
@@ -972,19 +974,6 @@ export class Member {
     if (hubName !== this.awayHub) {
       this.awayHub = hubName;
     }
-    const hubOn = away?.hub === true;
-    const fw = away?.forwarder;
-    let hubStatus = 'off';
-    if (hubOn) {
-      hubStatus = fw === undefined ? 'home' : fw.registered === true ? 'registered' :
-        (fw.error ?? '').length > 0 ? 'failed' : 'registering';
-    }
-    const hubError = hubStatus === 'failed' ? Errors.shown(new Failure(fw?.error ?? '', fw?.detail ?? '')) : '';
-    if (hubOn !== this.hubOn || hubStatus !== this.hubStatus || hubError !== this.hubError) {
-      this.hubOn = hubOn;
-      this.hubStatus = hubStatus;
-      this.hubError = hubError;
-    }
     const r = away?.relay;
     const relayAt = r?.endpoint ?? '';
     const relayConnected = r?.connected === true;
@@ -997,6 +986,29 @@ export class Member {
       this.relayOnline = relayOnline;
       this.relayError = relayError;
     }
+  }
+
+  // Hides a notice that may be hidden, until something about it changes.
+  async dismissNotice(id: string): Promise<void> {
+    const a = await this.call<Object>('dismiss', { 'id': id } as Record<string, Object>);
+    if (a.ok === undefined) {
+      this.error = Errors.shown(a.failure as Failure);
+    }
+    await this.pollDevices();
+  }
+
+  // The person saw the change of root: the member does not tell it again,
+  // not even after a restart.
+  async rootChangeSeen(): Promise<void> {
+    this.rootChangedFrom = '';
+    this.rootChangedTo = '';
+    await this.call<Object>('root_change_seen');
+  }
+
+  // A device's name as the group's devices show it, else its ID.
+  private nameOf(id: string): string {
+    const d = this.devices.find((x: Device) => x.id === id);
+    return d !== undefined && d.name.length > 0 ? d.name : id;
   }
 
   // The core's event, on the main thread (the module's threadsafe function).
@@ -1025,6 +1037,14 @@ export class Member {
       }
     } else if (e.type === 'mute' || e.type === 'sync') {
       this.pollMuted();
+    } else if (e.type === 'root_changed') {
+      // Every device shows it until the person saw it, and nobody turns it off.
+      Errors.log(`member: the group's root changed from ${e.from ?? ''} to ${e.to ?? ''}`);
+      this.rootChangedFrom = this.nameOf(e.from ?? '');
+      this.rootChangedTo = this.nameOf(e.to ?? '');
+      this.pollDevices();
+    } else if (e.type === 'state' || e.type === 'notice') {
+      this.pollDevices();
     } else if (e.type === 'copy') {
       // Images or files from another device come by themselves while sync
       // is on, as texts do through write.

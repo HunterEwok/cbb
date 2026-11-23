@@ -33,8 +33,9 @@ they look, so both apps are built to the same plan.
    code, a computer of the group types the digits after "+", docs/protocol.md, section 6),
    **Join with an invitation** (for a phone far from the group: the camera reads the
    invitation's QR code, or its text is pasted or its file opened; the invitation then
-   waits on a screen of its own, with its group, its hub and when it expires, to be joined
-   or declined, and declining sends nothing; joined, the phone shows the words the inviting
+   waits on a screen of its own, which warns to join only an invitation one asked for, to be
+   joined or declined, and declining sends nothing (the invitation names no group, hub or
+   expiry the phone could show before it joins, format.md section 11.3); joined, the phone shows the words the inviting
    admin compares, docs/protocol.md, section 12); restoring the group on a phone in no group
    comes with 0.7 (D-125). A phone always joins as a member; the root makes it an admin later from the
    phone's device page ("Make it an admin"), with the admin key its hellos offer
@@ -116,7 +117,8 @@ they look, so both apps are built to the same plan.
 
    **Muting** (docs/design.md, "Muting a device"): on an admin phone a device's card
    has "Mute" with the house's times ("Until an admin unmutes it" for the last), a `mute` command
-   signed after Face ID or the fingerprint, and "Unmute"; a muted device says so on its tile,
+   signed after Face ID or the fingerprint, and "Unmute"; on all four phones the page shows
+   "Unmute" for a muted device and "Mute" for one that is connected, never both. A muted device says so on its tile,
    its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
    says so until an admin unmutes it, an admin phone itself on its own page.
 
@@ -152,13 +154,14 @@ they look, so both apps are built to the same plan.
    online dot and badges (this phone, root, admin, hub, frozen), one line of its system and
    CBB version, the house (its sync: this phone's own, or on an admin phone a connected
    computer's), a row of icons (paste on it, mute, quick actions), the rest (type, MAC
-   address, role, ID) under More, and "…" with rename, make it an admin or a hub, unfreeze
+   address, role, ID) under More, and "…" with rename, make it an admin or a hub, freeze or unfreeze
    and remove; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
    system (Linux, Windows, macOS, iOS, Android, or "device" for firmware), a "root", "admin" or "frozen" mark, a live dot when it is online and
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
    device records (section 10 of [protocol.md](protocol.md)), so every app and
    `cbb status` show the same. On an admin phone, a row opens the device: rename,
-   "Make it an admin" (on the root phone), "Unfreeze" for an admin computer
+   "Make it an admin" (on the root phone), "Freeze" for an admin computer that is not the
+   root's, as one does with a stolen one, "Unfreeze" for an admin computer
    that another admin froze (design.md, "Who may remove an admin"), and "Remove", which asks once, then
    needs Face ID, the fingerprint or the passcode, and is done; removing an admin phone shows
    the devices it had admitted, which stay. On the root phone the row of a phone or a computer
@@ -173,12 +176,13 @@ they look, so both apps are built to the same plan.
    on or off: the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
    An admin phone also offers "Make it a hub" for a connected computer that is an admin, or that
-   the root phone makes one first: after Face ID or the fingerprint it signs a `hub` command
+   the root phone makes one first (a phone is never a hub, D-134): after Face ID or the
+   fingerprint it signs a `hub` command
    (docs/protocol.md, section 11, "Several hubs") with its forwarder, or the project's, and the
    computer becomes a hub of the group as well; it refuses while sync away from home is off
    there, which only its own user turns on.
    With sync away from home on, the list marks the group's hubs whose offers the phone keeps
-   ("hub", or "hub in use" for the one it reaches now; this phone too while it is the hub), a
+   ("hub", or "hub in use" for the one it reaches now), a
    device's page says "The group's hub", and Settings, "Away from home", names the hub the
    phone is connected to through the tunnel. The Mac app and the tray app say the same on a
    device's page, from `hub` in the service's device list.
@@ -202,9 +206,8 @@ they look, so both apps are built to the same plan.
    switch "Show error details", which puts the error itself under each error message; it is
    on in debug builds, and the launch argument `ShowErrorDetails` sets it too; Android takes the
    extra in debug builds only, since any app can start the activity with one).
-   The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
-   computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
-   networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Security level": root,
+   The advanced ones: why it does not sync (below), away from home (where it stands and the
+   blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Admin keys": root,
    admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
    two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
    away from home is turned on by the globe on Home (docs/design.md, "Sync away from
@@ -214,50 +217,23 @@ they look, so both apps are built to the same plan.
    The Live member keeps the phone's tunnel key and the hubs' offers itself and runs the
    tunnel in the app's process, in user space: it tries a hub's endpoints in AmneziaWG over
    UDP first and VLESS after them, in turn, keeping to the way that works. Nothing changes
-   on the screen. A phone in a group made before 0.6 syncs at home only and shows no card
-   for sync away from home, the hub or the relay (D-123).
-   On a root or admin phone, "This phone as the hub" comes first (docs/design.md, "The
-   phone as the hub"): a switch, on from the start in a group the phone made; where it
-   stands (at home only without a forwarder, registering, registered, or why the forwarder
-   refuses it, with the error underneath when details are on); whether the network the
-   phone is on is one of the hub's home networks, with "This is my home network" when it
-   is not; the forwarder the group's root set; how the hub's tunnel hides (WireGuard,
-   AmneziaWG, or VLESS to a forwarder that takes it, which comes with AmneziaWG: the Live
-   member makes the AmneziaWG settings and the VLESS user ID and keeps them while that
-   choice stays, and the clients get them the next time they meet the hub at home); and on Android
-   "Keep the hub running in the background", which lets the foreground service keep it.
-   The switch stays in Settings, and the phone's own page in the device list has no "Make it
-   a hub", unlike the computers' apps: a phone is the hub only while its app is open (on
-   Android also in the background, at the cost of the battery), so a computer that is always
-   on is the better hub, and the apps do not put the phone forward for it.
-   While the phone is the hub, the switch for its own sync away from home is hidden: a hub
-   is nobody's client. Home says "This phone is the hub: sync works while the app is open".
-   On a home network the hub takes members on a port on every address, which it publishes
-   with `r=phone` (docs/protocol.md, section 3).
-   The Live member runs all of it in the app's process, in user space: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
-   port and the addresses, and how its tunnel hides) and the link to the group's relay, and
-   it keeps their keys and the hub's clients itself; the cards read where they stand from
-   `away_status` (docs/core-api.md). The hub's forwarder is the root's setting: the root names
-   it with a hub command (from a computer, `cbb global hub -on`; from the root phone, the
-   manage action `forwarder`), which also makes the group's credentials for it; the phone keeps
-   it and serves through it once its own switch is on, and Settings shows it with "The group's
-   root sets this hub's forwarder", without fields, or that the hub serves at home only while
-   the root set none. On the root phone the group's server credentials need the root key
+   on the screen.
+   No phone is a hub, not even the root's (D-134): a hub is a computer, a router or a board,
+   which an admin phone makes one with "Make it a hub" on its page (above), so sync away
+   from home works with every app closed. The Live member runs sync away from home (`away`)
+   and the link to the group's relay in the app's process, in user space, keeps their keys
+   itself and refuses a hub command; the cards read where they stand from `away_status`
+   (docs/core-api.md). On the root phone the group's server credentials need the root key
    every 30 days: the app renews them when it comes to the front, asking with "Renew the
    group's keys for sync away from home", and a root action (the relay, a forwarder, the
-   hubs) renews them with its key; once they expired, the relay card says so. The apps keep only what the user chose for the hub (on,
-   disguise, home networks, and on Android the background): Android's `AwayOn06`
-   in a sealed file, the Swift kit's `AwayOn06.Prefs` in the keychain; they serve while the
-   app is in front (on Android also in the background when allowed). Turning the switch off
-   stops the hub at once, which hands its clients to the group's next hub. The app going to
-   the background on its own does not: on Android, without leave to run there, the hub stops
-   after a minute there; on the iPhone the member pauses and the hub stays one. So a short
-   trip away hands nobody over, and the clients wait out the gap as for any hub that goes
-   quiet, then move on to the next hub.
-   A hub without a forwarder is reached at the phone's addresses on the home network. The relay is the group's setting: the root sets it with
-   the fingerprint, the face or the screen lock (the manage action `relay`), and the other
-   devices show where their link to it stands, with "The group's root sets the relay for
-   every device".
+   hubs) renews them with its key; once they expired, the relay card says so. On Aurora,
+   whose root key signs after the admin PIN, the relay page offers that button instead while
+   they are due or expired.
+   The relay is the group's setting: the root sets it with
+   the fingerprint, the face, the screen lock or Aurora's admin PIN (the manage action
+   `relay`), after what a relay learns, and the other devices show where their link to it
+   stands, with "The group's main device sets the relay for every device"; on Aurora it is
+   Settings, "Blind relay".
    On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
    (docs/protocol.md, section 12) through a hub of the group it is connected to. The phone shows the invitation's QR
    code, which a new phone scans in Join with an invitation, and shares the file
@@ -271,7 +247,7 @@ they look, so both apps are built to the same plan.
    The sync mode and the other settings stay, and the app goes back to Start with a new
    member key. The root leaves only when the group has no other devices than its watch.
    When the records no longer list the phone, Home shows "This phone was removed from the
-   group" with the same button. The watch hears that its phone is in no group, or in
+   group" with the same button, on all four phones. The watch hears that its phone is in no group, or in
    another one than its admin key's, and deletes the key.
 
 The lost phone case is one path, and the app says so in plain words: "Lost a phone? Open
@@ -284,9 +260,10 @@ the group", not a status code), never a dialog that must be dismissed.
 ### Notices
 
 The member keeps a short list of things the person should know about the group's records
-(its `notices`), and Home shows each in a sentence of the app's own, under the alerts, on the iPhone, Android
-and Aurora: a
-change of the main device on its way, an admin that has been silent so long that its admin
+(its `notices`), and Home shows each in a sentence of the app's own, above the devices, on the
+iPhone, Android, Aurora and HarmonyOS, and under the alerts in the Mac app and the tray app,
+which read them from `cbb status` (`notices`) and hide one with the control socket's
+`dismiss`, without the administrator: a change of the main device on its way, an admin that has been silent so long that its admin
 rights end soon (35 days in all), removals waiting until every admin has seen them and how
 much of the main device's room they take, a removal this phone still has to confirm, a frozen
 admin that holds removals back, a checkpoint waiting for records no device passed on, a device
@@ -323,7 +300,7 @@ stops the most first and large, the others under it. The Rust core decides the r
 home it gives each a stable code, a level (stop: nothing syncs here; warn: some copies or
 devices do not; info) and its parameters, and the apps only say each code in their words;
 `testdata/why/vectors.json` holds the cases. A computer's status carries them, a phone's member
-answers `why` (docs/core-api.md), with where the phone's own hub, tunnel and relay stand, and
+answers `why` (docs/core-api.md), with where the phone's tunnel and relay stand, and
 `cbb status` prints the first that stops sync. With "Show error details" on, each reason also
 shows its code and the member's own words.
 
@@ -331,18 +308,13 @@ shows its code and the member's own words.
 |---|---|---|
 | `not_in_group` | stop | the device is in no group |
 | `removed` | stop | the group removed it: leave, then join again |
-| `recovery_fork` | stop | the group's recovery key signed two owners: the group stopped for good |
-| `root_two_histories` | stop | the group's root signed two histories: the group stops until it decides |
-| `admins_conflict` | stop | two admins conflict: the group stops until the root decides |
-| `owner_disagrees` | stop | these peers count another owner of the group (`devices`) |
+| `recovery_fork` | stop | the recovery key signed two changes at one step: the group stopped for good, make a new one |
+| `root_two_histories` | stop | the root's key signed two histories: the group stops until its root decides, or moves to a new root with the recovery key |
+| `admins_conflict` | stop | two admins disagree about a device: the group waits for its root to decide |
+| `owner_disagrees` | stop | this device and its peers (`devices`) follow different roots: leave, then join again |
 | `frozen` | stop | the group's records froze this device's keys |
 | `nothing_here` | stop | the group's records give this device nothing |
 | `stopped` | stop | the group's records stop the exchange until the root decides |
-| `admins_conflict` | stop | two admins disagree about a device: the group waits for its root to decide |
-| `root_two_histories` | stop | the root's key signed two histories: move the group to a new root with the recovery key |
-| `recovery_fork` | stop | the recovery key signed two changes at one step: the group stopped for good, make a new one |
-| `owner_disagrees` | stop | this device and its peers follow different roots: leave, then join again |
-| `nothing_here` | stop | the group sends this device nothing |
 | `sync_off` | stop | sync is off here, until a time or until turned on |
 | `away_off` | stop | no device of the group is on this network: turn on Everywhere |
 | `new_network` | stop | a computer has not met its group on this network (the apps' button "This is my home network", `sudo cbb network` in the command line) |
@@ -353,20 +325,16 @@ shows its code and the member's own words.
 | `hub_waiting` | stop | this device is the hub and nobody connected yet |
 | `alone` | stop | connected, but no other device of the group is online |
 | `secrets_stopped` | warn | the group sends no secrets until the root decides |
-| `no_secrets_here` | warn | the group sends this device no secrets |
-| `change_arriving` | warn | a change of root is arriving and its records are not all here: keep the device near the others |
-| `checkpoint_stuck` | warn | a checkpoint of the root waits for records no device has offered |
+| `no_secrets_here` | warn | the group seals no secrets to this device |
+| `change_arriving` | warn | a change of the group's root is arriving and its records are not all here: they are asked for, so keep the device near the others |
+| `checkpoint_stuck` | warn | the root's checkpoint waits for records no device has offered |
 | `muted` | warn | an admin muted this device: its copies do not reach the group |
 | `forwarder_down`, `entries_stale` | warn | the hub's forwarder does not take it, or the list of entry points is out of date |
-| `no_secrets_here` | warn | the group seals no secrets to this device |
 | `newer` | warn, or stop | the group has records or settings of a newer version: update; a stop when this version cannot follow them |
-| `change_arriving` | warn | a change of the group's root is arriving; its records are asked for |
-| `checkpoint_stuck` | warn | the root's checkpoint waits for records no device has offered |
 | `unreached` | warn | members at home cannot connect to this computer: its firewall |
 | `only_device` | info | the group's only device: add a phone or a computer |
-| `copy_waits` | info | a copy waits until this device learns the device that sent it |
-| `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
 | `copy_waits` | info | copies wait for their senders' records (`devices`) |
+| `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
 | `update` | info | a newer CBB is available |
 
 ## The lab
@@ -394,12 +362,13 @@ is in software gets the same big-screen layout with a computer's rights.
     are online with the two switches (the house and the globe, which go under the count when
     the two do not fit); **Devices**: "All devices", "Needs attention" while a device does,
     and each collection, each with its count (a collection's menu renames or ungroups it);
-    **Settings**: Appearance, Notifications, the recovery key (on the root), away from home
+    **Settings**: Appearance, Notifications, the recovery key (on the root; elsewhere "Move the
+    group to this phone"), away from home
     (the hub, moving it, Everywhere, the relay), the group's rules (for admins), why it does
     not sync, and About with leaving the group. A part opens in the detail column; there is no
     switch for the advanced settings, each has its own part. In portrait the sidebar folds
     away behind its button, and "+" moves to the detail's toolbar.
-  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+  - **The devices**: the alerts and the last copy that came, then the section's devices as tiles (the default), a list or
     orbits (the toolbar's view menu; the orbits only for all devices), with a search in the
     toolbar. A tap chooses a device: its card stands at the trailing edge, 400 points wide
     (growing with the text size, at most 520), and the chosen tile is outlined; when the window
@@ -435,7 +404,7 @@ is in software gets the same big-screen layout with a computer's rights.
     behind their switch. The sidebar stands while the window has room for it, 360 dp of devices
     and the details (as in landscape); else it slides in from the edge behind ☰ (as in
     portrait). A short line at its foot names the keys.
-  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+  - **The devices**: the alerts and the last copy that came, then the section's devices as tiles (the default), a list or
     orbits (⋯; the orbits only for all devices; a collection's ⋯ also renames or ungroups it),
     with + beside it on an admin. A tap chooses a device: its details stand at the trailing
     edge, 400 dp wide (growing with the font, at most 520), and the chosen tile is outlined;
@@ -478,7 +447,7 @@ is in software gets the same big-screen layout with a computer's rights.
   - **The sidebar** (280 vp, ArkUI's `SideBarContainer`): the group's line; **Devices**: "All
     devices", "Needs attention" while a device does, each collection, each with its count;
     **Settings**: the language and the error details, notifications, the recovery key (on the
-    root) and this phone as the hub (each its own page), the group, the lab, why it does not
+    root) and the blind relay (each its own page), the group, the lab, why it does not
     sync, and About; a part opens beside the sidebar (`components/SettingsBody.ets`, which the
     phone's Settings page shows whole, the advanced parts behind their switch). It stands from
     1040 vp (the sidebar, 360 of devices and the details); narrower it slides in behind ☰. A
@@ -636,8 +605,8 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   sync is off); the devices as tiles, a list or orbits around this Mac (the toolbar
   switches), and a device's card in a pane beside them. There is no Send or Fetch: the
   clipboard syncs by itself. An update the group passed around shows as a card on top.
-- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group" and
-  "Recovery key".
+- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group", "Join with
+  an invitation" and "Recovery key".
 - **The device card**: its name, online dot and badges (this Mac, root, admin, hub,
   frozen), one line of its system and CBB version, the house (an admin turns another
   computer's sync off there, `cbb sync -on`), mute, and the rest (type, MAC address, role,
@@ -656,7 +625,11 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   open the window with it): the appearance as icons, the colour and the language in a row
   (the phones' `Theme.swift` and `Tokens.swift`, shared; the language through
   `AppleLanguages`, shown once the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
-  keys for remote paste, the recovery key), and about: the version, where seven clicks show
+  keys for remote paste; "Move the group to this Mac", which lists who stays, each device
+  ticked but the old main device, and takes the key from the sheet or a YubiKey's PIN, as
+  `cbb recovery -leave … -yubikey`; and for an admin the group's "Copy lifetime" and "Secret
+  lifetime", `cbb ttl`, and on the main device "Admin keys", `cbb keys`, which warns before
+  keys in files), and about: the version, where seven clicks show
   error details (on in debug builds, off in release ones, and the `ShowErrorDetails` default
   either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
@@ -674,8 +647,8 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   device that may be a hub it is "Make it a hub"; on this Mac with sync away from home off,
   its question says that a hub needs it and turns it on in the same step (`cbb global hub
   -away-on`): the consent to sync away from home is given on this Mac. Elsewhere the line is
-  dimmed with the reason: a phone is a hub only from its own app's Settings, a member without
-  `hub` among its capabilities, a watch and a computer without root never, a frozen device once the root unfreezes it, and
+  dimmed with the reason: a phone, a watch and a leaf never (D-134), a member without
+  `hub` among its capabilities and a computer without root never, a frozen device once the root unfreezes it, and
   a computer that is no admin once the root makes it one.
 - **Remote paste**: only an app may press keys on a Mac, once its user allowed it in
   Accessibility, so the app is the Mac's paste target (`PasteTarget`), not the service or its
@@ -691,7 +664,12 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   mute is an alert, with "Unmute" on an admin.
 - **Join a group**: on a Mac in no group, the button asks for the six digits of a pairing
   window open on a device of the group and runs `cbb pair -code` as the administrator with
-  them on its standard input. "+" on the root or an admin opens the pairing window: it runs
+  them on its standard input. "Join with an invitation" takes the text of an invitation from
+  afar, says that sync away from home turns on with it, and runs
+  `cbb pair -invite - -app FILE` as the administrator with the text and `yes` on its standard
+  input; the sheet shows this Mac's key fingerprint from the line cbb writes into the file
+  (JSON: `fingerprint`, then `done`), which whoever invited it compares, and Cancel removes
+  the file, and cbb gives up. "+" on the root or an admin opens the pairing window: it runs
   `cbb pair -app FILE` as the administrator and shows the window that cbb writes into the
   file (JSON: `code`, `qr`, `expires`, then `refused` when a device fails and `done` with
   `name` when one joins), with its QR code for a new phone and its six digits for a new
@@ -726,8 +704,8 @@ service and its clipboard agent keep syncing without it.
   by itself. What an action says shows at the bottom for a while.
 - **Alerts**: the Mac app's card above the devices, with the same buttons on the root, and an
   update the group passed around as a card on top.
-- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group" and
-  "Recovery key". It opens by itself when the app starts in no group, as after the install.
+- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group", "Join with
+  an invitation" and "Recovery key". It opens by itself when the app starts in no group, as after the install.
 - **The device card**: its name, online dot and badges (root, admin, hub), one line of its
   system and CBB version, the house (an admin turns another computer's sync off there), mute,
   and the rest (type, MAC address, role, ID) under More; then the hub's line and the menu.
@@ -745,7 +723,11 @@ service and its clipboard agent keep syncing without it.
   tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
   user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
   Manager writes it), and "Advanced settings", which shows the hub and its tunnel (this
-  computer's card) and the claim with the recovery key (`cbb recovery`). Seven taps on the
+  computer's card), the claim with the recovery key (`cbb recovery`: who stays, each device
+  ticked but the old main device, an unticked one leaving with `-leave`, and the key from the
+  sheet or a YubiKey's PIN with `-yubikey`) and, for an admin, the group's settings: "Copy
+  lifetime" and "Secret lifetime" (`cbb ttl`) and, on the main device, "Admin keys" (`cbb
+  keys`), which warns before keys in files. Seven taps on the
   version show "Show error details" (as cbb: on in a build without a release version,
   `CBB_DEBUG=1` or `0`, or the switch). They are kept in the user's configuration folder
   (`cbb/desktop.json`).
@@ -768,6 +750,8 @@ service and its clipboard agent keep syncing without it.
   `cbb invite -app` as the administrator, as the Mac app does (`invite.go`).
 - **Join a group**: asks for the six digits of a pairing window open on a device of the group
   and runs `cbb pair -code` as the administrator with them on its standard input (`join.go`).
+  "Join with an invitation" works as the Mac app's: `cbb pair -invite - -app FILE`, the
+  fingerprint in the dialog until the join ends, and Cancel removes the file.
 - Languages: English and those of `frontend/l10n/` (keyed by the English text, made from
   `apps/l10n` by `tools/strings`; the Go side reads them for the tray), the system's language unless Settings picks one.
 
@@ -827,24 +811,9 @@ accessibility service until "Allow restricted settings" is chosen in the app's A
 F-Droid or Google Play skips it. Google Play allows the service only with its accessibility
 declaration; the GitHub and F-Droid builds have it from the start.
 
-**Remote paste onto the phone** (docs/design.md, "Remote paste"). The same service is the
-phone's paste target, once the phone's user turned remote paste on in Settings ("Let the
-group's admins paste here", and apart from it "Let a paste press Enter"). A `paste` command
-an admin signed (`PasteReceiver`, with the switches, the limits per sender and the log of
-the last 100 pastes without their text, as on a computer) goes into the text field that has
-the input focus in another app:
-
-- **paste**: the text goes on the clipboard, marked sensitive for a secret, and the field gets
-  `ACTION_PASTE`, or `ACTION_SET_TEXT` where it takes no paste. After half a second the
-  clipboard gets its item back, unless something else was copied meanwhile. The service's
-  own copy detection ignores that moment, so the text is not sent to the group.
-- **type**: the text replaces the field's selection through `ACTION_SET_TEXT`, and the cursor
-  goes after it.
-- **Enter**: `ACTION_IME_ENTER`, from Android 11.
-
-It refuses while the phone is locked, when no editable field has the focus, and while the
-service is off. Settings say so and open the accessibility settings. A notification names
-the sender.
+A phone takes no remote paste in 0.6: the member answers a `paste` command that this does
+not work on a phone yet (docs/protocol.md, section 15), and the phones' switches for it come
+back with 0.7.
 
 **Sending with one tap, without the service** (and always as well):
 
@@ -892,16 +861,14 @@ its banner. It needs no touch screen and no camera, and every control takes the 
 focus, with a ring in the accent colour around the focused one. The app tells a TV by
 `UiModeManager` and then differs from a phone in a few ways:
 
-- **Joining.** The start screen offers only to join a phone's group: the TV shows its QR
-  code and an admin phone scans it in Add a device, so nothing is typed on the TV. It joins
+- **Joining.** The start screen offers only to join a phone's group: an admin phone opens a
+  pairing window in Add a device, and the TV, which has no camera, takes its six digits from
+  the remote (docs/protocol.md, section 6). It joins
   as a plain member, without an admin key, as a TV has no fingerprint or face to guard one;
   its hello says `tv`.
 - **Receive only.** It starts in the receive sync mode and never sends copies of its own:
-  the accessibility service there is only the remote paste target, and the settings leave
-  out sending copies by themselves, the question before Share, and the watch.
-- **Remote paste.** An admin pastes into the field that has the focus, as on a phone, once
-  remote paste and the accessibility service are on. When no field has the focus, the
-  paste is refused with a hint to open a search or text field with the remote first.
+  the settings leave out sending copies by themselves, the accessibility service, the
+  question before Share, and the watch.
 
 What the TV's system allows:
 
@@ -944,10 +911,6 @@ phone is paired with, and nothing is installed there. Settings, Bluetooth keyboa
 - **Speed**: 10, 20 or 40 characters a second; slow devices drop keys typed too fast. A text
   is at most 4096 characters.
 - **Type the clipboard** types the phone's clipboard on the connected device.
-- **Type remote pastes there** sends remote pastes from the group's admins to that device
-  instead of this phone's focused field. Remote paste must be on. Keys there go straight in,
-  so a line break presses Enter, and a text with one is refused unless Enter is allowed, as
-  for a typed paste on a computer. The phone answers `done` once typing has started.
 
 The phone needs Android's "Nearby devices" permission (`BLUETOOTH_CONNECT` and
 `BLUETOOTH_ADVERTISE`, Android 12 and later). Some makers leave the profile out of their
@@ -979,14 +942,7 @@ call (`cbb_core::keyboard`). Settings, Bluetooth keyboard has the switch, **Make
 visible** (two minutes, as "CBB keyboard"), the device's layout, the speed (10, 20 or 40) and
 **Type the clipboard**; the main page's pull-down menu types the clipboard too while a device
 is connected. Aurora's own pairing dialog asks about a new device, so the app has no agent.
-It is also the Aurora app's remote paste target (`src/pastereceiver.cpp`), since Aurora lets
-no app put keys into another one: with **Let the group's admins paste there** on, on the same
-page, an admin's `paste` command is typed on the connected device. The member passes the
-command to the app, which checks and opens it through the node (`check_command`, the
-paste's text cleaned as the computers clean it), keeps the replay cache, the limits per
-sender (one a second, 30 a minute) and the log of the last pastes without their text, and
-refuses a text with a line break unless **Let a paste press Enter** is on; `paste-off`
-turns the switch off. The package manager takes the `Bluetooth` permission for a regular
+The package manager takes the `Bluetooth` permission for a regular
 app; not yet tried on the phone: whether the sandbox lets BlueZ call the app's objects.
 
 ## A computer as a TV's remote
@@ -1244,17 +1200,13 @@ offers Leave, which alone deletes its files (D-126).
   user to save them where they choose.
 - **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
   phone's own code for joining is drawn from the core's modules.
-- **Remote paste**: an admin phone pastes on a computer or another phone from the device's
+- **Remote paste**: an admin phone pastes on a computer from the device's
   page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
   system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
-  signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
-  put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
-  as Aurora does.
-- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
-  group without a computer the root or an admin phone is the hub itself (Settings, "This phone
-  as the hub"), registered with the forwarder the group's root set, its tunnel hidden for
-  strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
-  user read what it learns. That relay is the group's, which the root phone sets (the manage
+  signs the paste command (`cbb_member_manage`, `paste`).
+- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, a
+  computer, a router or a board (D-134); a group without a hub meets at a blind relay once
+  the user read what it learns. That relay is the group's, which the root phone sets (the manage
   action `relay`) and the other phones show read-only. The member of 0.6 runs both and keeps
   the group's server credentials itself; the root phone signs the next period of the group's
   server credentials (docs/protocol.md, section 18) with the root key when it is due, after
@@ -1271,7 +1223,7 @@ offers Leave, which alone deletes its files (D-126).
   (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`), or, for a YubiKey plugged into the
   USB-C port, moves the bytes of its CCID interface through `usbManager` after asking for the
   right to use it (`setCard`'s bulk flag, the transport `ccid_bulk`). The sheet page seals
-  onto it and the change-root screen opens it; the YubiKey of a group of 0.5 is gone from it.
+  onto it and the change-root screen opens it.
 - **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
   Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
   how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
@@ -1301,8 +1253,8 @@ offers Leave, which alone deletes its files (D-126).
   as on the iPhone.
 - **Notifications**: the group's events as on the other phones (joined, removed, an admin, a
   takeover, frozen), each kind with its switch, and the received files.
-- **Errors**: the core's message, and in debug mode its details under it; the details switch
-  in Settings turns them on in a release build. A member that panics is started again, and in
+- **Errors**: the core's message, and in debug mode its details under it; the details switch,
+  which seven taps on the version in Settings show, turns them on in a release build. A member that panics is started again, and in
   release mode the app asks to send the bug report (docs/core-api.md, "Bug reports").
 - **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
   DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a
@@ -1428,6 +1380,11 @@ the app on real devices.
   the catalogs; `tools/repocheck` fails when a catalog differs from what it makes, when a
   translation is missing, or when a translation's format directives (`%@`, `%1$s`, `%1`)
   are not the English text's.
+- The words follow one termbase, `apps/l10n/terms.json` (D-133): for each concept the word
+  every language uses (the main device, an admin, the relay, the forwarder, joining a
+  group, a YubiKey held to the phone) and the words it does not use. `go run ./tools/strings
+  -lint`, a step of CI, checks the strings against it, as described under "Words in the
+  apps" below.
 - English is the source language, translated into the languages of the website: Chinese
   (Simplified), Spanish, Russian, Arabic, Swahili, Hebrew and Hindi. Plurals, numbers and
   dates use the platform's formatters.
@@ -1436,6 +1393,37 @@ the app on real devices.
 - The language follows the system, with an in-app choice (System or one of the eight) in
   Settings, and on the Start screen when the system's language has no translation.
   Arabic and Hebrew lay the screens out right to left, the tray app too.
+
+### Words in the apps
+
+The apps say what the platforms say. A label names the action with a verb ("Move the group
+to this phone", not "OK"); a dialog's title and its button agree; a sentence is short and
+plain, with no slang or colloquial words. Where the platform names an
+action itself, the apps use its word: a YubiKey is inserted over USB-C, held to the phone
+for NFC (the phones' own NFC sheets) and touched when it blinks (Yubico Authenticator's
+wording). Apple's Human Interface Guidelines ("Writing"), Material Design ("Writing"), the
+Microsoft Writing Style Guide and the platforms' published translations decide a dispute.
+
+`go run ./tools/strings -lint` checks every language's strings, and CI runs it:
+
+- **The termbase**, `apps/l10n/terms.json`. Each concept gives each language its word
+  (`use`), a pattern that finds it (`find`) and the patterns of the words it does not use
+  (`avoid`, with `except` for a phrase where such a word means something else). Where the
+  English names a concept, a translation must name it too, by its `find`.
+- **Vale** ([vale.sh](https://vale.sh), at the version `tools/strings/lint.go` names, which
+  `go run` builds and checks against Go's checksum database, so nothing is installed). The
+  tool writes each language's strings to a file, one paragraph a string, and runs Vale with
+  `tools/strings/vale/vale.ini`: the termbase's `avoid` words, made into
+  `tools/strings/vale/styles/<language>/Terms.yml` by `go run ./tools/strings`, and the
+  rules of `tools/strings/vale/styles/Cbb` for every language (one character for an
+  ellipsis, the language's quotes, one space between words).
+- **One English text, one translation.** Strings whose English is the same but for the
+  platform's directives (`%@`, `%s`, `%1$s`, `%1`) are translated alike. A string whose ID
+  names its place in brackets gives the same English another translation, and must then
+  differ from the plain string in some language.
+
+A new concept goes into the termbase with its word in each language that has one; then
+`go run ./tools/strings` writes the rules and `-lint` shows every string to change.
 
 ## Themes
 

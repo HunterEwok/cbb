@@ -3,8 +3,8 @@
 
 // A remote invitation (docs/protocol.md, section 12), both sides of it on
 // this phone. As an admin: the core (ffi's cbb_invite_*) opens the
-// invitation's guest tunnel on this phone when it is the group's hub, else
-// through a hub of the group it reaches, and runs the pairing window; the
+// invitation's guest tunnel through a hub of the group it reaches, and runs
+// the pairing window; the
 // page shows the invitation's QR code, and asks the user about each device
 // that uses it by the fingerprint the device shows. As a phone without a
 // group: reads an invitation the user scanned or pasted, for the page that
@@ -44,7 +44,7 @@ public:
     // idle, preparing (finding the admin key), opening (waiting for the
     // hub), open, joining (the user is asked), done or failed.
     QString state() const { return m_state; }
-    // The invitation's text, cbb://invite#..., and its QR code's rows.
+    // The invitation's text, cbb://join#..., and its QR code's rows.
     QString text() const { return m_text; }
     QStringList modules() const { return m_modules; }
     // When it expires, Unix milliseconds.
@@ -67,9 +67,9 @@ public:
     Q_INVOKABLE void cancel();
     void fail(const Failure &f);
 
-    // Reads what the user scanned or pasted as an invitation: {"group",
-    // "hub", "expiresMs"} for the page that accepts or declines it, or
-    // {"error"} with the message to show.
+    // Reads what the user scanned or pasted as an invitation: {"phone"}
+    // for the page that accepts or declines it, or {"error"} with the
+    // message to show.
     Q_INVOKABLE QVariantMap read(const QString &text) const;
     // Reads a camera frame (a QImage from grabToImage); returns the
     // invitation's text it found, if any.

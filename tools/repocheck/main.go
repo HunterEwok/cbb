@@ -13,7 +13,9 @@
 //     command line's
 //     member/l10n/<language>.json, the installers' packaging/l10n/<language>.tsv,
 //     the localized keys of a .desktop file, such as Comment[ru]=,
-//     the website's site/l10n/<language>.json
+//     the website's site/l10n/<language>.json, the apps' termbase
+//     apps/l10n/terms.json and the Vale rules made from it,
+//     tools/strings/vale/styles/<language>/Terms.yml,
 //     and the Android app's store texts, fastlane/metadata/android/<locale>/
 //     for a language other than English);
 //   - every Go and Rust file, except generated Go code, starts with the
@@ -230,6 +232,10 @@ var appsTranslation = regexp.MustCompile(`^apps/l10n/[a-z]{2,3}\.json$`)
 // command line, the Rust cbb (member/src/l10n.rs).
 var cliTranslation = regexp.MustCompile(`^member/l10n/[a-z]{2,3}\.json$`)
 
+// termRules are the Vale rules tools/strings makes from the apps' termbase,
+// apps/l10n/terms.json, which names each language's words in that language.
+var termRules = regexp.MustCompile(`^tools/strings/vale/styles/[a-z]{2,3}/Terms\.yml$`)
+
 // desktopEntryTranslation matches a localized key of a .desktop file, the
 // Desktop Entry Specification's way to translate it (Comment[ru]=...).
 var desktopEntryTranslation = regexp.MustCompile(`^(Name|GenericName|Comment|Keywords)\[[A-Za-z_@]+\]=`)
@@ -244,7 +250,7 @@ func isTranslation(name string) bool {
 	if m := storeTranslation.FindStringSubmatch(name); m != nil && m[2] != "en" {
 		return true
 	}
-	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || (appsTranslation.MatchString(name) && name != "apps/l10n/en.json") || harmonyTranslation.MatchString(name) || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
+	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || (appsTranslation.MatchString(name) && name != "apps/l10n/en.json") || harmonyTranslation.MatchString(name) || cliTranslation.MatchString(name) || installerTranslation.MatchString(name) || name == "apps/l10n/terms.json" || termRules.MatchString(name)
 }
 
 // check returns the rule violations in one file; listed holds the paths of

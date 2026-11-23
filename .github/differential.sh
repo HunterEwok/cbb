@@ -7,22 +7,20 @@
 # each of Go, the Rust core and the Kotlin kit, then the comparison, which fails on any case they read differently and writes
 # those cases to OUT/failures.jsonl.
 #
-# Usage: differential.sh SEED BODIES SETS OUT, from the repository's root.
+# Usage: differential.sh SEED BODIES OUT, from the repository's root.
 set -eu
 
 seed=$1
 bodies=$2
-sets=$3
-out=$(mkdir -p "$4" && cd "$4" && pwd)
+out=$(mkdir -p "$3" && cd "$3" && pwd)
 
-go run ./tools/difffuzz gen -seed "$seed" -n "$bodies" -sets "$sets" -o "$out/corpus.jsonl"
+go run ./tools/difffuzz gen -seed "$seed" -n "$bodies" -o "$out/corpus.jsonl"
 export CBB_VERDICTS="$out/corpus.jsonl"
 
-CBB_VERDICTS_OUT="$out/go-group.txt" go test ./internal/group -run '^TestVerdicts$' -count=1
 CBB_VERDICTS_OUT="$out/go-release.txt" go test ./internal/release -run '^TestVerdicts$' -count=1
-(cd core/ && CBB_VERDICTS_OUT="$out/rust.txt" cargo test --locked --release --lib command::verdicts)
+(cd core/ && CBB_VERDICTS_OUT="$out/rust.txt" cargo test --locked --release --lib verdicts::verdicts)
 # --rerun: Gradle does not see the corpus change between runs.
 (cd apps/android && CBB_VERDICTS_OUT="$out/kotlin.txt" ./gradlew --no-daemon -q -p kit test --tests '*.VerdictTest' --rerun)
 
 go run ./tools/difffuzz compare -corpus "$out/corpus.jsonl" -failures "$out/failures.jsonl" \
-	go="$out/go-group.txt,$out/go-release.txt" rust="$out/rust.txt" kotlin="$out/kotlin.txt"
+	go="$out/go-release.txt" rust="$out/rust.txt" kotlin="$out/kotlin.txt"

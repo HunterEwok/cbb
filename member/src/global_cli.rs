@@ -229,7 +229,7 @@ fn relay_args(args: &[String]) -> std::result::Result<(Vec<(String, String)>, bo
 }
 
 /// The most relays cbb global relay names: the bound of the group's
-/// servers in its settings (format 4.5, field 15).
+/// servers in its settings (format 4.4, field 15).
 const MAX_RELAYS: usize = cbb_core::records::body::MAX_SERVERS;
 
 /// A line from standard input, for a question.

@@ -278,16 +278,6 @@
     "name": "TestVLESSScansApart"
    },
    {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestRecordsStrictBody"
-   },
-   {
     "lang": "rust",
     "file": "core/src/vectors.rs",
     "name": "strict"
@@ -313,29 +303,9 @@
     "name": "TestVLESSScansApart"
    },
    {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestRecordsStrictBody"
-   },
-   {
     "lang": "rust",
     "file": "core/src/vectors.rs",
     "name": "strict"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strictgen_test.go",
-    "name": "TestStrictMutants"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "strict_mutants"
    }
   ]
  },
@@ -356,16 +326,6 @@
     "lang": "go",
     "file": "internal/forward/forward_test.go",
     "name": "TestVLESSScansApart"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestRecordsStrictBody"
    },
    {
     "lang": "rust",
@@ -393,16 +353,6 @@
     "name": "TestVLESSScansApart"
    },
    {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestRecordsStrictBody"
-   },
-   {
     "lang": "rust",
     "file": "core/src/vectors.rs",
     "name": "strict"
@@ -418,29 +368,9 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestGoAuthorityVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestCommandSignerByRoot"
-   },
-   {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_authority"
    },
    {
     "lang": "rust",
@@ -458,29 +388,9 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestGoAuthorityVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestCommandSignerByRoot"
-   },
-   {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_authority"
    },
    {
     "lang": "rust",
@@ -498,29 +408,9 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestGoAuthorityVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestCommandSignerByRoot"
-   },
-   {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_authority"
    },
    {
     "lang": "rust",
@@ -538,29 +428,9 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestGoAuthorityVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestCommandSignerByRoot"
-   },
-   {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_authority"
    },
    {
     "lang": "rust",
@@ -578,29 +448,9 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestGoAuthorityVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/authority_test.go",
-    "name": "TestCommandSignerByRoot"
-   },
-   {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_authority"
    },
    {
     "lang": "rust",
@@ -1188,11 +1038,6 @@
     "name": "TestSourceTablesKeepNewClients"
    },
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
-   },
-   {
     "lang": "rust",
     "file": "member/src/link/tests.rs",
     "name": "the_rounds_are_bounded"
@@ -1266,11 +1111,6 @@
     "lang": "go",
     "file": "internal/forward/scan_sources_test.go",
     "name": "TestSourceTablesKeepNewClients"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
    },
    {
     "lang": "rust",
@@ -1348,11 +1188,6 @@
     "name": "TestSourceTablesKeepNewClients"
    },
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
-   },
-   {
     "lang": "rust",
     "file": "member/src/link/tests.rs",
     "name": "the_rounds_are_bounded"
@@ -1426,11 +1261,6 @@
     "lang": "go",
     "file": "internal/forward/scan_sources_test.go",
     "name": "TestSourceTablesKeepNewClients"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
    },
    {
     "lang": "rust",
@@ -1508,11 +1338,6 @@
     "name": "TestSourceTablesKeepNewClients"
    },
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
-   },
-   {
     "lang": "rust",
     "file": "member/src/link/tests.rs",
     "name": "the_rounds_are_bounded"
@@ -1586,11 +1411,6 @@
     "lang": "go",
     "file": "internal/forward/scan_sources_test.go",
     "name": "TestSourceTablesKeepNewClients"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
    },
    {
     "lang": "rust",
@@ -1668,11 +1488,6 @@
     "name": "TestSourceTablesKeepNewClients"
    },
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
-   },
-   {
     "lang": "rust",
     "file": "member/src/link/tests.rs",
     "name": "the_rounds_are_bounded"
@@ -1748,11 +1563,6 @@
     "name": "TestSourceTablesKeepNewClients"
    },
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
-   },
-   {
     "lang": "rust",
     "file": "member/src/link/tests.rs",
     "name": "the_rounds_are_bounded"
@@ -1801,21 +1611,6 @@
     "lang": "go",
     "file": "internal/vless/vless_test.go",
     "name": "TestUserOfEachClient"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandSenders"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/interop_test.go",
-    "name": "TestGoCommandVectors"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_commands"
    }
   ]
  },
@@ -1841,11 +1636,6 @@
     "lang": "go",
     "file": "internal/forward/scan_sources_test.go",
     "name": "TestSourceTablesKeepNewClients"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
    },
    {
     "lang": "rust",
@@ -1923,11 +1713,6 @@
     "name": "TestSourceTablesKeepNewClients"
    },
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
-   },
-   {
     "lang": "rust",
     "file": "member/src/link/tests.rs",
     "name": "the_rounds_are_bounded"
@@ -2003,11 +1788,6 @@
     "name": "TestSourceTablesKeepNewClients"
    },
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
-   },
-   {
     "lang": "rust",
     "file": "member/src/link/tests.rs",
     "name": "the_rounds_are_bounded"
@@ -2078,21 +1858,6 @@
   "id": "cbb-audit-66",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/group/envelope_test.go",
-    "name": "TestEnvelopeVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_envelopes"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
@@ -2103,21 +1868,6 @@
   "id": "cbb-audit-67",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/group/envelope_test.go",
-    "name": "TestEnvelopeVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_envelopes"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
@@ -2127,21 +1877,6 @@
  {
   "id": "cbb-audit-68",
   "tests": [
-   {
-    "lang": "go",
-    "file": "internal/group/envelope_test.go",
-    "name": "TestEnvelopeVectors"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_envelopes"
-   },
    {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
@@ -2156,11 +1891,6 @@
     "lang": "rust",
     "file": "member/src/nettest/relayd.rs",
     "name": "a_refused_registration_leaves_nothing"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
    },
    {
     "lang": "go",
@@ -2313,21 +2043,6 @@
   "id": "cbb-audit-71",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandSenders"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/interop_test.go",
-    "name": "TestGoCommandVectors"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_commands"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testSyncsTheButtonAndCommands"
@@ -2341,11 +2056,6 @@
     "lang": "rust",
     "file": "member/src/nettest/relayd.rs",
     "name": "a_refused_registration_leaves_nothing"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
    },
    {
     "lang": "go",
@@ -2389,11 +2099,6 @@
    },
    {
     "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
-   },
-   {
-    "lang": "go",
     "file": "internal/pasteboard/dib_test.go",
     "name": "TestImageBytesCoverDecoding"
    },
@@ -2431,11 +2136,6 @@
     "lang": "rust",
     "file": "member/src/nettest/relayd.rs",
     "name": "a_refused_registration_leaves_nothing"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/strict_test.go",
-    "name": "TestStrictVectors"
    },
    {
     "lang": "go",
@@ -2491,11 +2191,6 @@
     "lang": "go",
     "file": "internal/forward/scan_sources_test.go",
     "name": "TestSourceTablesKeepNewClients"
-   },
-   {
-    "lang": "go",
-    "file": "internal/group/command_test.go",
-    "name": "TestCommandByIsItsSigner"
    },
    {
     "lang": "rust",
@@ -2663,16 +2358,6 @@
   "id": "cbb-audit-81",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/group/removed_test.go",
-    "name": "TestRemovedAdminVectors"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_removed_admin"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
@@ -2682,16 +2367,6 @@
  {
   "id": "cbb-audit-85",
   "tests": [
-   {
-    "lang": "go",
-    "file": "internal/group/removed_test.go",
-    "name": "TestRemovedAdminCases"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_removed_admins"
-   },
    {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
@@ -2718,16 +2393,6 @@
   "id": "cbb-audit-90",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/group/removed_test.go",
-    "name": "TestRemovedAdminCases"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_removed_admins"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
@@ -2753,14 +2418,14 @@
   "id": "cbb-audit-95",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/authority/recovery_test.go",
-    "name": "TestOldRootAfterHandover"
+    "lang": "rust",
+    "file": "core/src/records/tests/recovery.rs",
+    "name": "two_heads_at_one_seq_stop_the_group_for_good"
    },
    {
     "lang": "rust",
-    "file": "core/src/authority.rs",
-    "name": "v2_vectors"
+    "file": "core/src/records/tests/recovery.rs",
+    "name": "a_head_naming_an_earlier_root_is_void"
    }
   ]
  },

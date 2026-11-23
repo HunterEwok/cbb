@@ -19,7 +19,7 @@ data class WhyReason(
     val level: String,
     /** When sync turns on again, a mute ends or the certificate ends, in Unix milliseconds; 0 without a time. */
     val untilMS: Long = 0,
-    /** A device's name: the hub, the admin that took the group over. */
+    /** A device's name: the hub. */
     val device: String = "",
     /** The devices the reason is about, by name. */
     val devices: List<String> = emptyList(),
@@ -43,7 +43,7 @@ data class WhyReason(
 
 /**
  * Where a tunnel the app runs itself stands, for [CoreMember.why]: the
- * phone as the hub, its sync away from home and its relay, which the member
+ * phone's sync away from home and its relay, which the member
  * does not see (`cbb_core::why::AwayFacts`).
  */
 data class WhyAway(

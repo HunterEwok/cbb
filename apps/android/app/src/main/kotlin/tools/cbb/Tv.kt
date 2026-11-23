@@ -10,8 +10,7 @@ import android.content.res.Configuration
 /**
  * The app on a TV (Android TV, Google TV, Fire OS; docs/apps.md, "Android
  * TV"): the same APK, which there joins a phone's group by the QR code it
- * shows, as a member without an admin key, takes pastes and receives
- * copies. The camera, its own copies and the watch are a phone's.
+ * shows, as a member without an admin key, and receives copies. The camera, its own copies and the watch are a phone's.
  */
 object Tv {
     fun isTv(context: Context): Boolean =

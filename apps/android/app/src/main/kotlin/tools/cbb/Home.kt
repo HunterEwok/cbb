@@ -295,7 +295,7 @@ private fun TopBar(model: AppModel, layout: DeviceLayout, layouts: List<DeviceLa
             Box {
                 IconText("+", stringResource(R.string.add_device)) { adding = true }
                 DropdownMenu(expanded = adding, onDismissRequest = { adding = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.scan_code)) }, onClick = {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.add_device)) }, onClick = {
                         adding = false
                         open(HomePage.ADD)
                     })
@@ -362,7 +362,7 @@ internal fun Summary(model: AppModel) {
         )
     }
     // Everywhere while it connects, or once it fails.
-    model.away?.takeIf { it.on && model.hub?.on != true }?.let { away ->
+    model.away?.takeIf { it.on }?.let { away ->
         val inUse = model.devices.firstOrNull { it.hub == LiveGroup.HubMark.IN_USE }
         val line = when {
             away.status == AwayFromHome.Status.CONNECTED && inUse != null -> stringResource(R.string.away_connected_to, inUse.name)
@@ -375,14 +375,6 @@ internal fun Summary(model: AppModel) {
         away.error?.let { NoteText(it) }
     }
     model.awayNote?.let { NoteText(it) }
-    // The phone as the hub works while the app is open: Home says so, as a fact, not a fault.
-    model.hub?.takeIf { it.on }?.let { h ->
-        Text(
-            stringResource(if (h.background) R.string.hub_home_background else R.string.hub_home_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = LocalPalette.current.textDim,
-        )
-    }
     // An admin's mute of this phone, which an admin ends.
     model.devices.firstOrNull { it.isSelf }?.muted?.let { m ->
         Text(
@@ -438,7 +430,7 @@ private fun SyncSwitches(model: AppModel) {
             }
         }
         val away = model.away
-        if (away != null && model.hub?.on != true) {
+        if (away != null) {
             var asking by remember { mutableStateOf(false) }
             val waits = off != null && !away.on
             SwitchFace(

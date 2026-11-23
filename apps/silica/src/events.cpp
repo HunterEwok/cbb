@@ -81,7 +81,7 @@ QList<Events::Event> Events::between(const QMap<QString, Seen> &old, const QMap<
         }
         const Seen was = old.value(e.first);
         if (e.second.root && !was.root)
-            events.append(Event(QStringLiteral("takeover"), tr("%1 took the group over: it holds the group's root now.").arg(n)));
+            events.append(Event(QStringLiteral("takeover"), tr("%1 moved the group to itself: it is the group's main device now.").arg(n)));
         else if (e.second.admin && !was.admin)
             events.append(Event(QStringLiteral("admins"), tr("%1 is an admin now.").arg(n)));
         if (e.second.frozen != was.frozen)

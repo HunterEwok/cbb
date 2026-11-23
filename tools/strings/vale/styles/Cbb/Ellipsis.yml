@@ -1,0 +1,7 @@
+# One character for an ellipsis, as every platform's guide asks.
+extends: existence
+message: "Use '…', one character, not three dots."
+level: error
+nonword: true
+tokens:
+  - '\.\.\.'

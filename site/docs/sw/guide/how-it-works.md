@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 99a8e99d0146 -->
+<!-- source: a7d4bf61e687 -->
 # Jinsi inavyofanya kazi
 
 Ukurasa huu unaeleza Copy Beyond Borders kwa picha: nani yumo kwenye kikundi, jinsi vifaa vinavyopatana nyumbani, na kila njia ambayo vinaweza kuendelea kuwasiliana vikiwa mbali. Kanuni kamili ziko kwenye [muundo](../design.md); huzihitaji ili kuutumia.
@@ -14,7 +14,7 @@ Vifaa vyako huunda **kikundi**. Ni vifaa unavyoviruhusu tu vinavyokuwa ndani yak
 | **Msimamizi** | simu ya pili, au kompyuta aliyoichagua mzizi | huongeza na kuondoa vifaa, kama mzizi |
 | **Mwanachama** | kila kompyuta, simu na kifaa kidogo (kipanga njia, Raspberry Pi: [vifaa vidogo](../../member/README.md)) | husawazisha ubao wa kunakili |
 | **Mwanachama bila root** | kompyuta ya Linux iliyosakinishwa bila `sudo` | husawazisha kama mwanachama, lakini kamwe si mzizi, msimamizi wala kitovu ([tazama hapa chini](#rootless-members)) |
-| **Kitovu** | kompyuta nyumbani, au simu wakati programu yake imefunguliwa, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani; kinachopitisha nakala tu hakisomi yoyote |
+| **Kitovu** | kompyuta, ruta au bodi ndogo nyumbani, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani; kinachopitisha nakala tu hakisomi yoyote |
 
 Funguo za simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na hazitoki kamwe; kila sahihi kwa ufunguo wa mzizi wa kikundi au ufunguo wa msimamizi huomba uso wako, alama ya kidole au nambari ya siri, huku ufunguo ambao simu husawazisha nao ukifanya kazi bila kuuliza. Kompyuta huweka funguo zake kwenye faili ambazo Copy Beyond Borders pekee ndiyo huzisoma.
 
@@ -32,7 +32,7 @@ Kikundi kinaweza kuwa na kompyuta moyoni mwake, au kuundwa na simu pekee. Zote m
 |---|---|---|
 | Nani anashikilia ufunguo wa kikundi | simu (ndani ya chipu yake ya usalama), au kompyuta [bila programu](without-app.md) | simu, ndani ya chipu yake ya usalama |
 | Usawazishaji nyumbani | kila kifaa moja kwa moja | kila kifaa moja kwa moja |
-| Usawazishaji mbali na nyumbani | kupitia kompyuta kama kitovu, wakati wowote | kupitia simu kama kitovu wakati programu yake imefunguliwa (kwenye Android pia chinichini), au relei pofu |
+| Usawazishaji mbali na nyumbani | kupitia kompyuta kama kitovu, wakati wowote | kupitia relei pofu, wakati programu zinafanya kazi |
 | Unachohitaji | kompyuta inayowashwa mara nyingi | hakuna kingine |
 
 Kwa nini tunapendekeza kompyuta: huwa imewashwa mara nyingi zaidi kuliko programu inavyokuwa wazi kwenye simu, na iPhone huipa programu muda mfupi chinichini, kwa hiyo usawazishaji ukiwa mbali na nyumbani hufanya kazi tu. Kompyuta inayowaka kila wakati ikijiunga na kikundi cha simu, programu ya simu hutoa kuifanya kitovu.
@@ -80,18 +80,15 @@ Baadhi ya mitandao (hoteli, ofisi, nchi fulani) huzuia trafiki ya VPN. Kitovu hu
 
 `cbb global hub -no-vless` huzima VLESS, na `-no-obfuscate` pamoja nayo huacha WireGuard ya kawaida.
 
-## Simu pekee: simu kama kitovu
+## Simu pekee: relei pofu
 
-Kikundi cha simu pekee, au simu na Mac, hakina kompyuta ya kuwa kitovu. Njia mbili hukiweka kikisawazisha ukiwa mbali na nyumbani:
-
-- **Simu kama kitovu**, wakati programu yake imefunguliwa (Mipangilio, **This phone as the hub**; imewashwa tangu mwanzo kwenye kikundi kilichoundwa kwenye simu). Simu nyingine, televisheni na vifaa vidogo huunganishwa nayo nyumbani, na kwa kisambazaji huifikia kutoka mbali pia. Kwenye Android inaweza kuendelea kufanya kazi chinichini; iPhone hutoa huduma tu programu ikiwa wazi.
-- **Relei pofu yako mwenyewe** (`cbb relay` kwenye seva yako). Inachukua nafasi ya kitovu kama mahali pa kukutana, lakini si mwanachama: usimbaji fiche wa vifaa hupita ndani yake mwisho hadi mwisho, kwa hiyo haiwezi kusoma ubao wa kunakili. Huona ni vifaa vipi vyako vinavyozungumza, na lini. Kompyuta na programu zote mbili za simu zinaweza kuitumia.
+Simu kamwe si kitovu: kitovu ni kompyuta, ruta au bodi ndogo kama Raspberry Pi, inayobaki ikiwa imewashwa na kupokea miunganisho. Kikundi cha simu pekee hukutana badala yake kwenye **relei pofu**, ya mradi au yako mwenyewe (`cbb relay` kwenye seva yako). Inachukua nafasi ya kitovu kama mahali pa kukutana, lakini si mwanachama: usimbaji fiche wa vifaa hupita ndani yake mwisho hadi mwisho, kwa hiyo haiwezi kusoma ubao wa kunakili. Huona ni vifaa vipi vyako vinavyozungumza, na lini. Kompyuta na programu zote za simu zinaweza kuitumia.
 
 ![Relei pofu huunganisha laptopu iliyo mbali na Mac iliyo nyumbani; usimbaji fiche hupita ndani yake mwisho hadi mwisho](../images/relay.svg)
 
-Kikundi kinaweza kuwa na vitovu kadhaa: mzizi, kila msimamizi aliye na kitovu kilichowekwa, na vitovu vinavyopitisha nakala tu. Vifaa vilivyo mbali na nyumbani hutumia cha kwanza kinachojibu, kompyuta kabla ya simu, kwa hiyo kikundi cha simu na kompyuta huendelea kufanya kazi wakati programu ya simu imefungwa.
+Kikundi kinaweza kuwa na vitovu kadhaa: kompyuta ya mzizi, kila kompyuta ya msimamizi iliyo na kitovu kilichowekwa, na vitovu vinavyopitisha nakala tu. Vifaa vilivyo mbali na nyumbani hutumia cha kwanza kinachojibu.
 
-**Imepangwa:** relei pofu kwenye `cbb.tools` kwa kila mtu asiyetaka kuendesha kitovu au relei. Itaona ni vifaa vipi vinavyozungumza na lini, kamwe isione kinachonakiliwa, na wewe mwenyewe ndiye unayeiwasha.
+Mradi huendesha relei pofu kwenye `cbb.tools` kwa kila mtu asiyetaka kuendesha kitovu au relei yake mwenyewe. Huona ni vifaa vipi vinavyozungumza na lini, kamwe haioni kinachonakiliwa, na mzizi wa kikundi ndiye anayeiwasha.
 
 ## Kila seva inaweza kuona nini
 

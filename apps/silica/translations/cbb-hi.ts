@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>डिवाइस के लेआउट में इनके लिए कोई कुंजी नहीं है: %1। ऊपर उसका लेआउट चुनें।</translation>
+        <translation>डिवाइस के लेआउट में इसके लिए कोई कुंजी नहीं है: %1। ऊपर उसका लेआउट चुनें।</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -352,6 +352,14 @@
         <translation>डिवाइस ID</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>फ़्रीज़ करें</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>%1 फ़्रीज़ किया जा रहा है</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>समूह में</translation>
     </message>
@@ -364,6 +372,14 @@
         <translation>एडमिन बनाएँ</translation>
     </message>
     <message>
+        <source>Make it a hub</source>
+        <translation>इसे हब बनाएँ</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>%1 को हब बनाया जा रहा है</translation>
+    </message>
+    <message>
         <source>Making %1 an admin</source>
         <translation>%1 को एडमिन बनाया जा रहा है</translation>
     </message>
@@ -372,16 +388,8 @@
         <translation>और</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>एक घंटे के लिए म्यूट करें</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>म्यूट हटाने तक म्यूट करें</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>%1 म्यूट किया जा रहा है</translation>
+        <source>Mute</source>
+        <translation>म्यूट करें</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -553,10 +561,6 @@
         <translation>समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>फ़ोन अपनी कुंजी नहीं मिटा सका।</translation>
     </message>
@@ -645,6 +649,10 @@
         <translation>CBB का यह बिल्ड खराब है।</translation>
     </message>
     <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>यह निमंत्रण किसी दूसरी तरह के डिवाइस के लिए है। इस फ़ोन के लिए निमंत्रण माँगें।</translation>
+    </message>
+    <message>
         <source>This is not a CBB invitation.</source>
         <translation>यह CBB निमंत्रण नहीं है।</translation>
     </message>
@@ -684,12 +692,12 @@
         <translation>%1 समूह में शामिल हुआ।</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 ने समूह सँभाल लिया: अब समूह का रूट इसके पास है।</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 ने समूह अपने पास ले लिया: अब यह समूह का मुख्य डिवाइस है।</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>%1 को फ़्रीज़ कर दिया गया: जब तक कोई एडमिन इसे अनफ़्रीज़ न करे, बाकी इसे मना करेंगे।</translation>
+        <translation>%1 फ़्रीज़ कर दिया गया: जब तक कोई एडमिन उसे अनफ़्रीज़ न करे, बाकी उसे ठुकराते हैं।</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
@@ -697,7 +705,7 @@
     </message>
     <message>
         <source>%1 was unfrozen.</source>
-        <translation>%1 को अनफ़्रीज़ कर दिया गया।</translation>
+        <translation>%1 अनफ़्रीज़ कर दिया गया।</translation>
     </message>
 </context>
 <context>
@@ -755,6 +763,10 @@
         <translation>फ़्रीज़ किया गया एडमिन %1 हटाने को रोक रहा है: उसे अनफ़्रीज़ करें या हटाएँ।</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>समूह के डिवाइस अब इसे ठुकराते हैं। यहाँ इसकी कुंजियाँ मिटाने के लिए समूह छोड़ें; फिर यह फिर से किसी समूह से जुड़ सकता है।</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>समूह का मुख्य डिवाइस बदल गया</translation>
     </message>
@@ -771,6 +783,10 @@
         <translation>इस फ़ोन को एक हटाने की पुष्टि करनी है; यह आपकी अगली एडमिन कार्रवाई के साथ होगी।</translation>
     </message>
     <message>
+        <source>This phone was removed from the group</source>
+        <translation>यह फ़ोन समूह से हटा दिया गया</translation>
+    </message>
+    <message>
         <source>This wasn't me</source>
         <translation>यह मैंने नहीं किया</translation>
     </message>
@@ -780,14 +796,6 @@
     <message>
         <source>Decline</source>
         <translation>अस्वीकार करें</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>समूह</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>हब</translation>
     </message>
     <message>
         <source>Join</source>
@@ -802,8 +810,8 @@
         <translation>निमंत्रण से जुड़ें</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>या निमंत्रण का पाठ चिपकाएँ, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>या निमंत्रण का पाठ चिपकाएँ, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +820,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>तक मान्य</translation>
     </message>
     <message>
         <source>You are invited to a group</source>
@@ -922,16 +926,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 बाइट</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 अक्षर प्रति सेकंड</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(असत्यापित)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -942,16 +938,8 @@
         <translation>जब तक यह दिखता है, नया डिवाइस इसे अपनी ब्लूटूथ सेटिंग में “CBB keyboard” नाम से ढूँढ लेता है।</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>लाइन ब्रेक वाले टेक्स्ट को भी इसकी ज़रूरत है: कीबोर्ड लाइन ब्रेक को Enter की तरह टाइप करता है।</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>ब्लूटूथ कीबोर्ड की तरह काम करें</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>तब समूह का कोई एडमिन इस फ़ोन के ज़रिए उस डिवाइस पर टेक्स्ट टाइप करता है जिससे यह जुड़ा है, अपने ऐप से या cbb paste से। यह फ़ोन दिखाता है कि किसने पेस्ट किया, और पिछले पेस्ट का लॉग उनके टेक्स्ट के बिना रखता है।</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -959,7 +947,7 @@
     </message>
     <message>
         <source>Connected to %1.</source>
-        <translation>%1 से कनेक्ट है।</translation>
+        <translation>%1 से जुड़ा।</translation>
     </message>
     <message>
         <source>English (US)</source>
@@ -970,28 +958,12 @@
         <translation>तैयार हो रहा है…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>पिछले पेस्ट</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>पेस्ट को Enter दबाने दें</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>समूह के एडमिन को वहाँ पेस्ट करने दें</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>इस फ़ोन को दिखने योग्य बनाएँ</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग से इस फ़ोन से कनेक्ट करें।</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>रिमोट पेस्ट</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1024,14 +996,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>%1 सेकंड तक दिखेगा</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>विफल</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>अस्वीकृत</translation>
     </message>
 </context>
 <context>
@@ -1257,6 +1221,33 @@
     </message>
 </context>
 <context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>15 मिनट के लिए</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>8 घंटे के लिए</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>एक घंटे के लिए</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>तब इसकी कॉपी समूह के किसी डिवाइस तक नहीं पहुँचतीं; यह फिर भी उनकी कॉपी लेता है।</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>जब तक कोई एडमिन अनम्यूट न करे</translation>
+    </message>
+</context>
+<context>
     <name>NewGroupPage</name>
     <message>
         <source>Make</source>
@@ -1267,24 +1258,24 @@
         <translation>समूह बनाएँ</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह सँभाल लेगा।</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह को अपने पास ले आएगा।</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>समूह की रूट कुंजी फ़ोन पर एक फ़ाइल में रखी जाती है: जो भी इसे कॉपी करे, वह समूह के रूट की तरह काम कर सकता है।</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>मुख्य डिवाइस की कुंजी फ़ोन पर एक फ़ाइल में रखी जाती है: जो भी इसे कॉपी करे, वह समूह के मुख्य डिवाइस की तरह काम कर सकता है।</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>समूह की रूट कुंजी फ़ोन के सुरक्षित तत्व में बनती है और कभी उससे बाहर नहीं जाती।</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>मुख्य डिवाइस की कुंजी फ़ोन के सुरक्षित तत्व में बनती है और कभी उससे बाहर नहीं जाती।</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>इस डिवाइस में कुंजियों के लिए सुरक्षित चिप या भरोसेमंद फ़िंगरप्रिंट या चेहरा सेंसर नहीं है: समूह के मुख्य डिवाइस के रूप में यह समूह की रक्षा उस फ़ोन से कम करता है जिसमें दोनों हों।</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>यह फ़ोन समूह का रूट बनेगा: यह बाकी डिवाइसों को उनके QR कोड से जोड़ता है और माँगने वाले फ़ोनों को एडमिन बनाता है।</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>यह फ़ोन समूह का मुख्य डिवाइस बनेगा: यह बाकी डिवाइसों को उनके QR कोड से जोड़ता है और माँगने वाले फ़ोनों को एडमिन बनाता है।</translation>
     </message>
 </context>
 <context>
@@ -1296,10 +1287,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>समूह से %1 गैलरी में है</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>%1 से पेस्ट किया गया</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1435,8 +1422,8 @@
         <translation>अपनी YubiKey को USB-C पोर्ट में लगाएँ और उसका PIN टाइप करें।</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>इस शीट को अपने फ़ोनों से दूर किसी सुरक्षित जगह रखें। जिसके पास यह और समूह का कोई डिवाइस हो, वह आपका समूह ले सकता है।</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>इस शीट को अपने फ़ोनों से दूर किसी सुरक्षित जगह रखें। जिसके पास यह और समूह का कोई डिवाइस हो, वह आपके समूह को उस डिवाइस पर ले जा सकता है।</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1504,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>इस रिले पर मिलें</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>इस रिले पर मिलें?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>क्लिपबोर्ड डिवाइसों के बीच एंड-टू-एंड एन्क्रिप्टेड रहता है: रिले उसे पढ़ नहीं सकता और न ही किसी डिवाइस का रूप ले सकता है। पर जब तक डिवाइस उसका इस्तेमाल करते हैं, वह जानता है कि समूह के कौन-से डिवाइस ऑनलाइन हैं और उनके इंटरनेट पते क्या हैं, और कौन किससे बात करता है, कब और कितना भेजता है। समूह का अपना हब इसमें से कुछ भी बाहर नहीं जाने देता। ऐसा रिले इस्तेमाल करें जिसे आप खुद चलाते हैं, या जिसके संचालक पर आप इसके लिए भरोसा करते हैं।</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>रिले पर: अभी समूह का कोई दूसरा डिवाइस वहाँ नहीं है।</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>रिले पर; वहाँ समूह के डिवाइस: %1।</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>ब्लाइंड रिले</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>रिले से जुड़ रहा है…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>ऐसे समूह के लिए जिसका अपना हब नहीं है: ऐप के सिंक करते समय डिवाइस एक रिले पर मिलते हैं, जैसे cbb relay से बनाया गया रिले। क्लिपबोर्ड डिवाइसों के बीच एन्क्रिप्टेड रहता है, पर रिले जानता है कि कौन-से डिवाइस ऑनलाइन हैं और उनके पते क्या हैं, और कौन किससे, कब और कितनी बात करता है। रोकने के लिए दोनों फ़ील्ड खाली छोड़ें।</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>रिले का पता उसके पोर्ट के साथ और उसकी कुंजी दें, जैसे cbb relay उन्हें छापता है, या दोनों खाली छोड़ें।</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>रिले छोड़ें</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>इस रिले पर मिलें</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>बंद: यह फ़ोन किसी रिले पर किसी से नहीं मिलता।</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>रिले का पता, जैसे 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>रिले की कुंजी, 44 अक्षर</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>घर से दूर सिंक के लिए समूह की कुंजियाँ नवीनीकृत करें</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>घर से दूर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन मुख्य डिवाइस की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>समूह का मुख्य डिवाइस हर डिवाइस के लिए रिले सेट करता है; घर से बाहर सिंक चालू रहने तक यह फ़ोन बाकी डिवाइसों से वहीं मिलता है।</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>इंतज़ार: ऐप के सिंक करते समय रिले काम करता है।</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1549,12 +1614,16 @@
         <translation>ब्लूटूथ कीबोर्ड की तरह काम करें</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>एडमिन कुंजियाँ</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>उन्नत सेटिंग्स</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>कोई दूसरा फ़ोन समूह सँभाल लेता है</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>कोई दूसरा फ़ोन समूह को अपने पास ले आता है</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1563,6 +1632,10 @@
     <message>
         <source>As the phone</source>
         <translation>फ़ोन के अनुसार</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>ब्लाइंड रिले</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>
@@ -1621,10 +1694,6 @@
         <translation>कुंजी फ़िंगरप्रिंट</translation>
     </message>
     <message>
-        <source>Keys an admin may keep</source>
-        <translation>व्यवस्थापक कौन-सी कुंजियाँ रख सकता है</translation>
-    </message>
-    <message>
         <source>Lab</source>
         <translation>प्रयोगशाला</translation>
     </message>
@@ -1641,8 +1710,8 @@
         <translation>समूह छोड़ा जा रहा है</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>समूह छोड़ रहा है और उसकी रूट कुंजी मिटा रहा है</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>समूह छोड़ रहा है और मुख्य डिवाइस की कुंजी मिटा रहा है</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1732,10 +1801,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 ने इस डिवाइस से समूह ले लिया।</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>समूह के मुख्य डिवाइस का बदलाव आ रहा है।</translation>
     </message>
@@ -1760,10 +1825,6 @@
         <translation>समूह के स्वामी से इसके अधिकार लौटाने को कहें।</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें, वह प्रमाणपत्र नवीनीकृत करेगा।</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 उपलब्ध है।</translation>
     </message>
@@ -1778,10 +1839,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>इंटरनेट कनेक्शन जाँचें; CBB खुद फिर कोशिश करता है।</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>उससे पहले इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें।</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1859,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>हर जगह चालू है, पर समूह में कोई बेस नहीं है।</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>अगर यह डिवाइस खोया नहीं था, तो %1 को समूह से हटाएँ।</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1952,14 +2005,6 @@
         <translation>यह डिवाइस समूह से हटा दिया गया।</translation>
     </message>
     <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>इस डिवाइस का प्रमाणपत्र %1 को समाप्त हो गया।</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>इस डिवाइस का प्रमाणपत्र %1 को समाप्त होगा।</translation>
-    </message>
-    <message>
         <source>This device's rights as a trusted device are paused.</source>
         <translation>भरोसेमंद डिवाइस के रूप में इस डिवाइस के अधिकार रोके गए हैं।</translation>
     </message>
@@ -2058,6 +2103,14 @@
         <translation>कंप्यूटर</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>मुख्य डिवाइस</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>मुख्य डिवाइस और एडमिन</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>सदस्य</translation>
     </message>
@@ -2076,14 +2129,6 @@
     <message>
         <source>Phone</source>
         <translation>फ़ोन</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>रूट</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>रूट और एडमिन</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2106,8 +2151,8 @@
         <translation>फ़्रीज़</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>रूट</translation>
+        <source>main device</source>
+        <translation>मुख्य डिवाइस</translation>
     </message>
     <message>
         <source>this phone</source>

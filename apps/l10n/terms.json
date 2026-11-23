@@ -1,0 +1,194 @@
+{
+  "terms": [
+    {
+      "concept": "main device",
+      "note": "The device that holds the group's root key. The apps call it the main device; root is the protocol's word (docs/reference/glossary.md).",
+      "langs": {
+        "en": {
+          "use": "main device",
+          "find": "main devices?",
+          "avoid": [
+            "\\broots?\\b"
+          ],
+          "except": [
+            "without root",
+            "by root",
+            "as root"
+          ]
+        },
+        "ru": {
+          "use": "главное устройство",
+          "find": "главн\\pL* устройств\\pL*",
+          "avoid": [
+            "\\bкор(?:ень|ня|ню|нем|не)\\b",
+            "\\bсоздател\\pL*"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "admin",
+      "note": "A device the main device made an admin.",
+      "langs": {
+        "en": {
+          "use": "admin",
+          "find": "admins?"
+        },
+        "ru": {
+          "use": "администратор",
+          "find": "администратор\\pL*",
+          "avoid": [
+            "\\bадмин(?:а|у|ом|е|ы|ов|ам|ами|ах|ск\\pL*)?\\b"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "relay",
+      "note": "The blind relay where devices without a hub meet (docs/protocol.md, section 14).",
+      "langs": {
+        "en": {
+          "use": "relay",
+          "find": "relays?"
+        },
+        "ru": {
+          "use": "ретранслятор",
+          "find": "ретранслятор\\pL*",
+          "avoid": [
+            "\\bреле(?:й|я|ю|ем|е|и|ев|ям|ями|ях)\\b"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "forwarder",
+      "note": "The server that passes a hub's traffic on (docs/protocol.md, section 13).",
+      "langs": {
+        "en": {
+          "use": "forwarder",
+          "find": "forwarders?"
+        },
+        "ru": {
+          "use": "сервер пересылки",
+          "find": "сервер\\pL* пересылки",
+          "avoid": [
+            "\\bфорвардер\\pL*",
+            "\\bпересыл(?:ьщик|атель)\\pL*"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "join",
+      "note": "A device becomes a member of the group. Joining is not signing in.",
+      "langs": {
+        "en": {
+          "use": "join"
+        },
+        "ru": {
+          "use": "вступить",
+          "avoid": [
+            "\\bвой(?:ти|дите|дёт|дет|дут)\\s+в\\s+(?:\\pL+\\s+)?(?:групп\\pL*|неё|нее)",
+            "\\bвош(?:ёл|ла|ло|ли)\\s+в\\s+(?:\\pL+\\s+)?групп\\pL*",
+            "\\bвход(?:ит|ят)\\s+в\\s+(?:\\pL+\\s+)?групп\\pL*",
+            "\\bотказал\\pL*\\s+войти\\b",
+            "(?<![\\pL ])войти(?![\\pL ])"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "hardware",
+      "note": "Keys made in a security chip or a TPM.",
+      "langs": {
+        "en": {
+          "use": "hardware"
+        },
+        "ru": {
+          "use": "оборудование",
+          "avoid": [
+            "\\bжелез(?:о|а|у|ом|е|ный|ная|ное|ные|ного|ных)\\b"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "move the group",
+      "note": "With the recovery key a member becomes the main device in place of the old one (cbb recover).",
+      "langs": {
+        "en": {
+          "use": "move the group",
+          "avoid": [
+            "\\bclaim(?:s|ed|ing)?\\b",
+            "\\b(?:take|takes|taken|taking|took)\\s+(?:\\w+\\s+)?group\\s+over\\b",
+            "\\b(?:group|it)\\s+(?:was|is)\\s+taken\\s+over\\b",
+            "\\byours\\s+to\\s+take\\b"
+          ]
+        },
+        "ru": {
+          "use": "перенести группу",
+          "avoid": [
+            "\\bзабр\\pL*(?:\\s+\\pL+){0,2}\\s+групп\\pL*",
+            "\\bзабир\\pL*(?:\\s+\\pL+){0,2}\\s+групп\\pL*",
+            "\\bзабер\\pL*(?:\\s+\\pL+){0,2}\\s+групп\\pL*",
+            "\\bгрупп\\pL*(?:\\s+\\pL+){0,2}\\s+забр\\pL*"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "hold to the phone",
+      "note": "A YubiKey held to the phone for NFC: the phones' own NFC sheets say so. Over USB-C it is plugged in (the next concept), and its button is touched.",
+      "langs": {
+        "en": {
+          "use": "hold to the phone"
+        },
+        "ru": {
+          "use": "поднесите",
+          "avoid": [
+            "\\bприложи(?:ть|те|л|ли|ла)\\b"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "plug in",
+      "note": "A YubiKey connected to the phone's USB-C port: Yubico's own Russian says «Подключите YubiKey к USB-порту». Paste (вставьте текст) is another word and stays.",
+      "langs": {
+        "en": {
+          "use": "plug in"
+        },
+        "ru": {
+          "use": "подключите",
+          "avoid": [
+            "\\bвстав\\pL*(?:\\s+\\pL+){0,2}\\s+(?:в|во)\\s+(?:порт|разъ[её]м)\\pL*",
+            "\\bвставь\\pL*\\s+YubiKey\\b",
+            "\\bYubiKey\\s+не\\s+вставлен\\pL*"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "press",
+      "note": "What a person does to a button: the platforms' own words.",
+      "langs": {
+        "en": {
+          "use": "tap",
+          "avoid": [
+            "\\btap on\\b",
+            "\\bclick on\\b"
+          ]
+        },
+        "ru": {
+          "use": "нажмите",
+          "avoid": [
+            "\\bтапн\\pL*",
+            "\\bтапа\\pL*",
+            "\\bкликн\\pL*",
+            "\\bкликай\\pL*"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -50,6 +50,16 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     assert_eq!(st.device, id_text(&la.mesh.device()));
     assert_eq!(st.group, la.tag());
     assert!(!st.removed);
+    // A new group tells nothing; a notice hidden stays hidden in the set.
+    assert!(st.notices.is_empty(), "{:?}", st.notices);
+    for bad in ["", "AAAA"] {
+        let e = ask(&a, "dismiss", |h| h.value = bad.into()).unwrap_err();
+        assert!(e.message().contains("a notice's id"), "{}", e.message());
+    }
+    let id = cbb_core::certs::b64::encode(&[9; 32]);
+    assert!(ask(&a, "dismiss", |h| h.value = id.clone()).unwrap().header.done);
+    let rid = crate::notices::record_id(&id).unwrap();
+    assert!(la.mesh.set().lock().unwrap().dismissed().any(|d| *d == rid));
     let devs = ask(&a, "devices", |_| {}).unwrap().header.devices;
     assert_eq!(devs.len(), 3);
     until("b's hello", || ask(&a, "devices", |_| {}).unwrap().header.devices.iter().any(|d| d.online && !d.this));

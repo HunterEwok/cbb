@@ -185,18 +185,18 @@ const hubTunnel = (a) => a?.vless ? "vless" : a?.obfuscated ? "obfuscate" : "pla
 // The tunnel after a switch: VLESS goes only with AmneziaWG.
 const tunnelAfter = (sw, on) => sw === "web" ? (on ? "vless" : "obfuscate") : (on ? "obfuscate" : "plain");
 
-// noHub says why d cannot be a hub, "" when it can: a phone only from its
-// own app, never a member without the cap hub, a watch or a computer without root, and a
+// noHub says why d cannot be a hub, "" when it can: never a phone (D-134),
+// never a member without the cap hub, a watch or a computer without root, and a
 // computer only as the root or an admin with the hub power.
 function noHub(d, me) {
-  const never = { phone: "A phone is a hub only from its own app's Settings, while the app is open.", watch: "A watch is never a hub." }[d.role];
+  const never = { phone: "A phone is never a hub.", watch: "A watch is never a hub." }[d.role];
   if (never) return t(never);
   if (!can(d, "hub")) return t("This device is never a hub.");
   if (d.store === "rootless") return t("It runs without administrator rights, so it is never a hub.");
-  if (d.frozen) return t("It is frozen: the root unfreezes it first.");
+  if (d.frozen) return t("It is frozen: the main device unfreezes it first.");
   // A hub that reads the copies is the root or an admin; an admin makes any
   // other computer a hub that only passes them on.
-  if (d.self && (!d.may_hub || d.forward_only)) return t("Only the group's root or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.");
+  if (d.self && (!d.may_hub || d.forward_only)) return t("Only the group's main device or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.");
   if (!d.self && !me?.admin) return t("Only an admin makes another device a hub.");
   return "";
 }
@@ -275,7 +275,8 @@ function render() {
     const busy = state.busy ? "disabled" : "";
     box.innerHTML = `<div class="notice start"><span class="logo" aria-hidden="true"></span><h2>${esc(t("Copy Beyond Borders"))}</h2>` +
       `<div class="start-buttons"><button class="accent" id="create" ${busy}>${esc(t("Create a group"))}</button>` +
-      `<button class="glass" id="join" ${busy}>${esc(t("Join a group"))}</button></div>` +
+      `<button class="glass" id="join" ${busy}>${esc(t("Join a group"))}</button>` +
+      `<button class="glass" id="join-invite" ${busy}>${esc(t("Join with an invitation"))}</button></div>` +
       `<p><button class="link small" id="recovery">${esc(t("Recovery key"))}</button></p>` +
       // Out of a group the toast is hidden: what failed says why here.
       (state.message ? `<p class="dim" id="join-message">${esc(state.message)}</p>` : "") + `</div>`;
@@ -328,7 +329,8 @@ function renderSwitches(inGroup) {
 function renderAlerts(st) {
   const box = $("alerts");
   const lines = st ? alertLines(st) : [];
-  box.hidden = lines.length === 0 && !st?.update;
+  const notices = (st?.notices ?? []).map((n) => [n, noticeText(n)]).filter(([, text]) => text);
+  box.hidden = lines.length === 0 && notices.length === 0 && !st?.update;
   const root = state.devices.find((x) => x.self)?.root;
   box.innerHTML = "";
   // The newest release the group passed around, when this computer runs
@@ -370,7 +372,7 @@ function renderAlerts(st) {
     if (!root) {
       const d = document.createElement("p");
       d.className = "dim";
-      d.textContent = t("The group's root decides.");
+      d.textContent = t("The group's main device decides.");
       box.append(d);
       continue;
     }
@@ -397,6 +399,41 @@ function renderAlerts(st) {
       row.append(b);
     }
     box.append(row);
+  }
+  // The member's notices about the group: a sentence each, and Hide where
+  // the user may hide it.
+  for (const [n, text] of notices) {
+    const row = document.createElement("div");
+    row.className = "notice-line";
+    const p = document.createElement("p");
+    p.textContent = "ⓘ " + text;
+    row.append(p);
+    if (n.dismissable) {
+      const b = document.createElement("button");
+      b.className = "glass";
+      b.textContent = t("Hide");
+      b.disabled = state.busy;
+      b.onclick = () => act("Dismiss", n.id);
+      row.append(b);
+    }
+    box.append(row);
+  }
+}
+
+// The member's notice n in a sentence (docs/apps.md, "Notices"), with the
+// devices by name; null for a kind this app does not show.
+function noticeText(n) {
+  const a = n.args ?? {};
+  const device = a.device ? (state.devices.find((d) => d.id === a.device)?.name ?? a.device) : "";
+  switch (n.kind) {
+    case "change_arriving": return t("A change of the group's main device is on its way.");
+    case "removals_waiting": return t("Removals wait until every admin has seen them.");
+    case "root_room_waiting": return t("Removals that wait for admins fill %s of the main device's room for records: bring those admins online.", `${a.percent ?? 0}%`);
+    case "ack_owed": return t("This computer has a removal to confirm; it does so with your next admin action.");
+    case "frozen_holding": return t("The frozen admin %s holds removals back: unfreeze it or remove it.", device);
+    case "checkpoint_stuck": return t("The main device's records wait for records no device has passed on.");
+    case "returned_after_removal": return t("%s was removed before the main device changed, and counts again now: remove it again if it should not be in the group.", device);
+    default: return null;
   }
 }
 
@@ -427,14 +464,6 @@ function pickTime(title, text, forever) {
   });
 }
 
-// A wait in days, hours or minutes.
-function roughly(ms) {
-  const h = Math.floor(ms / 3600000);
-  if (h >= 48) return t("%d d", Math.floor(h / 24));
-  if (h >= 2) return t("%d h", h);
-  return t("%d min", Math.max(1, Math.floor(ms / 60000)));
-}
-
 // The alerts of a status: a sentence each, whether cbb resolve ends it, and
 // the devices whose removal does.
 function alertLines(st) {
@@ -442,22 +471,12 @@ function alertLines(st) {
   if (st.muted) out.push({ text: st.muted_until_ms
     ? t("An admin muted this computer until %s: its copies do not reach the group.", clock(st.muted_until_ms))
     : t("An admin muted this computer: its copies do not reach the group until an admin unmutes it."), unmute: true, remove: [] });
-  if (st.stop === "full") out.push({ text: t("The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides."), remove: [] });
+  if (st.stop === "full") out.push({ text: t("The group is stopped: its devices exchange only their records, no clipboard, until the group's main device decides."), remove: [] });
   if (st.stop === "secrets") out.push({ text: t("The group sends no secrets until its owner decides."), remove: [] });
   for (const c of st.conflicts ?? []) {
     const who = c.devices?.length ? c.devices.join(", ") : t("devices unknown here");
     if (c.kind === "two_histories") out.push({ text: t("%s signed two histories with one key, as a stolen key or a restore from a backup would.", who), resolve: true, remove: [] });
-    if (c.kind === "admins") out.push({ text: t("Admins removed or froze each other without seeing it: %s. The root removes one of them.", who), remove: c.devices ?? [] });
-    if (c.kind === "claims") out.push({ text: t("Two claims to take the group over: %s. The root cancels one or both by removing its admin.", who), remove: c.devices ?? [] });
-  }
-  for (const c of st.claims ?? []) {
-    if (c.state === "pending") {
-      out.push({ text: c.left_ms > 0
-        ? t("%s claims the group, to take it over from its root: it takes effect in %s, unless the root removes it.", c.by, roughly(c.left_ms))
-        : t("%s claims the group, to take it over from its root, unless the root removes it.", c.by), remove: [c.by] });
-    } else if (c.state === "competing" || c.state === "disputed") {
-      out.push({ text: t("%s claims the group, and the group is stopped until its root decides.", c.by), remove: [c.by] });
-    }
+    if (c.kind === "admins") out.push({ text: t("Admins removed or froze each other without seeing it: %s. The main device removes one of them.", who), remove: c.devices ?? [] });
   }
   if (st.newer > 0) out.push({ text: t("The group holds %d records of a later version: update CBB to read them.", st.newer), newer: true, remove: [] });
   return out;
@@ -827,7 +846,7 @@ function renderDetail() {
   if (d.muted) lines.push([t("Copies"), muteUntil(d.muted_until_ms)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
   lines.push([t("Device ID"), d.id, true]);
-  const badges = [d.self && t("This computer"), d.root && t("root"), d.admin && !d.root && t("admin"), d.hub && t("hub"), d.frozen && t("frozen")].filter(Boolean);
+  const badges = [d.self && t("This computer"), d.root && t("main device"), d.admin && !d.root && t("admin"), d.hub && t("hub"), d.frozen && t("frozen")].filter(Boolean);
 
   const me = state.devices.find((x) => x.self);
   const busy = state.busy ? "disabled" : "";
@@ -984,7 +1003,7 @@ async function deviceAction(action) {
       await act("Unmute", d.id);
       break;
     case "freeze":
-      if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
+      if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the main device unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
       break;
     case "unfreeze":
       if (await ask(t("Unfreeze %s?", d.name), t("Unfreeze it only if it is in safe hands; otherwise remove it."), t("Unfreeze"))) await act("Unfreeze", d.id);
@@ -1039,6 +1058,7 @@ function renderSettings() {
   $("advanced").checked = !!s.advanced;
   $("advanced-box").hidden = !s.advanced;
   $("advanced-recovery").hidden = !state.status?.group;
+  renderGroupSettings();
   $("details").checked = s.details ?? state.show_details;
   // Seven taps on the version show the switch, as on the phones; it stays
   // in sight once it is on.
@@ -1046,6 +1066,41 @@ function renderSettings() {
   $("version").textContent = state.version;
 }
 let versionTaps = 0;
+
+// The group's settings, as the phones have them (docs/apps.md, Settings):
+// how long a copy and a secret live (D-129), on the root and the admins,
+// and which keys may be admins, on the root. Each choice signs a record.
+export const ttlChoices = [60000, 300000, 900000, 1800000, 3600000];
+export const secretTtlChoices = [5000, 15000, 30000, 60000];
+export const keyLevels = [["proven", "Proven hardware only"], ["hardware", "Keys in hardware"], ["files", "Keys in files too"]];
+export function lifetime(ms) {
+  const s = Math.round(ms / 1000);
+  return s >= 60 && s % 60 === 0 ? t("%d min", s / 60) : t("%d s", s);
+}
+// The choices, with the group's own when it is none of them.
+function lifetimeOptions(choices, current) {
+  const all = choices.includes(current) || !current ? choices : [...choices, current].sort((a, b) => a - b);
+  return all.map((ms) => `<option value="${ms}" ${ms === current ? "selected" : ""}>${esc(lifetime(ms))}</option>`).join("");
+}
+function renderGroupSettings() {
+  const me = state.devices?.find((x) => x.self);
+  const s = state.status ?? {};
+  $("group-box").hidden = !s.group || !me?.admin;
+  if ($("group-box").hidden) return;
+  $("ttl").innerHTML = lifetimeOptions(ttlChoices, s.ttl_ms || 300000);
+  $("secret-ttl").innerHTML = lifetimeOptions(secretTtlChoices, s.secret_ttl_ms || 60000);
+  $("key-level-row").hidden = !me.root;
+  const level = s.key_level || "hardware";
+  $("key-level").innerHTML = keyLevels.map(([v, name]) => `<option value="${v}" ${v === level ? "selected" : ""}>${esc(t(name))}</option>`).join("");
+}
+async function setKeyLevel(level) {
+  if (level === "files" && !(await ask(t("Admin keys"), t("Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them."), t("Keys in files too")))) {
+    renderGroupSettings();
+    return;
+  }
+  await act("SetKeyLevel", level);
+  renderGroupSettings();
+}
 
 function openSettings() {
   renderSettings();
@@ -1061,10 +1116,7 @@ function whyTitle(r) {
   switch (r.code) {
     case "not_in_group": return t("This device is in no group.");
     case "removed": return t("This device was removed from the group.");
-    case "taken_over": return t("%s took the group over from this device.", r.device);
     case "frozen": return t("This device's rights as a trusted device are paused.");
-    case "cert_expired": return t("This device's certificate ended on %s.", date);
-    case "cert_ending": return t("This device's certificate ends on %s.", date);
     case "stopped": return t("The group's records stop the exchange.");
     case "secrets_stopped": return t("The group sends no secrets until its owner decides.");
     case "sync_off": return r.until_ms ? t("Sync is off on this device until %s.", date) : t("Sync is off on this device.");
@@ -1103,10 +1155,7 @@ function whyAction(r) {
   switch (r.code) {
     case "not_in_group": return t("Start a group or join one.");
     case "removed": return t("Leave the group on this device, then join again.");
-    case "taken_over": return t("If this device was not lost, remove %s from the group.", r.device);
     case "frozen": return t("Ask the group's owner to restore its rights.");
-    case "cert_expired": return t("Bring it home to a trusted device of the group, which renews the certificate.");
-    case "cert_ending": return t("Connect it at home to a trusted device of the group before then.");
     case "stopped": return t("The group's owner decides on its alerts.");
     case "sync_off": return t("Turn sync on.");
     case "only_device": return t("Add a phone or a computer.");
@@ -1168,7 +1217,11 @@ function openAdd() {
   $("admit-admin-row").hidden = !me?.root;
   $("admit-admin").checked = false;
   const dlg = $("add-dialog");
-  dlg.onclose = () => closeWindow();
+  // A close event comes as a task of its own: one that arrives after the
+  // dialog opened again belongs to the window before and must not end this one.
+  dlg.onclose = () => {
+    if (!dlg.open) closeWindow();
+  };
   dlg.showModal();
   if (me?.admin) openWindow(false);
 }
@@ -1268,15 +1321,42 @@ async function invite() {
   await refresh();
 }
 
-// The recovery key claims a group whose every phone is lost; this computer
-// must be in the group.
+// The recovery key moves the group to this computer, for example when the
+// phone that was its main device is lost; this computer must be in the
+// group.
 async function recovery() {
   if (!state.status?.group) {
-    await ask(t("Recovery key"), t("The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings."), t("OK"));
+    await ask(t("Move the group to this computer"), t("With the group's recovery key, this computer becomes the main device, for example when the old one is lost. Join the group first, then move it here in Settings."), t("OK"));
     return;
   }
-  const key = await ask(t("Claim the group with its recovery key?"), t("Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does."), t("Claim"), "");
-  if (key?.trim()) await act("Recover", key.trim());
+  // Who stays: the core's list of the group's devices, each ticked but the
+  // old main device; an unticked one leaves the group in the same act. The
+  // key comes from the sheet, or a YubiKey that holds it opens with its PIN.
+  const dlg = $("recover-dialog");
+  const others = (state.devices ?? []).filter((d) => !d.self);
+  $("recover-who").innerHTML = others.map((d) =>
+    `<label class="switch"><input type="checkbox" data-stays="${esc(d.id)}" ${d.root ? "" : "checked"}> <span>${esc(d.name || d.id)}</span></label>`).join("");
+  $("recover-key").placeholder = t("The recovery key's text, as on the sheet");
+  $("recover-pin").placeholder = t("The YubiKey's PIN");
+  $("recover-key").value = $("recover-pin").value = "";
+  $("recover-card").checked = false;
+  const sync = () => {
+    const card = $("recover-card").checked;
+    $("recover-key").hidden = card;
+    $("recover-pin").hidden = !card;
+    $("recover-ok").disabled = !(card ? $("recover-pin").value : $("recover-key").value.trim());
+  };
+  $("recover-card").onchange = $("recover-key").oninput = $("recover-pin").oninput = sync;
+  sync();
+  dlg.returnValue = "";
+  dlg.showModal();
+  await new Promise((done) => dlg.addEventListener("close", done, { once: true }));
+  if (dlg.returnValue !== "ok") return;
+  const leave = [...dlg.querySelectorAll("[data-stays]")].filter((c) => !c.checked).map((c) => c.dataset.stays);
+  const card = $("recover-card").checked;
+  const secret = card ? $("recover-pin").value : $("recover-key").value.trim();
+  $("recover-key").value = $("recover-pin").value = "";
+  if (secret) await act("Recover", secret, leave, card);
 }
 
 // Joining a group: the six digits of a pairing window open on a device
@@ -1284,6 +1364,58 @@ async function recovery() {
 async function joinGroup() {
   const code = await ask(t("Join a group"), t("On a device of the group, open a pairing window: tap + there. Then type the six digits it shows."), t("Join"), "");
   if (code?.trim()) await act("JoinGroup", code.trim());
+}
+
+// Joining a group far away with an invitation (join.go): its text, which
+// cbb pair -invite takes as the administrator, then this computer's key
+// fingerprint, which whoever invited it compares, until the join ends.
+let joiningByInvite = false;
+async function joinInvite() {
+  if (joiningByInvite) return;
+  const dlg = $("join-invite-dialog");
+  const text = $("join-invite-text");
+  text.value = "";
+  $("join-invite-paste").hidden = false;
+  $("join-invite-wait").hidden = $("join-invite-shown").hidden = true;
+  $("join-invite-ok").hidden = false;
+  const sync = () => { $("join-invite-ok").disabled = !text.value.trim().startsWith("cbb://join#"); };
+  text.oninput = sync;
+  sync();
+  dlg.onclose = null;
+  dlg.returnValue = "";
+  dlg.showModal();
+  await new Promise((done) => dlg.addEventListener("close", done, { once: true }));
+  if (dlg.returnValue !== "ok") return;
+  const invitation = text.value.trim();
+  text.value = "";
+  joiningByInvite = true;
+  $("join-invite-paste").hidden = $("join-invite-ok").hidden = true;
+  $("join-invite-wait").hidden = false;
+  let running = true;
+  const ended = act("JoinInvite", invitation).finally(() => {
+    running = joiningByInvite = false;
+    if (dlg.open) dlg.close("done");
+  });
+  dlg.onclose = () => {
+    if (running) call("CancelJoin").catch((e) => console.error("CancelJoin", e));
+  };
+  dlg.returnValue = "";
+  dlg.showModal();
+  while (running && dlg.open) {
+    let j;
+    try {
+      j = await call("JoinState");
+    } catch (e) {
+      console.error("JoinState", e);
+    }
+    if (j?.fingerprint) {
+      $("join-invite-wait").hidden = true;
+      $("join-invite-shown").hidden = false;
+      $("join-invite-fingerprint").textContent = j.fingerprint;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await ended;
 }
 
 async function refresh() {
@@ -1396,6 +1528,7 @@ document.addEventListener("click", async (e) => {
     case "invite": return invite();
     case "create": return act("CreateGroup");
     case "join": return joinGroup();
+    case "join-invite": return joinInvite();
     case "recovery": case "advanced-recovery": $("settings-dialog").close(); return recovery();
     case "advanced-why":
       $("settings-dialog").close();
@@ -1442,6 +1575,9 @@ $("at-login").addEventListener("change", async (e) => {
   renderSettings();
 });
 $("advanced").addEventListener("change", (e) => saveSettings({ advanced: e.target.checked }));
+$("ttl").addEventListener("change", (e) => act("SetTTL", Number(e.target.value), 0).then(renderGroupSettings));
+$("secret-ttl").addEventListener("change", (e) => act("SetTTL", 0, Number(e.target.value)).then(renderGroupSettings));
+$("key-level").addEventListener("change", (e) => setKeyLevel(e.target.value));
 $("admit-admin").addEventListener("change", (e) => openWindow(e.target.checked));
 
 // The house: a tap turns sync off until turned on again, or on; holding it

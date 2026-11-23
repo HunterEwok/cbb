@@ -79,8 +79,8 @@ fn handshake_data_and_close() {
 
     // Both ends derive the same sid.
     let (mut a, mut b) = ([0u8; 32], [0u8; 32]);
-    cx.export(b"EXPERIMENTAL-cbb-pair-v2", &[], &mut a).unwrap();
-    sx.export(b"EXPERIMENTAL-cbb-pair-v2", &[], &mut b).unwrap();
+    cx.export(b"EXPERIMENTAL-cbb-pair-v3", &[], &mut a).unwrap();
+    sx.export(b"EXPERIMENTAL-cbb-pair-v3", &[], &mut b).unwrap();
     assert_eq!(a, b);
     assert_ne!(a, [0u8; 32]);
 
@@ -127,7 +127,7 @@ fn exporter_matches_rustls() {
         client.read_tls(&mut &buf[..]).unwrap();
         client.process_new_packets().unwrap();
     }
-    for (label, context, len) in [(&b"EXPERIMENTAL-cbb-pair-v2"[..], &b""[..], 32), (b"another", b"with a context", 77)]
+    for (label, context, len) in [(&b"EXPERIMENTAL-cbb-pair-v3"[..], &b""[..], 32), (b"another", b"with a context", 77)]
     {
         let want = client.export_keying_material(vec![0u8; len], label, Some(context)).unwrap();
         assert_eq!(want, server.export_keying_material(vec![0u8; len], label, Some(context)).unwrap());
@@ -287,4 +287,69 @@ fn a_refused_client_certificate_fails_without_a_panic() {
     assert!(refused, "the server took a certificate it refuses");
     assert!(!s.take_outgoing().is_empty(), "the server tells the client why");
     assert!(s.feed(b"more").is_err(), "a failed session stays failed");
+}
+
+/// Shuttles the bytes as `shuttle` does, giving the first error either
+/// side meets.
+fn try_shuttle(a: &mut Session, b: &mut Session) -> Result<()> {
+    loop {
+        let (x, y) = (a.take_outgoing(), b.take_outgoing());
+        if x.is_empty() && y.is_empty() {
+            return Ok(());
+        }
+        b.feed(&x)?;
+        a.feed(&y)?;
+    }
+}
+
+/// A relay's server and a client that knows the relay by pins: the
+/// client's chain, its key outside the core.
+fn pinned(pins: impl FnOnce(&[u8]) -> Vec<certs::KeyHash>) -> (Session, Session) {
+    let ((rc, rk), (cc, ck)) = (device(), device());
+    let scfg = registration_server(&rc, &rk, b"cbb-relay/3", &clock()).unwrap();
+    let key = Arc::new(crate::identity::FileKey::new(&ck).unwrap());
+    let ccfg = pinned_client(vec![cc], key, pins(&rc), b"cbb-relay/3", &clock()).unwrap();
+    let client = Session::client(Arc::new(ccfg), server_name(None)).unwrap();
+    let server = Session::server(Arc::new(scfg)).unwrap();
+    (client, server)
+}
+
+#[test]
+fn a_pinned_client_reaches_the_server_of_its_pin() {
+    let other = Cert::parse(&device().0).unwrap().key_hash();
+    // Among the pins, the server's own one is enough.
+    let (mut c, mut s) = pinned(|rc| vec![other, Cert::parse(rc).unwrap().key_hash()]);
+    shuttle(&mut c, &mut s);
+    assert!(!c.is_handshaking() && !s.is_handshaking());
+    assert_eq!(c.alpn_protocol(), Some(&b"cbb-relay/3"[..]));
+    // It shows its own certificate, which the relay checks itself.
+    assert_eq!(s.peer_certificates().map(<[_]>::len), Some(1));
+}
+
+#[test]
+fn a_pinned_client_refuses_another_server() {
+    let other = Cert::parse(&device().0).unwrap().key_hash();
+    let (mut c, mut s) = pinned(|_| vec![other]);
+    let err = try_shuttle(&mut c, &mut s).unwrap_err();
+    assert!(err.details().contains("not the one given for it"), "{}", err.details());
+}
+
+#[test]
+fn a_pinned_client_needs_a_chain() {
+    let (_, ck) = device();
+    let key = Arc::new(crate::identity::FileKey::new(&ck).unwrap());
+    let err = pinned_client(Vec::new(), key, Vec::new(), b"cbb-relay/3", &clock()).unwrap_err();
+    assert!(err.to_string().contains("chain is empty"), "{err}");
+}
+
+/// The verifiers offer the one scheme of a group's keys and name no
+/// authority; a client's certificate resolver always has its one.
+#[test]
+fn the_verifiers_offer_one_scheme() {
+    assert_eq!(PinVerifier { pins: Vec::new() }.supported_verify_schemes(), vec![provider::SCHEME]);
+    assert_eq!(format!("{:?}", PinVerifier { pins: Vec::new() }), "PinVerifier");
+    assert_eq!(ServerCertVerifier::supported_verify_schemes(&AnyPeer), vec![provider::SCHEME]);
+    assert_eq!(ClientCertVerifier::supported_verify_schemes(&AnyPeer), vec![provider::SCHEME]);
+    assert!(ClientCertVerifier::root_hint_subjects(&AnyPeer).is_empty());
+    assert!(no_tls12().is_err());
 }

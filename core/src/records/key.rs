@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! Keys, their hashes and IDs, and ES256 signatures in the format's one
-//! form (format-0.6 sections 2 and 3.1), on the format's codec
+//! form (format sections 2 and 3.1), on the format's codec
 //! (`crate::format::key`, `crate::format::sig`). The records keep their keys
 //! owned; a key is written and hashed as the format writes it.
 

@@ -58,14 +58,6 @@ interface Typed {
   map?: string;
 }
 
-// What typing a remote paste came to: reason empty when it started, or why
-// not, in English for the sender; refused false when it failed rather than
-// being refused.
-export class RemoteTyping {
-  reason: string = '';
-  refused: boolean = true;
-}
-
 function bytes(hex: string): ArrayBuffer {
   const out = new Uint8Array(hex.length / 2);
   for (let i = 0; i < out.length; i++) {
@@ -477,40 +469,6 @@ export class Keyboard {
       return;
     }
     this.begin(r.reports ?? []);
-  }
-
-  // Types a remote paste's text on the connected host.
-  typeRemote(text: string): RemoteTyping {
-    const out = new RemoteTyping();
-    if (!this.on) {
-      out.reason = 'this phone types remote pastes on its Bluetooth keyboard, which is off; its user turns it on in the app\'s settings';
-      return out;
-    }
-    if (text.length > MAX_CHARS) {
-      out.reason = `the text is longer than the ${MAX_CHARS} characters a keyboard types`;
-      return out;
-    }
-    if (this.listening.size === 0) {
-      out.refused = false;
-      out.reason = 'this phone\'s Bluetooth keyboard is not connected to a device';
-      return out;
-    }
-    if (this.typing) {
-      out.reason = 'this phone\'s Bluetooth keyboard is typing another text; send it again in a moment';
-      return out;
-    }
-    const r = this.reportsFor(text);
-    if (r instanceof Failure) {
-      out.refused = false;
-      out.reason = r.details.length > 0 ? r.details : r.message;
-      return out;
-    }
-    if ((r.untypeable ?? '').length > 0) {
-      out.reason = `the host's layout (${this.layout}) has no key for ${r.untypeable ?? ''}`;
-      return out;
-    }
-    this.begin(r.reports ?? []);
-    return out;
   }
 
   private begin(reports: string[]): void {

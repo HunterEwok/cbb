@@ -32,7 +32,7 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | Every TCP connection | TLS 1.3, mutual between members | RFC 8446 | 4, 6, 13, 14 |
 | Key exchange in TLS | X25519 in `cbb` and the phones' member (the Rust core's TLS); X25519MLKEM768 first in Go's TLS (Go 1.27's default), then X25519, in `cbb-helper` and the forwarder; what the system offers in the phones' pairing | RFC 8446, draft-ietf-tls-ecdhe-mlkem | 4 |
 | TLS cipher suites | Go: the three of TLS 1.3; the Rust core: TLS_CHACHA20_POLY1305_SHA256 and TLS_AES_128_GCM_SHA256 | RFC 8446 | 4 |
-| Certificates | X.509 v3, ECDSA P-256 with SHA-256 | RFC 5280 | 2 |
+| The member key in TLS | a fixed X.509 v3 template that holds the key alone, read byte for byte and never as a certificate (D-105) | RFC 5280 | 2 |
 | Device records, revocations, commands, server credentials, release files, evidence | ECDSA P-256 over SHA-256 of the exact signed bytes, ASN.1 DER signatures | FIPS 186-5 | 10, 15, 16, 17, 18 |
 | Pairing | CPace, suite CPACE-X25519-SHA512, bound to the TLS exporter | draft-irtf-cfrg-cpace-21, RFC 5705 | 6 |
 | Channel binding | TLS exporter (32 bytes) with the labels of section 19 | RFC 8446, section 7.5 | 6, 13, 14 |
@@ -55,7 +55,7 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | The iPhone kit | swift-crypto (CryptoKit's API, BoringSSL on Linux), the Security framework for the keychain and the Secure Enclave, Network.framework for TLS |
 | The Android kit | `java.security` and `javax.crypto` and the Android Keystore; pairing, sealing and the records run in the Rust core through `ffi/` |
 | The phones' sealed messages | the Rust core's (`core/src/seal.rs`) through `ffi/`, for copies and commands alike |
-| The phones' tunnel | `cbb`'s (`ffi/src/tunnel.rs`): GotaTun for WireGuard with `ring-shim/` over RustCrypto, rustls for VLESS with XHTTP |
+| The phones' tunnel | `cbb`'s, in the Live member (`ffi/src/member.rs`): GotaTun for WireGuard with `ring-shim/` over RustCrypto, rustls for VLESS with XHTTP |
 
 The interop vectors in `testdata/interop` pin the bytes of each signed object, of a
 CPace exchange and of sealed messages (`seal-go.json`, `seal-rust.json`), so the four implementations cannot drift apart ([testing](testing.md)).
@@ -68,9 +68,10 @@ X-Wing, KEM `0x647a`) against the vector of draft-ietf-hpke-pq-05 for the same s
 
 | Key | Type | Made by | Kept | Lifetime |
 |---|---|---|---|---|
-| Group root CA | ECDSA P-256 | the root phone, or `cbb new` on a computer | the phone's Secure Enclave or Keystore, signs only after Face ID, the fingerprint or the passcode; on a computer a file readable only by the service | the certificate 20 years |
-| Admin CA | ECDSA P-256 | each admin | a phone's Secure Enclave or Keystore, behind the user's face, fingerprint or passcode; on a computer the TPM on Linux when there is one, else a file | the certificate ends with the root's |
-| Member key | ECDSA P-256 | each device | the TPM on Linux when there is one, the Secure Enclave or Keystore on phones, else a file readable only by the service | the certificate 2 years, renewed 240 days before its end |
+| Root key | ECDSA P-256 | the root phone, or `cbb new` on a computer | the phone's Secure Enclave, StrongBox or HUKS, signs only after Face ID, the fingerprint or the passcode; on a computer a file readable only by the service | until the root changes (protocol, section 9) |
+| Admin key | ECDSA P-256 | each admin | a phone's Secure Enclave, StrongBox or HUKS, behind the user's face, fingerprint or passcode; on a computer the TPM on Linux when there is one, else a file | until a removal or a root change takes it back, or its device is silent for 35 days |
+| Recovery key | ECDSA P-256 and SLH-DSA-SHA2-128s, both from one 32-byte secret | the root, when the group is made | on the recovery sheet, or sealed on a YubiKey; nowhere on a device | until the person replaces it |
+| Member key | ECDSA P-256 | each device | the TPM on Linux when there is one, the Secure Enclave, StrongBox or HUKS on phones, else a file readable only by the service | until the device leaves the group |
 | Tunnel key | X25519 | each device that syncs away from home | sealed in the TPM on Linux when there is one, else a file of the service; the phone's keychain or app storage | until the device leaves the group |
 | Preshared key | 32 random bytes | each tunnel client | as the tunnel key | as the tunnel key |
 | Server key | ECDSA P-256 | each hub | the TPM on Linux when there is one, else a file of the service | until the hub leaves; each credential it gets lasts a period of 35 days |
@@ -78,12 +79,12 @@ X-Wing, KEM `0x647a`) against the vector of draft-ietf-hpke-pq-05 for the same s
 | Release root keys | ECDSA P-256 | the maintainer | offline hardware keys | until replaced in a release |
 | Release and status keys | ECDSA P-256 | the maintainer | the maintainer's Secure Enclave, never CI | named in `keys.json`, at most 100 days per signature |
 | Pairing secrets | the six-digit code, CPace's scalars | for one attempt | memory only | the window, 5 minutes |
-| Invitation secret | at least 16 random bytes | the hub, for `cbb invite` | the invitation file (`.cbbinvite`, mode 0600) and the hub's memory | the invitation, 1 hour by default, at most 24 hours |
-| Key for sealed messages | X-Wing: a 32-byte secret, a 1216-byte public key that the root puts in the device record (`seal`, section 10) | each device that reads copies or takes commands | on a computer `seal.json` beside the identity, sealed by the TPM where there is one, else readable only by the service; the phone's protected app storage | until the device leaves the group |
+| Invitation secret | 32 random bytes | the hub, for `cbb invite` or an admin phone | the invitation (`cbb://join#...`: a QR code, or the file `cbb.cbbinvite`, mode 0600) and the hub's memory | the invitation, 1 hour by default, at most 24 hours |
+| Sealing keys | X-Wing, one per epoch: a 32-byte secret and a 1216-byte public key, which the device's keys statement carries (format section 10) | each device that reads copies or takes commands | on a computer `epochs.json`, each secret sealed under the device's local key (`local.json`, sealed by the TPM or the Secure Enclave where there is one); the phone's protected app storage | until the core erases the epoch (`keystore::rotate`) |
 | A copy's key | 32 random bytes | the device that copies, for each copy | only sealed to each reader, in the copy's wraps | the copy |
 | The robot's key | X-Wing, as above | the maintainer (`cbb-bug keygen`) | the secret on the robot's computer, never on cbb.tools; the public key in the build (`ROBOT_KEY_B64`) | until replaced in a release |
 
-The lifetimes are in [limits](reference/limits.md#certificates-and-keys); where each system keeps the
+The lifetimes are in [limits](reference/limits.md#keys-and-signed-files); where each system keeps the
 files is in [devices, ports and files](reference/devices.md). The key levels (which keys
 must be in hardware, and how a device proves it) are in [keys](guide/keys.md) and the
 protocol, section 17.

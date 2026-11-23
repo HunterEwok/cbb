@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -108,12 +109,59 @@ func TestFFIPhoneServersRelay(t *testing.T) {
 	})
 }
 
-// TestFFIPhoneHub: an admin phone is a hub of the group (on the records of
-// 0.6 a phone is one only with an admin key), registered with the
-// forwarder the root named for it, and the root computer keeps its offer at the forwarder's
-// address; stopping the hub hands its clients to the group's next hub, so
-// the group's only hub stops without anyway (D-122).
-func TestFFIPhoneHub(t *testing.T) {
+// TestFFIPhoneIsNoHub: a hub is a computer, a router or a board, never a
+// phone (D-134). The root names no forwarder for an admin phone, the
+// group's records make it no hub, and the phone's member knows no hub
+// command to start one.
+func TestFFIPhoneIsNoHub(t *testing.T) {
+	var h hub
+	pi, next, in := adminPhone(t, phoneOnLinuxBin(t), &h)
+	var phoneID string
+	for _, d := range pi.devices(t) {
+		if d.Name == "member phone" {
+			phoneID = d.ID
+		}
+	}
+	if phoneID == "" {
+		t.Fatal("the admin phone is not in the group")
+	}
+	_, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "member phone", Forwarder: "127.0.0.1:1",
+		ForwarderKey: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="}, "")
+	if err == nil || !strings.Contains(err.Error(), "hub") {
+		t.Fatalf("the root named a forwarder for a phone: %v", err)
+	}
+	if hl := tunnelState(t, pi).Hub(phoneID); hl != nil {
+		t.Fatalf("the root keeps an offer of the phone as a hub: %+v", hl)
+	}
+	for _, op := range []string{"hub", "hub_off"} {
+		req, err := json.Marshal(map[string]any{"op": op, "args": map[string]any{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(in, "CALL %s\n", req)
+		var ans struct {
+			OK    map[string]any `json:"ok"`
+			Error map[string]any `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
+			t.Fatalf("%s: %v", op, err)
+		}
+		if ans.Error == nil {
+			t.Fatalf("the phone took %s: %v", op, ans.OK)
+		}
+	}
+	a, _ := phoneCall(t, next, in)("away_status", nil)["away"].(map[string]any)
+	if a["hub"] == true {
+		t.Fatalf("the phone says it is a hub: %v", a)
+	}
+}
+
+// TestFFIAdminPhoneMakesAHubAndFreezes: an admin phone's "Make it a hub"
+// and "Freeze" (docs/apps.md, "Screens"). The phone sends an admin computer
+// the hub command through the forwarder it names, and the computer, with
+// sync away from home on, becomes a hub of the group; the phone then
+// freezes it and unfreezes it, which every member learns.
+func TestFFIAdminPhoneMakesAHubAndFreezes(t *testing.T) {
 	cert, err := forward.NewCert()
 	if err != nil {
 		t.Fatal(err)
@@ -135,46 +183,90 @@ func TestFFIPhoneHub(t *testing.T) {
 
 	var h hub
 	pi, next, in := adminPhone(t, phoneOnLinuxBin(t), &h)
-	var phoneID string
-	for _, d := range pi.devices(t) {
-		if d.Name == "member phone" {
-			phoneID = d.ID
+	box := startService(t, &h, "box")
+	// By the link of pi's QR code, which names the window.
+	c, _, link := openWindowLink(t, pi)
+	if _, err := box.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
+		t.Fatalf("box joining pi: %v", err)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "box" {
+		t.Fatalf("pi's window ended with %+v, %v", m, err)
+	}
+	c.Close()
+	makeAdmin(t, pi, box)
+	manage := func(req map[string]any) map[string]any {
+		t.Helper()
+		b, err := json.Marshal(req)
+		if err != nil {
+			t.Fatal(err)
 		}
+		fmt.Fprintf(in, "MANAGE %s\n", b)
+		var ans struct {
+			OK    map[string]any `json:"ok"`
+			Error map[string]any `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(next("MANAGED ")), &ans); err != nil {
+			t.Fatal(err)
+		}
+		if ans.Error != nil {
+			return map[string]any{"error": ans.Error}
+		}
+		return ans.OK
 	}
-	call := phoneCall(t, next, in)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
-		t.Fatal(err)
+	self := func(s *testService) control.Device {
+		for _, d := range s.devices(t) {
+			if d.Self {
+				return d
+			}
+		}
+		return control.Device{}
 	}
-	// The root names the phone's forwarder, which makes the group's
-	// credentials for it; the phone keeps it as its setting and serves
-	// through it once its own switch is on, never before.
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "member phone", Forwarder: f.Addr().String(),
-		ForwarderKey: forward.Pin(cert.Leaf)}, ""); err != nil {
-		t.Fatal(err)
-	}
-	var set map[string]any
-	waitUpTo(t, 30*time.Second, "the phone keeps the root's forwarder", func() bool {
-		set = call("away_status", nil)
-		rf, _ := set["root_forwarder"].(map[string]any)
-		return rf["endpoint"] == f.Addr().String()
-	})
-	if a, _ := set["away"].(map[string]any); a["hub"] == true {
-		t.Fatalf("the root's command switched the phone's hub on: %v", set)
-	}
-	call("hub", map[string]any{"vless_off": true})
-	waitUpTo(t, 30*time.Second, "the phone registered with the forwarder", func() bool {
-		a, _ := call("away_status", nil)["away"].(map[string]any)
-		fw, _ := a["forwarder"].(map[string]any)
-		return a["hub"] == true && fw["registered"] == true
-	})
-	waitUpTo(t, 30*time.Second, "the root keeps the phone's offer at the forwarder", func() bool {
-		hl := tunnelState(t, pi).Hub(phoneID)
-		return hl != nil && len(hl.Endpoints) == 1 && hl.Endpoints[0].String() == f.Addr().String()
+
+	// Commands go over a connection to the computer: the phone dials the
+	// address it is handed, as the app hands in what DNS-SD finds.
+	found, _ := json.Marshal(map[string]any{"op": "found", "args": map[string]any{
+		"key": "box", "addrs": []string{box.addr()}, "device": self(box).ID,
+	}})
+	fmt.Fprintf(in, "CALL %s\n", found)
+	next("ANSWER ")
+	waitFor(t, "the phone connected to box", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
 	})
 
-	// The group's only hub stops: its clients go to the next hub in the
-	// order, as on every hub of 0.6, so no anyway is asked for.
-	if a := call("hub_off", nil)["away"].(map[string]any); a["hub"] == true {
-		t.Fatalf("the phone is still a hub: %v", a)
+	// With sync away from home off on the computer, it refuses.
+	hubReq := map[string]any{"action": "hub", "device": "box", "forwarder": f.Addr().String(), "key": forward.Pin(cert.Leaf)}
+	var got map[string]any
+	waitUpTo(t, 30*time.Second, "the phone knows box as an admin", func() bool {
+		got = manage(hubReq)
+		return got["status"] != nil
+	})
+	if got["status"] == "done" {
+		t.Fatalf("box became a hub with sync away from home off: %v", got)
 	}
+	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got = manage(hubReq); got["status"] != "done" {
+		t.Fatalf("make box a hub: %v", got)
+	}
+	waitUpTo(t, 30*time.Second, "box serves as a hub", func() bool { return self(box).Hub })
+
+	// Freeze, then unfreeze: the root learns both.
+	if got = manage(map[string]any{"action": "freeze", "device": "box"}); got["name"] != "box" {
+		t.Fatalf("freeze box: %v", got)
+	}
+	frozen := func() bool {
+		for _, d := range pi.devices(t) {
+			if d.Name == "box" {
+				return d.Frozen
+			}
+		}
+		return false
+	}
+	waitUpTo(t, 30*time.Second, "the root learns box is frozen", frozen)
+	if got = manage(map[string]any{"action": "thaw", "device": "box"}); got["name"] != "box" {
+		t.Fatalf("unfreeze box: %v", got)
+	}
+	waitUpTo(t, 30*time.Second, "the root learns box is unfrozen", func() bool { return !frozen() })
 }

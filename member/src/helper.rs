@@ -396,7 +396,7 @@ fn read_answers(stdout: std::process::ChildStdout, waiting: Waiting, log: Arc<dy
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// This test program plays the helper when CBB_FAKE_HELPER is set: it
@@ -423,6 +423,10 @@ mod tests {
                     Header { error: "the key is gone".into(), detail: "TPM_RC_HANDLE".into(), ..h },
                     Vec::new(),
                 ),
+                "attest-status" => Message::new(h, b"{}".to_vec()),
+                "key-new" | "key-public" | "key-sign" | "seal" | "unseal" => {
+                    Message::new(h, key_answer(&m.header.op, &m.payload))
+                }
                 "sleep" => continue,
                 "exit" => std::process::exit(3),
                 _ => Message::new(Header { error: "unknown".into(), ..h }, Vec::new()),
@@ -432,9 +436,31 @@ mod tests {
         std::process::exit(0);
     }
 
+    /// The fake helper's answers about keys (crate::keys): a key held in
+    /// the TPM unless the request names one of the cases below, a
+    /// signature, and secrets it seals and opens.
+    #[cfg(unix)]
+    fn key_answer(op: &str, payload: &[u8]) -> Vec<u8> {
+        const PUBLIC: &str = "BAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+        let req: serde_json::Value = serde_json::from_slice(payload).unwrap_or_default();
+        let tpm = req.get("key_tpm").cloned().unwrap_or(serde_json::json!({"blob": "new"}));
+        let ans = match (op, tpm.as_str(), req.get("tpm").and_then(|t| t.as_str())) {
+            ("key-public", Some("two"), _) => serde_json::json!({"key_tpm": "two", "key_se": "AQ==", "public": PUBLIC}),
+            ("key-public", Some("short"), _) => serde_json::json!({"key_tpm": "short", "public": "BQEC"}),
+            ("key-public", Some("none"), _) => serde_json::json!({}),
+            ("key-sign", ..) => return b"signed".to_vec(),
+            ("seal", ..) if req.get("secret").and_then(|s| s.as_str()) == Some("AA==") => serde_json::json!({}),
+            ("seal", ..) => serde_json::json!({"tpm": "sealed", "secret": req["secret"]}),
+            ("unseal", _, Some("empty")) => serde_json::json!({}),
+            ("unseal", ..) => serde_json::json!({"secret": "b3BlbmVk"}),
+            _ => serde_json::json!({"key_tpm": tpm, "public": PUBLIC}),
+        };
+        serde_json::to_vec(&ans).unwrap()
+    }
+
     #[cfg(unix)]
     /// A Helper that runs this test program as fake_helper.
-    fn fake(log: Arc<Mutex<Vec<String>>>) -> Helper {
+    pub(crate) fn fake(log: Arc<Mutex<Vec<String>>>) -> Helper {
         Helper::new(script(), Arc::new(move |s: &str| log.lock().unwrap().push(s.to_string())))
     }
 

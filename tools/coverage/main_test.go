@@ -106,6 +106,30 @@ func TestTarget(t *testing.T) {
 	}
 }
 
+// TestLCOV checks the LCOV tracefile, as the tray app's window test
+// writes it: within a file, records naming one line count it once, ran
+// when one of them ran it; files of one part add up.
+func TestLCOV(t *testing.T) {
+	a := write(t, "a.info", "TN:\nSF:apps/desktop/frontend/app.js\nDA:1,1\nDA:2,0\nDA:3,0\nDA:3,2\nend_of_record\nSF:apps/desktop/frontend/tokens.js\nDA:1,4,abc\nend_of_record\n")
+	b := write(t, "b.info", "SF:apps/desktop/frontend/app.js\nDA:2,2\nend_of_record\n")
+	var out strings.Builder
+	if err := run(options{lcovFiles: []string{"js-tray=" + a, "js-tray=" + b}, slack: 1}, &out); err != nil {
+		t.Fatal(err)
+	}
+	// 3 of 4, then 1 of 1.
+	if want := "| js-tray | lines | 4 | 5 | 80.0 |"; !strings.Contains(out.String(), want) {
+		t.Errorf("no %q in\n%s", want, out.String())
+	}
+	for _, bad := range []string{"DA:1,1\n", "SF:x\nDA:one,1\n", "SF:x\n"} {
+		if err := run(options{lcovFiles: []string{"js-tray=" + write(t, "bad.info", bad)}, slack: 1}, &out); err == nil {
+			t.Errorf("%q taken", bad)
+		}
+	}
+	if err := run(options{lcovFiles: []string{write(t, "c.info", "")}, slack: 1}, &out); err == nil {
+		t.Error("no PART taken")
+	}
+}
+
 func TestLLVMAndJaCoCo(t *testing.T) {
 	llvm := write(t, "rust.json", `{"data":[{"files":[
 {"filename":"/w/core/src/certs.rs","summary":{"lines":{"count":10,"covered":9}}},
@@ -168,5 +192,28 @@ func TestBranches(t *testing.T) {
 	o.coreBranchTarget = 0
 	if o.targetOf("rust-core/branches") != 80 {
 		t.Error("a core without its own target")
+	}
+}
+
+// The files only tests compile count in no part.
+func TestTestOnlyFiles(t *testing.T) {
+	for f, want := range map[string]bool{
+		"/w/core/src/sim/mod.rs":          true,
+		"/w/core/src/vectors.rs":          true,
+		"/w/core/src/msg/mutants.rs":      true,
+		"/w/member/src/nettest/relay.rs":  true,
+		"/w/core/src/msg/mod.rs":          false,
+		"/w/core/src/simple.rs":           false,
+		"/w/member/src/relayd/command.rs": false,
+	} {
+		if testOnly(f) != want {
+			t.Errorf("testOnly(%q) = %v", f, !want)
+		}
+	}
+	if llvmParts["rust-core"]("/w/core/src/sim/mod.rs") || llvmParts["rust-member"]("/w/member/src/nettest/relay.rs") {
+		t.Error("a test-only file counts")
+	}
+	if !llvmParts["rust-member"]("/w/member/src/lib.rs") {
+		t.Error("lib.rs does not count")
 	}
 }

@@ -72,8 +72,8 @@ struct InvitationView: View {
     }
 }
 
-/// An invitation that waits for the user: the group it joins, its hub and
-/// when it expires, with Join and Decline. Declining sends nothing.
+/// An invitation that waits for the user, with Join and Decline. Declining
+/// sends nothing.
 struct InvitationAnswerView: View {
     let invite: AppModel.PendingInvite
     @EnvironmentObject private var model: AppModel
@@ -89,15 +89,6 @@ struct InvitationAnswerView: View {
                 Text("You are invited to a group")
                     .font(.system(.title2, design: .monospaced).weight(.bold))
                     .multilineTextAlignment(.center)
-                VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-                    LabeledContent { Text(verbatim: invite.invitation.group).font(.system(.body, design: .monospaced)) } label: { Text("Group") }
-                    LabeledContent { Text(verbatim: String(invite.invitation.hub.prefix(12))).font(.system(.body, design: .monospaced)) } label: { Text("Hub") }
-                    LabeledContent {
-                        Text(Date(timeIntervalSince1970: TimeInterval(invite.invitation.expires)), style: .relative)
-                    } label: { Text("Expires in") }
-                }
-                .padding(Tokens.spacingMedium)
-                .glassCard()
                 Text("Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(palette.textDim)

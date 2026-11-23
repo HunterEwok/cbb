@@ -96,7 +96,7 @@ struct DeviceDetail: View {
         .confirmationDialog(Text("Freeze \(device?.name ?? "")?"), isPresented: $freezing) {
             Button(role: .destructive) { Task { await model.freeze(id) } } label: { Text("Freeze") }
         } message: {
-            Text("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it.")
+            Text("For a stolen admin computer: it changes nothing more and the others refuse it until the main device unfreezes or removes it.")
         }
         .confirmationDialog(Text("Unfreeze \(device?.name ?? "")?"), isPresented: $thawing) {
             Button { Task { await model.unfreeze(id) } } label: { Text("Unfreeze") }
@@ -415,24 +415,24 @@ struct DeviceDetail: View {
         }
     }
 
-    /// Why d cannot be a hub, nil when it can: a phone only from its own
-    /// app, never a member without the cap hub, a watch or a computer without root, and a
+    /// Why d cannot be a hub, nil when it can: never a phone (D-134),
+    /// never a member without the cap hub, a watch or a computer without root, and a
     /// computer only as the root or an admin with the hub power. Another
     /// computer turns sync away from home on itself, and is told so.
     private func noHub(_ d: Control.Device) -> LocalizedStringKey? {
         switch d.role {
-        case "phone": return "A phone is a hub only from its own app's Settings, while the app is open."
+        case "phone": return "A phone is never a hub."
         case "watch": return "A watch is never a hub."
         default: break
         }
         if !d.can("hub") { return "This device is never a hub." }
         if d.store == "rootless" { return "It runs without administrator rights, so it is never a hub." }
-        if d.frozen { return "It is frozen: the root unfreezes it first." }
+        if d.frozen { return "It is frozen: the main device unfreezes it first." }
         // A hub that reads the copies is the root or an admin; an admin
         // makes any other computer a hub that only passes them on.
-        if d.isSelf, !d.mayHub || d.forwardOnly { return "Only the group's root or an admin is a hub: the root makes this Mac an admin first." }
+        if d.isSelf, !d.mayHub || d.forwardOnly { return "Only the group's main device or an admin is a hub: the main device makes this Mac an admin first." }
         if !d.isSelf, !model.isAdmin { return "Only an admin makes another device a hub." }
-        if !d.isSelf, !d.mayHub || d.forwardOnly, !mayPassOn(d) { return "Only the group's root or an admin is a hub: make it an admin first." }
+        if !d.isSelf, !d.mayHub || d.forwardOnly, !mayPassOn(d) { return "Only the group's main device or an admin is a hub: make it an admin first." }
         return nil
     }
 

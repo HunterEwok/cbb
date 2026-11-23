@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The member's push sender (format section 20.4, P-3): it keeps the
+//! The member's push sender (format section 9.6, P-3): it keeps the
 //! phones' registrations, decides when a copy or an event wakes a phone
 //! whose app is closed, seals the body to that phone and asks the
 //! project's push service (src/pushd, through [`crate::push::Client`]).

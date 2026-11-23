@@ -7,8 +7,7 @@
 //! `mesh`); this keeps the mode, sync turned off, an admin's mute, the
 //! clipboard's own content and the group's current copy, and asks the
 //! rule of incoming copies (`cbb_core::rule`) whether new content goes into
-//! the clipboard. It stands where the engine of 0.5 (`cbb_core::clip`)
-//! stands until the service switches.
+//! the clipboard.
 
 use std::collections::VecDeque;
 use std::sync::Mutex;

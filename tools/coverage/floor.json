@@ -1,10 +1,15 @@
 {
-  "go": 80.0,
+  "go": 83.0,
   "go-core": 90.0,
-  "rust-core": 85.0,
+  "go-tray": 68.0,
+  "rust-core": 90.0,
   "rust-core/branches": 79.0,
-  "rust-member": 32.0,
-  "rust-service": 79.0,
-  "swift-kit": 85.0,
-  "kotlin-kit": 92.0
+  "rust-member": 83.0,
+  "rust-service": 84.0,
+  "swift-kit": 87.0,
+  "kotlin-kit": 92.0,
+  "js-tray": 83.0,
+  "cpp-aurora": 90.0,
+  "ets-harmony": 29.0,
+  "ets-harmony-watch": 64.0
 }

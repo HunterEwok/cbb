@@ -3,8 +3,8 @@
 
 //! The protocol core of cbb's members (docs/protocol.md):
 //! certificates and their checks, the signed records, the hybrid clock, the
-//! sync engine, the frames of the member protocol and the joiner's side of
-//! the pairing, and the format of the saved state for a board without a file
+//! copies sealed end to end, the rule of incoming copies, the frames of the
+//! member protocol and the joiner's side of the pairing, and the format of the saved state for a board without a file
 //! system. It does no I/O and needs no operating system, only an
 //! allocator and a source of randomness, so the same code runs in cbb on
 //! computers, in the phones' apps and on a microcontroller such as the ESP32.
@@ -39,14 +39,12 @@
 
 extern crate alloc;
 
-#[cfg(feature = "tls")]
-pub mod admit;
 pub mod alpn;
 pub mod api;
 pub mod arrange;
 #[cfg(feature = "web")]
 pub mod attest;
-pub mod authority;
+pub mod awg;
 pub mod beacon;
 pub mod benchtime;
 pub mod blind;
@@ -54,24 +52,19 @@ pub mod bounds;
 pub mod bug;
 pub mod certs;
 pub mod clip;
-pub mod command;
 pub mod commands;
 pub mod content;
 pub mod copies;
-pub mod copy;
-pub mod credential;
 pub mod error;
 pub mod format;
 #[cfg(feature = "fuzzing")]
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
-pub mod group;
 #[cfg(any(test, feature = "testkit"))]
 pub mod groupgen;
 pub mod hlc;
 pub mod hubkey;
 pub mod identity;
-pub mod invite;
 pub mod issue;
 pub mod join;
 pub mod keyboard;
@@ -79,21 +72,15 @@ pub mod keylevel;
 pub mod keystore;
 #[cfg(test)]
 mod longrules;
-pub mod manage;
 pub mod media;
 pub mod msg;
-pub mod pair;
-#[cfg(feature = "tls")]
-pub mod pair_session;
 pub mod peer;
 #[cfg(test)]
 mod powerloss;
 pub mod push;
 pub mod records;
-pub mod recovery;
 pub mod release;
 pub mod remotepaste;
-pub mod root;
 pub mod rule;
 pub mod seal;
 pub mod secret;
@@ -105,7 +92,6 @@ pub mod slhdsa;
 pub mod store;
 pub mod strict;
 pub mod sync;
-pub mod takeover;
 pub mod third_party {
     // Copied code, kept close to its source: its field arithmetic wraps on
     // purpose (u128 limbs, reduced modulo p), and its indexes and unwraps
@@ -119,6 +105,8 @@ mod testkit;
 pub mod tls;
 #[cfg(test)]
 mod vectors;
+#[cfg(test)]
+mod verdicts;
 pub mod vless;
 pub mod why;
 pub mod wire;

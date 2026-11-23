@@ -17,7 +17,7 @@ pub const RULE_ACTION: Rule = Rule::field("orders/action");
 pub const RULE_MUTE: Rule = Rule::field("orders/mute");
 pub const RULE_DEVICE: Rule = Rule::field("orders/device");
 
-/// The longest text of a paste, and of one typed out (format 20.6: 16 KiB
+/// The longest text of a paste, and of one typed out (format 13: 16 KiB
 /// for a member; a leaf takes what its 16 KiB frame holds beside the
 /// command's envelope).
 pub const MAX_PASTE_TEXT: usize = 1 << 20;
@@ -43,7 +43,7 @@ fn flag(v: Option<&Value<'_>>, rule: Rule) -> Result<bool, Rule> {
     }
 }
 
-/// A hidden character (format 20.1): C0, DEL, C1, U+2028 to U+202E and
+/// A hidden character (format 1): C0, DEL, C1, U+2028 to U+202E and
 /// U+2066 to U+2069.
 fn hidden(c: char) -> bool {
     matches!(c, '\u{0}'..='\u{1f}' | '\u{7f}'..='\u{9f}' | '\u{2028}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
@@ -55,7 +55,8 @@ fn plain_text(t: &str) -> bool {
     (1..=255).contains(&t.len()) && !t.chars().any(hidden)
 }
 
-fn action_name(t: &str) -> bool {
+/// An action's name: 1 to 32 of a-z, 0-9 and -, starting with a letter.
+pub fn valid_action_name(t: &str) -> bool {
     (1..=32).contains(&t.len())
         && t.starts_with(|c: char| c.is_ascii_lowercase())
         && t.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -133,7 +134,7 @@ pub fn check(t: u64, b: &[u8]) -> Result<(), Rule> {
         }
         COMMAND_ACTION => {
             only(&m, &[10])?;
-            if !m.get(10).and_then(Value::as_text).is_some_and(action_name) {
+            if !m.get(10).and_then(Value::as_text).is_some_and(valid_action_name) {
                 return Err(RULE_ACTION);
             }
         }

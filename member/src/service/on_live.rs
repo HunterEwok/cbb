@@ -360,8 +360,13 @@ impl Service {
         // say of this device and the group.
         let mut facts = crate::why::facts(&status, &devices);
         cbb_core::why::group_facts(&mut facts, &st, &me);
-        facts.checkpoint_stuck = !live.mesh.set().lock().unwrap().stuck_checkpoints().is_empty();
-        Status { why: cbb_core::why::diagnose(&facts, uptime::wall_ms()), ..status }
+        let notices = {
+            let set = live.mesh.set();
+            let set = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            facts.checkpoint_stuck = !set.stuck_checkpoints().is_empty();
+            crate::notices::of(&set, &me, uptime::wall_ms().max(0).unsigned_abs())
+        };
+        Status { why: cbb_core::why::diagnose(&facts, uptime::wall_ms()), notices, ..status }
     }
 
     /// The devices of a group of 0.6, as `cbb devices` shows them.
@@ -496,6 +501,15 @@ impl Service {
             "status" => {
                 Ok(control::reply(Header { status: Some(self.live_status(live)), ..Default::default() }, Vec::new()))
             }
+            // A notice the user hid (`Status::notices`): the set keeps it
+            // dismissed, on this device only.
+            "dismiss" => crate::notices::record_id(&h.value)
+                .ok_or_else(|| Error::msg("dismiss needs a notice's id"))
+                .and_then(|id| {
+                    live.mesh.set().lock().unwrap_or_else(std::sync::PoisonError::into_inner).dismiss(&id);
+                    live.mesh.changed()
+                })
+                .map(|()| control::reply(Header { done: true, ..Default::default() }, Vec::new())),
             "devices" => {
                 Ok(control::reply(Header { devices: self.live_devices(live), ..Default::default() }, Vec::new()))
             }
@@ -705,7 +719,7 @@ impl Service {
         };
         crate::admin::level_allows(value, root_store, "this device, the group's root,", "", true)?;
         let now = uptime::wall_ms().max(0) as u64;
-        // The default, hardware, is written as no level at all (format 4.5).
+        // The default, hardware, is written as no level at all (format 4.4).
         let kept = if level == LEVEL_HARDWARE { 0 } else { level };
         live.mesh.write(|set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
         (self.log)(&format!("cbb: the group's key level is {value} now"));
@@ -723,7 +737,7 @@ impl Service {
     }
 
     /// cbb global relay: the group's own relay, which the root signs in the
-    /// group's settings (format 4.5, field 15; D-121), so that every device
+    /// group's settings (format 4.4, field 15; D-121), so that every device
     /// takes it from there and shows it a face (`faces::group_servers`).
     /// The relays given (`relay` and `relays`) take the place of those the
     /// settings named; `default`, the project's relay, leaves the group
@@ -976,7 +990,14 @@ impl Service {
             n.learn_all();
         }
         let now = crate::admitting::home_window_ms;
-        let (mut open, digits) = crate::admitting::home_window(now(), crate::admitting::WINDOW_LIFETIME);
+        // Five minutes of this device's running time, which a wall clock
+        // set ahead does not move (docs/protocol.md, "Pairing in 0.6"),
+        // counted from before the client hears the window opened: what it
+        // does after that falls within the five minutes.
+        let opened_at = crate::uptime::now();
+        let end = opened_at + crate::admitting::WINDOW_LIFETIME;
+        let opened_ms = u64::try_from(opened_at.as_millis()).unwrap_or(u64::MAX);
+        let (mut open, digits) = crate::admitting::home_window(opened_ms, crate::admitting::WINDOW_LIFETIME);
         let (tx, rx) = mpsc::sync_channel(1);
         live.mesh.on_pair(Some(Box::new(move |sock, s, x| {
             // One device at a time; another is dropped.
@@ -1006,9 +1027,6 @@ impl Service {
             ..Default::default()
         };
         control::write(out, &control::partial(opened))?;
-        // Five minutes of this device's running time, which a wall clock
-        // set ahead does not move (docs/protocol.md, "Pairing in 0.6").
-        let end = crate::uptime::now() + crate::admitting::WINDOW_LIFETIME;
         loop {
             if hung.load(Ordering::SeqCst) {
                 (self.log)("cbb: the pairing window closed: its cbb pair ended");
@@ -1161,13 +1179,14 @@ impl Service {
                     os: cbb_core::format::print::os_name(a.info.os).to_string(),
                     fingerprint: a.fingerprint.clone(),
                 };
+                // Drops an answer left from before, before the question goes
+                // out: an answer to this one may come at once.
+                while asked.try_recv().is_ok() {}
                 if control::write(out, &control::partial(Header { joining: Some(joining), ..Default::default() }))
                     .is_err()
                 {
                     return false;
                 }
-                // Drops an answer left from before.
-                while asked.try_recv().is_ok() {}
                 let until = Instant::now() + crate::pair::CONFIRM_WAIT;
                 while !hung.load(Ordering::SeqCst) && Instant::now() < until {
                     match asked.recv_timeout(Duration::from_millis(200)) {
@@ -1211,7 +1230,7 @@ impl Service {
     /// the service starts in the group it kept.
     pub(super) fn live_join(&self, m: &Message, _r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
         let h = &m.header;
-        if in_group(&self.state_dir) || matches!(Identity::load(&self.state_dir), Ok(Some(_))) {
+        if in_group(&self.state_dir) {
             return Err(Error::msg("this device is already in a group"));
         }
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;

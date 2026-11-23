@@ -54,7 +54,7 @@ impl Own {
 /// The key the button compares the group's copy ev by; None for a copy
 /// with nothing the phone could hold.
 pub fn key_of(ev: &Event) -> Option<String> {
-    if ev.unread || ev.is_mark() {
+    if ev.is_mark() {
         return None;
     }
     match (&ev.kind, &ev.media) {
@@ -157,9 +157,7 @@ mod tests {
         let s = swap("first", None, &own);
         assert!(s.sends && s.takes.is_none());
         // Nor does a copy with nothing to hold come in.
-        let mut unread = text("f", PC, "", 1_000);
-        unread.unread = true;
-        assert!(swap("x", Some(unread), &own).takes.is_none());
+        assert!(swap("x", Some(text("f", PC, "", 1_000)), &own).takes.is_none());
     }
 
     #[test]

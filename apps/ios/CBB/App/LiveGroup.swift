@@ -13,7 +13,6 @@ import UniformTypeIdentifiers
 private let relayLog = Logger(subsystem: "tools.cbb", category: "relay")
 private let browseLog = Logger(subsystem: "tools.cbb", category: "browse")
 private let pairLog = Logger(subsystem: "tools.cbb", category: "pair")
-private let hubLog = Logger(subsystem: "tools.cbb", category: "hub")
 private let modeLog = Logger(subsystem: "tools.cbb", category: "mode")
 private let keysLog = Logger(subsystem: "tools.cbb", category: "keys")
 private let imageLog = Logger(subsystem: "tools.cbb", category: "images")
@@ -84,24 +83,11 @@ final class LiveGroup: GroupController {
     private var events: Task<Void, Never>?
     private var browser: BonjourBrowser?
     private var relay: Relay?
-    /// While the phone is the group's hub on a home network, the member's
-    /// port on every address, published by Bonjour.
-    private var homePort: UInt16?
-    private var publisher: BonjourPublisher?
-    /// On a group of 0.6, what the user chose for the hub; the Live member
-    /// runs sync away from home, the hub and the relay itself (AwayOn06).
-    private var hub06 = Hub06Keychain.load() ?? AwayOn06.Prefs()
-    /// Whether the app is in front: the phone is the hub only then (iOS
-    /// gives an app no way to keep it running in the background).
+    /// Whether the app is in front.
     private var foreground = false
     /// Whether the app is in the background, where the member closes its
     /// connections and makes none, but for a background refresh.
     private var background = false
-    /// The network the phone is on, as the hub remembers home networks.
-    private var network: String?
-    private let paths = NWPathMonitor()
-    /// The hub's changes, one after another.
-    private var hubWork: Task<Void, Never>?
     private var online: Set<String> = []
     /// Where the connected members' hellos say their keys live.
     private var keyStores: [String: String] = [:]
@@ -141,34 +127,11 @@ final class LiveGroup: GroupController {
             keysLog.error("the saved group does not read: \(String(reflecting: error), privacy: .public)")
         }
         try? startSync()
-        // A new network may be a home network of the hub, or no longer be one.
-        paths.pathUpdateHandler = { [weak self] path in
-            let key = Self.networkKey(path)
-            Task { @MainActor in
-                self?.network = key
-                self?.refreshHub()
-            }
-        }
-        paths.start(queue: DispatchQueue(label: "cbb.paths"))
         // The phone locked with the app in front: the keys sign without
         // asking no more, as when the app goes to the background.
         let authorization = authorization
         NotificationCenter.default.addObserver(forName: UIApplication.protectedDataWillBecomeUnavailableNotification,
                                                object: nil, queue: nil) { _ in authorization.end() }
-    }
-
-    /// The network of path as the hub remembers it (HubState.networkKey):
-    /// Wi-Fi or Ethernet with an IPv4 gateway, never a mobile network.
-    nonisolated static func networkKey(_ path: NWPath) -> String? {
-        guard path.status == .satisfied,
-              let interface = path.availableInterfaces.first(where: { $0.type == .wifi || $0.type == .wiredEthernet }),
-              path.usesInterfaceType(interface.type) else { return nil }
-        let gateway = path.gateways.lazy.compactMap { e -> String? in
-            if case .hostPort(let host, _) = e, case .ipv4(let a) = host { return "\(a)" }
-            return nil
-        }.first
-        guard let local = LocalAddresses.ipv4(interface: interface.name) else { return nil }
-        return HubState.networkKey(gateway: gateway, address: local.address, prefixLength: local.prefixLength)
     }
 
     var hasGroup: Bool { state != nil || before06 }
@@ -186,7 +149,7 @@ final class LiveGroup: GroupController {
     var isAdmin: Bool { state?.isAdmin ?? true }
     var isRoot: Bool { state?.isRoot ?? false }
     /// Has the phone's member in the core build, check and sign one of the
-    /// root's own records with the root key (cbb_core::root), which it adds
+    /// root's own records with the root key (cbb_member_manage), which it adds
     /// and sends.
     @discardableResult
     private func rootRecord<T>(_ root: SecKeySigner, _ act: (CoreMember, Data, @escaping (Data) throws -> Data) throws -> T) throws -> T {
@@ -309,7 +272,7 @@ final class LiveGroup: GroupController {
         try startSync()
         await refresh()
         let text = made.recovery.text.flatMap { $0.split(separator: " ").map(String.init) }.joined(separator: "-")
-        return Core.RecoverySheet(qr: made.recovery.qr, text: text, admin: Data())
+        return Core.RecoverySheet(qr: made.recovery.qr, text: text)
     }
 
     /// Opens this phone's home window on a group of 0.6 (docs/protocol.md,
@@ -322,8 +285,7 @@ final class LiveGroup: GroupController {
         guard let g = state, g.isAdmin else { throw Failure.noGroup }
         guard let node else { throw Failure.unreachable }
         let signer = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
-        let port: UInt16
-        if let p = homePort { port = p } else { port = try node.listen(.home, port: 0) }
+        let port = try node.listen(.home, port: 0)
         let hosts = LocalAddresses.current()
         guard !hosts.isEmpty else { throw Failure.noNetwork }
         let w = try CorePairing.Window(member: node, publicKey: signer.publicKeyDER, addrs: hosts) { try signer.signature(digest: $0) }
@@ -652,8 +614,6 @@ final class LiveGroup: GroupController {
             let others = (group06?.devices ?? []).filter { $0.device != g.device && $0.role != "watch" }.map(\.name)
             if !others.isEmpty { throw Failure.rootLeaves(others) }
         }
-        await hubDone()
-        stopHome()
         stopNode()
         for label in [Self.caLabel, Self.adminLabel, Self.memberLabel] {
             KeychainIdentity.removeKey(label: label)
@@ -678,6 +638,17 @@ final class LiveGroup: GroupController {
     /// computer.
     func unfreeze(_ id: String) async throws {
         try await act(String(localized: "Unfreeze an admin computer", bundle: .app), "thaw", ["device": .string(id)])
+    }
+
+    /// Freezes an admin computer, as one does with a stolen one.
+    func freeze(_ id: String) async throws {
+        try await act(String(localized: "Freeze an admin computer", bundle: .app), "freeze", ["device": .string(id)])
+    }
+
+    /// Makes an admin computer a hub through the project's forwarder; the
+    /// computer answers whether it is one.
+    func makeHub(_ id: String) async throws {
+        try await act(String(localized: "Make a computer a hub", bundle: .app), "hub", ["device": .string(id)])
     }
 
     /// Gives a device another name (docs/protocol.md, section 10): a device
@@ -858,7 +829,6 @@ final class LiveGroup: GroupController {
             }
         }
         try? node.setPush(PushSetup.shared.frame())
-        refreshHub()
         Task { await sendShared() }
     }
 
@@ -954,8 +924,6 @@ final class LiveGroup: GroupController {
 
     /// Stops syncing and starts again.
     private func restartSync() async {
-        await hubDone()
-        stopHome()
         stopNode()
         try? startSync()
     }
@@ -966,30 +934,11 @@ final class LiveGroup: GroupController {
         browser?.stop()
         node?.stop()
         (node, events, browser, relay) = (nil, nil, nil, nil)
-        publisher?.stop()
-        (publisher, homePort) = (nil, nil)
     }
 
-    // MARK: The phone as the hub
-
-    /// The phone as the group's hub as Settings shows it: nil without a
-    /// group and on a phone that is no admin, which cannot be the hub. The
-    /// forwarder is the one the group's root set.
-    func hubStatus() async -> AppModel.Hub? {
-        guard state?.isAdmin == true else { return nil }
-        let a = awayState06, p = hub06, byRoot = rootForwarder06
-        let (status, error) = AwayOn06.hubStatus(p, a, paused: !foreground, forwarder: byRoot != nil)
-        var h = AppModel.Hub(on: p.on, status: status, error: error, forwarder: byRoot.map { .init(endpoint: $0.endpoint, pin: $0.key) },
-                             home: p.isHome(network), clients: a?.clients ?? 0, disguise: p.hides)
-        h.entriesStale = status == .failed && a?.forwarder?.entriesStale == true
-        return h
-    }
-
-    /// Tells the group the app came to the front or went to the background;
-    /// the hub follows.
+    /// Tells the group the app came to the front or went to the background.
     func setForeground(_ on: Bool) {
         foreground = on
-        refreshHub()
         // Back at the front the member connects at once, and without a
         // computer browsing starts again too, as iOS may have ended it.
         guard on, let node else { return }
@@ -1034,88 +983,11 @@ final class LiveGroup: GroupController {
         if running { try? node.resume() } else { try? node.pause() }
     }
 
-    /// Makes this phone the group's hub, or stops it being the hub, in a
-    /// group of 0.6; the network it is on becomes a home network of the hub.
-    func setPhoneHub(_ on: Bool) async throws {
-        guard state?.isAdmin == true else { return }
-        var p = hub06
-        p.on = on
-        if on { p = p.adding(home: network) }
-        try saveHub06(p)
-        if on { try updateHub06() } else { unhub06() }
-    }
-
-    /// Sets how the hub's tunnel hides.
-    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {
-        guard state?.isAdmin == true else { return }
-        var p = hub06
-        p.hides = d
-        try saveHub06(p)
-        try updateHub06()
-    }
-
-    /// Remembers the network the phone is on as a home network, where the
-    /// hub takes members and publishes itself.
-    func addHomeNetwork() async throws {
-        guard state?.isAdmin == true, let network else { return }
-        try saveHub06(hub06.adding(home: network))
-        refreshHub()
-    }
-
-    /// Runs updateHub06 after the changes before it.
-    private func refreshHub() {
-        let previous = hubWork
-        hubWork = Task { @MainActor [weak self] in
-            await previous?.value
-            guard let self, self.state != nil else { return }
-            do { try self.updateHub06() } catch { hubLog.error("the hub did not start: \(String(reflecting: error), privacy: .public)") }
-        }
-    }
-
-    // MARK: Away, the hub and the relay on 0.6
-
-    private func saveHub06(_ p: AwayOn06.Prefs) throws {
-        try Hub06Keychain.save(p)
-        hub06 = p
-    }
-
-    /// On a group of 0.6, has the Live member serve as a hub while the
-    /// user turned it on and the app is in front, publishing it on a home
-    /// network of the hub. In the background the member pauses and the hub
-    /// stays one, so that a short trip away hands no clients over: they
-    /// wait out the gap as for any hub that goes quiet, and move on to the
-    /// group's next hub after it. Only the switch stops the hub at once.
-    private func updateHub06() throws {
-        guard let node, let g = state, g.isAdmin, hub06.on else { return unhub06() }
-        guard foreground else { return stopHome() }
-        try AwayOn06.serve(node, hub06, homeAddrs: LocalAddresses.current().filter { !$0.contains(":") }, byRoot: try? node.rootForwarder())
-        guard hub06.isHome(network) else { return stopHome() }
-        guard homePort == nil else { return }
-        for p in [Self.memberPort, 0] {
-            guard let home = try? node.listen(.home, port: p) else { continue }
-            homePort = home
-            do {
-                publisher = try BonjourPublisher(name: g.device, port: home, txt: ["v": "1", "g": g.tag, "r": "phone"])
-            } catch {
-                hubLog.error("the hub cannot publish itself on the home network: \(String(reflecting: error), privacy: .public)")
-            }
-            return
-        }
-        hubLog.error("the hub cannot listen on the home network")
-    }
-
-    /// On a group of 0.6, stops the Live member serving as a hub, when it does.
-    private func unhub06() {
-        stopHome()
-        guard let node, (try? node.awayStatus())?.hub == true else { return }
-        do { try node.stopHub() } catch { hubLog.error("the hub did not stop: \(String(reflecting: error), privacy: .public)") }
-    }
+    // MARK: Away and the relay on 0.6
 
     /// On a group of 0.6, sync away from home as the Live member runs it; nil while it is off.
     private var awayState06: CoreMember.AwayState? { try? node?.awayStatus() }
 
-    /// On a group of 0.6, the forwarder the group's root set for this phone as a hub; nil while it set none.
-    private var rootForwarder06: CoreMember.RootForwarder? { (try? node?.rootForwarder()) ?? nil }
 
     /// On a group of 0.6, sets the group's relay (docs/design.md, "Blind
     /// relay"), where every device meets the others while sync away from
@@ -1138,15 +1010,6 @@ final class LiveGroup: GroupController {
     struct Away06Failure: Error, CustomStringConvertible {
         let message: String
         var description: String { message }
-    }
-
-    private func hubDone() async { await hubWork?.value }
-
-    private func stopHome() {
-        publisher?.stop()
-        publisher = nil
-        if homePort != nil { try? node?.unlisten(.home) }
-        homePort = nil
     }
 
     /// Why the phone does not sync (docs/apps.md, "Why it does not sync"),
@@ -1344,8 +1207,8 @@ final class LiveGroup: GroupController {
         private var handed: [String: [String]] = [:]
         /// The group tag the members publish.
         let group: String
-        /// This phone's device ID, never dialed: as a hub it announces
-        /// itself, and its browser finds that announcement too.
+        /// This phone's device ID, never dialed: its browser may find its
+        /// own home window's announcement.
         let device: String
 
         init(group: String, device: String) {

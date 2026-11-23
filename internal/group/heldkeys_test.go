@@ -4,6 +4,12 @@
 package group
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"errors"
 	"runtime"
 	"testing"
 
@@ -47,7 +53,63 @@ func TestHardwareOff(t *testing.T) {
 	if b, err := (Sealer{}).Seal([]byte("secret")); b != nil || err != nil {
 		t.Errorf("Seal with CBB_TPM off: %v, %v", b, err)
 	}
-	if _, held := HeldOf(newGroup(t).Key); held {
+	key, err := NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, held := HeldOf(key); held {
 		t.Error("a key in a file is held by hardware")
+	}
+}
+
+// A key kept in the file loads back as the same P-256 key; a file key that
+// is not PKCS #8, or not P-256, does not load.
+func TestFileKeys(t *testing.T) {
+	key, err := NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := storeKey(key)
+	if err != nil || s.der == nil {
+		t.Fatalf("storeKey of a file key: %+v, %v", s, err)
+	}
+	got, err := s.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.(*ecdsa.PrivateKey).Equal(key) || KeyStoreOf(got) != StoreFile {
+		t.Error("the file key loaded as another key")
+	}
+
+	if _, err := (storedKey{der: []byte{1, 2, 3}}).load(); err == nil {
+		t.Error("a key that is not PKCS #8 loaded")
+	}
+	p384, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	_, ed, _ := ed25519.GenerateKey(rand.Reader)
+	for name, k := range map[string]any{"P-384": p384, "Ed25519": ed} {
+		der, err := x509.MarshalPKCS8PrivateKey(k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := (storedKey{der: der}).load(); err == nil {
+			t.Errorf("a %s key loaded as a device key", name)
+		}
+	}
+}
+
+// Without a TPM nothing failed, so there is no reason to give; CloseTPM
+// leaves the TPM to open again when next used.
+func TestNoTPM(t *testing.T) {
+	CloseTPM()
+	t.Cleanup(ReopenTPM)
+	if _, err := theTPM(); !errors.Is(err, tpmkey.ErrNoTPM) {
+		t.Skipf("this machine has a TPM: %v", err)
+	}
+	if got := WhyNotHardware(); got != "" {
+		t.Errorf("WhyNotHardware() without a TPM = %q", got)
+	}
+	CloseTPM()
+	if _, err := theTPM(); !errors.Is(err, tpmkey.ErrNoTPM) {
+		t.Errorf("the TPM after CloseTPM: %v", err)
 	}
 }

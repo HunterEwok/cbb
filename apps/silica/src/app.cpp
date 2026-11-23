@@ -31,6 +31,8 @@
 #include <QThread>
 #include <QUrl>
 
+#include <memory>
+
 namespace {
 
 // Runs KeyStore::ensure in a thread of its own and hands the key back.
@@ -655,6 +657,45 @@ void App::setGroupTtl(double ttlMs, double secretTtlMs)
     runManage(QStringLiteral("ttl"), QString(), extra, [](const QJsonObject &) {});
 }
 
+void App::setRelay(const QString &address, const QString &key)
+{
+    if (!m_member.root) {
+        show(Errors::shown({QCoreApplication::translate("RelayPage", "The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on."),
+                            QStringLiteral("relay: only the root sets the group's relay")}));
+        emit relaySet(false);
+        return;
+    }
+    if (m_busy)
+        return;
+    const QString a = address.trimmed(), k = key.trimmed();
+    QJsonArray relays;
+    if (!a.isEmpty())
+        relays.append(a + QLatin1Char(' ') + k);
+    // runManage tells managed() either way; relaySet follows it.
+    auto conn = std::make_shared<QMetaObject::Connection>();
+    *conn = connect(this, &App::managed, this, [this, conn, a](const QString &action, const QString &, bool ok) {
+        if (action != QLatin1String("relay"))
+            return;
+        disconnect(*conn);
+        if (ok)
+            Errors::log(a.isEmpty() ? QStringLiteral("relay: the group meets at no relay")
+                                    : QStringLiteral("relay: the group meets at %1").arg(a));
+        m_node.pollAway();
+        emit relaySet(ok);
+    });
+    runManage(QStringLiteral("relay"), QString(), QJsonObject{{QStringLiteral("relays"), relays}}, nullptr);
+}
+
+void App::renewPeriod()
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("period"), QString(), QJsonObject(), [this](const QJsonObject &) {
+        Errors::log(QStringLiteral("servers: signed the next period of the server keys"));
+        m_node.pollAway();
+    });
+}
+
 void App::openCard(const QString &pin)
 {
     if (m_busy)
@@ -761,7 +802,7 @@ QString App::saveSheet()
                 p.fillRect(left + (col + 4) * cell, y + (row + 4) * cell, cell, cell, Qt::black);
     y += cell * (count + 8) + 60;
     text(m_recoveryText, 14, true, true);
-    text(QCoreApplication::translate("RecoveryPage", "Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over."), 11, false, false);
+    text(QCoreApplication::translate("RecoveryPage", "Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device."), 11, false, false);
     p.end();
     Errors::log(QStringLiteral("recovery: the sheet saved as a PDF in Documents"));
     return path;
@@ -921,7 +962,6 @@ void App::leave()
     Errors::log(QStringLiteral("group: left %1").arg(m_member.groupTag()));
     m_member = Membership();
     m_events.forget();
-    m_paste.forgetLog();
     show(QString());
     emit groupChanged();
 

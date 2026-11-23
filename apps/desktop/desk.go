@@ -69,6 +69,11 @@ type Desk struct {
 	inviteSeen   string
 	inviteEndsMs int64
 
+	// joinPath is the file of a join by invitation under way (join.go),
+	// "" when none; joinCancelled whether the window gave it up.
+	joinPath      string
+	joinCancelled bool
+
 	// ask is what the window asks for next, once it reads it (TakeAsk):
 	// the tray's Settings, or the question before sync away from home.
 	ask string
@@ -247,7 +252,7 @@ func (d *Desk) requestHeader(h control.Header, payload []byte) (*control.Message
 // CreateGroup makes a new group with this computer as its root, as cbb
 // new does as the administrator.
 func (d *Desk) CreateGroup() {
-	d.admin([]string{"new"}, false, "The group is made: this computer is its root. Add a device with the + button.")
+	d.admin([]string{"new"}, false, "The group is made: this computer is its main device. Add a device with the + button.")
 }
 
 // Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, StopHub, SetAway and SetSync change the group:
@@ -264,6 +269,24 @@ func (d *Desk) MakeAdmin(id string) {
 // and the group's files go, its settings stay, and it may join again.
 func (d *Desk) Leave() {
 	d.admin([]string{"leave", "-yes"}, false, "Left the group. This computer can join a group again.")
+}
+
+// SetTTL sets how long a copy and a secret live in the group (cbb ttl,
+// D-129), in milliseconds; 0 keeps one as it is.
+func (d *Desk) SetTTL(copyMS, secretMS int64) {
+	value := func(ms int64) string {
+		if ms <= 0 {
+			return "-"
+		}
+		return fmt.Sprintf("%ds", ms/1000)
+	}
+	d.admin([]string{"ttl", value(copyMS), value(secretMS)}, false, "Saved. Every device of the group follows it.")
+}
+
+// SetKeyLevel sets which keys may be the group's admins and hubs (cbb
+// keys), on the root: proven, hardware or files.
+func (d *Desk) SetKeyLevel(level string) {
+	d.admin([]string{"keys", level}, false, "Saved. Every device of the group follows it.")
 }
 
 func (d *Desk) Freeze(id string)   { d.admin([]string{"freeze", id}, false, "Frozen.") }
@@ -336,9 +359,18 @@ func (d *Desk) Resolve() {
 
 // Recover claims the group with its recovery key, typed from the sheet or
 // its QR code's text, as cbb recovery does as the administrator with the
-// key on its standard input; the claim waits as a takeover does.
-func (d *Desk) Recover(key string) {
-	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "The claim is made: it takes effect after the group's takeover delay.")
+// key on its standard input; this computer is the group's main device at
+// once. The devices in leave (their IDs) leave the group in the same act;
+// with card, secret is the PIN of the YubiKey that holds the key.
+func (d *Desk) Recover(secret string, leave []string, card bool) {
+	args := []string{"recovery"}
+	for _, id := range leave {
+		args = append(args, "-leave", id)
+	}
+	if card {
+		args = append(args, "-yubikey")
+	}
+	d.adminWith(args, strings.TrimSpace(secret)+"\n", "This computer is the group's main device now.")
 }
 
 // Update installs the newest signed release the group passed around, as
@@ -748,8 +780,9 @@ func (d *Desk) Bug() *BugOffer {
 	log.Printf("bug: the service broke and started again: %s", details.Details)
 	if d.showDetails() || o.Action != "ask" {
 		if d.showDetails() {
+			msg := d.T("Something in CBB broke. It started again.") + "\n\n" + details.Details
 			d.mu.Lock()
-			d.message = d.T("Something in CBB broke. It started again.") + "\n\n" + details.Details
+			d.message = msg
 			d.mu.Unlock()
 		}
 		d.BugCancel()

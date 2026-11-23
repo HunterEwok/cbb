@@ -47,6 +47,10 @@ protocol GroupController: AnyObject {
     func setTtl(ms: Int64?, secretMS: Int64?) async throws
     /// Unfreezes an admin computer that another admin froze.
     func unfreeze(_ id: String) async throws
+    /// Freezes an admin computer, as one does with a stolen one.
+    func freeze(_ id: String) async throws
+    /// Makes an admin computer a hub through the project's forwarder (D-134).
+    func makeHub(_ id: String) async throws
     /// Whether this phone holds the group's root.
     var isRoot: Bool { get }
     /// Whether the saved group was made before 0.6, which this version no
@@ -99,15 +103,7 @@ protocol GroupController: AnyObject {
     func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])?
     /// Turns sync away from home on or off.
     func setAwayFromHome(_ on: Bool) async throws
-    /// The phone as the group's hub; nil on a phone that cannot be it.
-    func hubStatus() async -> AppModel.Hub?
-    /// Makes this phone the group's hub, or stops it being the hub.
-    func setPhoneHub(_ on: Bool) async throws
-    /// Sets how the hub's tunnel hides.
-    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws
-    /// Remembers the network the phone is on as a home network of the hub.
-    func addHomeNetwork() async throws
-    /// Tells the group whether the app is in front, where the hub works.
+    /// Tells the group whether the app is in front.
     func setForeground(_ on: Bool)
     /// The app went to the background (true) or came back from it.
     func setBackground(_ on: Bool)
@@ -170,6 +166,8 @@ extension GroupController {
     var groupTag: String? { hasGroup ? "group" : nil }
     func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? { nil }
     func unfreeze(_ id: String) async throws {}
+    func freeze(_ id: String) async throws { throw PhoneGroup.Failure.notAdmin }
+    func makeHub(_ id: String) async throws { throw PhoneGroup.Failure.notAdmin }
     var removed: Bool { false }
     func leave() async throws { throw LiveGroup.Failure.noGroup }
     var isRoot: Bool { false }
@@ -195,10 +193,6 @@ extension GroupController {
     func actionsOff(_ id: String) async throws {}
     func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? { nil }
     func setAwayFromHome(_ on: Bool) async throws {}
-    func hubStatus() async -> AppModel.Hub? { nil }
-    func setPhoneHub(_ on: Bool) async throws {}
-    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {}
-    func addHomeNetwork() async throws {}
     func setForeground(_ on: Bool) {}
     func setBackground(_ on: Bool) {}
     func backgroundPass(_ running: Bool) {}
@@ -441,10 +435,9 @@ final class AppModel: ObservableObject {
         case inUse
     }
 
-    /// Whether d is one of the group's hubs, as this phone knows: this phone
-    /// while it is the hub, or a hub whose offer it keeps; nil otherwise.
+    /// Whether d is one of the group's hubs, as this phone knows: a hub
+    /// whose offer it keeps; nil otherwise.
     func hubMark(_ d: Computer) -> HubMark? {
-        if d.isSelf { return hub?.on == true ? .hub : nil }
         guard let a = away, a.on else { return nil }
         if a.hub == d.id, a.status == .connected || a.status == .atHome { return .inUse }
         return a.hubs.contains(d.id) ? .hub : nil
@@ -453,27 +446,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var away: Away?
     /// What turning it on or off said, when it failed.
     @Published private(set) var awayNote: String?
-
-    /// The phone as the group's hub as Settings and Home show it: nil on a
-    /// phone that cannot be the hub. home tells whether the phone is on
-    /// one of the hub's home networks now.
-    struct Hub: Equatable {
-        var on: Bool
-        var status: HubOnPhone.Status
-        /// Why the forwarder does not take it, as the hub says.
-        var error: String?
-        var forwarder: HubState.Forwarder?
-        /// The project's forwarder does not take it and the phone holds no
-        /// signed entry points that have not expired (docs/protocol.md,
-        /// section 16): a new list may be what it needs.
-        var entriesStale = false
-        var home = false
-        var clients = 0
-        /// How its tunnel hides.
-        var disguise = HubOnPhone.Disguise.plain
-    }
-
-    @Published private(set) var hub: Hub?
 
     /// The phone at a blind relay as Settings shows it (docs/design.md,
     /// "Blind relay"): where it stands, why the relay does not take it, the
@@ -498,8 +470,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var relayNote: String?
     /// The relay's last error, logged once.
     private var relayError: String?
-    /// What the last change to the hub said, when it failed.
-    @Published private(set) var hubNote: String?
 
     /// An open remote invitation: its text, when it expires, and how to
     /// cancel it.
@@ -527,8 +497,6 @@ final class AppModel: ObservableObject {
     /// How long an invitation from the phone is valid: an hour, as cbb
     /// invite's default.
     static let inviteLifetime = 3600
-    /// The registration's last error, logged once.
-    private var hubError: String?
 
     let group: GroupController
     private let defaults: UserDefaults
@@ -668,7 +636,8 @@ final class AppModel: ObservableObject {
 
     /// Reads a remote invitation the user scanned, opened or pasted, for
     /// the screen that accepts or declines it; false with a message when it
-    /// is none, has expired, or the phone is in a group already.
+    /// is none, is another kind of device's, or the phone is in a group
+    /// already. It carries no expiry: the hub refuses one whose time is over.
     func readInvitation(_ text: String) -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard phase == .start else {
@@ -682,8 +651,8 @@ final class AppModel: ObservableObject {
                 message = Self.showsErrorDetails ? summary + "\n\n" + why : summary
                 return false
             case let .invitation(inv):
-                guard Date(timeIntervalSince1970: TimeInterval(inv.expires)) > Date() else {
-                    message = String(localized: "The invitation has expired. Ask for a new one.", bundle: .app)
+                guard inv.phone else {
+                    message = String(localized: "This invitation is for another kind of device. Ask for one for this phone.", bundle: .app)
                     return false
                 }
                 message = nil
@@ -1010,17 +979,22 @@ final class AppModel: ObservableObject {
 
     func refresh() async {
         await group.refresh()
-        computers = group.computers
-        devices = group.devices
-        isRoot = group.isRoot
-        before06 = group.before06
-        removed = group.removed
-        notices = group.notices
-        rootChanged = group.rootChanged
-        keyLevel = group.keyLevel
-        (ttlMS, secretTtlMS) = group.ttlMS
+        // Home asks every two seconds. A value that did not change is not
+        // set again: setting it would draw again every view it feeds (the
+        // device list is built anew from the devices), and the screen would
+        // change under a person reading it, or a test reading its elements.
+        keep(\.computers, group.computers)
+        keep(\.devices, group.devices)
+        keep(\.isRoot, group.isRoot)
+        keep(\.before06, group.before06)
+        keep(\.removed, group.removed)
+        keep(\.notices, group.notices)
+        keep(\.rootChanged, group.rootChanged)
+        keep(\.keyLevel, group.keyLevel)
+        let ttl = group.ttlMS
+        keep(\.ttlMS, ttl.0)
+        keep(\.secretTtlMS, ttl.1)
         await refreshAway()
-        await refreshHub()
         await refreshRelay()
         if notifies {
             Notifier.shared.observe(devices)
@@ -1028,9 +1002,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Sets the model's value at key to value only when it differs, so
+    /// that nothing that watches it is told of a change that is none.
+    private func keep<T: Equatable>(_ key: ReferenceWritableKeyPath<AppModel, T>, _ value: T) {
+        if self[keyPath: key] != value { self[keyPath: key] = value }
+    }
+
     private func refreshAway() async {
         guard let a = await group.awayStatus() else {
-            away = nil
+            keep(\.away, nil)
             Island.end(.away)
             return
         }
@@ -1044,18 +1024,9 @@ final class AppModel: ObservableObject {
         // at home it is old news. The member logs each failure itself.
         let failing = a.status == .connecting ? a.error : nil
         if notifies { Notifier.shared.away(trying: a.on && failing != nil) }
-        away = Away(on: a.on, status: a.status, error: failing.map {
+        keep(\.away, Away(on: a.on, status: a.status, error: failing.map {
             Self.describe($0, summary: String(localized: "The hub does not answer through the tunnel.", bundle: .app), log: false)
-        }, hub: a.hub, hubs: a.hubs)
-    }
-
-    private func refreshHub() async {
-        let h = await group.hubStatus()
-        if h?.error != hubError {
-            hubError = h?.error
-            if let e = hubError { log.error("the hub: \(e, privacy: .public)") }
-        }
-        hub = h
+        }, hub: a.hub, hubs: a.hubs))
     }
 
     private func refreshRelay() async {
@@ -1064,7 +1035,7 @@ final class AppModel: ObservableObject {
             relayError = r?.error
             if let e = relayError { log.error("the relay: \(e, privacy: .public)") }
         }
-        blindRelay = r
+        keep(\.blindRelay, r)
     }
 
     /// Meets the group at the blind relay at address with the key pin, as
@@ -1082,25 +1053,6 @@ final class AppModel: ObservableObject {
             relayNote = Self.describe(error)
         }
         await refreshRelay()
-    }
-
-    /// Makes this phone the group's hub, or stops it being the hub.
-    func setHub(_ on: Bool) async { await hubChange { try await self.group.setPhoneHub(on) } }
-
-    /// Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
-    func setHubDisguise(_ d: HubOnPhone.Disguise) async { await hubChange { try await self.group.setHubDisguise(d) } }
-
-    /// Remembers the network the phone is on as home.
-    func addHomeNetwork() async { await hubChange { try await self.group.addHomeNetwork() } }
-
-    private func hubChange(_ f: () async throws -> Void) async {
-        do {
-            try await f()
-            hubNote = nil
-        } catch {
-            hubNote = Self.describe(error)
-        }
-        await refreshHub()
     }
 
     /// Opens a remote invitation for a device far away (docs/protocol.md,
@@ -1289,6 +1241,30 @@ final class AppModel: ObservableObject {
         devices = group.devices
     }
 
+    /// Freezes a stolen admin computer: nothing it signs counts until the
+    /// root unfreezes it.
+    func freeze(_ id: String) async {
+        do {
+            try await group.freeze(id)
+            message = String(localized: "Frozen.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        devices = group.devices
+    }
+
+    /// Makes an admin computer a hub with a hub command; the computer
+    /// answers (D-134: a hub is never a phone).
+    func makeHub(_ id: String) async {
+        do {
+            try await group.makeHub(id)
+            message = String(localized: "It is a hub now.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        devices = group.devices
+    }
+
     /// Turns sync on or off on a connected computer, as an admin.
     func setSync(_ id: String, on: Bool) async {
         do {
@@ -1448,6 +1424,7 @@ final class AppModel: ObservableObject {
             message = nil
             return secret
         } catch is CancellationError {
+            message = nil
             return nil
         } catch {
             message = Self.describe(error)
@@ -1622,7 +1599,7 @@ final class AppModel: ObservableObject {
                 return String(localized: "The code did not match. Scan the device's code again.", bundle: .app)
             }
             if f.message.contains("add it as an admin") {
-                return String(localized: "This phone asks to join as an admin, which only the group's root phone can grant. Scan it with the root phone, or join on it without asking to be an admin.", bundle: .app)
+                return String(localized: "This phone asks to join as an admin, which only the group's main device can grant. Scan it with the main device, or join on it without asking to be an admin.", bundle: .app)
             }
             return String(localized: "The device refused to join. Try again on it.", bundle: .app)
         }
@@ -1643,7 +1620,7 @@ final class AppModel: ObservableObject {
                 return String(localized: "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.", bundle: .app)
             case let .rootLeaves(others):
                 let names = others.formatted(.list(type: .and))
-                return String(localized: "This phone holds the group's root, and the group has other devices: \(names). Remove them first, or let an admin phone take the group over.", bundle: .app)
+                return String(localized: "This phone is the group's main device, and the group has other devices: \(names). Remove them first, or let an admin phone move the group to itself.", bundle: .app)
             default: break
             }
         }

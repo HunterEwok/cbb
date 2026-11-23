@@ -143,7 +143,7 @@ pub struct Reason {
     /// or the certificate ends; 0 when the reason has none.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub until_ms: i64,
-    /// A device's name: the hub, the admin that took the group over.
+    /// A device's name: the hub.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub device: String,
     /// The devices a reason is about, by name.

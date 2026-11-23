@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The project's push service (`cbb-push`, format section 20.4,
+//! The project's push service (`cbb-push`, format section 9.6,
 //! `cbb_core::push`): members of a group ask it to wake a phone whose app
 //! is closed, and it passes a sealed body of one size to the phone's
 //! platform (APNs for the iPhone and the iPad, FCM for Android with Play
@@ -145,7 +145,7 @@ pub trait Platform: Send + Sync {
     fn send(&self, d: &Delivery<'_>) -> Outcome;
 }
 
-/// The budgets (format section 20.4, P-4): sends an hour and the burst.
+/// The budgets (format section 9.6, P-4): sends an hour and the burst.
 /// What goes to one token is budgeted per group (its tag), so that no
 /// group, a made-up one included, spends another's.
 #[derive(Clone, Copy, Debug)]

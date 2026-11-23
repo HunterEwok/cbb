@@ -113,7 +113,12 @@ pub fn seal(secret: &[u8]) -> Result<Option<Sealed>> {
             .map(|b| Sealed { se: Some(serde_json::Value::String(b64_std(&b))), ..Sealed::default() }));
     }
     #[allow(unreachable_code)]
-    let Some(helper) = crate::helper::shared() else { return Ok(None) };
+    seal_by(crate::helper::shared(), secret)
+}
+
+/// Seals secret through helper, if there is one.
+fn seal_by(helper: Option<Arc<Helper>>, secret: &[u8]) -> Result<Option<Sealed>> {
+    let Some(helper) = helper else { return Ok(None) };
     let req = Sealed { secret: secret.to_vec(), ..Sealed::default() };
     let payload = serde_json::to_vec(&req).context("cannot encode a sealing request")?;
     let ans = helper.call(Header { op: "seal".into(), ..Default::default() }, payload, KEY_TIME)?;
@@ -123,6 +128,12 @@ pub fn seal(secret: &[u8]) -> Result<Option<Sealed>> {
 
 /// Opens what seal sealed, through cbb-helper.
 pub fn unseal(b: &Sealed) -> Result<Vec<u8>> {
+    unseal_by(b, crate::helper::shared)
+}
+
+/// Opens what seal sealed: a Mac's enclave itself, the TPM through the
+/// helper that helper gives.
+fn unseal_by(b: &Sealed, helper: impl FnOnce() -> Option<Arc<Helper>>) -> Result<Vec<u8>> {
     if let Some(se) = &b.se {
         let raw = se
             .as_str()
@@ -136,7 +147,7 @@ pub fn unseal(b: &Sealed) -> Result<Vec<u8>> {
             return Err(Error::msg("the secret is sealed by a Mac's Secure Enclave; was the state copied from a Mac?"));
         }
     }
-    let helper = crate::helper::shared().ok_or_else(|| {
+    let helper = helper().ok_or_else(|| {
         Error::msg("the key is sealed by the TPM or the Secure Enclave, which cbb opens only through cbb-helper, and there is no cbb-helper beside cbb")
     })?;
     let req = Sealed { secret: Vec::new(), ..b.clone() };
@@ -239,6 +250,12 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
 /// Opens the key the identity file keeps as held: a Mac's enclave key
 /// itself, a TPM key through this process's helper.
 pub fn open(held: &HeldKey) -> Result<Arc<dyn ExternalKey>> {
+    open_by(held, crate::helper::shared)
+}
+
+/// Opens the key held: a Mac's enclave key itself, a TPM key through the
+/// helper that helper gives.
+fn open_by(held: &HeldKey, helper: impl FnOnce() -> Option<Arc<Helper>>) -> Result<Arc<dyn ExternalKey>> {
     if let HeldKey::SecureEnclave(blob) = held {
         #[cfg(target_os = "macos")]
         return Ok(Arc::new(EnclaveKey(
@@ -252,7 +269,7 @@ pub fn open(held: &HeldKey) -> Result<Arc<dyn ExternalKey>> {
             ));
         }
     }
-    let helper = crate::helper::shared().ok_or_else(|| {
+    let helper = helper().ok_or_else(|| {
         Error::msg("this device's key is in the TPM or the Secure Enclave, which only cbb-helper opens, and there is no cbb-helper beside cbb")
     })?;
     let ans = call(&helper, "key-public", &Wire::of(held)).map_err(|e| e.context("cannot open this device's key"))?;
@@ -279,7 +296,12 @@ pub fn new_device_key() -> (Option<Arc<dyn ExternalKey>>, String) {
         };
     }
     #[allow(unreachable_code)]
-    let Some(helper) = crate::helper::shared() else { return (None, String::new()) };
+    new_key_by(crate::helper::shared())
+}
+
+/// Makes a new device key through helper, if there is one.
+fn new_key_by(helper: Option<Arc<Helper>>) -> (Option<Arc<dyn ExternalKey>>, String) {
+    let Some(helper) = helper else { return (None, String::new()) };
     match call(&helper, "key-new", &Wire::default()) {
         Ok(ans) => {
             let why = ans.why.clone();
@@ -296,6 +318,57 @@ pub fn new_device_key() -> (Option<Arc<dyn ExternalKey>>, String) {
 #[cfg(test)]
 mod sealed_tests {
     use super::*;
+
+    #[cfg(unix)]
+    fn helper() -> Arc<Helper> {
+        Arc::new(crate::helper::tests::fake(Arc::new(std::sync::Mutex::new(Vec::new()))))
+    }
+
+    /// A key the helper makes and opens in the TPM signs through it; its
+    /// answers that name no key, a key in two places or no P-256 key are
+    /// refused, and without a helper there is no key.
+    #[cfg(unix)]
+    #[test]
+    fn keys_in_the_tpm_through_the_helper() {
+        let (key, why) = new_key_by(Some(helper()));
+        let key = key.unwrap_or_else(|| panic!("no key: {why}"));
+        assert_eq!(key.public().len(), 65);
+        let held = key.held().unwrap();
+        assert!(matches!(&held, HeldKey::Tpm(b) if b["blob"] == "new"));
+        assert_eq!(key.sign_digest(&[7; 32]).unwrap(), b"signed");
+        assert!(new_key_by(None).0.is_none());
+
+        let opened = open_by(&held, || Some(helper())).unwrap();
+        assert_eq!(opened.public(), key.public());
+        let tpm = |s: &str| HeldKey::Tpm(serde_json::Value::String(s.into()));
+        let err = |held: &HeldKey| open_by(held, || Some(helper())).err().map(|e| e.message().to_string());
+        assert_eq!(err(&tpm("two")).as_deref(), Some("the helper named a key in two places"));
+        assert_eq!(err(&tpm("short")).as_deref(), Some("the helper's key is not a P-256 key"));
+        assert_eq!(err(&tpm("none")).as_deref(), Some("the helper did not open this device's key"));
+        assert!(open_by(&held, || None).err().unwrap().message().contains("no cbb-helper beside cbb"));
+        #[cfg(not(target_os = "macos"))]
+        assert!(open_by(&HeldKey::SecureEnclave(vec![1]), || Some(helper())).err().unwrap().message().contains("Mac"));
+    }
+
+    /// Secrets the helper seals open through it; one it does not seal stays
+    /// in the file, and one sealed elsewhere does not open here.
+    #[cfg(unix)]
+    #[test]
+    fn secrets_sealed_through_the_helper() {
+        let sealed = seal_by(Some(helper()), b"secret").unwrap().unwrap();
+        assert!(sealed.is_sealed() && sealed.secret.is_empty(), "{sealed:?}");
+        assert_eq!(unseal_by(&sealed, || Some(helper())).unwrap(), b"opened");
+        assert!(seal_by(Some(helper()), &[0]).unwrap().is_none(), "nothing sealed");
+        assert!(seal_by(None, b"secret").unwrap().is_none());
+        let empty = Sealed { tpm: Some(serde_json::Value::String("empty".into())), ..Sealed::default() };
+        assert_eq!(unseal_by(&empty, || Some(helper())).err().unwrap().message(), "the helper unsealed no secret");
+        assert!(unseal_by(&sealed, || None).err().unwrap().message().contains("no cbb-helper beside cbb"));
+        let se = |v: &str| Sealed { se: Some(serde_json::Value::String(v.into())), ..Sealed::default() };
+        assert!(unseal_by(&se("%%"), || None).err().unwrap().message().contains("not understood"));
+        #[cfg(not(target_os = "macos"))]
+        assert!(unseal_by(&se("AQ=="), || None).err().unwrap().message().contains("Mac"));
+        assert_eq!(base64_decode("b3BlbmVk").unwrap(), b"opened");
+    }
 
     /// A Sealed printed shows how long its secret is, never the secret.
     #[test]

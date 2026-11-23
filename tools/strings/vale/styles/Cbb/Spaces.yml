@@ -1,0 +1,8 @@
+# One space between words, and none before a full stop or a comma.
+extends: existence
+message: "One space between words, and none before '%s'."
+level: error
+nonword: true
+tokens:
+  - '  +'
+  - ' [.,;:!?](?=\s|$)'

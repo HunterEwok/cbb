@@ -31,7 +31,7 @@
     </message>
     <message>
         <source>Move to %1</source>
-        <translation>移到“%1”</translation>
+        <translation>移到 %1</translation>
     </message>
     <message>
         <source>Move to end</source>
@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>该设备的键盘布局没有这些字符的按键：%1。请在上方选择它的布局。</translation>
+        <translation>设备的布局中没有以下字符的按键：%1。请在上方选择它的布局。</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -352,6 +352,14 @@
         <translation>设备 ID</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>冻结</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>正在冻结 %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>在群组中</translation>
     </message>
@@ -364,6 +372,14 @@
         <translation>设为管理员</translation>
     </message>
     <message>
+        <source>Make it a hub</source>
+        <translation>设为中心节点</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>正在将 %1 设为中心节点</translation>
+    </message>
+    <message>
         <source>Making %1 an admin</source>
         <translation>正在将 %1 设为管理员</translation>
     </message>
@@ -372,16 +388,8 @@
         <translation>更多</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>静音一小时</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>静音直到取消</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>正在静音 %1</translation>
+        <source>Mute</source>
+        <translation>静音</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -553,10 +561,6 @@
         <translation>群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>邀请已过期。请索要新的邀请。</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>手机无法删除它的密钥。</translation>
     </message>
@@ -645,6 +649,10 @@
         <translation>此 CBB 版本已损坏。</translation>
     </message>
     <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>此邀请适用于其他类型的设备。请索要适用于此手机的邀请。</translation>
+    </message>
+    <message>
         <source>This is not a CBB invitation.</source>
         <translation>这不是 CBB 邀请。</translation>
     </message>
@@ -684,8 +692,8 @@
         <translation>%1 加入了群组。</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 接管了群组：现在由它持有群组的根。</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 已把群组移到自己这里：现在它是群组的主设备。</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -755,6 +763,10 @@
         <translation>被冻结的管理员 %1 阻碍了移除操作：请解冻或移除它。</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>群组的主设备已更换</translation>
     </message>
@@ -771,6 +783,10 @@
         <translation>这部手机有一项移除待确认；它会在你下一次管理操作时确认。</translation>
     </message>
     <message>
+        <source>This phone was removed from the group</source>
+        <translation>这部手机已从群组中移除</translation>
+    </message>
+    <message>
         <source>This wasn't me</source>
         <translation>不是我做的</translation>
     </message>
@@ -780,14 +796,6 @@
     <message>
         <source>Decline</source>
         <translation>拒绝</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>群组</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>中心节点</translation>
     </message>
     <message>
         <source>Join</source>
@@ -802,8 +810,8 @@
         <translation>通过邀请加入</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>或粘贴邀请文本，cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>或粘贴邀请文本，cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +820,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>相机无法启动：%1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>有效期至</translation>
     </message>
     <message>
         <source>You are invited to a group</source>
@@ -922,16 +926,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 字节</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>每秒 %1 个字符</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>（未验证）</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -942,16 +938,8 @@
         <translation>在可见期间，新设备可以在其蓝牙设置中找到名为“CBB keyboard”的这部手机。</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>含换行的文本也需要它：键盘会把换行输入为回车键。</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>充当蓝牙键盘</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>群组的管理员随后可以通过这部手机，在它所连接的设备上输入文本，可从自己的应用或用 cbb paste。这部手机会显示是谁粘贴的，并保留最近粘贴的记录，不含其文本。</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -970,28 +958,12 @@
         <translation>正在准备…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>最近的粘贴</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>允许粘贴按下回车键</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>允许群组的管理员在那里粘贴</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>让这部手机可被发现</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>没有已连接的设备。请在该设备的蓝牙设置中连接这部手机。</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>远程粘贴</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1024,14 +996,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>可见，剩余 %1 秒</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>失败</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>已拒绝</translation>
     </message>
 </context>
 <context>
@@ -1257,6 +1221,33 @@
     </message>
 </context>
 <context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>15 分钟</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>8 小时</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>1 小时</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>之后它的副本不会到达群组中的任何设备；它仍会接收它们的副本。</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>静音</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>直到管理员取消静音</translation>
+    </message>
+</context>
+<context>
     <name>NewGroupPage</name>
     <message>
         <source>Make</source>
@@ -1267,24 +1258,24 @@
         <translation>创建群组</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以接管群组。</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以把群组移到自己这里。</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>群组的根密钥保存在手机上的一个文件中：任何复制它的人都可以充当群组的根。</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>主设备密钥保存在手机上的一个文件中：任何复制它的人都可以充当群组的主设备。</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>群组的根密钥在手机的安全元件中生成，永不离开。</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>主设备密钥在手机的安全元件中生成，永不离开。</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>这台手机将成为群组的根：它通过二维码添加其他设备，并将提出请求的手机设为管理员。</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>这台手机将成为群组的主设备：它通过二维码添加其他设备，并将提出请求的手机设为管理员。</translation>
     </message>
 </context>
 <context>
@@ -1296,10 +1287,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>来自群组的%1已存入图库</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>来自 %1 的粘贴</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1435,8 +1422,8 @@
         <translation>将 YubiKey 插入 USB-C 接口，然后输入其 PIN 码。</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能接管你的群组。</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能把你的群组移到那台设备。</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1504,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>在此中继相遇</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>在此中继相遇？</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>剪贴板在设备之间保持端到端加密：中继无法读取它，也无法冒充设备。但在设备使用中继时，它确实会知道群组中哪些设备在线及其互联网地址，以及哪些设备彼此通信、何时以及发送多少。群组自己的中心节点不会泄露这些信息。请使用你自己运行的中继，或其运营者值得你托付这些信息的中继。</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>在中继处：现在没有群组的其他设备。</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>在中继处；群组在那里的设备：%1。</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>盲中继</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>正在连接中继…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>用于没有自己中心节点的群组：应用同步时，设备在中继处相遇，例如用 cbb relay 搭建的中继。剪贴板在设备之间保持加密，但中继会知道哪些设备在线及其地址，以及哪些设备彼此通信、何时以及通信多少。两个字段都留空即可停止。</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>按 cbb relay 打印的格式填写中继的地址（含端口）和密钥，或两者都留空。</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>离开中继</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>在此中继相遇</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>关闭：这部手机不在中继处与任何设备相遇。</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>中继地址，例如 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>中继密钥，44 个字符</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>续订群组用于离家同步的密钥</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>群组用于离家同步的密钥已过期：在这部手机用主设备密钥续期之前，它的中继和中心节点不接受任何设备。</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>群组的主设备为所有设备设置中继；离家同步开启时，这部手机在那里与其他设备会合。</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>等待中：应用同步时中继才工作。</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1549,12 +1614,16 @@
         <translation>充当蓝牙键盘</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>管理员密钥</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>高级设置</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>另一台手机接管群组</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>另一台手机把群组移到自己这里</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1563,6 +1632,10 @@
     <message>
         <source>As the phone</source>
         <translation>跟随手机</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>盲中继</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>
@@ -1621,10 +1694,6 @@
         <translation>密钥指纹</translation>
     </message>
     <message>
-        <source>Keys an admin may keep</source>
-        <translation>管理员可保存的密钥</translation>
-    </message>
-    <message>
         <source>Lab</source>
         <translation>实验室</translation>
     </message>
@@ -1641,8 +1710,8 @@
         <translation>正在退出群组</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>正在退出群组并删除其根密钥</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>正在退出群组并删除主设备密钥</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1732,10 +1801,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 已从此设备接管群组。</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>群组主设备的更换正在传来。</translation>
     </message>
@@ -1760,10 +1825,6 @@
         <translation>请群组的所有者恢复它的权限。</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>在家中将它连接到群组的受信任设备：该设备会续订证书。</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 已可用。</translation>
     </message>
@@ -1778,10 +1839,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>请检查网络连接；CBB 会自动重试。</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>在此之前，请在家中将它连接到群组的受信任设备。</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1859,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>“随处”已打开，但群组没有主站。</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>如果此设备并未丢失，请将 %1 移出群组。</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1952,14 +2005,6 @@
         <translation>此设备已被移出群组。</translation>
     </message>
     <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>此设备的证书已于 %1 到期。</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>此设备的证书将于 %1 到期。</translation>
-    </message>
-    <message>
         <source>This device's rights as a trusted device are paused.</source>
         <translation>此设备作为受信任设备的权限已暂停。</translation>
     </message>
@@ -2058,6 +2103,14 @@
         <translation>电脑</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>主设备</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>主设备和管理员</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>成员</translation>
     </message>
@@ -2076,14 +2129,6 @@
     <message>
         <source>Phone</source>
         <translation>手机</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>根</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>根和管理员</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2106,8 +2151,8 @@
         <translation>已冻结</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>根</translation>
+        <source>main device</source>
+        <translation>主设备</translation>
     </message>
     <message>
         <source>this phone</source>

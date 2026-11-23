@@ -88,7 +88,7 @@ internal enum class SettingsPart(@StringRes val title: Int, val symbol: String) 
     NOTIFICATIONS(R.string.notifications, "🔔"),
     RECOVERY(R.string.recovery_title, "🔑"),
     AWAY(R.string.away_title, "🌐"),
-    PASTE(R.string.remote_paste, "⌨"),
+    SHARE(R.string.send_share, "⇪"),
     GROUP(R.string.group, "👥"),
     WHY(R.string.why_screen, "?"),
     ABOUT(R.string.about, "ⓘ"),
@@ -99,9 +99,10 @@ internal enum class SettingsPart(@StringRes val title: Int, val symbol: String) 
         val home = model.phase == AppModel.Phase.HOME
         return when (this) {
             LOOK, ABOUT -> true
-            NOTIFICATIONS, PASTE, GROUP, WHY -> home
+            NOTIFICATIONS, GROUP, WHY -> home
+            SHARE -> home && !model.isTv
             RECOVERY -> home
-            AWAY -> home && (model.hub != null || model.blindRelay != null)
+            AWAY -> home && model.blindRelay != null
         }
     }
 }
@@ -463,6 +464,7 @@ private fun DeviceSection(
         LostPhoneCard(model)
         model.message?.let { NoteText(it, dim = true) }
         FallbackSend(model)
+        LastReceived(model)
         // The orbit keeps the group's order; Arrange mode, a search and the other sections show tiles.
         if (section == TabletSection.All && layout == DeviceLayout.ORBIT && !arrange.on && !search.active) {
             Orbit(model.devices, selected, select = { select(it) }, modifier = Modifier.weight(1f).fillMaxWidth())
@@ -563,7 +565,7 @@ private fun AddButton(model: AppModel, open: (HomePage) -> Unit) {
     Box {
         IconText("+", stringResource(R.string.add_device)) { adding = true }
         DropdownMenu(expanded = adding, onDismissRequest = { adding = false }) {
-            DropdownMenuItem(text = { Text(stringResource(R.string.scan_code)) }, onClick = {
+            DropdownMenuItem(text = { Text(stringResource(R.string.add_device)) }, onClick = {
                 adding = false
                 open(HomePage.ADD)
             })
@@ -661,9 +663,9 @@ internal fun Modifier.chosen(d: LiveGroup.Device): Modifier {
     return border(2.dp, LocalPalette.current.accent, RoundedCornerShape(LocalStyle.current.radiusTile)).semantics { selected = true }
 }
 
-/** Whether it takes remote paste: members, and Android and Aurora phones; iPhones and iPads cannot. */
+/** Whether it takes remote paste: members; the phones take none in 0.6. */
 internal val LiveGroup.Device.takesPaste: Boolean
-    get() = !isSelf && (role == "member" || (role == "phone" && os in setOf("android", "aurora", "sailfish")))
+    get() = !isSelf && role == "member"
 
 /** The widest a part of Settings stands beside the sidebar, for lines a person reads at a glance. */
 private val readableWidth = 640.dp

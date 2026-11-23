@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The intro (format 11.3, design-no-certificates section 3): the first
+//! The intro (format 11.4, design-no-certificates section 3): the first
 //! message of a member whose key the peer does not know yet, such as a
 //! device admitted a minute ago by an admin the peer has not heard from.
 //! It carries the sender's own record and the records that prove it up to
 //! the group's first root: the root changes, and for each signer on the way
 //! the record that gave it its admin key. At most 32 records and 16 KiB,
-//! and apart from them at most 64 recovery heads (format 20.7): a head's
+//! and apart from them at most 64 recovery heads (format 11.4): a head's
 //! second signature alone may pass 16 KiB.
 //!
 //! Sender and reader count one way, [`fits`]: by the bytes of each

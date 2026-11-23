@@ -352,6 +352,14 @@
         <translation>ID del dispositivo</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>Congelar</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>Congelando %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>En el grupo</translation>
     </message>
@@ -364,6 +372,14 @@
         <translation>Hacer admin</translation>
     </message>
     <message>
+        <source>Make it a hub</source>
+        <translation>Convertirlo en hub</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>Convirtiendo %1 en hub</translation>
+    </message>
+    <message>
         <source>Making %1 an admin</source>
         <translation>Haciendo admin a %1</translation>
     </message>
@@ -372,16 +388,8 @@
         <translation>Más</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Silenciar una hora</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>Silenciar hasta reactivar</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>Silenciando %1</translation>
+        <source>Mute</source>
+        <translation>Silenciar</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -553,10 +561,6 @@
         <translation>El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>La invitación ha caducado. Pide una nueva.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>El teléfono no pudo borrar su clave.</translation>
     </message>
@@ -645,6 +649,10 @@
         <translation>Esta compilación de CBB está dañada.</translation>
     </message>
     <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>Esta invitación es para otro tipo de dispositivo. Pide una para este teléfono.</translation>
+    </message>
+    <message>
         <source>This is not a CBB invitation.</source>
         <translation>Esto no es una invitación de CBB.</translation>
     </message>
@@ -684,8 +692,8 @@
         <translation>%1 se unió al grupo.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 tomó el control del grupo: ahora tiene la raíz del grupo.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 se pasó el grupo: ahora es el dispositivo principal del grupo.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -693,7 +701,7 @@
     </message>
     <message>
         <source>%1 was removed from the group.</source>
-        <translation>%1 fue eliminado del grupo.</translation>
+        <translation>%1 se quitó del grupo.</translation>
     </message>
     <message>
         <source>%1 was unfrozen.</source>
@@ -755,6 +763,10 @@
         <translation>El administrador congelado %1 retiene las eliminaciones: descongélalo o quítalo.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>Los dispositivos del grupo lo rechazan ahora. Abandona el grupo para borrar sus claves aquí; después podrá unirse de nuevo a un grupo.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>El dispositivo principal del grupo cambió</translation>
     </message>
@@ -771,6 +783,10 @@
         <translation>Este teléfono tiene una eliminación que confirmar; lo hace con tu próxima acción de administrador.</translation>
     </message>
     <message>
+        <source>This phone was removed from the group</source>
+        <translation>Este teléfono se quitó del grupo</translation>
+    </message>
+    <message>
         <source>This wasn't me</source>
         <translation>No fui yo</translation>
     </message>
@@ -780,14 +796,6 @@
     <message>
         <source>Decline</source>
         <translation>Rechazar</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>Grupo</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>Hub</translation>
     </message>
     <message>
         <source>Join</source>
@@ -802,8 +810,8 @@
         <translation>Unirse con una invitación</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>O pega el texto de la invitación, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>O pega el texto de la invitación, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +820,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>La cámara no se inicia: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>Válida hasta</translation>
     </message>
     <message>
         <source>You are invited to a group</source>
@@ -922,16 +926,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 bytes</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 caracteres por segundo</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(sin verificar)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -942,16 +938,8 @@
         <translation>Mientras es visible, un dispositivo nuevo encuentra este teléfono como “CBB keyboard” en sus ajustes de Bluetooth.</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>También lo necesita un texto con un salto de línea: el teclado escribe un salto de línea como Intro.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>Actuar como teclado Bluetooth</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>Un administrador del grupo escribe entonces un texto a través de este teléfono en el dispositivo al que está conectado, desde su propia app o con cbb paste. Este teléfono muestra quién pegó y guarda un registro de los últimos pegados sin su texto.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -970,28 +958,12 @@
         <translation>Preparando…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>Últimos pegados</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>Permitir que un pegado pulse Intro</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>Permitir que los administradores del grupo peguen allí</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>Hacer visible este teléfono</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>No hay ningún dispositivo conectado. Conéctate a este teléfono desde el dispositivo, en sus ajustes de Bluetooth.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>Pegado remoto</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1024,14 +996,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>Visible durante %1 s</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>falló</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>rechazado</translation>
     </message>
 </context>
 <context>
@@ -1257,6 +1221,33 @@
     </message>
 </context>
 <context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>Durante 15 minutos</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>Durante 8 horas</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>Durante una hora</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>Entonces sus copias no llegan a ningún dispositivo del grupo; sigue recibiendo las de ellos.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>Silenciar</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>Hasta que un administrador le quite el silencio</translation>
+    </message>
+</context>
+<context>
     <name>NewGroupPage</name>
     <message>
         <source>Make</source>
@@ -1267,24 +1258,24 @@
         <translation>Crear un grupo</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>Haz admin a otro teléfono pronto: si pierdes este, un teléfono admin toma el control del grupo.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>Haz administrador a otro teléfono pronto: si pierdes este, un teléfono administrador se pasa el grupo.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>La clave raíz del grupo se guarda en un archivo del teléfono: quien la copie puede actuar como la raíz del grupo.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>La clave del dispositivo principal se guarda en un archivo del teléfono: quien la copie puede actuar como el dispositivo principal del grupo.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>La clave raíz del grupo se crea en el elemento seguro del teléfono y nunca sale de él.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>La clave del dispositivo principal se crea en el elemento seguro del teléfono y nunca sale de él.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>Este teléfono pasa a ser la raíz del grupo: añade los demás dispositivos por sus códigos QR y hace admins a los teléfonos que lo piden.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Este teléfono pasa a ser el dispositivo principal del grupo: añade los demás dispositivos por sus códigos QR y hace administradores a los teléfonos que lo piden.</translation>
     </message>
 </context>
 <context>
@@ -1296,10 +1287,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 del grupo está en la galería</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>Pegado desde %1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1435,8 +1422,8 @@
         <translation>Inserta tu YubiKey en el puerto USB-C y escribe su PIN.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede tomar tu grupo.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede pasar tu grupo a ese dispositivo.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1504,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Encontrarse en este relé</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>¿Encontrarse en este relé?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>El portapapeles sigue cifrado de extremo a extremo entre los dispositivos: el relé no puede leerlo ni hacerse pasar por un dispositivo. Pero sí sabe, mientras los dispositivos lo usan, qué dispositivos del grupo están en línea y sus direcciones de internet, y cuáles hablan entre sí, cuándo y cuánto envían. Un hub propio del grupo no deja salir nada de esto. Usa un relé que gestiones tú, o uno cuyo operador te merezca esa confianza.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>En el relé: ahora no hay ningún otro dispositivo del grupo.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>En el relé; dispositivos del grupo allí: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Relé ciego</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>Conectando con el relé…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>Para un grupo sin hub propio: los dispositivos se encuentran en un relé, como uno montado con cbb relay, mientras la app sincroniza. El portapapeles sigue cifrado entre los dispositivos, pero el relé sabe cuáles están en línea y sus direcciones, y cuáles hablan entre sí, cuándo y cuánto. Deja ambos campos vacíos para dejar de usarlo.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>Indica la dirección del relé con su puerto y su clave, tal como los imprime cbb relay, o deja ambos vacíos.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>Dejar el relé</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Encontrarse en este relé</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>Desactivado: este teléfono no se encuentra con nadie en un relé.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>Dirección del relé, como 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>Clave del relé, 44 caracteres</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>Renovar las claves del grupo para sincronizar fuera de casa</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>Las claves del grupo para sincronizar fuera de casa han caducado: su relé y sus hubs no aceptan ningún dispositivo hasta que este teléfono las renueve con la clave del dispositivo principal.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>El dispositivo principal del grupo configura el relé para todos los dispositivos; este teléfono se encuentra allí con los demás mientras la sincronización fuera de casa está activada.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>Esperando: el relé funciona mientras la app sincroniza.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1549,12 +1614,16 @@
         <translation>Actuar como teclado Bluetooth</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>Claves de administrador</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>Ajustes avanzados</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>Otro teléfono toma el control del grupo</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>Otro teléfono se pasa el grupo</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1563,6 +1632,10 @@
     <message>
         <source>As the phone</source>
         <translation>Como el teléfono</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Relé ciego</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>
@@ -1621,10 +1694,6 @@
         <translation>Huella de la clave</translation>
     </message>
     <message>
-        <source>Keys an admin may keep</source>
-        <translation>Claves que puede guardar un administrador</translation>
-    </message>
-    <message>
         <source>Lab</source>
         <translation>Laboratorio</translation>
     </message>
@@ -1641,8 +1710,8 @@
         <translation>Saliendo del grupo</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Saliendo del grupo y borrando su clave raíz</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>Saliendo del grupo y borrando la clave del dispositivo principal</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1732,10 +1801,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 tomó el grupo de este dispositivo.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>Está en camino un cambio del dispositivo principal del grupo.</translation>
     </message>
@@ -1760,10 +1825,6 @@
         <translation>Pide al propietario del grupo que le devuelva sus derechos.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>Conéctalo en casa a un dispositivo de confianza del grupo, que renueva el certificado.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 está disponible.</translation>
     </message>
@@ -1778,10 +1839,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>Comprueba la conexión a internet; CBB lo intenta de nuevo solo.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>Antes de esa fecha, conéctalo en casa a un dispositivo de confianza del grupo.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1859,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>En todas partes está activado, pero el grupo no tiene base.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>Si este dispositivo no se perdió, quita %1 del grupo.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1952,14 +2005,6 @@
         <translation>Este dispositivo se quitó del grupo.</translation>
     </message>
     <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>El certificado de este dispositivo venció el %1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>El certificado de este dispositivo vence el %1.</translation>
-    </message>
-    <message>
         <source>This device's rights as a trusted device are paused.</source>
         <translation>Los derechos de este dispositivo como dispositivo de confianza están en pausa.</translation>
     </message>
@@ -2058,6 +2103,14 @@
         <translation>Ordenador</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>Dispositivo principal</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>Dispositivo principal y administrador</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>Miembro</translation>
     </message>
@@ -2076,14 +2129,6 @@
     <message>
         <source>Phone</source>
         <translation>Teléfono</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>Raíz</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>Raíz y admin</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2106,8 +2151,8 @@
         <translation>congelado</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>raíz</translation>
+        <source>main device</source>
+        <translation>dispositivo principal</translation>
     </message>
     <message>
         <source>this phone</source>

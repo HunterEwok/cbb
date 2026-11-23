@@ -4,8 +4,7 @@
 //! The member connection of 0.6 on a computer (format section 9): the
 //! connections to the group's members over TLS by key (`cbb/4`), and on
 //! each the records exchange (`link`), the keys statements (`sealed`),
-//! copies, commands and their results. It is built beside the member of
-//! 0.5 (`node`) and takes its place when the service switches.
+//! copies, commands and their results.
 //!
 //! Each connection has two threads: the one that dialed or accepted reads,
 //! and a writer sends what is queued, and a ping after five seconds of
@@ -123,8 +122,8 @@ pub struct Mesh {
     kept: Mutex<HashMap<[u8; 16], copies::Kept>>,
     /// The last text this device copied while it held no other reader's
     /// keys (alone, or just joined), with when it was copied: it goes out
-    /// once a reader's statement arrives, as the hello of 0.5 carried the
-    /// current copy to the members that came later.
+    /// once a reader's statement arrives, so the members that came later
+    /// get the current copy.
     unsent: Mutex<Option<(Content, Timestamp)>>,
     /// The newest copy, not a secret, that this device made or took, by
     /// the time it was signed, with its ID and frame: sent to each peer as
@@ -320,8 +319,11 @@ fn result_frame(id: &[u8; 16], by: &DeviceId, status: u64, reason: &str) -> Vec<
         (3, Value::Bytes(&by.0)),
         (4, Value::Uint(status)),
     ];
+    // A reason the message would not carry (a control character, over
+    // 256 bytes) is cleaned to one it does (section 15).
+    let reason = cbb_core::wire::clean_reason(reason);
     if !reason.is_empty() {
-        f.push((5, Value::Text(reason)));
+        f.push((5, Value::Text(&reason)));
     }
     frame::write(&Value::Map(f))
 }

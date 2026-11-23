@@ -96,9 +96,9 @@ pub const FIELD_LEAF: u16 = 10;
 pub const FIELDS: [u16; 15] = [1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 /// The longest lifetime of a guarded grant: 40 days.
 pub const MAX_LIFE_MS: u64 = 3_456_000_000;
-/// The most readers of a leaf (format 20.6).
+/// The most readers of a leaf (format 13).
 pub const MAX_READERS: usize = 16;
-/// The most commanders of a leaf (format 20.6).
+/// The most commanders of a leaf (format 13).
 pub const MAX_COMMANDERS: usize = 16;
 /// The grant's field of the only peers the leaf connects with.
 pub const FIELD_NEIGHBORS: u16 = 14;

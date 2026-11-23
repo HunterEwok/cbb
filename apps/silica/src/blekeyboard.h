@@ -86,10 +86,6 @@ public:
     Q_INVOKABLE void type(const QString &text);
     // Types the clipboard's text.
     Q_INVOKABLE void typeClipboard();
-    // Types a remote paste's text on the connected host: empty when it
-    // started, or why not, in English for the sender, with refused false
-    // when it failed rather than being refused.
-    QString typeRemote(const QString &text, bool *refused);
 
 signals:
     void settingsChanged();

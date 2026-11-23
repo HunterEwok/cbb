@@ -33,8 +33,6 @@ mod console;
 #[cfg(feature = "board")]
 mod net;
 mod out;
-#[cfg(feature = "board")]
-mod pair;
 mod selftest;
 mod store;
 #[cfg(feature = "board")]
@@ -92,10 +90,6 @@ mod qemu {
         }
 
         fn wifi(&mut self, _: Option<crate::store::Wifi>) {}
-
-        fn join(&mut self, _: &str) -> cbb_core::error::Result<String> {
-            Err(cbb_core::error::Error::msg("the QEMU build has no network to join a group over"))
-        }
 
         fn type_reports(&mut self, _: alloc::vec::Vec<[u8; 8]>, _: u64) -> cbb_core::error::Result<()> {
             Err(cbb_core::error::Error::msg("the QEMU build has no keyboard"))
@@ -164,12 +158,9 @@ fn main() -> ! {
     }
 }
 
-/// The Nano ESP32: Wi-Fi, and the phone that joins the board to a group.
+/// The Nano ESP32: Wi-Fi and its keyboards.
 #[cfg(feature = "board")]
-struct Nano {
-    spawner: embassy_executor::Spawner,
-    stack: Option<embassy_net::Stack<'static>>,
-}
+struct Nano;
 
 #[cfg(feature = "board")]
 impl Board for Nano {
@@ -179,11 +170,6 @@ impl Board for Nano {
 
     fn wifi(&mut self, wifi: Option<store::Wifi>) {
         net::want(wifi);
-    }
-
-    fn join(&mut self, name: &str) -> error::Result<alloc::string::String> {
-        let stack = self.stack.ok_or_else(|| error::Error::msg("Wi-Fi did not start, so the board cannot join"))?;
-        pair::start(self.spawner, stack, name)
     }
 
     fn type_reports(&mut self, reports: alloc::vec::Vec<[u8; 8]>, gap_ms: u64) -> error::Result<()> {
@@ -247,7 +233,7 @@ async fn read_console(
 #[cfg(feature = "board")]
 #[esp_hal::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
-    use embassy_futures::select::{Either4, select4};
+    use embassy_futures::select::{Either, select};
     use esp_hal::timer::timg::TimerGroup;
     use esp_hal::usb::usb_serial_jtag::UsbSerialJtag;
 
@@ -261,13 +247,9 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut store = open_store(peripherals.FLASH);
     report(&store);
     let wifi = store.as_ref().ok().and_then(Store::wifi);
-    let stack = match net::start(spawner, peripherals.WIFI, wifi) {
-        Ok(s) => Some(s),
-        Err(e) => {
-            println!("cbb-esp32: {}", e.for_user());
-            None
-        }
-    };
+    if let Err(e) = net::start(spawner, peripherals.WIFI, wifi) {
+        println!("cbb-esp32: {}", e.for_user());
+    }
 
     // The console reads the USB serial and esp-println writes to it, unless
     // the USB port is the keyboard: then both use the serial port beside it.
@@ -283,36 +265,14 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
         println!("cbb-esp32: {}", e.for_user());
     }
     let mut jtag = (!usb::console_on_otg()).then(|| UsbSerialJtag::new(peripherals.USB_DEVICE).into_async().split().0);
-    let mut board = Nano { spawner, stack };
+    let mut board = Nano;
     let mut console = Console::new();
     console.start();
     let mut buf = [0u8; 64];
-    // Whether the board offered pairing once its address came this boot.
-    let mut offered = false;
     loop {
-        let want = !offered;
-        let up = async move {
-            match stack {
-                Some(s) if want => s.wait_config_up().await,
-                _ => core::future::pending().await,
-            }
-        };
-        let n = match select4(read_console(&mut jtag, &mut buf), pair::JOINED.wait(), ble::BONDED.wait(), up).await {
-            Either4::First(n) => n,
-            Either4::Fourth(()) => {
-                offered = true;
-                console.offer_pair(&store, &mut board);
-                0
-            }
-            Either4::Second(id) => {
-                let saved = console::save_identity(&mut store, &id);
-                if let Err(e) = &saved {
-                    println!("cbb-esp32: {}", e.for_user());
-                }
-                pair::SAVED.signal(saved.is_ok());
-                0
-            }
-            Either4::Third(bonds) => {
+        let n = match select(read_console(&mut jtag, &mut buf), ble::BONDED.wait()).await {
+            Either::First(n) => n,
+            Either::Second(bonds) => {
                 if let Err(e) = console::save_bonds(&mut store, &bonds) {
                     println!("cbb-esp32: {}; the host must pair again after a restart", e.for_user());
                 }

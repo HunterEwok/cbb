@@ -352,6 +352,14 @@
         <translation>מזהה מכשיר</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>הקפאה</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>מקפיא את %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>בקבוצה</translation>
     </message>
@@ -364,6 +372,14 @@
         <translation>הפיכה למנהל</translation>
     </message>
     <message>
+        <source>Make it a hub</source>
+        <translation>הפיכה לרכזת</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>הופך את %1 לרכזת</translation>
+    </message>
+    <message>
         <source>Making %1 an admin</source>
         <translation>הופך את %1 למנהל</translation>
     </message>
@@ -372,16 +388,8 @@
         <translation>עוד</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>השתקה לשעה</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>השתקה עד ביטול</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>משתיק את %1</translation>
+        <source>Mute</source>
+        <translation>השתקה</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -553,10 +561,6 @@
         <translation>הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>תוקף ההזמנה פג. בקשו הזמנה חדשה.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>הטלפון לא הצליח למחוק את המפתח שלו.</translation>
     </message>
@@ -645,6 +649,10 @@
         <translation>גרסת ה-CBB הזו פגומה.</translation>
     </message>
     <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>ההזמנה הזו מיועדת לסוג אחר של מכשיר. בקשו הזמנה לטלפון הזה.</translation>
+    </message>
+    <message>
         <source>This is not a CBB invitation.</source>
         <translation>זו לא הזמנה של CBB.</translation>
     </message>
@@ -684,8 +692,8 @@
         <translation>%1 הצטרף לקבוצה.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 השתלט על הקבוצה: השורש של הקבוצה אצלו עכשיו.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 העביר אליו את הקבוצה: עכשיו הוא המכשיר הראשי של הקבוצה.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -755,6 +763,10 @@
         <translation>המנהל המוקפא %1 מעכב הסרות: הפשירו אותו או הסירו אותו.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>מכשירי הקבוצה דוחים אותו עכשיו. עזבו את הקבוצה כדי למחוק את המפתחות שלו כאן; אחר כך הוא יוכל להצטרף שוב לקבוצה.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>המכשיר הראשי של הקבוצה השתנה</translation>
     </message>
@@ -771,6 +783,10 @@
         <translation>לטלפון הזה יש הסרה לאשר; הוא יעשה זאת בפעולת הניהול הבאה שלכם.</translation>
     </message>
     <message>
+        <source>This phone was removed from the group</source>
+        <translation>הטלפון הזה הוסר מהקבוצה</translation>
+    </message>
+    <message>
         <source>This wasn't me</source>
         <translation>זה לא הייתי אני</translation>
     </message>
@@ -780,14 +796,6 @@
     <message>
         <source>Decline</source>
         <translation>דחייה</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>קבוצה</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>רכזת</translation>
     </message>
     <message>
         <source>Join</source>
@@ -802,8 +810,8 @@
         <translation>הצטרפות בהזמנה</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>או הדביקו את טקסט ההזמנה, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>או הדביקו את טקסט ההזמנה, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +820,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>המצלמה לא מופעלת: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>בתוקף עד</translation>
     </message>
     <message>
         <source>You are invited to a group</source>
@@ -922,16 +926,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 בתים</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 תווים בשנייה</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(לא מאומת)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -942,16 +938,8 @@
         <translation>כל עוד הטלפון גלוי, מכשיר חדש מוצא אותו בהגדרות הבלוטות' שלו בשם “CBB keyboard”.</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>גם טקסט עם מעבר שורה צריך את זה: המקלדת מקלידה מעבר שורה כ־Enter.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>שימוש כמקלדת בלוטות'</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>מנהל הקבוצה מקליד אז טקסט דרך הטלפון הזה במכשיר שהוא מחובר אליו, מהאפליקציה שלו או עם cbb paste. הטלפון מראה מי הדביק ושומר יומן של ההדבקות האחרונות בלי הטקסט שלהן.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -959,7 +947,7 @@
     </message>
     <message>
         <source>Connected to %1.</source>
-        <translation>מחובר אל %1.</translation>
+        <translation>מחובר ל-%1.</translation>
     </message>
     <message>
         <source>English (US)</source>
@@ -970,28 +958,12 @@
         <translation>מתכונן…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>הדבקות אחרונות</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>לאפשר להדבקה ללחוץ Enter</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>לאפשר למנהלי הקבוצה להדביק שם</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>הפיכת הטלפון לגלוי</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>הדבקה מרחוק</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1024,14 +996,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>גלוי עוד %1 שנ'</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>נכשל</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>נדחה</translation>
     </message>
 </context>
 <context>
@@ -1257,6 +1221,33 @@
     </message>
 </context>
 <context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>למשך 15 דקות</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>למשך 8 שעות</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>למשך שעה</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>אז ההעתקות שלו לא מגיעות לאף מכשיר בקבוצה; הוא עדיין מקבל את שלהם.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>השתקה</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>עד שמנהל יבטל את ההשתקה</translation>
+    </message>
+</context>
+<context>
     <name>NewGroupPage</name>
     <message>
         <source>Make</source>
@@ -1267,24 +1258,24 @@
         <translation>יצירת קבוצה</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל ישתלט על הקבוצה.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל יעביר אליו את הקבוצה.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>מפתח השורש של הקבוצה נשמר בקובץ בטלפון: כל מי שמעתיק אותו יכול לפעול כשורש של הקבוצה.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>המפתח של המכשיר הראשי נשמר בקובץ בטלפון: כל מי שמעתיק אותו יכול לפעול כמכשיר הראשי של הקבוצה.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>מפתח השורש של הקבוצה נוצר ברכיב המאובטח של הטלפון ולעולם לא יוצא ממנו.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>המפתח של המכשיר הראשי נוצר ברכיב המאובטח של הטלפון ולעולם לא יוצא ממנו.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>הטלפון הזה הופך לשורש של הקבוצה: הוא מוסיף את שאר המכשירים לפי קודי ה-QR שלהם והופך טלפונים שמבקשים לכך למנהלים.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>הטלפון הזה הופך למכשיר הראשי של הקבוצה: הוא מוסיף את שאר המכשירים לפי קודי ה-QR שלהם והופך טלפונים שמבקשים לכך למנהלים.</translation>
     </message>
 </context>
 <context>
@@ -1296,10 +1287,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 מהקבוצה נמצא בגלריה</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>הודבק מ־%1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1435,8 +1422,8 @@
         <translation>חברו את ה-YubiKey ליציאת USB-C והקלידו את קוד ה-PIN שלו.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להשתלט על הקבוצה שלך.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להעביר את הקבוצה שלך למכשיר הזה.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1504,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>מפגש בממסר הזה</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>להיפגש בממסר הזה?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>הלוח נשאר מוצפן מקצה לקצה בין המכשירים: הממסר לא יכול לקרוא אותו או להתחזות למכשיר. אבל בזמן שהמכשירים משתמשים בו, הוא כן יודע אילו מכשירים בקבוצה מחוברים ואת כתובות האינטרנט שלהם, ואילו מהם מדברים זה עם זה, מתי וכמה הם שולחים. רכזת משל הקבוצה לא מוציאה שום דבר מזה. השתמשו בממסר שאתם מפעילים בעצמכם, או בכזה שאתם סומכים על המפעיל שלו בעניין הזה.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>בממסר: אין שם עכשיו מכשיר אחר של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>בממסר; מכשירי הקבוצה שם: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>ממסר עיוור</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>מתחבר לממסר…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>לקבוצה בלי רכזת משלה: המכשירים נפגשים בממסר, כמו כזה שהוקם עם cbb relay, בזמן שהיישום מסנכרן. הלוח נשאר מוצפן בין המכשירים, אבל הממסר יודע אילו מהם מחוברים ואת הכתובות שלהם, ואילו מדברים זה עם זה, מתי וכמה. השאירו את שני השדות ריקים כדי להפסיק.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>הזינו את כתובת הממסר עם הפורט ואת המפתח שלו, כפי ש-cbb relay מדפיס אותם, או השאירו את שניהם ריקים.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>עזיבת הממסר</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>מפגש בממסר הזה</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>כבוי: הטלפון הזה לא נפגש עם אף אחד בממסר.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>כתובת הממסר, כמו 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>מפתח הממסר, 44 תווים</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>חידוש מפתחות הקבוצה לסנכרון מחוץ לבית</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>תוקף המפתחות של הקבוצה לסנכרון מחוץ לבית פג: הממסר והרכזות שלה לא מקבלים אף מכשיר עד שהטלפון הזה יחדש אותם במפתח של המכשיר הראשי.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>המכשיר הראשי של הקבוצה מגדיר את הממסר לכל המכשירים; הטלפון הזה פוגש שם את האחרים כל עוד הסנכרון מחוץ לבית פועל.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>ממתין: הממסר עובד בזמן שהיישום מסנכרן.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1549,12 +1614,16 @@
         <translation>שימוש כמקלדת בלוטות'</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>מפתחות מנהל</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>הגדרות מתקדמות</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>טלפון אחר משתלט על הקבוצה</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>טלפון אחר מעביר אליו את הקבוצה</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1563,6 +1632,10 @@
     <message>
         <source>As the phone</source>
         <translation>כמו בטלפון</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>ממסר עיוור</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>
@@ -1621,10 +1694,6 @@
         <translation>טביעת האצבע של המפתח</translation>
     </message>
     <message>
-        <source>Keys an admin may keep</source>
-        <translation>מפתחות שמנהל רשאי לשמור</translation>
-    </message>
-    <message>
         <source>Lab</source>
         <translation>מעבדה</translation>
     </message>
@@ -1641,8 +1710,8 @@
         <translation>יוצא מהקבוצה</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>עוזב את הקבוצה ומוחק את מפתח השורש שלה</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>עוזב את הקבוצה ומוחק את המפתח של המכשיר הראשי</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1732,10 +1801,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 לקח את הקבוצה מהמכשיר הזה.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>החלפה של המכשיר הראשי של הקבוצה בדרך.</translation>
     </message>
@@ -1760,10 +1825,6 @@
         <translation>בקשו מהבעלים של הקבוצה להחזיר לו את ההרשאות.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>חברו אותו בבית למכשיר מהימן של הקבוצה, והוא יחדש את התעודה.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>CBB %1 זמין.</translation>
     </message>
@@ -1778,10 +1839,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>בדקו את החיבור לאינטרנט; CBB ינסה שוב בעצמו.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>לפני כן, חברו אותו בבית למכשיר מהימן של הקבוצה.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1859,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>״בכל מקום״ מופעל, אבל לקבוצה אין בסיס.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>אם המכשיר לא אבד, הסירו את %1 מהקבוצה.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1952,14 +2005,6 @@
         <translation>המכשיר הזה הוסר מהקבוצה.</translation>
     </message>
     <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>התעודה של המכשיר הזה פגה ב־%1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>התעודה של המכשיר הזה תפוג ב־%1.</translation>
-    </message>
-    <message>
         <source>This device's rights as a trusted device are paused.</source>
         <translation>ההרשאות של המכשיר הזה כמכשיר מהימן מושהות.</translation>
     </message>
@@ -2058,6 +2103,14 @@
         <translation>מחשב</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>מכשיר ראשי</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>מכשיר ראשי ומנהל</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>חבר</translation>
     </message>
@@ -2076,14 +2129,6 @@
     <message>
         <source>Phone</source>
         <translation>טלפון</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>שורש</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>שורש ומנהל</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2106,8 +2151,8 @@
         <translation>מוקפא</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>שורש</translation>
+        <source>main device</source>
+        <translation>מכשיר ראשי</translation>
     </message>
     <message>
         <source>this phone</source>

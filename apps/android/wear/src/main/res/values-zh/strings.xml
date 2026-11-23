@@ -10,7 +10,7 @@
     <string name="ask_action">在 %2$s 上运行 %1$s？</string>
     <string name="ask_actions_off">关闭 %1$s 上的所有快捷操作？</string>
     <string name="ask_away_off">关闭 %1$s 上的离家同步？</string>
-    <string name="ask_freeze">冻结 %1$s？它名义上仍是管理员，但在根设备解冻它之前，它签署的任何内容都无效。</string>
+    <string name="ask_freeze">冻结 %1$s？它名义上仍是管理员，但在主设备解冻它之前，它签署的任何内容都无效。</string>
     <string name="ask_paste_off">关闭 %1$s 上的远程粘贴？</string>
     <string name="ask_remove">从群组中移除 %1$s？</string>
     <string name="away">随处</string>

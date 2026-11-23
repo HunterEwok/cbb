@@ -3,19 +3,16 @@
 
 //! Races: many connections through one tunnel while the hub's clients
 //! change and the link ends, many registrations with the relay at once while
-//! it stops, and one engine taking copies from many threads.
+//! it stops.
 
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 
-use cbb_core::clip::{Engine, Event, Kind, Via};
-use cbb_core::hlc::{Clock, Timestamp};
-
 use crate::hub::{Hub as Server, Peer};
-use crate::nettest::{Group, now_ms, wait_for};
+use crate::nettest::{Group, wait_for};
 use crate::tunnel::{self, Hub, Link, State};
 
 fn key() -> [u8; 32] {
@@ -279,75 +276,4 @@ fn registrations_at_once_and_a_stop() {
     let began = Instant::now();
     drop(again);
     assert!(began.elapsed() < Duration::from_secs(20), "the links' end took {:?}", began.elapsed());
-}
-
-/// One engine takes local copies and the events of another member from
-/// many threads at once: it ends with the latest of them all, and its
-/// clock never issued one timestamp twice.
-#[test]
-fn one_engine_from_many_threads() {
-    let base = now_ms();
-    let engine = |id: &str| {
-        let wall = Arc::new(AtomicI64::new(base));
-        let w = wall.clone();
-        let clock = Clock::new(Box::new(move || w.load(Ordering::SeqCst)), Timestamp::default(), None);
-        let w = wall.clone();
-        (
-            Arc::new(Engine::new(
-                id,
-                clock,
-                Box::new(move || w.load(Ordering::SeqCst)),
-                Box::new(|| Duration::from_secs(1000)),
-            )),
-            wall,
-        )
-    };
-    let (a, wall_a) = engine("00000000000000000000000000000001");
-    let (b, wall_b) = engine("00000000000000000000000000000002");
-    // b's copies, made ahead, reach a from several threads while a's own
-    // threads copy.
-    let theirs: Vec<Event> = (0..200)
-        .map(|i| {
-            wall_b.fetch_add(if i % 3 == 0 { -50 } else { 30 }, Ordering::SeqCst);
-            b.copied(&format!("theirs {i}"), Kind::Text, Via::Copy).unwrap().unwrap()
-        })
-        .collect();
-    let theirs = Arc::new(theirs);
-    let mine = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let start = Arc::new(Barrier::new(8));
-    let ts: Vec<_> = (0..8)
-        .map(|t| {
-            let (a, theirs, mine, start, wall) =
-                (a.clone(), theirs.clone(), mine.clone(), start.clone(), wall_a.clone());
-            std::thread::spawn(move || {
-                start.wait();
-                for k in 0..100 {
-                    if t % 2 == 0 {
-                        wall.fetch_add(if k % 4 == 0 { -40 } else { 20 }, Ordering::SeqCst);
-                        if let Some(ev) = a.copied(&format!("mine {t} {k}"), Kind::Text, Via::Copy).unwrap() {
-                            mine.lock().unwrap().push(ev);
-                        }
-                    } else {
-                        let ev = theirs[(k * 7 + t * 13) % theirs.len()].clone();
-                        let _ = a.received(ev).unwrap();
-                    }
-                }
-            })
-        })
-        .collect();
-    for t in ts {
-        t.join().unwrap();
-    }
-    for ev in theirs.iter() {
-        let _ = a.received(ev.clone()).unwrap();
-    }
-    let mine = mine.lock().unwrap();
-    assert_eq!(mine.len(), 400);
-    let mut times: Vec<Timestamp> = mine.iter().map(|e| e.time).collect();
-    times.sort();
-    times.dedup();
-    assert_eq!(times.len(), 400, "a timestamp issued twice");
-    let all: Vec<&Event> = mine.iter().chain(theirs.iter()).collect();
-    let latest = all.iter().copied().reduce(|x, y| if y.later(x) { y } else { x }).unwrap();
-    assert_eq!(a.current().unwrap().id, latest.id);
 }

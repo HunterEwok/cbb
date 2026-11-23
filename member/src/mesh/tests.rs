@@ -28,6 +28,13 @@ impl ExternalKey for K {
     }
 }
 
+impl K {
+    /// The key made from the 32 bytes b.
+    pub(crate) fn of(b: &[u8; 32]) -> K {
+        K(SigningKey::from_slice(b).unwrap())
+    }
+}
+
 pub(crate) fn root() -> K {
     K(SigningKey::from_slice(&[1; 32]).unwrap())
 }
@@ -348,6 +355,20 @@ fn the_root_commands_a_member_and_gets_its_result() {
     assert_eq!(r.status, 1);
     assert_eq!(r.by, b.device());
     assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), cbb_core::commands::COMMAND_UNMUTE);
+    a.close();
+    b.close();
+}
+
+#[test]
+fn a_results_reason_comes_cleaned() {
+    let (a, b) = two("reason");
+    b.on_command(Box::new(|_| Err(Error::msg("no\u{1b}[2Jway\u{7}\u{9b}here"))));
+    connect(&a, &b);
+    until("the connection", || a.connected().contains(&b.device()));
+    let r = a.command(&root(), b.device(), cbb_core::commands::COMMAND_UNMUTE, None).unwrap();
+    assert_eq!(r.status, 3);
+    // Each control character, escape and C1 too, is a space.
+    assert_eq!(r.reason, "no [2Jway  here");
     a.close();
     b.close();
 }

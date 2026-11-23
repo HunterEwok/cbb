@@ -81,6 +81,7 @@ mod next;
 mod nextimage;
 #[cfg(unix)]
 mod nextlink;
+pub mod notices;
 
 pub mod offered;
 pub mod orders;
@@ -142,7 +143,6 @@ use std::time::Duration;
 
 use cbb_core::{certs, clip};
 use error::{Context, Error, Result};
-use identity::Stored as _;
 
 const USAGE: &str = "Usage: cbb <command> [arguments]
 
@@ -226,8 +226,10 @@ Commands:
                           In no group: join a pairing window by its six digits, typed here;
                           -caps joins as a member that can do a comma-separated subset of
                           admin,dials,hub (by default all three).
-  pair -invite file|-     Join from afar with an invitation from cbb invite
-                          (its file, or with - its text pasted on standard input).
+  pair -invite file|- [-app FILE]
+                          Join from afar with an invitation from cbb invite
+                          (its file, or with - its text pasted on standard input);
+                          -app writes the key fingerprint into the desktop app's file.
   invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]
                           Invite a device from afar, on the root or an admin: shows a QR
                           code for the app and writes a file for a computer. Through the
@@ -416,7 +418,7 @@ pub(crate) fn flag(a: &str) -> Option<&str> {
 pub(crate) fn host_name() -> String {
     let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
-    if records::valid_name(&name) { name } else { "member".into() }
+    if cbb_core::join::info::valid_name(&name) { name } else { "member".into() }
 }
 
 pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
@@ -431,15 +433,15 @@ pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
 /// "Capabilities"); the Pi inside a ZX Spectrum Next joins through its link
 /// with none (nextlink).
 fn default_caps() -> Vec<String> {
-    cbb_core::authority::CAPS.iter().map(|c| (*c).to_string()).collect()
+    cbb_core::wire::CAPS.iter().map(|c| (*c).to_string()).collect()
 }
 
-/// Reads -caps: names of cbb_core::authority::CAPS joined by commas, or
+/// Reads -caps: names of cbb_core::wire::CAPS joined by commas, or
 /// none for an empty list; sorted, each once.
 fn parse_caps(list: &str) -> Result<Vec<String>> {
     let mut out = Vec::new();
     for c in list.split(',').map(str::trim).filter(|c| !c.is_empty() && *c != "none") {
-        if !cbb_core::authority::CAPS.contains(&c) {
+        if !cbb_core::wire::CAPS.contains(&c) {
             return Err(Error::msg(format!("-caps: {c:?} is none of admin, dials and hub")));
         }
         out.push(c.to_string());
@@ -464,7 +466,7 @@ const JOIN_BY_WINDOW: &str = "to join a group, open a pairing window with cbb pa
 pub(crate) const OLD_INVITATION: &str = "this invitation comes from a group made before 0.6, which a device joins only at home with cbb pair; ask for an invitation of a group of 0.6";
 
 /// cbb pair's usage in no group.
-const PAIR_USE: &str = "cbb pair [-code [ADDRESS:PORT] | -invite FILE] [-caps LIST] [-name NAME]";
+const PAIR_USE: &str = "cbb pair [-code [ADDRESS:PORT] | -invite FILE [-app FILE]] [-caps LIST] [-name NAME]";
 
 /// Joins a group: by a pairing window's six digits (-code) or by a remote
 /// invitation (-invite).
@@ -476,6 +478,7 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
     let mut code_addr = None;
     let mut caps = default_caps();
     let mut invite = None;
+    let mut app = None;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
@@ -499,6 +502,9 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
                 }
             },
             Some("invite") => invite = Some(next()?),
+            // The desktop app's file for a join by invitation, which shows
+            // the fingerprint while cbb waits.
+            Some("app") if args.iter().any(|a| flag(a) == Some("invite")) => app = Some(next()?),
             // The QR code a computer showed for a phone to dial it (D-119).
             Some("app" | "port" | "addr") => return Err(Error::msg(JOIN_BY_WINDOW)),
             _ => return Err(cli::usage(PAIR_USE)),
@@ -563,7 +569,7 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
     if let Some((path, text)) =
         invite.as_ref().filter(|(_, t)| t.trim_start().starts_with(cbb_core::join::invitation::PREFIX))
     {
-        join_invited(g, &name, &caps, given_name, given_caps, text)?;
+        join_invited(g, &name, &caps, given_name, given_caps, text, app.as_deref())?;
         // It is used up, and was a secret; nothing needs it any more.
         if !path.is_empty() {
             let _ = std::fs::remove_file(path);
@@ -585,7 +591,9 @@ fn join(g: &Global, args: &[String]) -> Result<()> {
 /// the running service, with its own -name and -caps unless cbb pair gives
 /// them, or with no service running, into the state folder, before the
 /// service starts. Shows this device's key fingerprint, which the admin
-/// compares before admitting it.
+/// compares before admitting it; with app (cbb pair -app FILE), also as one
+/// line of JSON in the desktop app's file, `{fingerprint}`, rewritten with
+/// done once the device joined. Removing the file gives up.
 fn join_invited(
     g: &Global,
     name: &str,
@@ -593,13 +601,29 @@ fn join_invited(
     given_name: Option<String>,
     given_caps: Option<Vec<String>>,
     text: &str,
+    app: Option<&str>,
 ) -> Result<()> {
-    let shown = |fp: &str| {
-        println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
+    let out = app.map(open_app_file).transpose()?.map(std::sync::Mutex::new);
+    let write = |line: serde_json::Value| -> Result<()> {
+        let Some(out) = &out else { return Ok(()) };
+        let mut f = out.lock().unwrap_or_else(|e| e.into_inner());
+        f.set_len(0)
+            .and_then(|_| std::io::Seek::rewind(&mut *f))
+            .and_then(|_| f.write_all(format!("{line}\n").as_bytes()))
+            .and_then(|_| f.sync_all())
+            .context("cannot write the fingerprint for the app")
+    };
+    let shown = |fp: &str| -> Result<()> {
+        let fp = fp.get(..23).unwrap_or(fp);
+        println!("{}", tr!("\nThis device's key fingerprint:  {}", fp));
         println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
         println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
         std::io::stdout().flush().ok();
+        write(serde_json::json!({ "fingerprint": fp }))
     };
+    if let Some(app) = app {
+        watch_app_file(app.to_string());
+    }
     if service_answers(g) {
         let h = control::Header {
             op: "join".into(),
@@ -610,12 +634,14 @@ fn join_invited(
             ..Default::default()
         };
         let (_w, mut r, mut m) = admit_cli::stream(g, h)?;
+        let mut fp = String::new();
         loop {
             if !m.header.fingerprint.is_empty() {
-                shown(&m.header.fingerprint);
+                fp = m.header.fingerprint.clone();
+                shown(&fp)?;
             }
             if m.header.done {
-                return Ok(());
+                return write(serde_json::json!({ "fingerprint": fp.get(..23).unwrap_or(&fp), "done": true }));
             }
             m = check(admit_cli::next(&mut r)?)?;
         }
@@ -623,11 +649,11 @@ fn join_invited(
     let me =
         joining::Me { name, os: cbb_core::format::print::os_number(admin::os_name()), caps: roster::caps_number(caps) };
     std::fs::create_dir_all(&g.state).context(format!("cannot create {}", g.state.display()))?;
-    let fp = own::Own::load(&g.state)?.hash();
-    shown(&base64::Engine::encode(&base64::engine::general_purpose::STANDARD, fp.0));
+    let fp = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, own::Own::load(&g.state)?.hash().0);
+    shown(&fp)?;
     let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
     live::invite::join(&g.state, &me, text, log)?;
-    Ok(())
+    write(serde_json::json!({ "fingerprint": fp.get(..23).unwrap_or(&fp), "done": true }))
 }
 
 /// After a join by invitation, waits a while for the service to hand this
@@ -720,7 +746,7 @@ pub(crate) fn watch_app_file(path: String) {
 }
 
 /// Reads a remote invitation for cbb pair -invite, its file or with "-"
-/// its text (cbb://invite#..., as a scanned code gives it) on the first
+/// its text (cbb://join#..., as a scanned code gives it) on the first
 /// line of standard input, and asks the user to agree that sync away from
 /// home goes on with the join; returns the path, empty for a text, and the
 /// invitation's text. The text itself is never taken on the command line,
@@ -735,27 +761,18 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the invitation")?;
         (String::new(), line.trim().to_string())
-    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX)
-        || path.trim_start().starts_with(cbb_core::join::invitation::PREFIX)
-    {
+    } else if path.trim_start().starts_with(cbb_core::join::invitation::PREFIX) {
         return Err(Error::msg(tr!(
             "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line"
         )));
     } else {
         (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
     };
-    if text.trim_start().starts_with(cbb_core::join::invitation::PREFIX) {
-        // An invitation of 0.6 carries no expiry: the hub refuses it once
-        // its time is over.
-        let inv = cbb_core::join::invitation::Invitation::parse(text.trim())
-            .map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
-        live::invite::guest_path(&inv)?;
-    } else {
-        let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
-        if inv.expired(uptime::wall_ms() / 1000) {
-            return Err(Error::msg("the invitation has expired; ask for a new one"));
-        }
-    }
+    // An invitation carries no expiry: the hub refuses it once its time
+    // is over.
+    let inv = cbb_core::join::invitation::Invitation::parse(text.trim())
+        .map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
+    live::invite::guest_path(&inv)?;
     println!(
         "{}",
         tr!(
@@ -838,7 +855,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         }
         i += 2;
     }
-    if !records::valid_name(&cfg.name) {
+    if !cbb_core::join::info::valid_name(&cfg.name) {
         return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
     }
     if let Some(u) = run_user {
@@ -1175,9 +1192,7 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         request(g, &control::Message::new(control::Header { op: "leave".into(), ..Default::default() }, Vec::new()))?;
         println!("{}", tr!("Left the group. The service restarts in no group: cbb pair joins one."));
     } else {
-        if identity::Identity::load(&g.state).ok().flatten().is_none()
-            && ![records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| g.state.join(f).exists())
-        {
+        if !leave::in_group(&g.state) {
             return Err(Error::msg(leave::NOTHING_TO_LEAVE));
         }
         leave::leave_group(&g.state)?;
@@ -2104,5 +2119,341 @@ mod tests {
         ] {
             assert_eq!(terminal_text(input, all), (want.to_string(), dropped), "{input:?}");
         }
+    }
+
+    /// cbb update's link to the group over the control sockets: what the
+    /// service holds and wants, an archive it sends whole or not at all,
+    /// and one handed to it to serve.
+    #[cfg(unix)]
+    #[test]
+    fn the_update_s_link_to_the_service() {
+        use super::update::Group as _;
+        use std::os::unix::net::UnixListener;
+
+        let dir = std::env::temp_dir().join(format!("cbb-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let g = super::Global { state: dir.clone(), socket: dir.join("cbb.sock") };
+        let kept = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        for path in [g.socket.clone(), control::admin_socket(&g.socket)] {
+            let ln = UnixListener::bind(&path).unwrap();
+            let kept = kept.clone();
+            std::thread::spawn(move || {
+                for c in ln.incoming() {
+                    let Ok(mut c) = c else { return };
+                    let mut r = control::Reader::new(c.try_clone().unwrap());
+                    let Ok(Some(m)) = r.read() else { continue };
+                    let h = control::Header::default();
+                    let part = |size| control::Header {
+                        part: Some(control::Part { size, ..Default::default() }),
+                        ..Default::default()
+                    };
+                    let data = |p: &[u8], done| {
+                        control::Message::new(
+                            control::Header { op: "reply".into(), done, ..Default::default() },
+                            p.to_vec(),
+                        )
+                    };
+                    let answers: Vec<control::Message> = match (m.header.op.as_str(), m.header.value.as_str()) {
+                        ("release", _) => vec![control::reply(h, Vec::new())],
+                        ("release_held", _) => vec![control::reply(h, br#"{"keys":1}"#.to_vec())],
+                        ("release_want", _) => vec![control::reply(h, br#"["abc"]"#.to_vec())],
+                        ("release_get", "whole") => {
+                            vec![control::partial(part(5)), data(b"hel", false), data(b"lo", true)]
+                        }
+                        ("release_get", "short") => vec![control::partial(part(5)), data(b"hi", true)],
+                        ("release_get", "long") => vec![control::partial(part(5)), data(b"hello!", true)],
+                        ("release_get", "other") => vec![control::partial(part(9))],
+                        ("release_get", _) => vec![control::failure(&super::Error::msg("no such archive"))],
+                        ("release_file", _) => {
+                            let size = m.header.part.map(|p| p.size).unwrap_or_default() as usize;
+                            let mut got = Vec::new();
+                            while got.len() < size {
+                                let Ok(Some(d)) = r.read() else { break };
+                                got.extend(d.payload);
+                            }
+                            kept.lock().unwrap().push(got);
+                            vec![control::reply(h, Vec::new())]
+                        }
+                        _ => vec![control::failure(&super::Error::msg("unknown"))],
+                    };
+                    for a in answers {
+                        let _ = control::write(&mut c, &a);
+                    }
+                }
+            });
+        }
+
+        let link = super::ServiceLink(&g);
+        link.share(&serde_json::value::RawValue::from_string("{}".into()).unwrap());
+        assert_eq!(link.held().unwrap().get(), r#"{"keys":1}"#);
+        assert_eq!(link.want(), ["abc"]);
+
+        let out = dir.join("archive");
+        link.get("whole", 5, &out).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), b"hello");
+        let err = |sha: &str| link.get(sha, 5, &dir.join(sha)).unwrap_err().message().to_string();
+        assert!(err("short").contains("less than the archive"), "{}", err("short"));
+        assert!(err("long").contains("more than the archive"));
+        assert!(err("other").contains("another file"));
+        assert!(err("gone").contains("no such archive"));
+        assert!(!dir.join("short").exists() && !dir.join("long").exists(), "a broken download leaves nothing");
+
+        std::fs::write(dir.join("served"), b"the archive").unwrap();
+        link.keep("abc", 11, &dir.join("served"));
+        assert_eq!(kept.lock().unwrap().as_slice(), [b"the archive".to_vec()]);
+        // An archive that is not there is not handed on, and says so only
+        // in the log.
+        link.keep("abc", 11, &dir.join("none"));
+        assert_eq!(kept.lock().unwrap().len(), 1);
+
+        // No service: its help costs nothing.
+        let none = super::Global { state: dir.clone(), socket: dir.join("gone").join("cbb.sock") };
+        let link = super::ServiceLink(&none);
+        assert!(link.want().is_empty());
+        assert!(link.held().is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A fake service on a Global's sockets in a folder of its own: each
+    /// request gets `answer`'s messages.
+    #[cfg(unix)]
+    fn fake_service(
+        name: &str,
+        answer: impl Fn(&control::Message) -> Vec<control::Message> + Send + Sync + 'static,
+    ) -> super::Global {
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("cbb-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let g = super::Global { state: dir.clone(), socket: dir.join("cbb.sock") };
+        let answer = std::sync::Arc::new(answer);
+        for path in [g.socket.clone(), control::admin_socket(&g.socket)] {
+            let ln = UnixListener::bind(&path).unwrap();
+            let answer = answer.clone();
+            std::thread::spawn(move || {
+                for c in ln.incoming() {
+                    let Ok(mut c) = c else { return };
+                    let Ok(Some(m)) = control::Reader::new(c.try_clone().unwrap()).read() else { continue };
+                    for a in answer(&m) {
+                        let _ = control::write(&mut c, &a);
+                    }
+                }
+            });
+        }
+        g
+    }
+
+    /// cbb pair -invite through the running service shows the fingerprint
+    /// the service gives, ends when it says done, and waits for the hub to
+    /// take this device's key.
+    #[cfg(unix)]
+    #[test]
+    fn a_join_by_invitation_through_the_service() {
+        let joins = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = joins.clone();
+        let g = fake_service("join", move |m| {
+            let h = control::Header::default;
+            match m.header.op.as_str() {
+                "status" => {
+                    let away = control::Away { hub_device: "hub".into(), ..Default::default() };
+                    let status = control::Status { away: Some(away), ..Default::default() };
+                    vec![control::reply(control::Header { status: Some(status), ..h() }, Vec::new())]
+                }
+                "join" => {
+                    seen.lock().unwrap().push((m.header.invite.clone(), m.header.name.clone(), m.header.consent));
+                    let fp = control::Header { fingerprint: "AAAA BBBB CCCC DDDD EEEE FFFF".into(), ..h() };
+                    vec![control::partial(fp), control::reply(h(), Vec::new())]
+                }
+                _ => vec![control::failure(&super::Error::msg("unknown"))],
+            }
+        });
+        // The desktop app's file gets the fingerprint, and done at the end.
+        // The file stays: removing it while the test runs would give up.
+        let app = std::env::temp_dir().join(format!("cbb-join-app-{}.json", std::process::id()));
+        std::fs::write(&app, "").unwrap();
+        let app = app.to_string_lossy().into_owned();
+        super::join_invited(&g, "pi", &[], Some("desk".into()), None, " cbb://join#x \n", Some(&app)).unwrap();
+        assert_eq!(joins.lock().unwrap().as_slice(), [("cbb://join#x".to_string(), "desk".to_string(), true)]);
+        let line: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&app).unwrap()).unwrap();
+        assert_eq!(line, serde_json::json!({ "fingerprint": "AAAA BBBB CCCC DDDD EEE", "done": true }));
+        super::wait_for_hub(&g);
+        std::fs::remove_dir_all(&g.state).unwrap();
+
+        // A service that refuses the join says why.
+        let g = fake_service("join-refused", |m| match m.header.op.as_str() {
+            "status" => vec![control::reply(control::Header::default(), Vec::new())],
+            _ => vec![control::failure(&super::Error::msg("the invitation has expired"))],
+        });
+        let e = super::join_invited(&g, "pi", &[], None, None, "cbb://join#x", None).unwrap_err();
+        assert!(e.to_string().contains("expired"), "{e}");
+        std::fs::remove_dir_all(&g.state).unwrap();
+
+        // With no service the join goes into the state folder, where an
+        // invitation that is no invitation stops it.
+        let dir = std::env::temp_dir().join(format!("cbb-join-alone-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let g = super::Global { state: dir.join("state"), socket: dir.join("gone").join("cbb.sock") };
+        assert!(super::join_invited(&g, "pi", &[], None, None, "cbb://join#not-one", None).is_err());
+        assert!(g.state.is_dir());
+        super::wait_for_hub(&g);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// cbb status asks the service for its status and the devices, and
+    /// -relay prints the group's relay name alone; cbb leave -yes asks a
+    /// running service to leave, or leaves by itself without one.
+    #[cfg(unix)]
+    #[test]
+    fn status_and_leave_through_the_service() {
+        let left = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let seen = left.clone();
+        let g = fake_service("status", move |m| {
+            let h = control::Header::default;
+            match m.header.op.as_str() {
+                "status" => {
+                    let status =
+                        control::Status { group: "g".into(), relay_group: "a:b:c".into(), ..Default::default() };
+                    vec![control::reply(control::Header { status: Some(status), ..h() }, Vec::new())]
+                }
+                "devices" => vec![control::reply(h(), Vec::new())],
+                "leave" => {
+                    seen.store(true, std::sync::atomic::Ordering::SeqCst);
+                    vec![control::reply(h(), Vec::new())]
+                }
+                _ => vec![control::failure(&super::Error::msg("unknown"))],
+            }
+        });
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        super::cmd_status(&g, &[]).unwrap();
+        super::cmd_status(&g, &a(&["-relay"])).unwrap();
+        assert!(super::cmd_status(&g, &a(&["-what"])).is_err());
+        // In no group there is nothing to leave.
+        let e = super::cmd_leave(&g, &a(&["-yes"])).unwrap_err();
+        assert_eq!(e.to_string(), super::leave::NOTHING_TO_LEAVE);
+        assert!(super::cmd_leave(&g, &a(&["-no"])).is_err());
+        std::fs::write(g.state.join(super::identity::FILE_NAME), b"{}").unwrap();
+        super::cmd_leave(&g, &a(&["-yes"])).unwrap();
+        assert!(left.load(std::sync::atomic::Ordering::SeqCst));
+        std::fs::remove_dir_all(&g.state).unwrap();
+
+        // Without a service: it leaves by itself.
+        let dir = std::env::temp_dir().join(format!("cbb-leave-alone-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let g = super::Global { state: dir.clone(), socket: dir.join("gone").join("cbb.sock") };
+        std::fs::write(dir.join(super::identity::FILE_NAME), b"{}").unwrap();
+        super::cmd_leave(&g, &a(&["-yes"])).unwrap();
+        assert!(!super::leave::in_group(&dir));
+        assert!(super::cmd_status(&g, &[]).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// cbb sync and cbb paste-receive ask the service what their words say,
+    /// refuse the words that do not go together, and say how things stand.
+    #[cfg(unix)]
+    #[test]
+    fn sync_and_paste_receive_through_the_service() {
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::<control::Header>::new()));
+        let seen = asked.clone();
+        let g = fake_service("sync", move |m| {
+            seen.lock().unwrap().push(m.header.clone());
+            let paste = control::Paste { on: true, enter: true, ..Default::default() };
+            let status =
+                control::Status { group: "g".into(), mode: "shared".into(), paste: Some(paste), ..Default::default() };
+            vec![control::reply(control::Header { status: Some(status), ..Default::default() }, Vec::new())]
+        });
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let last = || asked.lock().unwrap().iter().rev().find(|h| h.op != "status").cloned();
+
+        super::cmd_sync(&g, &a(&["off", "-for", "15m"])).unwrap();
+        let h = last().unwrap();
+        assert_eq!((h.op.as_str(), h.on, h.for_ms), ("sync", Some(false), 900_000));
+        super::cmd_sync(&g, &a(&["-on", "pi", "on"])).unwrap();
+        let h = last().unwrap();
+        assert_eq!((h.on, h.device.as_str()), (Some(true), "pi"));
+        super::cmd_sync(&g, &[]).unwrap();
+        for bad in
+            [&["-on", "pi"][..], &["on", "-for", "1h"], &["off", "-for", "0s"], &["off", "-for", "x"], &["maybe"]]
+        {
+            assert!(super::cmd_sync(&g, &a(bad)).is_err(), "{bad:?}");
+        }
+
+        super::cmd_paste_receive(&g, &a(&["on", "-enter"])).unwrap();
+        let h = last().unwrap();
+        assert_eq!((h.op.as_str(), h.name.as_str(), h.enter), ("paste_receive", "on", true));
+        super::cmd_paste_receive(&g, &a(&["off", "-all"])).unwrap();
+        assert!(last().unwrap().all);
+        super::cmd_paste_receive(&g, &a(&["off", "-on", "pi"])).unwrap();
+        assert_eq!(last().unwrap().device, "pi");
+        super::cmd_paste_receive(&g, &[]).unwrap();
+        for bad in [&["off", "-enter"][..], &["on", "-all"], &["off", "-all", "-on", "pi"], &["-what"]] {
+            assert!(super::cmd_paste_receive(&g, &a(bad)).is_err(), "{bad:?}");
+        }
+        std::fs::remove_dir_all(&g.state).unwrap();
+    }
+
+    /// The durations as Go writes them, the remote paste line for each
+    /// switch, and the update log's time stamps.
+    #[test]
+    fn durations_paste_lines_and_stamps() {
+        use super::go_duration_ms as d;
+        assert_eq!(d("1h30m"), Some(5_400_000));
+        assert_eq!(d("90s"), Some(90_000));
+        assert_eq!(d("250ms"), Some(250));
+        assert_eq!(d("0s"), Some(0));
+        for bad in ["", "5", "1d", "h", "9223372036854775807h"] {
+            assert_eq!(d(bad), None, "{bad}");
+        }
+
+        let line = |p: control::Paste| super::paste_line(&p);
+        let on = |enter, console| control::Paste {
+            on: true,
+            enter,
+            console,
+            targets: vec!["tmux".into()],
+            ..Default::default()
+        };
+        assert!(line(control::Paste::default()).contains("is off"));
+        assert!(line(on(true, true)).contains("press Enter, and reach text consoles"));
+        assert!(line(on(true, false)).ends_with("and press Enter."));
+        assert!(line(on(false, true)).contains("text consoles, without Enter"));
+        assert!(line(on(false, false)).ends_with("paste here, without Enter."));
+        let unlocked = control::Paste { no_lock_check: true, targets: Vec::new(), ..on(false, false) };
+        let l = line(unlocked);
+        assert!(l.contains("whether the session is locked") && l.contains("Nothing here can paste yet"), "{l}");
+
+        assert_eq!(super::stamp(0), "1970-01-01T00:00:00Z");
+        assert_eq!(super::stamp(951_782_400_000), "2000-02-29T00:00:00Z");
+        assert_eq!(super::stamp(1_795_444_496_789), "2026-11-23T14:34:56Z");
+        assert_eq!(super::stamp(-1000), "1969-12-31T23:59:59Z");
+    }
+
+    /// cbb watch prints each new text once, in order, and ends when the
+    /// service stops.
+    #[cfg(unix)]
+    #[test]
+    fn watch_prints_each_text_once() {
+        let g = fake_service("watch", |m| {
+            let h = control::Header::default;
+            let write = |seq, text: &[u8]| {
+                control::Message::new(control::Header { op: "write".into(), seq, ..h() }, text.to_vec())
+            };
+            match m.header.op.as_str() {
+                "watch" => vec![
+                    control::reply(h(), Vec::new()),
+                    write(1, b"one"),
+                    write(1, b"one again"),
+                    control::Message::new(control::Header { op: "status".into(), seq: 5, ..h() }, Vec::new()),
+                    write(2, b"two"),
+                ],
+                _ => vec![control::failure(&super::Error::msg("unknown"))],
+            }
+        });
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let e = super::cmd_watch(&g, &[]).unwrap_err();
+        assert!(e.to_string().contains("stopped"), "{e}");
+        assert!(super::cmd_watch(&g, &a(&["-x"])).is_err());
+        std::fs::remove_dir_all(&g.state).unwrap();
     }
 }

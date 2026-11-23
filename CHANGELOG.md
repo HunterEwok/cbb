@@ -11,11 +11,65 @@ the phones' apps, with the Go helper beside it on computers; the group's signed 
 new (version 2, in one strict form of CBOR) and a phone can be the group's root; there are
 apps for the iPhone, Android, Aurora OS and HarmonyOS, the Mac, and a tray app for Linux and
 Windows; devices sync away from home through a hub, a forwarder or a blind relay; releases are
-signed and `cbb update` installs them. From 0.6 on a device works in one group with devices of
-the release before it ([versions and compatibility](docs/reference/compatibility.md)); a group
-made with 0.5 is set up again once. The details follow.
+signed and `cbb update` installs them. As with 0.5, a device works in a group with devices of its own release: keep every device on
+the same release ([versions and compatibility](docs/reference/compatibility.md)); a group made
+with 0.5 is set up again once. The details follow.
 
 ### Added
+- An admin phone makes an admin computer of the group a hub, and freezes a stolen one: the
+  device page of the iPhone, Android, HarmonyOS and Aurora apps offers "Make it a hub" and
+  "Freeze". ffi's manage action `hub` sends the computer a `hub` command with the project's
+  forwarder or one named, as `cbb global hub -on` does on an admin computer
+  ([core API](docs/core-api.md), [apps](docs/apps.md)).
+- The Aurora and HarmonyOS apps' Home shows that the group removed this phone, with Leave, as
+  the iPhone and Android apps do; the HarmonyOS app also shows the member's notices and that the
+  main device changed, with "This wasn't me", and Aurora's "OK" on that card is kept by the
+  member (`root_change_seen`), so it does not come back when the app starts again
+  ([apps](docs/apps.md), "Notices").
+- The Mac app's and the tray app's Settings, under the advanced ones, have the group's settings the phones have:
+  "Copy lifetime" and "Secret lifetime" for an admin (`cbb ttl`) and "Admin keys" on the main
+  device (`cbb keys`), which warns before keys in files. Moving the group to the computer
+  lists who stays, each device ticked but the old main device, and takes the key from the
+  sheet or from a YubiKey with its PIN (`cbb recovery -leave … -yubikey`).
+- The Mac app and the tray app show the member's notices about the group under the alerts, as
+  the phones do, with Hide where a notice may be hidden: `cbb status` carries them
+  (`notices`), and the control socket's `dismiss` hides one without the administrator. Their
+  start window has "Join with an invitation", which runs `cbb pair -invite - -app FILE` and
+  shows this computer's key fingerprint while it waits; `cbb pair -invite` writes the
+  fingerprint into the app's file with `-app` ([apps](docs/apps.md), [CLI](docs/reference/cli.md)).
+- The platform parity table has a HarmonyOS column, lists the group's notices and cards where
+  it listed the alerts card of 0.5, shows the phones' remote invitations and Aurora's relay,
+  and lists the group management of the Mac and tray apps ([parity](docs/parity.md)).
+- Small fixes from a review of the apps' screens: the HarmonyOS app shows "Show error details"
+  only after seven taps on the version, as the other phones do; the "+" menu's item that opens
+  the pairing window is "Add a device" (it said "Scan a code"); the Android TV's start screen
+  says to type a pairing window's six digits, since nothing draws a code on the TV; and the
+  setting of which keys may be admins is "Admin keys" in every phone app.
+- The Aurora app has the blind relay page the other phones have (Settings, "Blind relay"):
+  where the phone stands at the group's relay, and on the root the relay's address and key,
+  set after what a relay learns, and "Renew the group's keys for sync away from home" while
+  they are due or expired. Its device list now marks a muted device and names devices in the
+  notices by their names, which it looked up under a wrong field.
+- On the iPhone and iPad, "Move the group to this phone" shows why a step failed (a key that
+  does not fit, a YubiKey refused) in its own sheet, and the iPad's sidebar offers it on a
+  phone that is not the main device. The iPad and Android tablets show the last copy that came,
+  with Copy, as the phones do.
+- The apps' plan describes the phones' invitation screen as it is: it warns to join only an
+  invitation one asked for, since an invitation of 0.6 names no group, hub or expiry before
+  the phone joins ([apps](docs/apps.md)).
+- Muting from a device's page is the same on the four phones, as on the iPhone: "Unmute" for a
+  muted device, else "Mute" for a connected one, which asks how long (15 minutes, an hour,
+  8 hours or until an admin unmutes it). The Aurora and HarmonyOS apps no longer show the mutes
+  and Unmute at once.
+- The apps' words follow a termbase, `apps/l10n/terms.json`, and `go run ./tools/strings -lint`
+  checks them in CI: a translation names each concept the English names by the termbase's word,
+  Vale's rules (the termbase's banned words, one-character ellipses, the language's quotes) pass
+  on every language, and one English text has one translation (D-133;
+  [apps](docs/apps.md), "Words in the apps").
+- docs/format.md: the wire format of 0.6 byte by byte, written from the core's tables: the CBOR
+  profile, keys, envelopes, every record, statement, command, grant, credential, message and copy,
+  pairing, the key container, the ceilings and the registries. The code's "format section N"
+  citations name its sections.
 - ffi's group of 0.6 names its key level and how long a copy and a secret live (`key_level`,
   `ttl_ms`, `secret_ttl_ms`), and the manage action `ttl` sets them from a phone. All four
   phone apps show both to admins in Settings, "Copy lifetime" and "Secret lifetime", and Home's
@@ -95,11 +149,9 @@ made with 0.5 is set up again once. The details follow.
 - A computer of 0.6 tells each phone connected to it the other members it reaches, so a
   phone away from home shows the members behind its hub as online
   ([protocol](docs/protocol.md), section 4, "Reach").
-- The iPhone and Android apps of 0.6 run sync away from home, the phone as a hub and the
-  link to the group's relay through the Live member, with the same cards as before; the
-  root phone sets the group's relay, which every device meets at, on HarmonyOS too; an
-  admin phone's forwarder as a hub is the root's setting, named with a hub command, which the
-  phone shows and serves through; the root phone renews the group's server credentials with
+- The iPhone and Android apps of 0.6 run sync away from home and the link to the group's
+  relay through the Live member, with the same cards as before; the root phone sets the
+  group's relay, which every device meets at, on HarmonyOS too; the root phone renews the group's server credentials with
   its root key when the app opens ([phone apps](docs/apps.md), "Screens").
 - A new phone joins a group of 0.6 by a window's QR code, or by the six digits its person types
   (the window found by mDNS) (`cbb_joiner_new`): it dials the member whose key the code names,
@@ -1569,9 +1621,9 @@ made with 0.5 is set up again once. The details follow.
 - Nightly mutation testing of the records' rules (`cargo mutants` on the Rust core,
   `gremlins` on Go's `internal/authority`): every change to the code that no test notices is
   listed in the run (docs/testing.md, "Mutation testing").
-- A model of the rules for handing the group over in records v:2, in Quint
-  (`docs/model/claims.qnt`): CI's `model` job checks its scenarios and the promises of
-  docs/records-v2.md over random runs.
+- CI's `model` job runs the scenarios of the Quint model of the record rules of 0.6
+  (`docs/model/records-v3.qnt`) in four parts; its two slowest scenarios and the random runs
+  of its promises run on a server.
 - The Rust core (`cbb_core`) and the phones' bindings (`ffi/`) may not panic outside
   their tests: clippy refuses unwrap, expect, indexing that can fail and arithmetic that can
   overflow there, and the core forbids unsafe code; the few places that cannot fail say why.
@@ -1585,7 +1637,13 @@ made with 0.5 is set up again once. The details follow.
 - CI measures the tests' coverage of the Go service (across packages, with the desktop
   clipboards and the e2e), the lite member, the Swift kit and the Kotlin kit, prints it in
   the run's summary, and fails when a part falls below its floor (`tools/coverage`,
-  docs/testing.md, "Coverage").
+  docs/testing.md, "Coverage"). The tray app is measured too: its Go code (`go-tray`) and,
+  from the browser's own count under its window's tests, its scripts (`js-tray`, LCOV). So
+  are the Aurora app's code that needs no screen, tested on desktop Qt 5 with gcov
+  (`cpp-aurora`), and the HarmonyOS phone's and watch's ArkTS, whose ohosTest suite also runs
+  under Node with the real core behind the native module (`ets-harmony`,
+  `ets-harmony-watch`), and what the Android phone app shares with its Wear OS app
+  (`kotlin-watch`).
 - The bench's desktop suite runs on the Linux member alone too: the primary selection kept
   out of the group (Y26), HTML and a PNG image copied on Linux and arriving with their types
   (O4, O1), the session's kind and a copy from an X11 program under Wayland (H1), the keys
@@ -2183,6 +2241,19 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- CI's Rust tests run their two longest tests, the power cut at every byte of every save and
+  the record sets' differential check, in two different parts: the hash of their names had put
+  both into the first part, which ran minutes after the others.
+- The apps call the group's root the main device on every screen, in every language, and a
+  move by the recovery key "moving the group" rather than taking it over. The Russian
+  strings drop their colloquial words for an admin, the relay, the forwarder, joining a group
+  and hardware for the termbase's, and a YubiKey is held to the phone, not pressed on it, for
+  NFC; a text the platforms show alike reads alike on all of them (D-133).
+- The Mac and the tray app call the recovery by the phones' name: "Move the group to this
+  Mac" (or "this computer"), and say that the device becomes the group's main device, not
+  its root.
+- CI installs the Python packages of the format vectors' generator from
+  `testdata/format/requirements.txt`, pinned by hash, and Dependabot keeps them current.
 - A phone's one button swaps instead of picking a direction (D-128): what the phone's
   clipboard holds goes to the group and the group's copy comes into the clipboard; an empty
   clipboard, or one holding the group's copy, only takes. Opening the app (a start or a return
@@ -2449,8 +2520,9 @@ made with 0.5 is set up again once. The details follow.
   records that a role gives no rights, so any admin with `admit` admits a phone without an
   admin key; D-26 is marked replaced by D-80, D-11 partly replaced by D-80 and D-40 partly
   replaced by D-87.
-- From 0.6 on, a device works in one group with devices of the release before it, and an
-  update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
+- 0.6 promises what 0.5 did: a device works in a group with devices of its own release, and
+  the format may still change before 0.7, where the promise of one release back starts (D-131;
+  docs/design.md, "Versions in one group"). SUPPORT.md says
   what keeps a group working if the maintainer is gone.
 - Admin actions no longer ask for the password every time (D-97). The user confirms them
   with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
@@ -2968,6 +3040,86 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The phone as the hub: a hub is a computer, a router or a board, never a phone, not even the
+  root's (D-134, which replaces D-64). The core makes no phone, watch or leaf a hub, the
+  phones' member refuses a hub command and serves no tunnel, the root names no forwarder for a
+  phone, and the iPhone, Android and HarmonyOS apps drop "This phone as the hub" and Home's
+  note about it; HarmonyOS's page of it becomes "Blind relay". An admin phone still makes a
+  computer a hub. A group without a computer meets at a blind relay.
+- The remote invitation of 0.5 (`cbb://invite#`): its readers in the core (`cbb_core::invite`)
+  and in Go (`internal/invite`) and their vectors (`testdata/interop/invites.json`); `cbb pair
+  -invite` and the apps take the invitation of 0.6 alone, and `docs/protocol.md`, section 12,
+  describes it alone (D-130).
+- The recovery sheet of 0.5 (`cbb://recover?`, with its admin CA): the core's
+  `cbb_core::recovery` and its entries `recovery_sheet` and `read_recovery_sheet`, the kits'
+  calls of them and their vectors (`testdata/interop/recovery-sheet.json`). The sheet of 0.6
+  is the core's `cbb_core::sheet`, which refuses one of 0.5 as earlier (D-130).
+- The JSON commands of 0.5 (`cbb_core::command`, with their sealing of `v` `2`): the core's
+  `parse_body` kind `command` and its entry `seal_command`, the kit's `sealCommand`, the
+  vectors (`testdata/interop/go-sealed-commands.json` and the commands of `strict.json` and
+  `strict-generated-*.json`) and the field list of `tools/difffuzz`'s verdicts.
+  `docs/protocol.md`, section 15, describes the commands of 0.6 alone ([format](docs/format.md),
+  section 6), and the `command` fuzz target reads them (D-130).
+- The core's calls for the copies of 0.5 that no program called: `open_copy`, `seal_segment`,
+  `open_segment`, `copy_verdict` and `seal_public`, the kit's `sealPublic`, and the error codes
+  `command` (15) and `copy` (17), which stay unused (D-130).
+- The sync engine of 0.5 and its copies: the core's `cbb_core::clip::Engine`, the sealed
+  copies of `cbb_core::copy` and the JSON member frames of `cbb_core::wire` (hello, event,
+  get, guest), with Go's reference copies of them (`internal/clip`'s sealed copies, events and
+  rule, `internal/hlc` and `internal/seal`) and their vectors (`copies-go.json`,
+  `copies-rust.json`, `member.json`, `swift-member.json`). The board of 0.6 and
+  `cbb_core::copies` keep and seal the group's copies; `seal-go.json` stays as a fixed vector
+  of Go's `crypto/hpke` that the core opens (D-130).
+- The core's TLS configurations for the members of 0.5, on the group's certificates
+  (`member_client`, `member_server`, `member_or_pair_server`, `restore_client`,
+  `pair_admitter`, the external pairing configurations and `check_member`); members of 0.6
+  speak TLS by key (`cbb_core::tls::bykey`) (D-130).
+- 27 app strings no screen showed any more (58 string resources of Android and HarmonyOS),
+  among them the alerts and recovery-key dialogs of 0.5 and the Mac's admission note about
+  the takeover delay.
+- Remote paste onto the phones until 0.7: the member of 0.6 hands a phone no paste, so the
+  Android, Aurora and HarmonyOS apps no longer offer the switches "Let the group's admins
+  paste" and "Let a paste press Enter", the log of pastes or the keyboard's "Type remote
+  pastes there", and the admin apps offer "Paste on it" for computers only. The phones still
+  send remote pastes to computers.
+- The specification of the records of 0.5 (`docs/records-v2.md`, and the part of
+  `docs/protocol.md`, section 10, that described them); section 10 now gives for the records of
+  0.6 who signs what, the admins and watches, the hubs table, the copies setting, voiding two
+  histories, stopping the exchange and the state; section 18 describes the server credentials
+  of 0.6 (faces, server keys derived for each, message `credentials`) in place of the JSON ones.
+- The takeover claims of 0.5 from the status and the apps: `cbb status`, the computer and Mac
+  apps no longer have lines for an admin's claim to take the group over, and `control.Status`
+  has no `claims` or `taken_over_by`; the apps say no reason `taken_over`, `cert_expired` or
+  `cert_ending`, which the core of 0.6 never gives (D-117).
+- The rest of the core's code of 0.5: the records of version 2 and their rules
+  (`cbb_core::authority`, `group`), the pairing of 0.5 (`cbb_core::pair`), the server
+  credentials on those records (`cbb_core::credential`), the JSON operations on them
+  (`evaluate`, `evaluate_saved`, `canonical_body`, `check_body`, `canonicalize`,
+  `check_member`, with the error codes `strict` and `rollback`), their fuzz targets
+  (`record_body`, `credential`), their kinds in the differential run and their vectors (D-130).
+- The ESP32 firmware's pairing of 0.5 (its `pair` command and the crate `embassy/` with
+  `esp32-on-linux`): it could join only a group of 0.5; the board joins a group of 0.6 in 0.7
+  (D-130).
+- The core's signing of the records of 0.5 (`cbb_core::admit`, `manage`, `root`, `takeover`,
+  `pair_session`): making a group with a group CA, admitting into it, the root's settings and
+  handover, the claims, and an admin's records on version 2 (D-130).
+- The core's `group_` calls on a records file of version 2 (`group_add`, `group_view`,
+  `group_command` and the rest); the group of 0.6 has its `set_` calls (D-130).
+- `cbb`'s join of 0.5 as a device that listens (`pair::listen`, `pair::join`), its mDNS
+  announcement (`j=1`) and its search for one by the code alone; `cbb` joins through a
+  pairing window (D-130).
+- Go's reader of the join QR code of 0.5 (`internal/phone`) and the bench's case of a
+  computer that listens for the phone (G17), with the forge's `qr:` case (D-130).
+- The bench's cases that played a member of 0.5 with its copied state: forged commands and
+  records (S17, S23, T8, G31, G32), the admin CA (K14), renewals (K3), the fetch limits (O15),
+  a relayed join (G8), another system in the hello (G35), an event sent again (Y15) and fuzzed
+  member frames (S20); the cases stay in the catalogue until the bench plays a member of 0.6
+  (D-130).
+- Go's records of 0.5: `internal/authority`, and in `internal/group` the group CA, the
+  identity file, records, commands, copies' checks, server credentials, member TLS and the
+  secret for sealed commands, with their tests, the nightly's fuzz targets and mutation run
+  on them and Go's side of the differential run. `internal/group` keeps the keys and the
+  names Go's parts share (D-130).
 - The ESP32 firmware does not join groups of 0.6 yet: it joins only as a device that waits for the phone to dial it, which 0.6 has no more (D-119); it moves to 0.6, joining by a pairing window, in 0.7.
 - The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
   renewals, proofs, sealing and joining of a computer, with their tests and the kit's
@@ -3090,6 +3242,51 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The preview of who stays after a change of root with the recovery key works in the iPhone,
+  Android and Aurora apps: the member took that step, which signs nothing, only with a key, as
+  HarmonyOS's app sent an empty one; ffi's manage now takes a step without `public`.
+- The iPhone app's Home no longer draws its device list again every two seconds when nothing
+  changed: the refresh sets only what differs.
+- The push service keeps APNs' or FCM's answer when the platform closes the connection right
+  after it: a failed acknowledgement only ends the connection, and the notification is not
+  posted a second time.
+- A home pairing window's five minutes count from the moment it opens, not from after `cbb
+  pair` hears of it: a slow machine no longer gives the window a few seconds more.
+- The desktop app no longer hangs when, with error details on, it shows the report of the
+  service's last crash.
+- The iPhone and iPad app shows its card about a group from before 0.6 and the main device's
+  mark in the device's details in the phone's language, not always in English.
+- A device that refuses or fails a command cleans its reason before it answers, so a reason
+  with a line break or over 256 bytes reaches the sender instead of being dropped.
+- OpenSSF Scorecard waits for `android-wrapper.yml`'s check of `gradle-wrapper.jar` on the
+  same commit before it looks: both start on a push to `main`, and Scorecard counted the jar as
+  unchecked while the check still ran. The format's checker and the copy of amneziawg-go
+  require `golang.org/x/crypto` v0.59.0, as the root module does, where they still named
+  v0.58.0, which OSV lists for its old `openpgp` package (unused here).
+- The tray app's Add a device dialog closes by itself when the device joins after it was
+  cancelled and opened again at once; the first close used to end the new pairing window.
+- The iPhone, Android, HarmonyOS and Aurora apps join with a remote invitation of 0.6
+  (`cbb://join#`, from `cbb invite` or an admin phone): their screen read only the invitation
+  of 0.5 and said the text was no invitation. The screen no longer shows a group, a hub or an
+  expiry, which the invitation of 0.6 does not carry, and refuses an invitation made for
+  another kind of device.
+- A computer joining from afar with `cbb join` no longer waits five minutes and gives up when
+  the admin answers at once: it forgot an answer that came before it had written down that it
+  was joining.
+- The ESP32 firmware builds again without the `board` feature.
+- The computer and Mac apps say that a recovery by the group's recovery key makes the computer
+  the group's root at once, as it does on 0.6, and no longer that the claim waits for the
+  group's takeover delay.
+- A member that is given the revocation list of Android attestations it already holds no
+  longer takes it as a new one on the second time: it wrote the list again, said it took it
+  and checked its peers' evidence again for nothing.
+- A hub of sync away from home now answers the devices that were connected to it before it
+  served, as soon as it serves: their `tunnel` waited for its next round, 15 s later, so they
+  learned of a new hub, or of the hub a move went to, that much later or not before the old
+  hub stopped.
+- A device that leaves its group no longer finds its list of known networks
+  (`networks.json`) written again right after the leave deleted it: the list stops being
+  written once the member stops, before the group's files go.
 - The iPhone app's theme swatches in Settings are laid out all at once, so none is left
   undrawn while its name is on screen (the accessibility audit of `testLanguages`).
 - A restart of the service no longer leaves it unreachable for a few seconds where the

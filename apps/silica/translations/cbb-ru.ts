@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>В раскладке устройства нет клавиши для: %1. Выберите его раскладку выше.</translation>
+        <translation>В раскладке устройства нет клавиш для: %1. Выберите его раскладку выше.</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -206,7 +206,7 @@
     </message>
     <message>
         <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Вставьте YubiKey в порт USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
+        <translation>Подключите YubiKey к порту USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -352,6 +352,14 @@
         <translation>ID устройства</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>Заморозить</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>Заморозка: %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>В группе</translation>
     </message>
@@ -361,27 +369,27 @@
     </message>
     <message>
         <source>Make an admin</source>
-        <translation>Сделать админом</translation>
+        <translation>Сделать администратором</translation>
+    </message>
+    <message>
+        <source>Make it a hub</source>
+        <translation>Сделать хабом</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>%1 становится хабом</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>
-        <translation>%1 становится админом</translation>
+        <translation>%1 становится администратором</translation>
     </message>
     <message>
         <source>More</source>
         <translation>Подробнее</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Заглушить на час</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>Заглушить до отмены</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>Заглушение: %1</translation>
+        <source>Mute</source>
+        <translation>Заглушить</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -502,19 +510,19 @@
     </message>
     <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
-        <translation>YubiKey не вставлен. Вставьте его в порт USB-C и попробуйте снова.</translation>
+        <translation>YubiKey не подключён. Подключите его к порту USB-C и попробуйте снова.</translation>
     </message>
     <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
+        <translation>Приглашение делает только администратор: телефон-администратор здесь или cbb invite на компьютере-администраторе.</translation>
     </message>
     <message>
         <source>Only an admin of the group adds devices.</source>
-        <translation>Добавлять устройства может только админ группы.</translation>
+        <translation>Добавлять устройства может только администратор группы.</translation>
     </message>
     <message>
         <source>Only an admin of the group changes its devices.</source>
-        <translation>Менять устройства группы может только её админ.</translation>
+        <translation>Менять устройства группы может только её администратор.</translation>
     </message>
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
@@ -551,10 +559,6 @@
     <message>
         <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
         <translation>Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>Срок приглашения истёк. Попросите новое.</translation>
     </message>
     <message>
         <source>The phone could not delete its key.</source>
@@ -645,6 +649,10 @@
         <translation>Эта сборка CBB повреждена.</translation>
     </message>
     <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>Это приглашение для устройства другого типа. Попросите приглашение для этого телефона.</translation>
+    </message>
+    <message>
         <source>This is not a CBB invitation.</source>
         <translation>Это не приглашение CBB.</translation>
     </message>
@@ -677,19 +685,19 @@
     <name>Events</name>
     <message>
         <source>%1 is an admin now.</source>
-        <translation>%1 теперь админ.</translation>
+        <translation>%1 теперь администратор.</translation>
     </message>
     <message>
         <source>%1 joined the group.</source>
         <translation>%1 вступил в группу.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 забрал группу: теперь корень группы у него.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 перенёс группу на себя: теперь это главное устройство группы.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>%1 заморожен: остальные отказывают ему, пока админ его не разморозит.</translation>
+        <translation>%1 заморожен: остальные его не принимают, пока администратор его не разморозит.</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
@@ -755,6 +763,10 @@
         <translation>Замороженный администратор %1 задерживает удаления: разморозьте его или удалите.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>Устройства группы его больше не принимают. Выйдите из группы, чтобы удалить его ключи; потом он сможет снова вступить в группу.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>Главное устройство группы сменилось</translation>
     </message>
@@ -771,6 +783,10 @@
         <translation>Этому телефону нужно подтвердить удаление; он сделает это при вашем следующем действии администратора.</translation>
     </message>
     <message>
+        <source>This phone was removed from the group</source>
+        <translation>Этот телефон удалён из группы</translation>
+    </message>
+    <message>
         <source>This wasn't me</source>
         <translation>Это был не я</translation>
     </message>
@@ -780,14 +796,6 @@
     <message>
         <source>Decline</source>
         <translation>Отклонить</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>Группа</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>Хаб</translation>
     </message>
     <message>
         <source>Join</source>
@@ -802,8 +810,8 @@
         <translation>Вступить по приглашению</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>Или вставьте текст приглашения, cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>Или вставьте текст приглашения, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +820,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>Камера не запускается: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>Действует до</translation>
     </message>
     <message>
         <source>You are invited to a group</source>
@@ -896,7 +900,7 @@
     <name>JoinWindowPage</name>
     <message>
         <source>Join a group</source>
-        <translation>Войти в группу</translation>
+        <translation>Вступить в группу</translation>
     </message>
     <message>
         <source>Looking for the group's phone on this network…</source>
@@ -922,16 +926,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 байт</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
-        <translation>%1 символов в секунду</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(не проверено)</translation>
+        <translation>%1 знаков в секунду</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -942,16 +938,8 @@
         <translation>Пока телефон виден, новое устройство найдёт его в своих настройках Bluetooth как «CBB keyboard».</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>Это нужно и для текста с переводом строки: клавиатура набирает перевод строки как Enter.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>Работать как Bluetooth-клавиатура</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>Тогда админ группы набирает текст через этот телефон на устройстве, к которому он подключён, из своего приложения или командой cbb paste. Телефон показывает, кто вставил, и хранит журнал последних вставок без их текста.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -970,28 +958,12 @@
         <translation>Подготовка…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>Последние вставки</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>Разрешить вставке нажимать Enter</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>Разрешить админам группы вставлять туда</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>Сделать телефон видимым</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>Ни одно устройство не подключено. Подключитесь к этому телефону с устройства, в его настройках Bluetooth.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>Удалённая вставка</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1025,14 +997,6 @@
         <source>Visible for %1 s</source>
         <translation>Виден ещё %1 с</translation>
     </message>
-    <message>
-        <source>failed</source>
-        <translation>не удалось</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>отклонено</translation>
-    </message>
 </context>
 <context>
     <name>MainPage</name>
@@ -1054,11 +1018,11 @@
     </message>
     <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>Админ заглушил этот телефон до %1: его копии не доходят до группы.</translation>
+        <translation>Администратор заглушил этот телефон до %1: его копии не доходят до группы.</translation>
     </message>
     <message>
         <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>Админ заглушил этот телефон: его копии не доходят до группы, пока админ не включит его.</translation>
+        <translation>Администратор заглушил этот телефон: его копии не доходят до группы, пока администратор не включит его.</translation>
     </message>
     <message>
         <source>At home: syncing directly.</source>
@@ -1106,7 +1070,7 @@
     </message>
     <message>
         <source>Join a group</source>
-        <translation>Войти в группу</translation>
+        <translation>Вступить в группу</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -1130,7 +1094,7 @@
     </message>
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
-        <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
+        <translation>Сделайте второй телефон администратором: добавьте его в группу, затем откройте его здесь и нажмите «Сделать администратором». Нажмите, чтобы закрыть.</translation>
     </message>
     <message>
         <source>Needs attention</source>
@@ -1190,7 +1154,7 @@
     </message>
     <message>
         <source>This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.</source>
-        <translation>Этот телефон в группе, созданной до версии 0.6, а эта версия её больше не запускает. Выйдите из неё на этом телефоне, затем создайте новую группу или войдите в другую. Пока вы не выйдете, ничего не удаляется.</translation>
+        <translation>Этот телефон в группе, созданной до версии 0.6, а эта версия её больше не запускает. Выйдите из неё на этом телефоне, затем создайте новую группу или вступите в другую. Пока вы не выйдете, ничего не удаляется.</translation>
     </message>
     <message>
         <source>Turn Everywhere off</source>
@@ -1241,7 +1205,7 @@
     </message>
     <message>
         <source>An admin muted this phone, so its copies stay on it.</source>
-        <translation>Админ заглушил этот телефон, поэтому его копии остаются на нём.</translation>
+        <translation>Администратор заглушил этот телефон, поэтому его копии остаются на нём.</translation>
     </message>
     <message>
         <source>An image</source>
@@ -1257,6 +1221,33 @@
     </message>
 </context>
 <context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>На 15 минут</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>На 8 часов</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>На час</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>Тогда его копии не дойдут ни до одного устройства группы; копии остальных оно по-прежнему принимает.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>Заглушить</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>Пока администратор не включит</translation>
+    </message>
+</context>
+<context>
     <name>NewGroupPage</name>
     <message>
         <source>Make</source>
@@ -1267,24 +1258,24 @@
         <translation>Создать группу</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>Вскоре сделайте админом ещё один телефон: если этот телефон потеряется, телефон-админ заберёт группу.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>Вскоре сделайте администратором ещё один телефон: если этот телефон потеряется, телефон-администратор перенесёт группу на себя.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>Корневой ключ группы хранится в файле на телефоне: любой, кто его скопирует, сможет действовать как корень группы.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>Ключ главного устройства хранится в файле на телефоне: любой, кто его скопирует, сможет действовать как главное устройство группы.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>Корневой ключ группы создаётся в защищённом элементе телефона и никогда его не покидает.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>Ключ главного устройства создаётся в защищённом элементе телефона и никогда его не покидает.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>У этого устройства нет защищённого чипа для ключей или надёжного датчика отпечатка или лица: главным устройством группы оно защищает её хуже, чем телефон, у которого есть и то и другое.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>Этот телефон станет корнем группы: он добавляет остальные устройства по их QR-кодам и делает админами телефоны, которые об этом просят.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Этот телефон станет главным устройством группы: он добавляет остальные устройства по их QR-кодам и делает администраторами телефоны, которые об этом просят.</translation>
     </message>
 </context>
 <context>
@@ -1296,10 +1287,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 из группы — в Галерее</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>Вставлено с %1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1432,11 +1419,11 @@
     </message>
     <message>
         <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
-        <translation>Вставьте YubiKey в порт USB-C и введите его PIN.</translation>
+        <translation>Подключите YubiKey к порту USB-C и введите его PIN.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого есть он и устройство группы, может забрать вашу группу.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого есть он и устройство группы, может перенести вашу группу на это устройство.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1504,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Встречаться на этом ретрансляторе</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>Встречаться на этом ретрансляторе?</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>Буфер обмена остаётся зашифрованным от устройства до устройства: ретранслятор не может его прочитать или выдать себя за устройство. Но пока устройства им пользуются, он узнаёт, какие устройства группы в сети и их интернет-адреса, а также какие из них общаются друг с другом, когда и сколько передают. Собственный хаб группы ничего из этого не раскрывает. Используйте свой ретранслятор или тот, чьему владельцу вы это доверяете.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>На ретрансляторе: других устройств группы там сейчас нет.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>На ретрансляторе, устройств группы там: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Слепой ретранслятор</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>Подключение к ретранслятору…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>Для группы без собственного хаба: устройства встречаются на ретрансляторе, например запущенном командой cbb relay, пока приложение синхронизирует. Буфер обмена остаётся зашифрованным между устройствами, но ретранслятор узнаёт, какие из них в сети, их адреса, и какие из них общаются друг с другом, когда и сколько. Чтобы перестать, оставьте оба поля пустыми.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>Укажите адрес ретранслятора с портом и его ключ, как их выводит cbb relay, или оставьте оба поля пустыми.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>Покинуть ретранслятор</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>Встречаться на этом ретрансляторе</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>Выключено: этот телефон ни с кем не встречается на ретрансляторе.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>Адрес ретранслятора, например 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>Ключ ретранслятора, 44 символа</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>Обновить ключи группы для синхронизации вне дома</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>Срок ключей группы для синхронизации вне дома истёк: её ретранслятор и хабы не принимают устройства, пока этот телефон не обновит их ключом главного устройства.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>Ретранслятор для всех устройств задаёт главное устройство группы; этот телефон встречает остальных там, пока включена синхронизация вне дома.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>Ожидание: ретранслятор работает, пока приложение синхронизирует.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1534,7 +1599,7 @@
     </message>
     <message>
         <source>A device becomes an admin</source>
-        <translation>Устройство становится админом</translation>
+        <translation>Устройство становится администратором</translation>
     </message>
     <message>
         <source>A device is frozen or unfrozen</source>
@@ -1549,12 +1614,16 @@
         <translation>Работать как Bluetooth-клавиатура</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>Ключи администраторов</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>Дополнительные настройки</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>Другой телефон забирает группу</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>Другой телефон переносит группу на себя</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1563,6 +1632,10 @@
     <message>
         <source>As the phone</source>
         <translation>Как на телефоне</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>Слепой ретранслятор</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>
@@ -1598,11 +1671,11 @@
     </message>
     <message>
         <source>Hardware</source>
-        <translation>Железо</translation>
+        <translation>Оборудование</translation>
     </message>
     <message>
         <source>Hardware or a file</source>
-        <translation>Железо или файл</translation>
+        <translation>Оборудование или файл</translation>
     </message>
     <message>
         <source>In a file on the phone</source>
@@ -1621,10 +1694,6 @@
         <translation>Отпечаток ключа</translation>
     </message>
     <message>
-        <source>Keys an admin may keep</source>
-        <translation>Какие ключи может хранить админ</translation>
-    </message>
-    <message>
         <source>Lab</source>
         <translation>Лаборатория</translation>
     </message>
@@ -1641,8 +1710,8 @@
         <translation>Выход из группы</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Выход из группы и удаление её корневого ключа</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>Выход из группы и удаление ключа главного устройства</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1674,7 +1743,7 @@
     </message>
     <message>
         <source>Proven hardware only</source>
-        <translation>Только проверенное железо</translation>
+        <translation>Только проверенное оборудование</translation>
     </message>
     <message>
         <source>Puts the error itself under each error message</source>
@@ -1702,7 +1771,7 @@
     </message>
     <message>
         <source>Some admins keep weaker keys; they stay until removed</source>
-        <translation>У некоторых админов ключи слабее; они остаются, пока их не удалят</translation>
+        <translation>У некоторых администраторов ключи слабее; они остаются, пока их не удалят</translation>
     </message>
     <message>
         <source>System</source>
@@ -1732,10 +1801,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>%1 забрал группу у этого устройства.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>Смена главного устройства группы уже в пути.</translation>
     </message>
@@ -1760,10 +1825,6 @@
         <translation>Попросите владельца группы вернуть ему права.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>Подключите его дома к доверенному устройству группы: оно продлит сертификат.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>Доступна CBB %1.</translation>
     </message>
@@ -1778,10 +1839,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>Проверьте подключение к интернету; CBB попробует снова сам.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>До этого подключите его дома к доверенному устройству группы.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1859,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>«Везде» включено, но в группе нет базы.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>Если устройство не терялось, удалите %1 из группы.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1952,14 +2005,6 @@
         <translation>Это устройство удалено из группы.</translation>
     </message>
     <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>Сертификат этого устройства истёк %1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>Сертификат этого устройства истекает %1.</translation>
-    </message>
-    <message>
         <source>This device's rights as a trusted device are paused.</source>
         <translation>Права доверенного устройства у этого устройства приостановлены.</translation>
     </message>
@@ -1989,7 +2034,7 @@
     </message>
     <message>
         <source>Two admins disagree about a device: the group waits for its main device.</source>
-        <translation>Два админа расходятся во мнении об устройстве: группа ждёт решения главного устройства.</translation>
+        <translation>Два администратора расходятся во мнении об устройстве: группа ждёт решения главного устройства.</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>
@@ -2043,11 +2088,11 @@
     <name>devices</name>
     <message>
         <source>Admin</source>
-        <translation>Админ</translation>
+        <translation>Администратор</translation>
     </message>
     <message>
         <source>Admin, frozen by another admin</source>
-        <translation>Админ, заморожен другим админом</translation>
+        <translation>Администратор, заморожен другим администратором</translation>
     </message>
     <message>
         <source>Board</source>
@@ -2056,6 +2101,14 @@
     <message>
         <source>Computer</source>
         <translation>Компьютер</translation>
+    </message>
+    <message>
+        <source>Main device</source>
+        <translation>Главное устройство</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>Главное устройство и администратор</translation>
     </message>
     <message>
         <source>Member</source>
@@ -2078,14 +2131,6 @@
         <translation>Телефон</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>Корень</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>Корень и админ</translation>
-    </message>
-    <message>
         <source>This phone</source>
         <translation>Этот телефон</translation>
     </message>
@@ -2095,7 +2140,7 @@
     </message>
     <message>
         <source>admin</source>
-        <translation>админ</translation>
+        <translation>администратор</translation>
     </message>
     <message>
         <source>device</source>
@@ -2106,8 +2151,8 @@
         <translation>заморожен</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>корень</translation>
+        <source>main device</source>
+        <translation>главное устройство</translation>
     </message>
     <message>
         <source>this phone</source>

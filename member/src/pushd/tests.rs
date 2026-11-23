@@ -480,10 +480,10 @@ fn an_ipv4_client_pays_as_its_own_address() {
     assert_eq!(payer_addr("2001:db8:1:2:3:4:5:6".parse().unwrap()), "2001:db8:1:2::".parse::<IpAddr>().unwrap());
     // On a dual-stack listener the kernel hands an IPv4 client over as
     // ::ffff:a.b.c.d; its payer is the IPv4 address. Where the machine has
-    // no IPv6 socket, there is nothing to check, unless CBB_REQUIRE_IPV6
-    // says the machine has one (the stands that run this check on purpose).
+    // no IPv6 socket, there is nothing to check, unless CBB_TEST_IPV6=1
+    // says the machine has one (CI and the bench).
     let skip = |why: &str| {
-        assert!(std::env::var_os("CBB_REQUIRE_IPV6").is_none(), "CBB_REQUIRE_IPV6 is set, but {why}");
+        assert!(std::env::var("CBB_TEST_IPV6").as_deref() != Ok("1"), "CBB_TEST_IPV6=1 is set, but {why}");
         eprintln!("an_ipv4_client_pays_as_its_own_address: skipped, {why}");
     };
     let Ok(l) = TcpListener::bind("[::]:0") else { return skip("no IPv6 socket") };
@@ -1668,4 +1668,111 @@ fn a_service_that_never_says_ready_holds_a_connect_only_until_the_deadline() {
     assert!(Client::connect(addr, [0; 32], key, &refs(&creds)).is_err());
     let took = start.elapsed();
     assert!(took < crate::push::ANSWER_WITHIN + Duration::from_secs(2), "the connect was held {took:?}");
+}
+
+/// One request a fake platform took: its header block and its body.
+pub(super) type Taken = Arc<Mutex<Vec<(Vec<u8>, Vec<u8>)>>>;
+
+/// A fake platform's answer to a header block and a body: a status and a
+/// body.
+type Answers = dyn Fn(&[u8], &[u8]) -> (u16, Vec<u8>);
+
+/// A fake platform host over TLS and HTTP/2, at one address for every host
+/// name: each request gets `answer`'s status and body, and a connection is
+/// closed after `per_conn` requests. Gives the way to it and the requests
+/// it took.
+pub(super) fn platform(
+    per_conn: usize,
+    answer: impl Fn(&[u8], &[u8]) -> (u16, Vec<u8>) + Send + Sync + 'static,
+) -> (super::h2::Reach, Taken) {
+    let keys = Keys::new().unwrap();
+    let clock: cbb_core::tls::Clock = Arc::new(crate::forward::SystemClock);
+    let server = Arc::new(cbb_core::tls::registration_server(&keys.cert, &keys.key, b"h2", &clock).unwrap());
+    let (mut client, _) = cbb_core::tls::pair_client(&keys.cert, &keys.key, &clock).unwrap();
+    client.alpn_protocols = vec![b"h2".to_vec()];
+    let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = tcp.local_addr().unwrap();
+    let taken: Taken = Arc::default();
+    let (seen, answer) = (taken.clone(), Arc::new(answer));
+    std::thread::spawn(move || {
+        for c in tcp.incoming() {
+            let Ok(c) = c else { continue };
+            let (server, seen, answer) = (server.clone(), seen.clone(), answer.clone());
+            std::thread::spawn(move || {
+                let Ok(conn) = ServerConnection::new(server) else { return };
+                let mut s = StreamOwned::new(conn, c);
+                if h2_serve(&mut s, per_conn, &seen, &*answer).is_err() {
+                    return;
+                }
+                // A graceful close, as a platform's: what the client still
+                // sends is read, so no reset throws away its answer.
+                s.conn.send_close_notify();
+                let _ = s.flush();
+                let _ = s.sock.set_read_timeout(Some(Duration::from_secs(2)));
+                let mut sink = [0u8; 4096];
+                while matches!(s.sock.read(&mut sink), Ok(n) if n > 0) {}
+            });
+        }
+    });
+    (super::h2::Reach::at(Arc::new(client), addr), taken)
+}
+
+fn h2_frame(kind: u8, flags: u8, stream: u32, p: &[u8]) -> Vec<u8> {
+    let len = u32::try_from(p.len()).unwrap().to_be_bytes();
+    let mut f = vec![len[1], len[2], len[3], kind, flags];
+    f.extend_from_slice(&stream.to_be_bytes());
+    f.extend_from_slice(p);
+    f
+}
+
+fn h2_serve(s: &mut (impl Read + Write), per_conn: usize, seen: &Taken, answer: &Answers) -> std::io::Result<()> {
+    let mut preface = [0u8; 24];
+    s.read_exact(&mut preface)?;
+    s.write_all(&h2_frame(4, 0, 0, &[]))?;
+    let (mut block, mut body, mut served) = (Vec::new(), Vec::new(), 0);
+    while served < per_conn {
+        let mut h = [0u8; 9];
+        s.read_exact(&mut h)?;
+        let len = u32::from_be_bytes([0, h[0], h[1], h[2]]) as usize;
+        let (kind, flags) = (h[3], h[4]);
+        let stream = u32::from_be_bytes([h[5], h[6], h[7], h[8]]) & 0x7fff_ffff;
+        let mut p = vec![0u8; len];
+        s.read_exact(&mut p)?;
+        match kind {
+            4 if flags & 1 == 0 => s.write_all(&h2_frame(4, 1, 0, &[]))?,
+            1 => block.extend_from_slice(&p),
+            0 => body.extend_from_slice(&p),
+            _ => {}
+        }
+        if (kind == 0 || kind == 1) && flags & 1 != 0 {
+            let (status, reply) = answer(&block, &body);
+            seen.lock().unwrap().push((std::mem::take(&mut block), std::mem::take(&mut body)));
+            let digits = status.to_string();
+            let mut hb = vec![0x08, u8::try_from(digits.len()).unwrap()];
+            hb.extend_from_slice(digits.as_bytes());
+            let mut out = h2_frame(1, if reply.is_empty() { 5 } else { 4 }, stream, &hb);
+            if !reply.is_empty() {
+                out.extend(h2_frame(0, 1, stream, &reply));
+            }
+            served += 1;
+            if served == per_conn {
+                // GOAWAY: no stream after this one.
+                let mut p = stream.to_be_bytes().to_vec();
+                p.extend_from_slice(&[0; 4]);
+                out.extend(h2_frame(7, 0, 0, &p));
+            }
+            s.write_all(&out)?;
+            s.flush()?;
+        }
+    }
+    Ok(())
+}
+
+/// A way to a closed port: every dial fails.
+pub(super) fn nowhere() -> super::h2::Reach {
+    let keys = Keys::new().unwrap();
+    let clock: cbb_core::tls::Clock = Arc::new(crate::forward::SystemClock);
+    let (client, _) = cbb_core::tls::pair_client(&keys.cert, &keys.key, &clock).unwrap();
+    let addr = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap();
+    super::h2::Reach::at(Arc::new(client), addr)
 }

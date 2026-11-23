@@ -17,7 +17,7 @@
     "pages/CollectionName",
     "pages/Keyboard",
     "pages/Paste",
-    "pages/Hub",
+    "pages/Relay",
     "pages/ShareSheet"
   ]
 }

@@ -4,7 +4,7 @@
 //! The Rust service as one of the group's hubs (docs/protocol.md, section
 //! 11), as Go's service is one: it admits the tunnel keys its members'
 //! hellos offer, answers each with its offer and those of the other hubs it
-//! keeps, and serves them on the same Hub the phones run (src/hub.rs). A
+//! keeps, and serves them on its Hub (src/hub.rs). A
 //! connection through the tunnel goes to a loopback port of its own, where
 //! the node takes the member protocol only, from the device whose tunnel
 //! address it came from.

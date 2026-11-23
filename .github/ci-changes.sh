@@ -50,7 +50,7 @@ for f in $files; do
 	core/* | ffi/* | Cargo.toml | Cargo.lock) rust=true; ios=true; android=true; silica=true; harmony=true ;;
 	# The computers' cbb, which the kits' interop tests run as the computer.
 	member/* | ring-shim/*) rust=true; ios=true; android=true; harmony=true ;;
-	embassy/* | esp32/* | .cargo/* | deny.toml | rustfmt.toml) rust=true ;;
+	esp32/* | .cargo/* | deny.toml | rustfmt.toml) rust=true ;;
 	apps/ios/*) ios=true; swift=true; macos=true ;;
 	apps/macos/*) macos=true ;;
 	apps/desktop/*) desktop=true ;;

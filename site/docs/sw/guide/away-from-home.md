@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1abdaa297166 -->
+<!-- source: 68da0e7aeffa -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
@@ -17,7 +17,7 @@ Kitovu ni cha mojawapo ya aina mbili, na unachagua aina unapokifanya kitovu:
 - **Kitovu kinachosoma nakala** ni msimamizi wa kikundi, kwa hiyo nakala hufungwa kwa ajili yake kama kwa vifaa vyako vingine, na [kiwango cha funguo](keys.md#the-three-levels) cha kikundi kinatumika kwa funguo zake. Katika kikundi kilichoundwa kwenye simu, simu huifanya kompyuta kuwa msimamizi kwanza.
 - **Kitovu kinachopitisha nakala tu** ni kompyuta nyingine yoyote ya kikundi. Nakala hufungwa mwisho hadi mwisho kwa ajili ya vifaa vyako vingine na kamwe si kwa ajili yake, kwa hiyo haisomi yoyote, na funguo zake hazihitaji chipu ya usalama: Raspberry Pi au NAS kwenye Docker yenye funguo zake kwenye faili ni chaguo zuri. Haitengenezi, haisomi wala haibandiki nakala zake yenyewe.
 
-Kwenye simu, gusa kompyuta, kisha **Make it a hub** na aina; programu ya Mac na programu ya trei huuliza vivyo hivyo. Kutoka kwenye kompyuta ya msimamizi, `sudo cbb global hub -on DEVICE -forward-only` huifanya kompyuta nyingine kuwa kitovu kinachopitisha nakala tu. Usawazishaji ukiwa mbali na nyumbani lazima uwe umewashwa huko kwanza (hatua ya 2 hapa chini, kwa `sudo cbb global on`).
+Kwenye simu ya msimamizi, gusa kompyuta ya msimamizi, kisha **Make it a hub**: inakuwa kitovu kinachosoma nakala. Programu ya Mac na programu ya trei huuliza aina ipi. Kutoka kwenye kompyuta ya msimamizi, `sudo cbb global hub -on DEVICE -forward-only` huifanya kompyuta nyingine kuwa kitovu kinachopitisha nakala tu. Usawazishaji ukiwa mbali na nyumbani lazima uwe umewashwa huko kwanza (hatua ya 2 hapa chini, kwa `sudo cbb global on`).
 
 ## 2. Kiwashe kwenye kitovu
 
@@ -43,7 +43,7 @@ Huna anwani ya umma kwa sababu mtoa huduma wako anakuweka nyuma ya carrier-grade
 Nyumbani, kitovu kikiwa kimewashwa:
 
 - **Kompyuta**: `sudo cbb global on` (kwenye Windows, kwenye terminal ya msimamizi).
-- **Simu**: kwenye programu, Mipangilio, **Sync away from home**. Kisha acha programu wazi kwa muda nyumbani, ili ikutane na kitovu. iPhone husawazisha ukiwa mbali na nyumbani programu ikiwa wazi; Android pia chinichini. Katika kikundi kilichoundwa kwenye simu, simu hiyo huanza ikiwa kitovu, na swichi huonekana inapoacha kuwa kitovu: chini ya **Move the hub to a computer** ifanye kompyuta kuwa kitovu (ukihifadhi kisambazaji kwenye simu kwanza), au zima **This phone as the hub**.
+- **Simu**: kwenye programu, Mipangilio, **Sync away from home**. Kisha acha programu wazi kwa muda nyumbani, ili ikutane na kitovu. iPhone husawazisha ukiwa mbali na nyumbani programu ikiwa wazi; Android pia chinichini.
 - **Kifaa kidogo** (kipanga njia, Raspberry Pi): `sudo cbb global on` kwenye kifaa ([vifaa vidogo](../../member/README.md#sync-away-from-home)).
 
 ## 4. Kikague
@@ -66,7 +66,7 @@ Nyuma ya carrier-grade NAT, kitovu hujisajili badala yake kwenye **kisambazaji**
 sudo cbb global hub
 ```
 
-Bila anwani zake, kitovu hupitia kisambazaji cha mradi kwenye `cbb.tools`: cbb inajua anwani na ufunguo wake, na simu inayokuwa kitovu huitumia pia. `-forwarder default` huiongeza kwa kitovu chenye anwani zake pia. Kwa [kisambazaji chako mwenyewe](../admin/self-hosting.md#a-forwarder) kwenye seva yoyote ndogo, toa anwani na ufunguo wake badala yake: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`; kwenye simu, chini ya **This phone as the hub**.
+Bila anwani zake, kitovu hupitia kisambazaji cha mradi kwenye `cbb.tools`: cbb inajua anwani na ufunguo wake. `-forwarder default` huiongeza kwa kitovu chenye anwani zake pia. Kwa [kisambazaji chako mwenyewe](../admin/self-hosting.md#a-forwarder) kwenye seva yoyote ndogo, toa anwani na ufunguo wake badala yake: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`.
 
 Kitovu kinaweza kuwa na anwani yake na kisambazaji kwa wakati mmoja: vifaa hujaribu kitovu kwanza na kisambazaji mwisho.
 
@@ -88,11 +88,9 @@ Njia nyingine za kujiunga ukiwa mbali, kupitia SSH au VPN yako mwenyewe, ziko ka
 
 ## Hakuna kompyuta ya kuwa kitovu
 
-Simu inaweza kuwa kitovu wakati programu yake imefunguliwa (Mipangilio, **This phone as the hub**). Au vifaa hukutana kwenye **relei pofu** kwenye seva yako mwenyewe badala ya kitovu: kompyuta kwa `cbb global relay`, simu chini ya **Blind relay** kwenye Mipangilio. Relei haiwezi kusoma ubao wa kunakili lakini huona ni vifaa vipi vinavyozungumza, lini na kwa kiasi gani. Tazama [kuendesha seva zako mwenyewe](../admin/self-hosting.md#a-blind-relay).
+Simu kamwe si kitovu: kitovu ni kompyuta, ruta au bodi ndogo kama Raspberry Pi. Bila kitovu, vifaa hukutana kwenye **relei pofu** badala ya kitovu, ya mradi au kwenye seva yako mwenyewe: kompyuta kwa `cbb global relay`, simu chini ya **Blind relay** kwenye Mipangilio. Relei haiwezi kusoma ubao wa kunakili lakini huona ni vifaa vipi vinavyozungumza, lini na kwa kiasi gani. Tazama [kuendesha seva zako mwenyewe](../admin/self-hosting.md#a-blind-relay).
 
-Swichi ya **This phone as the hub** iko kwenye Mipangilio tu, si kwenye ukurasa wa simu katika orodha ya vifaa kama ilivyo kwa kompyuta: simu huwa kitovu tu wakati programu yake imefunguliwa (simu ya Android pia chinichini, kwa gharama ya betri), kwa hiyo kompyuta inayowashwa kila wakati ni kitovu bora zaidi.
-
-Baadaye: relei pofu kwenye `cbb.tools` ambayo kikundi chochote kitaweza kuitumia.
+Mradi huendesha relei pofu kwenye `cbb.tools` ambayo kikundi chochote kinaweza kuitumia: `sudo cbb global relay default` inajua anwani na ufunguo wake, na hujisasisha yenyewe mradi unapovibadilisha.
 
 ## Kuzima
 

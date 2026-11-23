@@ -25,15 +25,12 @@ import { Join } from './Join';
 import { Joiner, PairWindow } from './Pairing06';
 import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
-import { Paste } from './Paste';
 
 // The root's duties (the attestations, the next period of the server
 // keys) are due days ahead, so a look every few hours, and one a minute
 // after the member starts, once it reached its peers, is plenty.
 const DUTIES_EVERY_MS: number = 6 * 3600 * 1000;
 const DUTIES_FIRST_MS: number = 60 * 1000;
-// What the core says when the hub to stop is the group's only one.
-const ONLY_HUB: string = 'no other hub';
 
 // What sealing the recovery key onto a YubiKey did (cbb_piv seal): the
 // retired slot, and whether the card keeps its factory management key,
@@ -130,10 +127,8 @@ export class AppModel {
   readonly events: Events = new Events();
   // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
   readonly bugs: Bugs = new Bugs();
-  // The lab (docs/apps.md, "The lab"): the phone as a Bluetooth keyboard,
-  // which also types an admin's remote paste.
+  // The lab (docs/apps.md, "The lab"): the phone as a Bluetooth keyboard.
   readonly keyboard: Keyboard = new Keyboard();
-  readonly paste: Paste = new Paste();
 
   private dir: string = '';
   private prefs: preferences.Preferences | undefined = undefined;
@@ -167,10 +162,6 @@ export class AppModel {
     // broke, the details only in debug mode (Errors.shown).
     this.member.onPanic = (details: string) => {
       this.panicked(details);
-    };
-    this.paste.init(prefs, this.keyboard);
-    this.paste.pasted = (name: string) => {
-      this.events.post(t('pasted_from', name));
     };
     this.member.onSaved = (folder: string, count: number) => {
       this.events.post(count === 1 ? t('notify_saved_one') : t('notify_saved', count));
@@ -271,7 +262,6 @@ export class AppModel {
         this.duties();
       }, DUTIES_FIRST_MS);
     }
-    await this.restoreHub();
   }
 
   async stopMember(): Promise<void> {
@@ -348,8 +338,9 @@ export class AppModel {
     }
   }
 
-  // An admin's change to a device (remove, rename, thaw, make_admin,
-  // sync_on, sync_off) or command for it (mute, unmute), signed with the
+  // An admin's change to a device (remove, rename, freeze, thaw,
+  // make_admin, sync_on, sync_off) or command for it (mute, unmute, hub:
+  // an admin computer a hub through the project's forwarder), signed with the
   // admin key; forMinutes: how long a mute or a sync off lasts, 0 for until
   // undone. True once the change is in the records or the device took the
   // command.
@@ -639,42 +630,6 @@ export class AppModel {
     }
   }
 
-  // This phone as one of the group's hubs, as the user set it; the core
-  // does not keep it, so it is set again each time the member starts.
-  hubWanted(): boolean {
-    return this.prefs !== undefined && this.prefs.getSync('hub_on', false) as boolean;
-  }
-
-  hubDisguise(): string {
-    return this.prefs !== undefined ? this.prefs.getSync('hub_disguise', 'plain') as string : 'plain';
-  }
-
-  // Makes this phone a hub of the group, through the forwarder the group's
-  // root set, or stops it being one (anyway: also when it is the group's
-  // only hub). Shows why not, except that it is the only hub, which it
-  // answers for the user to decide.
-  async setHub(on: boolean, disguise: string, anyway: boolean): Promise<Failure | undefined> {
-    const failure = await this.member.setHub(on, '', '', disguise, anyway);
-    if (failure !== undefined) {
-      if (on || anyway || !failure.details.includes(ONLY_HUB)) {
-        this.show(Errors.shown(failure));
-      }
-      return failure;
-    }
-    this.prefs?.putSync('hub_on', on);
-    if (on) {
-      this.prefs?.putSync('hub_disguise', disguise);
-    }
-    this.prefs?.flush();
-    this.show('');
-    return undefined;
-  }
-
-  // Whether a failure of setHub is that this phone is the group's only hub.
-  onlyHub(failure: Failure | undefined): boolean {
-    return failure !== undefined && failure.details.includes(ONLY_HUB);
-  }
-
   // The root sets the group's relay (manage relay), where every device
   // meets the others: the address with its key's pin, the project's with
   // the key 'default', or none with both empty. Shows why not.
@@ -691,15 +646,6 @@ export class AppModel {
     Errors.log(relays.length > 0 ? `relay: the group meets at ${relay}` : 'relay: the group meets at no relay');
     this.show('');
     return true;
-  }
-
-  private async restoreHub(): Promise<void> {
-    if (this.hubWanted() && this.isAdmin()) {
-      const failure = await this.member.setHub(true, '', '', this.hubDisguise(), false);
-      if (failure !== undefined) {
-        Errors.log(`servers: the hub did not start again: ${failure.message} (${failure.details})`);
-      }
-    }
   }
 
   // Keeps next as the membership, or shows why it could not.
@@ -730,7 +676,6 @@ export class AppModel {
     Errors.log(`group: left ${this.membership?.groupTag() ?? ''}`);
     this.membership = undefined;
     this.events.forget();
-    this.paste.forgetLog();
     this.show('');
     // A phone that joined again with its old member key would share it with
     // its old device record, and removing that record revokes the key; the

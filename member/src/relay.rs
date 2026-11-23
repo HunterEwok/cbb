@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! A member's link to the group's blind relay (docs/protocol.md, section
-//! 14; `cbb-relay/3`, format section 9.4): the registration over TLS to the
+//! 14; `cbb-relay/3`, format section 9.5): the registration over TLS to the
 //! relay known by its pin, with the certificate of the device's server key
 //! for the period alone, the proof of a WireGuard key made for this
 //! registration and the period's credentials (`Credentialed`), then the

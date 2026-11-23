@@ -124,9 +124,8 @@ enum Control {
         var mode: String?
         var syncUntilMS: Int64?
         /// How far the group's records stop the exchange: "secrets" or
-        /// "full"; nil when nothing stops. Claims and conflicts say why.
+        /// "full"; nil when nothing stops. The conflicts say why.
         var stop: String?
-        var claims: [Claim]?
         var conflicts: [Conflict]?
         /// How many records of a later version the service keeps.
         var newer: Int?
@@ -145,30 +144,53 @@ enum Control {
         /// The service broke and started again, and its bug report waits
         /// for the user's answer (docs/core-api.md, "Bug reports").
         var bug: Bool?
+        /// The group's settings (D-129): which keys may be admins and hubs
+        /// (proven, hardware or files), and how long a copy and a secret
+        /// live, in milliseconds.
+        var keyLevel: String?
+        var ttlMS: Int64?
+        var secretTTLMS: Int64?
+        /// The member's notices about the group (docs/apps.md, "Notices");
+        /// the op dismiss hides one that is dismissable.
+        var notices: [Notice]?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update, why, bug
+            case device, group, removed, role, os, away, version, mode, stop, conflicts, newer, muted, update, why, bug, notices
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
+            case keyLevel = "key_level"
+            case ttlMS = "ttl_ms"
+            case secretTTLMS = "secret_ttl_ms"
         }
     }
 
-    /// A claim to take the group over that waits or stops the group.
-    struct Claim: Codable, Equatable {
-        /// The name of the admin that claims the group.
-        var by: String
-        /// pending, competing or disputed.
-        var state: String
-        var leftMS: Int64?
+    /// One of the member's notices about the group: its kind
+    /// (change_arriving, removals_waiting, root_room_waiting, ack_owed,
+    /// frozen_holding, checkpoint_stuck or returned_after_removal), its
+    /// arguments, and whether the user may hide it.
+    struct Notice: Codable, Equatable, Identifiable {
+        struct Args: Codable, Equatable {
+            var device: String?
+            var devices: Int?
+            var percent: Int?
+            var removals: Int?
+            var daysLeft: Int?
 
-        enum CodingKeys: String, CodingKey {
-            case by, state
-            case leftMS = "left_ms"
+            enum CodingKeys: String, CodingKey {
+                case device, devices, percent, removals
+                case daysLeft = "days_left"
+            }
         }
+
+        var id: String
+        var kind: String
+        var args: Args?
+        var dismissable: Bool?
     }
 
     /// A conflict that stops the group until its root decides: kind is
-    /// admins, claims or two_histories, devices the names of those involved.
+    /// admins, fork, two_histories, admits or ids, devices the names of
+    /// those involved.
     struct Conflict: Codable, Equatable {
         var kind: String
         var devices: [String]

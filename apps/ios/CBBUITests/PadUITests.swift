@@ -52,7 +52,7 @@ final class PadUITests: XCTestCase {
         XCTAssertTrue(mac.waitForExistence(timeout: 10))
         mac.tap()
         XCTAssertTrue(app.buttons["Close"].waitForExistence(timeout: 10), "the card opens beside the tiles")
-        XCTAssertTrue(mac.isSelected, "the chosen tile is marked")
+        XCTAssertTrue(mac.becomesSelected(), "the chosen tile is marked")
         picture("pad-home-card")
 
         // A key pressed while the card still slides in can land before the
@@ -62,7 +62,7 @@ final class PadUITests: XCTestCase {
         app.typeKey(.rightArrow, modifierFlags: [])
         let thinkpad = app.buttons.containing(NSPredicate(format: "label CONTAINS 'thinkpad'")).firstMatch
         XCTAssertTrue(thinkpad.waitForExistence(timeout: 5))
-        XCTAssertTrue(thinkpad.isSelected, "the right arrow chooses the next device")
+        XCTAssertTrue(thinkpad.becomesSelected(), "the right arrow chooses the next device")
 
         app.settle("the next device's card")
         app.typeKey(.simulatorEscape, modifierFlags: [])

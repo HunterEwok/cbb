@@ -129,6 +129,12 @@ pub fn key_for(secret: &[u8; 32], hub: &DeviceId) -> ([u8; 32], [u8; 32]) {
     (s.to_bytes(), *public.as_bytes())
 }
 
+/// The WireGuard public key of an invitation's guest from its one-time
+/// private key, which the hub admits as the guest's peer.
+pub fn guest_public(private: &[u8; 32]) -> [u8; 32] {
+    x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(*private)).to_bytes()
+}
+
 /// HKDF's info for the hub's own WireGuard key toward a forwarder, the
 /// face's tag after it.
 const FACE_KEY_INFO: &[u8] = b"cbb hub face key v1";

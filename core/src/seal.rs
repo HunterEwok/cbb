@@ -6,8 +6,9 @@
 //! ChaCha20-Poly1305, and a fixed info string. Each device keeps a 32-byte
 //! secret; its public key is 1216 bytes. A sealed message is the 1120-byte
 //! encapsulated key followed by the ciphertext, which is 16 bytes longer
-//! than the message. The same is in Go (internal/seal); both are checked on
-//! testdata/interop/seal-go.json and seal-rust.json.
+//! than the message. testdata/interop/seal-rust.json holds what the core
+//! seals, and seal-go.json what Go's crypto/hpke sealed with the same
+//! suite, which the core opens alike.
 
 use alloc::vec::Vec;
 

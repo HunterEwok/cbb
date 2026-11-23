@@ -20,8 +20,6 @@ use crate::copies;
 use crate::discovery;
 use crate::error::{Context, Error, Result};
 use crate::files;
-use crate::identity::Identity;
-use crate::identity::Stored as _;
 use crate::peer;
 use crate::remotepaste;
 use crate::uptime;
@@ -178,8 +176,8 @@ pub struct Config {
     /// Where the tunnel sends its packets instead of the hub's addresses: a
     /// local UDP port that leads to the hub, such as `cbb next link -udp`.
     pub tunnel_via: Option<SocketAddr>,
-    /// What this member says it can do in its hellos (cbb_core::authority::
-    /// CAPS) until its own device record names its caps.
+    /// What this member says it can do in its hellos (cbb_core::wire::CAPS)
+    /// until its own device record names its caps.
     pub caps: Vec<String>,
 }
 

@@ -128,8 +128,6 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     }
     m_error.clear();
     Errors::log(QStringLiteral("member: started in the group %1").arg(membership.groupTag()));
-    m_startedMs = QDateTime::currentMSecsSinceEpoch();
-    m_seen.clear();
     m_peerTimer.start();
     pollMuted();
     pollDevices();
@@ -157,7 +155,9 @@ void Member::stop()
     m_groupState.clear();
     emit devicesChanged();
     m_paused = m_muted = false;
+    m_periodDue = m_periodOverdue = false;
     readAway(QJsonValue());
+    emit awayChanged();
     Errors::log(QStringLiteral("member: stopped"));
     emit changed();
 }
@@ -499,9 +499,6 @@ void Member::event(const QByteArray &json)
         pollDevices();
     } else if (type == QStringLiteral("state") || type == QStringLiteral("notice")) {
         pollDevices();
-    } else if (type == QStringLiteral("command")) {
-        command(e.value(QStringLiteral("token")).toDouble(), e.value(QStringLiteral("from")).toString(),
-                e.value(QStringLiteral("command")).toObject());
     } else if (type == QStringLiteral("copy")) {
         // Images or files from another device come by themselves while
         // sync is on, as texts do through write.
@@ -551,71 +548,6 @@ bool Member::listen(Failure *failure)
     m_listening = true;
     Errors::log(QStringLiteral("member: listening on port %1").arg(a.value(QStringLiteral("port")).toInt()));
     return true;
-}
-
-void Member::command(double token, const QString &from, const QJsonObject &record)
-{
-    if (!m_member)
-        return;
-    const auto refuse = [&](const QString &reason) {
-        Errors::log(QStringLiteral("member: refused a command from %1: %2").arg(from, reason));
-        answer(token, QStringLiteral("refused"), reason);
-    };
-    Failure failure;
-    const QJsonObject c =
-        call(m_member, QStringLiteral("check_command"), QJsonObject{{QStringLiteral("command"), record}}, &failure);
-    if (!failure.isNull()) {
-        refuse(failure.details.isEmpty() ? failure.message : failure.details);
-        return;
-    }
-    const QJsonObject body = c.value(QStringLiteral("command")).toObject();
-    const QString id = body.value(QStringLiteral("id")).toString();
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (qint64(body.value(QStringLiteral("time_ms")).toDouble()) < m_startedMs) {
-        refuse(QStringLiteral("this device started after the command was signed, so it may have carried it out "
-                              "already; send it again"));
-        return;
-    }
-    for (auto it = m_seen.begin(); it != m_seen.end();)
-        it = it.value() <= now ? m_seen.erase(it) : it + 1;
-    if (m_seen.contains(id)) {
-        refuse(QStringLiteral("this command was carried out already"));
-        return;
-    }
-    if (m_seen.size() >= maxCommands) {
-        refuse(QStringLiteral("too many commands; try again in a minute"));
-        return;
-    }
-    m_seen.insert(id, qint64(body.value(QStringLiteral("expires_ms")).toDouble()));
-    const QString kind = body.value(QStringLiteral("type")).toString();
-    if (kind == QStringLiteral("away-off")) {
-        Errors::log(QStringLiteral("member: %1 turned sync away from home off").arg(body.value(QStringLiteral("by")).toString()));
-        if (m_awayOn)
-            setAway(false);
-        answer(token, QStringLiteral("done"), QString());
-    } else if (kind == QStringLiteral("actions-off")) {
-        // A phone has no quick actions, so none of them stays on.
-        answer(token, QStringLiteral("done"), QString());
-    } else if (kind == QStringLiteral("paste") || kind == QStringLiteral("paste-off")) {
-        // The paste receiver answers, maybe once the keyboard has started.
-        QJsonObject checked = c;
-        checked.insert(QStringLiteral("token"), token);
-        emit commandArrived(checked);
-    } else {
-        refuse(QStringLiteral("this phone takes no %1 commands").arg(kind));
-    }
-}
-
-void Member::answer(double token, const QString &status, const QString &reason)
-{
-    if (!m_member)
-        return;
-    Failure failure;
-    call(m_member, QStringLiteral("answer"),
-         QJsonObject{{QStringLiteral("token"), token}, {QStringLiteral("status"), status}, {QStringLiteral("reason"), reason}},
-         &failure);
-    if (!failure.isNull())
-        Errors::log(QStringLiteral("member: answering a command: %1 (%2)").arg(failure.message, failure.details));
 }
 
 void Member::pause(int minutes)
@@ -758,6 +690,13 @@ void Member::pollAway()
         Errors::log(QStringLiteral("member: sync away from home: %1 (%2)").arg(failure.message, failure.details));
         return;
     }
+    const bool due = a.value(QStringLiteral("period_due")).toBool();
+    const bool overdue = a.value(QStringLiteral("period_overdue")).toBool();
+    if (due != m_periodDue || overdue != m_periodOverdue) {
+        m_periodDue = due;
+        m_periodOverdue = overdue;
+        emit awayChanged();
+    }
     readAway(a.value(QStringLiteral("away")));
 }
 
@@ -797,6 +736,22 @@ void Member::readAway(const QJsonValue &away)
     m_awayOn = on;
     m_awayStatus = status;
     m_awayHub = hubName;
+    // The relay the phone meets the group at, null while it meets none.
+    const QJsonObject r = o.value(QStringLiteral("relay")).toObject();
+    const QString relayAt = r.value(QStringLiteral("endpoint")).toString();
+    const bool relayConnected = r.value(QStringLiteral("connected")).toBool();
+    const int relayOnline = r.value(QStringLiteral("online")).toArray().size();
+    const Failure relayFailure{r.value(QStringLiteral("error")).toString(), r.value(QStringLiteral("detail")).toString()};
+    if (relayAt != m_relayAt || relayConnected != m_relayConnected || relayOnline != m_relayOnline)
+        changed = true;
+    m_relayAt = relayAt;
+    m_relayConnected = relayConnected;
+    m_relayOnline = relayOnline;
+    if (relayFailure.message != m_relayFailure) {
+        m_relayFailure = relayFailure.message;
+        m_relayError = relayFailure.isNull() ? QString() : Errors::shown(relayFailure);
+        changed = true;
+    }
     if (changed)
         emit awayChanged();
 }
@@ -815,7 +770,7 @@ void Member::pollDevices()
     // A connected device's mute, as its hello says, for its tile's button.
     for (QVariant &v : devices) {
         QVariantMap d = v.toMap();
-        d.insert(QStringLiteral("muted"), m_mutedPeers.contains(d.value(QStringLiteral("device")).toString()));
+        d.insert(QStringLiteral("muted"), m_mutedPeers.contains(d.value(QStringLiteral("id")).toString()));
         v = d;
     }
     const QJsonObject w = call(m_member, QStringLiteral("why"), QJsonObject(), &failure);
@@ -867,13 +822,23 @@ void Member::rootChangeSeen()
         return;
     m_rootChanged.clear();
     emit devicesChanged();
+    // The member remembers it too, so the card does not come back when
+    // the app starts again.
+    if (m_member) {
+        Failure failure;
+        call(m_member, QStringLiteral("root_change_seen"), QJsonObject{}, &failure);
+        if (!failure.isNull()) {
+            m_error = Errors::shown(failure);
+            emit changed();
+        }
+    }
 }
 
 QString Member::deviceName(const QString &id) const
 {
     for (const QVariant &v : m_devices) {
         const QVariantMap d = v.toMap();
-        if (d.value(QStringLiteral("device")).toString() == id) {
+        if (d.value(QStringLiteral("id")).toString() == id) {
             const QString name = d.value(QStringLiteral("name")).toString();
             return name.isEmpty() ? id : name;
         }

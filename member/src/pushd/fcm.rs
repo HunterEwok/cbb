@@ -10,18 +10,17 @@
 //! in base64 under `c`, the service's challenge (24 bytes) under `k`. No
 //! collapse key, which would let Google join two notifications.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use rsa::pkcs8::DecodePrivateKey;
 use rsa::signature::{SignatureEncoding, Signer};
-use rustls::ClientConfig;
 
-use super::h2::{Answer, Conn, Tls, dial};
+use super::h2::{Answer, Conn, Reach, Tls};
 use super::{Delivery, Outcome, Platform};
-use crate::error::{Context, Error, Result};
+use crate::error::{Error, Result};
 
 /// Google's hosts.
 pub const FCM_HOST: &str = "fcm.googleapis.com";
@@ -126,20 +125,15 @@ pub fn outcome(a: &Answer) -> Outcome {
 /// FCM for one Firebase project.
 pub struct Fcm {
     account: Account,
-    tls: Arc<ClientConfig>,
+    reach: Reach,
     access: Mutex<Option<(String, Instant)>>,
     fcm: Mutex<Option<Conn<Tls>>>,
 }
 
 impl Fcm {
     pub fn new(account: Account, roots: rustls::RootCertStore) -> Result<Fcm> {
-        let mut cfg = ClientConfig::builder_with_provider(Arc::new(cbb_core::tls::web::provider()))
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .context("cannot set up the TLS toward FCM")?
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-        cfg.alpn_protocols = vec![b"h2".to_vec()];
-        Ok(Fcm { account, tls: Arc::new(cfg), access: Mutex::new(None), fcm: Mutex::new(None) })
+        let reach = Reach::web(roots, "FCM")?;
+        Ok(Fcm { account, reach, access: Mutex::new(None), fcm: Mutex::new(None) })
     }
 
     /// The access token, asked for again before it runs out.
@@ -156,7 +150,7 @@ impl Fcm {
             "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion={}",
             self.account.assertion(iat)
         );
-        let mut conn = dial(&self.tls, TOKEN_HOST, TIMEOUT)?;
+        let mut conn = self.reach.dial(TOKEN_HOST, TIMEOUT)?;
         let ans =
             conn.post(TOKEN_HOST, "/token", &[("content-type", "application/x-www-form-urlencoded")], form.as_bytes())?;
         let v: serde_json::Value = serde_json::from_slice(&ans.body).unwrap_or_default();
@@ -191,7 +185,7 @@ impl Platform for Fcm {
             let headers = [("authorization", auth.as_str()), ("content-type", "application/json")];
             let mut conn = self.fcm.lock().unwrap_or_else(|e| e.into_inner());
             if conn.as_ref().is_none_or(|c| c.gone()) {
-                match dial(&self.tls, FCM_HOST, TIMEOUT) {
+                match self.reach.dial(FCM_HOST, TIMEOUT) {
                     Ok(c) => *conn = Some(c),
                     Err(_) => return Outcome::Later(Duration::from_secs(30)),
                 }
@@ -286,5 +280,61 @@ mod tests {
         // A bad request of ours is not the phone's fault: its token stays.
         let bad = r#"{"error":{"code":400,"status":"INVALID_ARGUMENT"}}"#;
         assert_eq!(outcome(&a(Some(400), bad)), Outcome::Later(Duration::from_secs(30)));
+    }
+
+    fn fcm(reach: Reach) -> Fcm {
+        Fcm { account: account(), reach, access: Mutex::new(None), fcm: Mutex::new(None) }
+    }
+
+    fn delivery<'a>(token: &'a [u8], body: Option<&'a [u8]>) -> Delivery<'a> {
+        Delivery { env: cbb_core::push::ENV_FCM, token, body, challenge: None, expires_s: 0, tag: [0; 32] }
+    }
+
+    fn has(block: &[u8], s: &str) -> bool {
+        block.windows(s.len()).any(|w| w == s.as_bytes())
+    }
+
+    /// The access token is asked for once and again after Google refuses
+    /// it, and the message goes with it.
+    #[test]
+    fn a_send_takes_an_access_token_and_a_new_one_once() {
+        let sends = std::sync::atomic::AtomicUsize::new(0);
+        let tokens = std::sync::atomic::AtomicUsize::new(0);
+        let (reach, taken) = crate::pushd::tests::platform(100, move |block, _| {
+            use std::sync::atomic::Ordering::SeqCst;
+            if has(block, "/token") {
+                let n = tokens.fetch_add(1, SeqCst);
+                return (200, format!(r#"{{"access_token":"tok{n}","expires_in":3600}}"#).into_bytes());
+            }
+            if sends.fetch_add(1, SeqCst) == 0 { (401, Vec::new()) } else { (200, b"{}".to_vec()) }
+        });
+        let f = fcm(reach);
+        assert_eq!(f.send(&delivery(b"phone-token", Some(b"body"))), Outcome::Sent);
+        // The token is kept: the next send asks for none.
+        assert_eq!(f.send(&delivery(b"phone-token", Some(b"body"))), Outcome::Sent);
+        let t = taken.lock().unwrap();
+        assert_eq!(t.len(), 5);
+        assert!(has(&t[0].0, "/token") && has(&t[0].1, b"jwt-bearer".escape_ascii().to_string().as_str()));
+        assert!(has(&t[1].0, "/v1/projects/cbb-test/messages:send") && has(&t[1].0, "Bearer tok0"));
+        assert!(has(&t[3].0, "Bearer tok1") && has(&t[4].0, "Bearer tok1"));
+        let v: serde_json::Value = serde_json::from_slice(&t[3].1).unwrap();
+        assert_eq!(v["message"]["token"], "phone-token");
+    }
+
+    #[test]
+    fn what_is_not_sent() {
+        let (reach, _) = crate::pushd::tests::platform(100, |_, _| (400, br#"{"error":"invalid_grant"}"#.to_vec()));
+        let f = fcm(reach);
+        assert_eq!(f.send(&delivery(b"phone-token", Some(b"body"))), Outcome::Later(Duration::from_secs(30)));
+        let e = f.access(false).err().unwrap().to_string();
+        assert!(e.contains("400") && e.contains("invalid_grant"), "{e}");
+        let f = fcm(crate::pushd::tests::nowhere());
+        assert_eq!(f.send(&delivery(b"phone-token", Some(b"body"))), Outcome::Later(Duration::from_secs(30)));
+        assert_eq!(f.send(&delivery(b"not a token", Some(b"body"))), Outcome::Gone);
+        assert_eq!(f.send(&delivery(b"phone-token", None)), Outcome::NoPath);
+        let mut d = delivery(b"phone-token", Some(b"body"));
+        d.env = cbb_core::push::ENV_APNS;
+        assert_eq!(f.send(&d), Outcome::NoPath);
+        assert!(Fcm::new(account(), rustls::RootCertStore::empty()).is_ok());
     }
 }

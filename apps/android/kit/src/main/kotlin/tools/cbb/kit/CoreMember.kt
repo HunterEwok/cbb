@@ -203,7 +203,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
     /** What a member port is for. */
     enum class Listen(val wire: String) {
-        /** The home network, while the phone is the hub: every address; the app publishes it with r=phone. */
+        /** The home network: every address, while an admin phone keeps a home window open. */
         HOME("home"),
     }
 
@@ -326,14 +326,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     /** On a group of 0.6: sync away from home as the member runs it, null while it is off. */
     fun awayStatus(): AwayState? = AwayState.of(call("away_status"))
 
-    /** The forwarder the group's root set for this phone as a hub: its address and its key's pin. */
-    data class RootForwarder(val endpoint: String, val key: String)
-
-    /** On a group of 0.6: the forwarder the group's root set for this phone as a hub, which it serves through; null while the root set none. */
-    fun rootForwarder(): RootForwarder? = call("away_status").optObject("root_forwarder")?.let { f ->
-        RootForwarder(f.optString("endpoint") ?: "", f.optString("key") ?: "")
-    }
-
     /**
      * On the root phone of a group of 0.6: whether the group's server credentials need its root key ([renewPeriod]) and
      * whether they expired already, so that the group's relay and its hubs' forwarders take nobody; both false elsewhere.
@@ -368,40 +360,13 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     /** On a group of 0.6: turns sync away from home on, with new tunnel keys, or off. */
     fun setAway(on: Boolean): AwayState? = AwayState.of(call("away", Wire.obj("on" to JsonPrimitive(on))))
 
-    /**
-     * On a group of 0.6, serves as a hub of the group (the records must make this phone one: an admin key), with the
-     * computers' hub: reached away from home through the forwarder at forwarder (`host:port`, its key's pin key or
-     * `default` for the project's; none given: the one the root set, [rootForwarder]), or at addrs ("ip:port") on the
-     * UDP port (0: any free one), hidden as obfuscateOff and vlessOff say. Its clients and the guests of invitations come in through its tunnel.
-     */
-    fun serveAsHub(
-        port: Int = 0,
-        addrs: List<String> = emptyList(),
-        forwarder: String = "",
-        key: String = "",
-        obfuscateOff: Boolean = false,
-        vlessOff: Boolean = false,
-    ): AwayState? = AwayState.of(
-        call(
-            "hub",
-            Wire.obj(
-                "port" to Wire.num(port.toLong()), "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }),
-                "forwarder" to Wire.str(forwarder), "key" to Wire.str(key),
-                "obfuscate_off" to JsonPrimitive(obfuscateOff), "vless_off" to JsonPrimitive(vlessOff),
-            ),
-        ),
-    )
-
-    /** On a group of 0.6: stops serving as a hub; its clients go to the next hub in the group's order. */
-    fun stopHub(): AwayState? = AwayState.of(call("hub_off"))
-
     /** On the root of a group of 0.6: the group's relays, each "address pin", or "default" alone; none meets at no relay. */
     fun setRelays(relays: List<String>, public: ByteArray, sign: (ByteArray) -> ByteArray): List<String> =
         act(Wire.obj("action" to Wire.str("relay"), "relays" to JsonArray(relays.map { JsonPrimitive(it) })), public, sign)
             .optArray("relays")?.map { (it as JsonPrimitive).content } ?: emptyList()
 
     /**
-     * On the root of a group of 0.6: names the forwarder of device, an admin phone or a computer that may be a hub, at
+     * On the root of a group of 0.6: names the forwarder of device, a computer that may be a hub, at
      * forwarder (`host:port`, or `default` for the project's) with its key's pin key, which the device takes as its
      * forwarder setting and serves through once its hub is on. The device's answer: done, refused or failed, and why.
      */
@@ -533,8 +498,8 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     /** The callbacks of the manage calls under way. */
     private val signing = mutableListOf<SignFn>()
 
-    // The root's own records (cbb_core::root, docs/protocol.md, section 10,
-    // "Handing the group over" and "The recovery key"): the core builds and
+    // The root's own records (cbb_member_manage, docs/protocol.md, section 10,
+    // "Who signs what" and "The recovery key"): the core builds and
     // checks them, signs them with the root key public through sign, adds
     // them and sends them to every member.
 

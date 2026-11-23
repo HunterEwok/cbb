@@ -163,11 +163,11 @@ public final class BonjourBrowser: @unchecked Sendable {
         return (v4 + v6).filter { seen.insert($0).inserted }
     }
 }
-/// Publishes this phone as a member on the home network while it is the
-/// group's hub (docs/design.md, "The phone as the hub"): the service of type
-/// _cbb._tcp named by its device ID, at the port where the core's member
-/// listens, with its TXT record (r=phone). The app's Info.plist lists the
-/// type, as for browsing.
+/// Publishes this phone on the home network while its home window is open
+/// (docs/apps.md, "Screens"): the service of type _cbb._tcp named by
+/// its device ID, at the port where the core's member listens, with the
+/// window's TXT record. The app's Info.plist lists the type, as for
+/// browsing.
 public final class BonjourPublisher: @unchecked Sendable {
     private let lock = NSLock()
     private var ref: DNSServiceRef?

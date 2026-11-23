@@ -587,7 +587,7 @@ fn write(a: WriteArgs) -> core::result::Result<Vec<u8>, Refusal> {
         kind => {
             let mut kind = kind.kind()?;
             // The call names no servers: a new settings record keeps the
-            // group's (format 4.5, field 15), which only `cbb global relay`
+            // group's (format 4.4, field 15), which only `cbb global relay`
             // on the root changes.
             if let Kind::Settings(s) = &mut kind {
                 s.servers = st.settings.servers.clone();

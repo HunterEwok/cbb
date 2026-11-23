@@ -12,7 +12,6 @@
 #include "member.h"
 #include "membership.h"
 #include "pairing06.h"
-#include "pastereceiver.h"
 #include "platform/osinfo.h"
 
 #include <QJsonObject>
@@ -54,7 +53,6 @@ class App : public QObject
     // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
     Q_PROPERTY(Bugs *bugs READ bugs CONSTANT)
     Q_PROPERTY(BleKeyboard *keyboard READ keyboard CONSTANT)
-    Q_PROPERTY(PasteReceiver *paste READ paste CONSTANT)
     // Settings: the error details under each error message (Errors::
     // showDetails), the language the next start uses ("" for the
     // system's), and whether the main page shows the devices as a list.
@@ -113,7 +111,6 @@ public:
     Events *events() { return &m_events; }
     Bugs *bugs() { return &m_bugs; }
     BleKeyboard *keyboard() { return &m_keyboard; }
-    PasteReceiver *paste() { return &m_paste; }
 
     bool errorDetails() const;
     void setErrorDetails(bool on);
@@ -151,8 +148,9 @@ public:
     // window of the group shows (the window announced at home), or a
     // window's QR code text.
     Q_INVOKABLE void joinByWindow(const QString &text);
-    // An admin's change to a device of the group (remove, rename, thaw,
-    // make_admin as the root, for a computer) or command for it (mute, unmute), signed with the admin key, or the
+    // An admin's change to a device of the group (remove, rename, freeze,
+    // thaw, make_admin as the root, for a computer) or command for it (mute,
+    // unmute, hub for an admin computer), signed with the admin key, or the
     // root's, off the GUI thread; managed() tells when it is done.
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
@@ -205,6 +203,13 @@ public:
     // How long a copy (ttlMs) or a secret (secretTtlMs) lives for the whole
     // group (D-129), in milliseconds; 0 leaves it as it is.
     Q_INVOKABLE void setGroupTtl(double ttlMs, double secretTtlMs);
+    // The root sets the group's blind relay (manage relay), where every
+    // device meets the others: the address with its key's pin, or none with
+    // both empty; relaySet tells whether it took. Setting it also signs the
+    // period of the group's server keys when one is due. renewPeriod signs
+    // that period alone (docs/protocol.md, section 18).
+    Q_INVOKABLE void setRelay(const QString &address, const QString &key);
+    Q_INVOKABLE void renewPeriod();
     Q_INVOKABLE void forgetRecovery();
     QString recoveryText() const { return m_recoveryText; }
     QStringList recoveryModules() const { return m_recoveryModules; }
@@ -241,6 +246,7 @@ signals:
     // fresh: no PIN yet, so the user chooses one and types it twice;
     // reason: why it is asked, when the dialog should say.
     void pinNeeded(bool fresh, const QString &reason);
+    void relaySet(bool ok);
     // A wrong PIN, with the tries left, or locked for good.
     void pinRefused(bool locked, int triesLeft);
     void pinAccepted();
@@ -285,7 +291,6 @@ private:
     Events m_events;
     Bugs m_bugs;
     BleKeyboard m_keyboard;
-    PasteReceiver m_paste{&m_node, &m_keyboard};
     bool m_busy = false;
     QString m_error;
     QString m_startLanguage;

@@ -68,8 +68,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I3 | `get.sh` and `get.ps1` check the release: a good build installs; a tampered archive, a wrong signature, an expired manifest, an unknown key and a missing openssl are refused with a clear message; `CBB_VERSION` installs that release | feed | |
 | I4 | Uninstall and purge on each system leave nothing: service, agent, units, firewall rules, users and groups, the Apps entry on Windows, the state with `--purge`/`-Purge` and the keys kept without it [L10] | real, fleet | |
 | I5 | Install again over an install: the group, mode, settings, quick actions, remote paste switch and keys stay | real | |
-| I6 | From 0.6 on, upgrade from the previous release one device at a time in a mixed group: the same group and devices, copying between old and new after each step and then between all; state and keys survive; the agent restarts in every running session [L9] | real, fleet | |
-| I7 | From 0.6 on, downgrade to the previous release over the new state: it starts in the same group or refuses clearly, and no key is lost [P14] | real, fleet | |
+| I6 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), upgrade from the previous release one device at a time in a mixed group: the same group and devices, copying between old and new after each step and then between all; state and keys survive; the agent restarts in every running session [L9] | real, fleet | |
+| I7 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), downgrade to the previous release over the new state: it starts in the same group or refuses clearly, and no key is lost [P14] | real, fleet | |
 | I8 | `cbb update -check` and `cbb update` on Linux, macOS and Windows from the feed: renamed into place (the running exe moved aside on Windows), the health check passes, the new version runs | feed, real | |
 | I9 | Updates refused: a tampered file, a bad signature, an expired manifest, an older version (the highest seen is kept), `min_from` not met, a wrong platform; each named in the message | feed | |
 | I10 | A new build that never becomes healthy is rolled back and listed as failed; the next check skips it | feed | |
@@ -89,7 +89,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I24 | Windows binaries carry a valid Authenticode signature; `cbb update` checks it; SmartScreen lets the installer run | real | signing |
 | I25 | The installers' errors: a failed step names its exit status; `CBB_ERROR_DETAILS=1` shows every command and the full Windows error record | real | |
 | I26 | The upgrade from 0.5 to 0.6, once: a group made before 0.6 is not carried over (records version 2 have no migration); each member leaves it at its first start, says so in `cbb status`, keeps its settings, and a new group made on 0.6 works; a 0.5 member left in the old group reaches no 0.6 member | real, fleet | |
-| I27 | From 0.6 on a device of version N works in one group with N-1: the previous release's cbb (`tools/e2e/previous.sh`) and this build's join one group, sync both ways, take the record of a device admitted later, and the previous one takes its removal (TestPreviousRelease in CI; I6 with the bench's two versions) | fleet | |
+| I27 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), a device of version N works in one group with N-1: the previous release's cbb (`tools/e2e/previous.sh`) and this build's join one group, sync both ways, take the record of a device admitted later, and the previous one takes its removal (TestPreviousRelease in CI; I6 with the bench's two versions) | fleet | |
 
 ## 2. Groups, pairing and roles (G)
 
@@ -110,10 +110,9 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G11 | A second phone joins from its Start screen and becomes an admin; an iPad joins as a phone | ui | iPhone, iPad |
 | G12 | Remote invitation: `cbb invite` on the hub, `cbb pair -invite` away; both show the same fingerprint; `yes` admits; the guest tunnel reaches only the pairing [P11] | real | |
 | G13 | Invitation refused: answered `no`; used twice; after its time (1 h by default, `-for 24h`, more than 24 h refused); the hub off; three failed attempts; cancelled; a file of another group; nothing left on the hub after each [P21, S7] | real, time | |
-| G14 | An invitation made and served by a phone that is the hub, and used on a phone | ui | |
+| G14 | An admin phone's invitation goes through a computer hub of the group; a phone with no hub to invite through says so, and its own device is no hub to name | fleet | |
 | G15 | Joining with the hub's addresses only: the service may reach them for the join and a failed join takes them back | real | |
 | G16 | The joiner's identity is replaced in one step: the joiner killed at each step (before the welcome, after the certificate, before it confirms) leaves no half-joined device, and the window says whether it was stored | fleet | |
-| G17 | The joining computer listens for the phone (QR): only during the join, only for the phone named in the code | fleet | |
 
 ### 2.2 Admins, the root and removal
 
@@ -177,7 +176,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 |---|---|---|---|
 | D1 | mDNS: every member, with and without its helper, publishes and browses; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
 | D2 | Who dials: of two computers the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
-| D3 | Members that dial dial those that publish `r=listen` at once, whatever their device IDs; of two that dial, the lower device ID dials and the other does after 30 s; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
+| D3 | Members that dial dial those that publish `r=listen` at once, whatever their device IDs; of two that dial, the lower device ID dials and the other does after 30 s; phones dial everyone, and no member dials a phone (`r=phone`) | fleet, ui | |
 | D6 | Known networks: a member is quiet on a network it does not know; it learns one by making or joining a group, a pairing window or a member connection; `cbb status` names quiet networks; `sudo cbb network` after a new router | fleet | |
 | D7 | Only private, unique-local and link-local addresses are published and accepted; a public source address on the member port is refused by the program and by the unit's limits | fleet | |
 | D8 | Only IPv6 between two members; link-local addresses tried last [P19] | fleet, real | |
@@ -340,7 +339,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W13 | The hub down [F6], hung, rebooting: a client says the hub is unreachable and sends nothing elsewhere | real, fleet | |
 | W14 | Several hubs: the root and each admin with a hub; failover within about a minute; back within 5 min; no copy lost [P36] | real, fleet | |
 | W15 | `cbb global move` to an admin computer; refused for a MIPS build (no tunnel) and a container; clients follow without coming home [P37] | real, fleet | |
-| W16 | The phone as the hub while its app is open: registering, registered, refused with the reason; "This is my home network"; clients retry every 5 s; Android keeps it in the background; moving the hub from the phone to a computer | ui | |
+| W16 | No phone is a hub (D-134): the records make no phone, watch or leaf one, not even the root's phone or one the hubs record names; the root names no forwarder for a phone, and a phone refuses a hub command | fleet | |
 | W17 | cbb without its helper as a client: plain WireGuard, then the hub obfuscated and reached with AmneziaWG (VLESS over XHTTP: `TestAloneMemberAwayXHTTP`) | real | |
 | W18 | A client that has not met the hub since its obfuscation changed cannot reach it away until it comes home | fleet | |
 | W19 | Client isolation: from a client's tunnel nothing but the hub's member port answers; the hub opens one port [S3, S4] | real, fleet | |
@@ -365,7 +364,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W40 | The servers keep nothing: no file or log line with addresses, tags, IDs, names or markers, in either mode; the units' exposure score [S18] | real | |
 | W41 | The push sender: an encrypted push reaches the iPhone and wakes it; cbb.tools stores nothing | ui, real | Apple account |
 | W42 | Phones away in a group of 0.6: the Live member's tunnel in the app's process to the hub; the Android foreground service away; the iPhone while the app runs; the devices list marks the hub, and a computer behind it shows online | ui | |
-| W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay, the phones' hub and cbb's tunnel in unit tests (roadmap item 61) | fleet | |
+| W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay and cbb's tunnel in unit tests (roadmap item 61) | fleet | |
 | W45 | A hub on a network that lets only HTTPS through: with UDP and the forwarder's TCP port blocked, it registers inside VLESS and its client away syncs both ways | fleet | |
 | W46 | A forwarder whose VLESS runs over XHTTP behind its site's web server (`cbb forward -vless-xhttp`): with UDP and the forwarder's TCP port blocked, the hub registers through the web server and its client away syncs both ways through it; anyone else gets the site; in the time-scaled build at the real times, whose VLESS alone trusts the web server's own CA (`CBB_TEST_XHTTP_CA`) | time | |
 | W47 | `cbb update` on a client away whose hub uses VLESS asks the mirror on the forwarder's server (`cbb forward -vless-mirror`) only inside VLESS, the mirror's certificate checked on the way; as W46 | time | |

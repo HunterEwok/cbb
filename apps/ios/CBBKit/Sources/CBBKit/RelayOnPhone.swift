@@ -4,9 +4,8 @@
 import Foundation
 
 /// The phone at the group's blind relay (docs/design.md, "Blind relay",
-/// D-68), as the screens show it. On a group of 0.6 the Live member meets
-/// the relay the group's root set (AwayOn06); a phone in a group of 0.5
-/// meets no relay (D-123).
+/// D-68), as the screens show it: the Live member meets the relay the
+/// group's root set (AwayOn06).
 public enum RelayOnPhone {
     /// What the screens show.
     public enum Status: Sendable, Equatable { case off, paused, connecting, connected, failed }

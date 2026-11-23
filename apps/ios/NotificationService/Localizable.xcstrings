@@ -76,7 +76,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Устройство ждёт, чтобы войти в вашу группу. Откройте приложение."
+            "value": "Устройство ждёт, чтобы вступить в вашу группу. Откройте приложение."
           }
         },
         "sw": {
@@ -415,48 +415,48 @@
         }
       }
     },
-    "Your group's root changed. Open the app to check.": {
+    "Your group's main device changed. Open the app to check.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تغيّر جذر مجموعتك. افتح التطبيق للتحقق."
+            "value": "تغيّر الجهاز الرئيسي لمجموعتك. افتح التطبيق للتحقق."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambió la raíz de tu grupo. Abre la app para comprobarlo."
+            "value": "Cambió el dispositivo principal de tu grupo. Abre la app para comprobarlo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "השורש של הקבוצה שלך השתנה. פתחו את האפליקציה כדי לבדוק."
+            "value": "המכשיר הראשי של הקבוצה שלך השתנה. פתחו את האפליקציה כדי לבדוק."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "आपके समूह का रूट बदल गया। जाँचने के लिए ऐप खोलें।"
+            "value": "आपके समूह का मुख्य डिवाइस बदल गया। जाँचने के लिए ऐप खोलें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "У вашей группы сменился корень. Откройте приложение, чтобы проверить."
+            "value": "У вашей группы сменилось главное устройство. Откройте приложение, чтобы проверить."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mzizi wa kikundi chako umebadilika. Fungua programu kuhakikisha."
+            "value": "Kifaa kikuu cha kikundi chako kimebadilika. Fungua programu kuhakikisha."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "你的群组的根设备已更改。请打开应用核实。"
+            "value": "你的群组的主设备已更改。请打开应用核实。"
           }
         }
       }

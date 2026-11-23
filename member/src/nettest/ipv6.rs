@@ -3,7 +3,7 @@
 
 //! The tunnel and the relay over IPv6: a hub and a relay that listen on
 //! the IPv6 loopback, reached there. Where the system has no IPv6 the tests
-//! say so and pass, unless CBB_TEST_IPV6=1 asks for them, as on the bench.
+//! say so and pass, unless CBB_TEST_IPV6=1 asks for them, as in CI and on the bench.
 
 use std::io::{Read, Write};
 use std::net::{Ipv6Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};

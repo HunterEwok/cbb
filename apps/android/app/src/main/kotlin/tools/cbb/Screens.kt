@@ -10,7 +10,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -96,8 +95,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
-import tools.cbb.kit.RemotePaste
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -191,7 +188,8 @@ private fun StartScreen(model: AppModel) {
         Text(stringResource(R.string.full_name), fontFamily = FontFamily.Monospace, color = palette.accent)
         Text(stringResource(R.string.tagline), textAlign = TextAlign.Center, color = palette.textDim)
         if (model.isTv) {
-            // A TV has no camera to scan a code: it shows its own, for the phone.
+            // A TV has no camera to scan a code: it types the six digits a
+            // pairing window shows.
             Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
             AccentButton(stringResource(R.string.join_tv), onClick = { model.startJoining() }, modifier = Modifier.widthIn(max = 480.dp))
             Text(stringResource(R.string.join_tv_hint), textAlign = TextAlign.Center, color = palette.textDim)
@@ -400,13 +398,6 @@ private fun InvitationAnswerScreen(model: AppModel, invite: AppModel.PendingInvi
             color = palette.accent,
             textAlign = TextAlign.Center,
         )
-        val until = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
-            .format(Instant.ofEpochSecond(invite.invitation.expires).atZone(ZoneId.systemDefault()))
-        Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Text(stringResource(R.string.invitation_group, invite.invitation.group), fontFamily = FontFamily.Monospace)
-            Text(stringResource(R.string.invitation_hub, invite.invitation.hub.take(12)), fontFamily = FontFamily.Monospace)
-            Text(stringResource(R.string.invitation_until, until))
-        }
         Text(stringResource(R.string.invitation_answer_hint), textAlign = TextAlign.Center, color = palette.textDim)
         AccentButton(stringResource(R.string.invitation_accept), onClick = model::acceptInvitation, modifier = Modifier.widthIn(max = 480.dp))
         QuietButton(stringResource(R.string.invitation_decline), onClick = model::declineInvitation)
@@ -539,20 +530,16 @@ internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
         }
         if (more(SettingsPart.WHY)) WhySection(model, model.settings.showsErrorDetails)
         if (more(SettingsPart.AWAY)) {
-            model.hub?.let { HubSection(model, it) }
             model.blindRelay?.let { BlindRelaySection(model, it) }
         }
-        if (more(SettingsPart.PASTE)) {
-            if (!model.isTv) ShareAsk(model)
-            RemotePasteSection(model.group.pastes, model.isTv)
-        }
+        if (more(SettingsPart.SHARE) && !model.isTv) ShareAsk(model)
         if (more(SettingsPart.GROUP)) {
             model.ttlMS?.let { LifetimeSection(model, it) }
             model.keyLevel?.let { KeyLevelSection(model, it) }
         }
         // The lab: what works but is no promise of 1.0 (docs/apps.md,
         // "The lab"). A TV has nothing near it to type into.
-        if (more(SettingsPart.PASTE) && !model.isTv) {
+        if (more(SettingsPart.SHARE) && !model.isTv) {
             Text(
                 stringResource(R.string.lab),
                 style = MaterialTheme.typography.titleMedium,
@@ -719,56 +706,6 @@ private fun AutoSend() {
     }
 }
 
-/**
- * Remote paste on this phone (docs/design.md, "Remote paste"): the switch
- * that lets the group's admins paste into the focused text field, the one
- * for Enter, and the accessibility service it needs.
- */
-@Composable
-private fun RemotePasteSection(pastes: PasteReceiver, tv: Boolean) {
-    val palette = LocalPalette.current
-    val context = LocalContext.current
-    var set by remember { mutableStateOf(pastes.settings) }
-    var service by remember { mutableStateOf(CopyWatcher.isOn(context)) }
-    // On in the settings, but not running: the system stopped it, as Android TV 14 does.
-    var stopped by remember { mutableStateOf(service && CopyWatcher.running == null) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        set = pastes.settings
-        service = CopyWatcher.isOn(context)
-        stopped = service && CopyWatcher.running == null
-    }
-    fun change(new: RemotePaste.Settings) {
-        runCatching { pastes.settings = new }.onFailure { Log.e("cbb", "saving the remote paste switches", it) }
-        set = pastes.settings
-    }
-    Section(stringResource(R.string.remote_paste)) {
-        Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Row(Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch) { change(RemotePaste.Settings(on = !set.on)) }, verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.remote_paste_switch), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                Switch(checked = set.on, onCheckedChange = null)
-            }
-            if (set.on) {
-                Row(Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch) { change(set.copy(enter = !set.enter)) }, verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.remote_paste_enter), modifier = Modifier.weight(1f))
-                    Switch(checked = set.enter, onCheckedChange = null)
-                }
-            }
-            Tip(R.string.remote_paste_body)
-            if (set.on && (!service || stopped)) {
-                val why = when {
-                    stopped -> R.string.remote_paste_service_stopped
-                    tv -> R.string.remote_paste_needs_service_tv
-                    else -> R.string.remote_paste_needs_service
-                }
-                Text(stringResource(why), style = MaterialTheme.typography.bodyMedium, color = palette.danger)
-                TextButton(onClick = {
-                    context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }) { Text(stringResource(R.string.open_accessibility), color = palette.accent) }
-            }
-        }
-    }
-}
-
 /** The root phone makes its Wear OS watch an admin, for the emergency actions (docs/protocol.md, section 10, "Watches"). */
 @Composable
 private fun WatchSection(model: AppModel) {
@@ -875,116 +812,8 @@ private fun BlindRelaySection(model: AppModel, relay: AppModel.BlindRelay) {
 }
 
 /**
- * The phone as the group's hub: the switch, where it stands, the
- * forwarder, the home networks and, on Android, the background.
- */
-@Composable
-private fun HubSection(model: AppModel, hub: AppModel.Hub) {
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    fun act(f: suspend () -> Unit) {
-        busy = true
-        scope.launch {
-            f()
-            busy = false
-        }
-    }
-    Section(stringResource(R.string.hub_title)) {
-        Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Row(
-                Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) { act { model.setHub(!hub.on) } },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.hub_switch), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                Switch(checked = hub.on, onCheckedChange = null, enabled = !busy)
-            }
-            val status = when (hub.status) {
-                HubOnPhone.Status.OFF -> R.string.hub_off
-                HubOnPhone.Status.PAUSED -> R.string.hub_paused
-                HubOnPhone.Status.HOME_ONLY -> R.string.hub_home_only
-                HubOnPhone.Status.REGISTERING -> R.string.hub_registering
-                HubOnPhone.Status.REGISTERED -> R.string.hub_registered
-                HubOnPhone.Status.FAILED -> R.string.hub_failed
-            }
-            Text(stringResource(status), color = if (hub.status == HubOnPhone.Status.REGISTERED) palette.accent else palette.textDim)
-            // The registration's error underneath, when details are on.
-            hub.error?.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.textDim) }
-            if (hub.entriesStale) {
-                Text("⚠ " + stringResource(R.string.hub_entries_stale), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
-            }
-            if (hub.on) {
-                Text(
-                    stringResource(if (hub.home) R.string.hub_on_home else R.string.hub_not_home),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = palette.textDim,
-                )
-                if (!hub.home) QuietButton(stringResource(R.string.hub_add_home), onClick = { if (!busy) act { model.addHomeNetwork() } })
-                // The forwarder is the group's root's setting: shown, not edited.
-                Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
-                val fw = hub.forwarder
-                Text(
-                    stringResource(if (fw != null) R.string.hub_forwarder_by_root else R.string.hub_forwarder_none_by_root),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textDim,
-                )
-                if (fw != null) {
-                    Text(fw.endpoint, style = MaterialTheme.typography.bodyMedium)
-                    Text(fw.pin, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = palette.textDim)
-                }
-                Text(stringResource(R.string.hub_disguise), fontWeight = FontWeight.SemiBold)
-                // Strict networks: AmneziaWG for networks that block VPNs,
-                // and VLESS over it for those that let only the web through.
-                var disguiseTo by remember { mutableStateOf<HubOnPhone.Disguise?>(null) }
-                val vpn = hub.disguise != HubOnPhone.Disguise.PLAIN
-                val web = hub.disguise == HubOnPhone.Disguise.VLESS
-                StrictSwitch(stringResource(R.string.hub_strict_vpn), vpn, !busy) {
-                    disguiseTo = if (vpn) HubOnPhone.Disguise.PLAIN else HubOnPhone.Disguise.OBFUSCATE
-                }
-                StrictSwitch(stringResource(R.string.hub_strict_web), web, !busy && vpn) {
-                    disguiseTo = if (web) HubOnPhone.Disguise.OBFUSCATE else HubOnPhone.Disguise.VLESS
-                }
-                Tip(R.string.hub_disguise_body)
-                disguiseTo?.let { d ->
-                    Confirm(
-                        stringResource(R.string.hub_disguise_title), stringResource(R.string.hub_disguise_confirm), stringResource(R.string.hub_disguise_change),
-                        dismiss = { disguiseTo = null },
-                        confirm = {
-                            disguiseTo = null
-                            act { model.setHubDisguise(d) }
-                        },
-                    )
-                }
-                Row(
-                    Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) { act { model.setHubInBackground(!hub.background) } },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(R.string.hub_background), modifier = Modifier.weight(1f))
-                    Switch(checked = hub.background, onCheckedChange = null, enabled = !busy)
-                }
-            }
-            model.hubNote?.let { NoteText(it) }
-            Tip(R.string.hub_body)
-        }
-    }
-}
-
-/** One switch of strict networks, which asks before it changes the hub. */
-@Composable
-private fun StrictSwitch(label: String, on: Boolean, enabled: Boolean, flip: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = enabled, onClick = flip),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = on, onCheckedChange = null, enabled = enabled)
-    }
-}
-
-/**
- * Home's + "Send an invitation": any admin makes one, on this phone while it
- * is the group's hub, else through a hub of the group it reaches; a phone
- * that is no admin says where to make one.
+ * Home's + "Send an invitation": any admin makes one through a hub of the
+ * group it reaches; a phone that is no admin says where to make one.
  */
 @Composable
 internal fun InviteSection(model: AppModel) {

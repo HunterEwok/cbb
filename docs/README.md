@@ -65,8 +65,8 @@ for security reviewers.
 | [Design](design.md) | how it works and why, after the arc42 template: goals, context, building blocks, run time, deployment, concepts, quality, risks |
 | [Decisions](decisions.md) | the architecture decisions in force, and the replaced ones as their history |
 | [Threat model](threat-model.md) | the assets, adversaries, trust boundaries, and each threat with its defence and code |
-| [Protocol](protocol.md) | the wire format, for anyone writing another implementation |
-| [Group records, version 2](records-v2.md) | why the group's authority records moved to version 2 in 0.6 and how they are tested; the rules are in protocol.md, section 10 |
+| [Protocol](protocol.md) | the protocol, for anyone writing another implementation: what each message and record is for, and the rules that apply them |
+| [Wire format](format.md) | every message, record, command and copy of 0.6, byte by byte |
 | [The core's entry point](core-api.md) | the one call, bytes in and bytes out, through which the phones and Go use the Rust core's rules, and its error codes |
 | [Cryptography](cryptography.md) | every primitive, library, key, its size, lifetime and where it is kept |
 | [Testing](testing.md) | the test levels, the interop vectors, the cross tests and the bench |

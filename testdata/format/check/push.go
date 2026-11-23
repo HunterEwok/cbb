@@ -17,7 +17,7 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-// The vectors of push (push.json, format section 20.4): registrations,
+// The vectors of push (push.json, format section 9.6): registrations,
 // sealed bodies, send keys' signatures, UnifiedPush tokens and the push service's
 // messages. Each verdict is this file's own reading: the AEAD and the keys
 // by Go's crypto, the fields by the tables the file gives, the padding and

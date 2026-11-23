@@ -3,8 +3,8 @@
 
 // A device's details (docs/apps.md, Devices), the page Device and, on a big
 // screen, the pane beside Home's devices: its sync, and for an
-// admin its changes and commands: paste on it, rename, mute, freeze's thaw, make an admin (the root,
-// for a phone or a computer that offers an admin key), hand the group over (the root),
+// admin its changes and commands: paste on it, rename, mute, freeze and thaw, make an admin (the root,
+// for a phone or a computer that offers an admin key), make an admin computer a hub (never a phone), hand the group over (the root),
 // take the group over (an admin, from a lost root), remove. A removal by
 // the root is final, so the page asks first and says so.
 
@@ -16,10 +16,31 @@ import { Device as DeviceInfo } from '../model/Member';
 
 import { BusyLine, ErrorText, NORMAL_BUTTON, PageTitle } from './Common';
 
-// Members take remote pastes, and the phones that type them on a keyboard
-// or into their own focus; an iPhone cannot.
+// Members take remote pastes; the phones take none in 0.6.
 export function takesPastes(d: DeviceInfo): boolean {
-  return d.role === 'member' || (d.role === 'phone' && ['android', 'aurora', 'harmonyos'].includes(d.os ?? ''));
+  return d.role === 'member';
+}
+
+// Whether an admin muted the device, as its hello says while it is connected.
+export function isMuted(d: DeviceInfo): boolean {
+  return app.member.mutedPeers.indexOf(d.id) >= 0;
+}
+
+// An admin mutes a device for the whole group, for a time or until an admin
+// unmutes it (docs/design.md, "Muting a device"), as on the iPhone: one
+// Mute, then how long.
+export function muteMenu(ui: UIContext, device: string): void {
+  const minutes = [15, 60, 8 * 60, 0];
+  ui.showActionSheet({
+    title: t('device_mute'),
+    message: t('device_mute_note'),
+    sheets: [
+      { title: t('device_mute_15'), action: () => { app.manage('mute', device, '', minutes[0]); } },
+      { title: t('device_mute_hour'), action: () => { app.manage('mute', device, '', minutes[1]); } },
+      { title: t('device_mute_8'), action: () => { app.manage('mute', device, '', minutes[2]); } },
+      { title: t('device_mute_until'), action: () => { app.manage('mute', device, '', minutes[3]); } }
+    ]
+  });
 }
 
 @ComponentV2
@@ -167,15 +188,36 @@ export struct DeviceDetail {
                     });
                   })
                 }
-                this.action(t('device_mute_hour'), false, () => {
-                  app.manage('mute', this.deviceId, '', 60);
-                })
-                this.action(t('device_mute'), false, () => {
-                  app.manage('mute', this.deviceId, '', 0);
-                })
-                this.action(t('device_unmute'), false, () => {
-                  app.manage('unmute', this.deviceId);
-                })
+                // A hub is a computer, a router or a board, never a phone
+                // (D-134): an admin phone makes an admin computer one.
+                if ((this.device() as DeviceInfo).role === 'member' && (this.device() as DeviceInfo).admin === true &&
+                  (this.device() as DeviceInfo).frozen !== true) {
+                  this.action(t('device_make_hub'), false, () => {
+                    this.confirm(t('device_make_hub_confirm'), t('device_make_hub'), () => {
+                      app.manage('hub', this.deviceId);
+                    });
+                  })
+                }
+                // A stolen admin computer: an admin freezes it, the root
+                // unfreezes it.
+                if ((this.device() as DeviceInfo).role === 'member' && (this.device() as DeviceInfo).admin === true &&
+                  (this.device() as DeviceInfo).root !== true && (this.device() as DeviceInfo).frozen !== true) {
+                  this.action(t('device_freeze'), true, () => {
+                    this.confirm(t('device_freeze_confirm'), t('device_freeze'), () => {
+                      app.manage('freeze', this.deviceId);
+                    });
+                  })
+                }
+                // Unmute for a muted device, Mute for a connected one.
+                if (isMuted(this.device() as DeviceInfo)) {
+                  this.action(t('device_unmute'), false, () => {
+                    app.manage('unmute', this.deviceId);
+                  })
+                } else if ((this.device() as DeviceInfo).online === true) {
+                  this.action(t('device_mute'), false, () => {
+                    muteMenu(this.getUIContext(), this.deviceId);
+                  })
+                }
                 if ((this.device() as DeviceInfo).root !== true) {
                   this.action(t('device_remove'), true, () => {
                     const d = this.device() as DeviceInfo;

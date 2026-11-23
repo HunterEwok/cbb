@@ -13,17 +13,15 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * Sync away from home, the phone as a hub and the group's relay on a group of 0.6, as the Live member runs them in
- * the app's process (docs/core-api.md, `away`, `hub`, `hub_off`, `away_status`, the manage action `relay`): an admin
- * phone serves as the hub and a phone syncs through its tunnel, how the hub's tunnel hides, what the member refuses,
- * and the link to the group's relay telling why it is not connected.
+ * Sync away from home and the group's relay on a group of 0.6, as the Live member runs them in the app's process
+ * (docs/core-api.md, `away_status`, the manage actions `forwarder` and `relay`): no phone is a hub, and the link to
+ * the group's relay tells why it is not connected.
  */
 class AwayKitTest {
     private val top: File = createTempDirectory("cbb-away-kit").toFile()
@@ -64,113 +62,23 @@ class AwayKitTest {
 
         val a = member06(aDir, "Admin phone", admitted.device, aKey, peers = listOf("127.0.0.1:$rPort"))
 
-        /** Has the admin phone serve as the hub once it learned it is an admin, as hub asks. */
-        fun serve(hub: () -> CoreMember.AwayState?): CoreMember.AwayState {
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
-            while (true) {
-                val got = runCatching { hub() }
-                got.getOrNull()?.let { return it }
-                assertTrue(System.nanoTime() < deadline, "the admin phone never became a hub: ${got.exceptionOrNull()}")
-                Thread.sleep(200)
-            }
-        }
     }
 
     /**
-     * An admin phone serves as the group's hub; the root phone turns sync away from home on, takes the hub's offer
-     * while they are connected at home, and once it starts again knowing no home address, it syncs through the hub's
-     * tunnel: a copy made on it reaches the hub.
+     * A hub is a computer, a router or a board, never a phone (docs/decisions.md, D-134): the root names no
+     * forwarder for an admin phone, nor for its own, and an admin names none at all.
      */
     @Test
-    fun aPhoneSyncsThroughTheTunnelOfAnAdminPhoneHub() {
-        val g = Group()
-        val port = freeUDP()
-        val hub = g.serve { g.a.serveAsHub(port, listOf("127.0.0.1:$port")) }
-        assertTrue(hub.hub, "the admin phone is a hub")
-        assertEquals(port, hub.port)
-        assertEquals(listOf("127.0.0.1:$port"), hub.endpoints)
-        assertTrue(hub.obfuscated, "a hub speaks AmneziaWG unless told not to")
-        assertFalse(hub.vless, "no VLESS without a forwarder")
-
-        val on = assertNotNull(g.r.setAway(true))
-        assertTrue(on.isOn, "sync away from home is on")
-        assertFalse(on.hub)
-        val held = waitFor("the root phone never took the hub's offer") { g.r.awayStatus()?.takeIf { it.hubDevice == g.admitted.device } }
-        assertFalse(held.through, "at home the phone reaches the hub without the tunnel")
-
-        // The root phone starts again with no home address of the hub: it reaches it through the tunnel.
-        g.r.close()
-        members -= g.r
-        g.r = member06(File(top, "root"), "Root phone", g.made.device, g.rKey)
-        waitFor("the root phone never went through the hub's tunnel") { g.r.awayStatus()?.takeIf { it.through && it.hubDevice == g.admitted.device } }
-        g.r.copy("through the tunnel")
-        waitFor("the copy never reached the hub") { g.a.current()?.takeIf { it.text == "through the tunnel" } }
-
-        // Off, the phone goes through no tunnel.
-        val off = g.r.setAway(false)
-        assertTrue(off == null || !off.isOn, "sync away from home is off: $off")
-    }
-
-    /**
-     * How the hub's tunnel hides (docs/design.md, "Blocked networks"): AmneziaWG by default, plain WireGuard when told,
-     * and VLESS only to a forwarder and only with AmneziaWG; stopping the hub leaves the phone a client.
-     */
-    @Test
-    fun theHubsTunnelHidesAsTheUserChose() {
-        val g = Group()
-        val port = freeUDP()
-        val plain = g.serve { g.a.serveAsHub(port, listOf("127.0.0.1:$port"), obfuscateOff = true, vlessOff = true) }
-        assertTrue(plain.hub)
-        assertFalse(plain.obfuscated, "plain WireGuard")
-        val hidden = assertNotNull(g.a.serveAsHub(port, listOf("127.0.0.1:$port")))
-        assertTrue(hidden.obfuscated, "AmneziaWG again")
-        assertEquals(port, hidden.port)
-        // VLESS carries AmneziaWG: plain WireGuard with VLESS to a forwarder is refused.
-        val pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
-        val e = assertFailsWith<Core.Refusal> { g.a.serveAsHub(port, forwarder = "127.0.0.1:1", key = pin, obfuscateOff = true) }
-        assertTrue(e.message.orEmpty().contains("VLESS"), e.message)
-        val stopped = assertNotNull(g.a.stopHub())
-        assertFalse(stopped.hub, "the phone is no hub after hub_off")
-        assertFailsWith<Core.Refusal>("a phone that is no hub cannot stop being one") { g.a.stopHub() }
-    }
-
-    /**
-     * The hub's forwarder is the root's setting: the root names it for an admin phone, which keeps it without becoming
-     * a hub and serves through it once its own switch is on; nobody else names it.
-     */
-    @Test
-    fun theRootNamesAnAdminPhonesForwarder() {
+    fun theRootNamesNoForwarderForAPhone() {
         val g = Group()
         val pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
         val fw = "127.0.0.1:${freeUDP()}"
         assertFailsWith<Core.Refusal>("an admin key is no root key") { g.a.nameForwarder("Root phone", fw, pin, g.aAdmin.publicKeyDER, g.aAdmin::signDigest) }
         assertFailsWith<Core.Refusal>("the root names no forwarder for its own phone") { g.r.nameForwarder("Root phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }
-        assertNull(g.a.rootForwarder())
-        val named = waitFor("the admin phone never took the root's forwarder") {
-            runCatching { g.r.nameForwarder("Admin phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }.getOrNull()?.takeIf { it.first == "done" }
-        }
-        assertEquals("done" to "", named)
-        assertEquals(CoreMember.RootForwarder(fw, pin), g.a.rootForwarder())
-        assertTrue(g.a.awayStatus()?.hub != true, "the root's command does not switch the hub on")
-        // Its own switch on, with no forwarder given: the root's.
-        val hub = g.serve { g.a.serveAsHub() }
-        assertTrue(hub.hub)
-        assertEquals(fw, hub.forwarder?.endpoint)
-    }
-
-    /** What the member refuses: a hub with no way to it, and bad addresses. The root's phone may be a hub without an admin key. */
-    @Test
-    fun theMemberRefusesABadHub() {
-        val g = Group()
-        // The root phone holds no admin key, and the records make it a hub all the same (protocol section 11, "Several hubs").
-        assertTrue(g.r.serveAsHub(freeUDP(), listOf("127.0.0.1:9"))?.hub == true, "the root's phone may be a hub")
-        assertTrue(g.r.stopHub()?.hub != true, "the root's phone stops being a hub")
-        val port = freeUDP()
-        g.serve { g.a.serveAsHub(port, listOf("127.0.0.1:$port")) }
-        assertFailsWith<Core.Refusal>("no address and no forwarder") { g.a.serveAsHub(port) }
-        assertFailsWith<Core.Refusal>("an address with no port") { g.a.serveAsHub(port, listOf("127.0.0.1")) }
-        assertFailsWith<Core.Refusal>("a bad port") { g.a.serveAsHub(70000, listOf("127.0.0.1:$port")) }
-        assertFailsWith<Core.Refusal>("a forwarder that is no address") { g.a.serveAsHub(port, forwarder = "nowhere", key = "x") }
+        // The admin phone may know it is an admin only later: it is no hub either way.
+        val e = assertFailsWith<Core.Refusal>("an admin phone is no hub") { g.r.nameForwarder("Admin phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }
+        assertTrue(e.message.orEmpty().contains("do not make Admin phone a hub"), e.message)
+        assertTrue(g.a.awayStatus()?.hub != true, "the admin phone is no hub")
     }
 
     /**

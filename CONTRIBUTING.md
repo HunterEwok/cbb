@@ -121,6 +121,7 @@ go run ./tools/prcheck -base origin/main   # the branch's authors and co-authors
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
 go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts, string.json and tray l10n
+go run ./tools/strings -lint   # the apps' words: the termbase apps/l10n/terms.json and Vale (docs/apps.md, "Words in the apps")
 go run ./tools/icon -check     # the apps' icons
 sh .github/shellcheck.sh       # every shell script
 pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
@@ -138,11 +139,13 @@ GOARCH=mips GOMIPS=softfloat go test -exec qemu-mips-static ./internal/mdns ./in
 
 ### The other parts
 
-The model of the records' rules for claims (Quint, Node; the `model` job in CI):
+The model of the record rules (Quint, Node; the `model` job in CI runs its scenarios in four
+parts by first letter, all but the two that take minutes each; the header of the model lists
+its promises for longer random runs):
 
 ```sh
-npx @informalsystems/quint@0.33.1 test --backend=typescript docs/model/claims.qnt
-npx @informalsystems/quint@0.33.1 run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
+npx @informalsystems/quint@0.33.1 test --backend=typescript docs/model/records-v3.qnt
+npx @informalsystems/quint@0.33.1 run --backend=typescript --invariant=promises --max-steps=25 --max-samples=500 docs/model/records-v3.qnt
 ```
 
 cbb and the Rust workspace (the `rust` job in CI):
@@ -158,7 +161,7 @@ CBB_FULL_SIZE=1 cargo test -p cbb-core --features std,tls,web records   # the re
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
 cargo build --release -p cbb-member --features testhooks && go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper && \
-  CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
+  CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with other services, and through the hub's tunnel
 ```
 
 Every test of `internal/service` at once, in parts that run in Docker containers side by side
@@ -180,15 +183,6 @@ not run them; it looks with `.github/hooks-marker.sh` for the line a hooks build
 with in every program it publishes, and the `hooks` job checks that the same script finds that
 line in a hooks build. A new hook that changes whom they trust or their clock goes into the
 list in `.github/release-ignores-hooks.sh`.
-
-The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
-
-```sh
-sudo ip tuntap add name tap0 mode tap user "$USER" && sudo ip addr add 192.168.69.1/24 dev tap0 \
-  && sudo ip link set tap0 up
-cargo build --release -p cbb-embassy --features host && \
-  CBB_ESP32_ON_LINUX=$PWD/target/release/esp32-on-linux go test ./internal/service -run TestEmbassyJoiner
-```
 
 The Android app (`apps/android`, Gradle 9 with JDK 17 or later): the protocol core `kit` has
 no Android dependencies and builds anywhere with Rust, whose core its tests build (see below);
@@ -216,7 +210,7 @@ which the feature `tunnel` builds into the Rust core's library (`ffi/bind.sh` bu
 every app); `cargo test --workspace` and the service tests (`TestFFIPhoneAway`,
 `TestFFIPhoneHub`) run it.
 
-The group rules of records `v:2` (docs/records-v2.md) reach the phones from the Rust core:
+The group rules of the records of 0.6 (docs/protocol.md, section 10) reach the phones from the Rust core:
 `ffi/` exports the core's one entry point (`cbb_core::api`, docs/core-api.md) as the C
 functions of `ffi/include/cbb_core.h`, which the Swift kit links as its module `CCbbCore`
 and the Kotlin kit calls through JNA (`Core.swift`, `Core.kt`). Its `bind.sh` builds the
@@ -260,6 +254,16 @@ sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos setup armv7hl
 sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos run '~/silica/build.sh rpm SailfishOS-4.6.0.13-armv7hl.default sailfish'
 ```
 
+The app's code that needs no screen (errors, the saved membership, the device events, the
+calls into the core, the key in a file) is tested on the computer too, with desktop Qt 5
+(`qtbase5-dev`) and the core built for the computer; with a file named, the run measures it
+with gcov for `tools/coverage` (`gcovr`):
+
+```sh
+apps/silica/tests/qt/run.sh                 # the tests
+apps/silica/tests/qt/run.sh /tmp/aurora.info  # with coverage, as LCOV
+```
+
 The app for HarmonyOS 5 and later (`apps/harmony`, in development; the plan is
 [docs/apps.md](docs/apps.md)): ArkTS and ArkUI in `entry/src/main/ets`, over the Rust core
 through the Node-API module in `entry/src/main/cpp` (`napi_init.cpp`, one function for each
@@ -275,24 +279,26 @@ watch's `wearable`. DevEco Studio's Previewer loads no native module and takes t
 `entry/src/mock/` instead, which answers every request with an error, so the pages show as on a
 phone in no group; outside mainland China DevEco offers only a watch emulator, which runs the
 `wearable` module. The tests in `entry/src/ohosTest` (Hypium) run on a phone
-or the emulator.
+or the emulator, and on the computer under Node (`nodetest/run.sh`): TypeScript turns the
+model, core and common ArkTS into JavaScript, `nodetest/shim.cjs` plays Hypium, ArkUI's
+decorators and the kits, and the native module's `call` goes to the real core built for the
+computer. Beside them, `nodetest/watch.test.cjs` tests the watch's link to its phone, with a
+fake Wear Engine and admin key. CI runs them in its `Aurora and HarmonyOS apps' code on the computer` job.
 
 ```sh
 apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/core/ffi
 apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
 sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
 apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
+apps/harmony/nodetest/run.sh      # the ohosTest suite and the watch's test under Node (cargo, a C compiler, Node.js)
 ```
 
 The differential run of all three implementations (Go, Rust and JDK 17;
 [docs/differential.md](docs/differential.md)):
 
 ```sh
-sh .github/differential.sh 1 20000 500 /tmp/differential
+sh .github/differential.sh 1 20000 /tmp/differential
 ```
-
-Go's tests of the records of 0.5 read the committed `testdata/interop/swift-*.json`, which
-the Swift kit of 0.5 wrote; the kit of 0.6 writes none (D-126).
 
 The app (macOS with Xcode):
 
@@ -365,4 +371,11 @@ and Qt. When Xcode adds a new key to a catalog, move it into the source.
 ```sh
 go run ./tools/strings          # sort the source and write the apps' files
 go run ./tools/strings -check   # what tools/repocheck checks too
+go run ./tools/strings -lint    # the words: the termbase and Vale, as CI checks them
 ```
+
+The words follow the termbase, `apps/l10n/terms.json`: for each concept the word each
+language uses and the words it does not. `-lint` checks every string against it, runs
+Vale's rules on every language and fails when one English text has two translations
+([apps](docs/apps.md), "Words in the apps"). It needs only Go: `go run` builds the Vale it
+names once and keeps it in the build cache.

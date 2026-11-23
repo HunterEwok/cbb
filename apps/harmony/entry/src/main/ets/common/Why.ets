@@ -8,7 +8,7 @@ import { t } from '../core/Text';
 import { Why } from '../model/Member';
 
 // The codes with a title and an action of their own.
-const TITLED: string[] = ['not_in_group', 'removed', 'taken_over', 'frozen', 'cert_expired', 'cert_ending', 'stopped',
+const TITLED: string[] = ['not_in_group', 'removed', 'frozen', 'stopped',
   'secrets_stopped', 'sync_off', 'only_device', 'away_off', 'new_network', 'no_hub', 'tunnel_blocked', 'hub_unreachable',
   'alone', 'relay_down', 'hub_waiting', 'muted', 'forwarder_down', 'entries_stale', 'newer', 'unreached',
   'devices_offline', 'devices_sync_off', 'devices_muted', 'update',
@@ -24,13 +24,9 @@ export function whyTitle(r: Why): string {
   const date = until > 0 ? new Date(until).toLocaleString() : '';
   const names = (r.devices ?? []).join(', ');
   switch (r.code) {
-    case 'taken_over':
     case 'tunnel_blocked':
     case 'hub_unreachable':
       return t(`why_${r.code}_t`, r.device ?? '');
-    case 'cert_expired':
-    case 'cert_ending':
-      return t(`why_${r.code}_t`, date);
     case 'sync_off':
     case 'muted':
       return until > 0 ? t(`why_${r.code}_until_t`, date) : t(`why_${r.code}_t`);
@@ -51,7 +47,7 @@ export function whyAction(r: Why): string {
   if (!TITLED.includes(r.code) || NO_ACTION.includes(r.code)) {
     return '';
   }
-  return r.code === 'taken_over' ? t('why_taken_over_d', r.device ?? '') : t(`why_${r.code}_d`);
+  return t(`why_${r.code}_d`);
 }
 
 // The code and the core's detail, for the error details.

@@ -4,53 +4,11 @@
 package actions
 
 import (
-	"errors"
 	"fmt"
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
-
-	"github.com/HunterEwok/cbb/internal/group"
 )
-
-func TestCheck(t *testing.T) {
-	phone := Signer{Role: group.RolePhone, Store: group.StoreHardware}
-	rootPhone := Signer{Root: true, Role: group.RolePhone, Store: group.StoreHardware}
-	fileComputer := Signer{Role: group.RoleMember, Store: group.StoreFile}
-	tpmComputer := Signer{Role: group.RoleMember, Store: group.StoreProven}
-	watch := Signer{Role: group.RoleWatch, Store: group.StoreHardware}
-	unknown := Signer{}
-	for _, tt := range []struct {
-		a      Action
-		s      Signer
-		refuse string
-	}{
-		{Action{Name: Lock}, phone, "is off on this device"},
-		{Action{Name: Lock, On: true}, fileComputer, ""},
-		{Action{Name: Lock, On: true}, unknown, ""},
-		{Action{Name: Lock, On: true, By: []string{ByPhone}}, fileComputer, "only for phone"},
-		{Action{Name: Lock, On: true, By: []string{ByPhone}}, phone, ""},
-		{Action{Name: Lock, On: true, By: []string{ByRoot}}, phone, "only for root"},
-		{Action{Name: Lock, On: true, By: []string{ByRoot}}, rootPhone, ""},
-		{Action{Name: Reboot, On: true}, fileComputer, "keys are in hardware"},
-		{Action{Name: Reboot, On: true}, unknown, "keys are in hardware"},
-		{Action{Name: Reboot, On: true}, tpmComputer, ""},
-		{Action{Name: Shutdown, On: true}, phone, ""},
-		{Action{Name: Shutdown, On: true, AnyKey: true}, fileComputer, ""},
-		{Action{Name: Sleep, On: true}, fileComputer, ""},
-		{Action{Name: Lock, On: true, By: []string{ByPhone, ByComputer}}, watch, "only for phone, computer"},
-		{Action{Name: Lock, On: true, By: []string{ByWatch}}, watch, ""},
-		{Action{Name: Reboot, On: true}, watch, ""},
-	} {
-		err := Check(tt.a, tt.s)
-		var r *Refusal
-		switch {
-		case tt.refuse == "" && err != nil:
-			t.Errorf("%+v for %+v: %v", tt.a, tt.s, err)
-		case tt.refuse != "" && (!errors.As(err, &r) || !strings.Contains(r.Reason, tt.refuse)):
-			t.Errorf("%+v for %+v: %v, want %q", tt.a, tt.s, err, tt.refuse)
-		}
-	}
-}
 
 func TestSettings(t *testing.T) {
 	dir := t.TempDir()
@@ -69,25 +27,45 @@ func TestSettings(t *testing.T) {
 	if fmt.Sprint(s.On()) != "[reboot restart]" || len(s.Actions) != 3 || s.Actions[0].Name != Lock || !s.Get(Restart).AnyKey {
 		t.Errorf("saved: %+v", s)
 	}
-	s.AllOff()
-	if len(s.On()) != 0 || s.Get(Reboot).By[0] != ByPhone {
-		t.Errorf("all off: %+v", s)
+	if es, err := ReadLog(dir); err != nil || es != nil {
+		t.Errorf("no log: %v, %v", es, err)
 	}
-	if k, err := ParseKinds("phone, computer,phone"); err != nil || fmt.Sprint(k) != "[phone computer]" {
-		t.Errorf("ParseKinds: %v, %v", k, err)
+	if err := os.WriteFile(filepath.Join(dir, LogFile), []byte(`[{"time_ms":3,"by":"x","action":"lock","result":"done"}]`), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := ParseKinds("tv"); err == nil {
-		t.Error("ParseKinds took a kind it does not know")
+	if es, err := ReadLog(dir); err != nil || len(es) != 1 || es[0].TimeMS != 3 || es[0].Action != Lock {
+		t.Errorf("the log: %+v, %v", es, err)
 	}
-	if k, err := ParseKinds("watch"); err != nil || fmt.Sprint(k) != "[watch]" {
-		t.Errorf("ParseKinds(watch): %v, %v", k, err)
+	if err := os.WriteFile(filepath.Join(dir, LogFile), []byte(`{`), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	for i := range LogSize + 3 {
-		if err := Append(dir, Entry{TimeMS: int64(i), By: "x", Action: Lock, Result: "done"}); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := ReadLog(dir); err == nil {
+		t.Error("a broken log read")
 	}
-	if es, err := ReadLog(dir); err != nil || len(es) != LogSize || es[0].TimeMS != 3 {
-		t.Errorf("the log: %d entries, %v", len(es), err)
+	if err := os.WriteFile(filepath.Join(dir, "actions.json"), []byte(`{`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(dir); err == nil {
+		t.Error("broken settings read")
+	}
+}
+
+// A refusal's reason is its error, word for word, as the sender gets it.
+func TestRefusal(t *testing.T) {
+	var err error = &Refusal{Reason: "the action lock is off on this device"}
+	if err.Error() != "the action lock is off on this device" {
+		t.Errorf("Refusal.Error() = %q", err.Error())
+	}
+}
+
+// The user's own settings are in the cbb folder of the system's place for
+// them.
+func TestOwnDir(t *testing.T) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		t.Skipf("no config folder here: %v", err)
+	}
+	if d, err := OwnDir(); err != nil || d != filepath.Join(base, "cbb") {
+		t.Errorf("OwnDir() = %q, %v", d, err)
 	}
 }

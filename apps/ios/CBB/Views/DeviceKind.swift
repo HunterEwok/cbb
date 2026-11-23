@@ -87,7 +87,7 @@ extension AppModel.Computer {
     var standing: LocalizedStringKey? {
         if isSelf { return admin ? "This phone · admin" : "This phone" }
         if frozen { return "frozen" }
-        if isRoot { return "root" }
+        if isRoot { return "main device" }
         if admin { return "admin" }
         return nil
     }

@@ -55,9 +55,9 @@ var automated = map[string][]string{
 	"Q6": {"fleet"}, "Q7": {"fleet"}, "Q2": {"fleet"}, "Q5": {"fleet"}, "U2": {"fleet"},
 	"O2": {"fleet"}, "O3": {"fleet"}, "O5": {"fleet"}, "Y20": {"fleet"}, "Y21": {"fleet"},
 	"Y22": {"fleet"}, "Y23": {"fleet"}, "G34": {"fleet"}, "K9": {"fleet"},
-	"Y33": {"fleet"}, "D16": {"fleet"}, "G35": {"fleet"}, "U11": {"fleet"}, "T17": {"fleet"}, "T19": {"fleet"}, "G13": {"fleet"}, "D17": {"fleet"}, "D3": {"fleet"}, "D14": {"fleet"}, "D13": {"fleet"}, "Y15": {"fleet"}, "G16": {"fleet"}, "G40": {"fleet"}, "K3": {"fleet"},
+	"Y33": {"fleet"}, "D16": {"fleet"}, "U11": {"fleet"}, "T17": {"fleet"}, "T19": {"fleet"}, "G13": {"fleet"}, "D17": {"fleet"}, "D3": {"fleet"}, "D14": {"fleet"}, "D13": {"fleet"}, "Y15": {"fleet"}, "G16": {"fleet"}, "G40": {"fleet"},
 	"E1": {"fleet"}, "E2": {"fleet"}, "E4": {"fleet"}, "O7": {"fleet"}, "O8": {"fleet"},
-	"S17": {"fleet"}, "S23": {"fleet"}, "G31": {"fleet"}, "G32": {"fleet"}, "K14": {"fleet"}, "K11": {"fleet"}, "G41": {"fleet"}, "Y6": {"fleet"}, "I3": {"fleet"}, "I8": {"fleet"}, "I9": {"fleet"}, "I10": {"fleet"}, "I11": {"fleet"}, "I12": {"fleet"}, "I2": {"fleet"}, "I4": {"fleet"}, "I6": {"fleet"}, "I7": {"fleet"}, "O9": {"fleet"}, "U9": {"fleet"}, "O6": {"fleet"}, "O15": {"fleet"}, "G17": {"fleet"}, "G8": {"fleet"}, "S22": {"fleet"}, "I1": {"fleet"},
+	"S17": {"fleet"}, "K11": {"fleet"}, "G41": {"fleet"}, "Y6": {"fleet"}, "I3": {"fleet"}, "I8": {"fleet"}, "I9": {"fleet"}, "I10": {"fleet"}, "I11": {"fleet"}, "I12": {"fleet"}, "I2": {"fleet"}, "I4": {"fleet"}, "I6": {"fleet"}, "I7": {"fleet"}, "O9": {"fleet"}, "U9": {"fleet"}, "O6": {"fleet"}, "S22": {"fleet"}, "I1": {"fleet"},
 	"I5": {"fleet"}, "I20": {"fleet"}, "S12": {"fleet"}, "G15": {"fleet"}, "S7": {"fleet"}, "S6": {"fleet"}, "H5": {"fleet"},
 	"M8": {"fleet"}, "M9": {"fleet"}, "M10": {"fleet"},
 	"W44": {"fleet"}, "W45": {"fleet"}, "W46": {"time"}, "W47": {"time"}, "W48": {"fleet"}, "S25": {"fleet"}, "S26": {"fleet"}, "W43": {"fleet"}, "Y36": {"fleet"},
@@ -72,7 +72,6 @@ var automated = map[string][]string{
 	// The Android app on an emulator in a group with the fleet (the phone suite).
 	"A1": {"phone"}, "M7": {"phone"}, "T16": {"phone"}, "Q8": {"phone"}, "A6": {"phone"},
 	"A12": {"phone"}, "O11": {"phone"}, "Y35": {"phone"}, "W5": {"phone"}, "W42": {"phone"},
-	"W16": {"phone"}, "G14": {"phone"},
 	"A2": {"ci"}, "A4": {"ci"}, "A5": {"ci"}, "A8": {"ci"}, "A9": {"ci"}, "A14": {"ci"}, "A15": {"ci"}, "A16": {"ci"}, "U12": {"ci"},
 	// CI's OpenWrt job (the apk feed, procd, UCI, fw4, the NTP wait, a
 	// sysupgrade's kept files) and the mips tests under qemu, its FreeBSD
@@ -85,15 +84,16 @@ var automated = map[string][]string{
 	// CI's upgrade job moves members of the latest release to the build under
 	// test (tools/e2e/upgrade.sh), and a Go test admits a device by the code it shows.
 	"I26": {"ci"}, "I27": {"ci"}, "G44": {"ci"},
+	// The kits' tests and the core's: no phone is a hub, and a phone invites through a computer hub.
+	"W16": {"ci"}, "G14": {"ci"},
 	// The phone kits' tests and the Go tests that read what they sign: the
-	// Swift and Kotlin phones admit a Go joiner by its QR code (G10, the fleet's
-	// G17 the refusals), a takeover (G28), a computer made an admin (G36), the
+	// Swift and Kotlin phones admit a Go joiner by its QR code (G10), a takeover (G28), a computer made an admin (G36), the
 	// watch's shared vectors (G38), the attestation and EK chains (K10).
 	"G10": {"ci"}, "G28": {"ci"}, "G36": {"ci", "phone"}, "G38": {"ci"}, "K10": {"ci"},
 	// The published workflow's check of every release (release-check).
 	"I22": {"ci"},
 	// The time-scaled build.
-	"K1": {"time"}, "K4": {"time"}, "K6": {"time"}, "K7": {"time"}, "Y14": {"time"}, "T8": {"time", "fleet"},
+	"K1": {"time"}, "K4": {"time"}, "K6": {"time"}, "K7": {"time"}, "Y14": {"time"}, "T8": {"time"},
 	"Y13": {"time"}, "W39": {"time"}, "W12": {"time"}, "K5": {"time"},
 }
 

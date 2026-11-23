@@ -557,8 +557,8 @@ func TestFFIPhoneAway(t *testing.T) {
 // members it is connected to (docs/protocol.md, section 4, "Reach"), so
 // that a phone away from home shows the members behind its hub as online;
 // and a computer that turns sync away from home on sends its tunnel key
-// (section 11) to the group's hub, here an admin phone, which answers with
-// its offer.
+// (section 11) to the group's hub, a computer (a phone is never one),
+// which answers with its offer.
 func TestFFIPhoneReach(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
@@ -596,22 +596,44 @@ func TestFFIPhoneReach(t *testing.T) {
 		return p != nil && fmt.Sprint(p["reach"]) == fmt.Sprint([]any{string(m2ID)})
 	})
 
-	// The admin phone serves as the group's hub; pi, away on, sends it its
-	// tunnel key and takes its offer.
-	var phoneID string
-	for _, d := range pi.devices(t) {
-		if d.Name == "member phone" {
-			phoneID = d.ID
-		}
+	// m2, an admin computer with sync away from home on, becomes a hub of
+	// the group through a forwarder; pi, away on, sends m2 its tunnel key
+	// and takes its offer.
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
 	}
-	port := freeUDP(t)
-	call("hub", map[string]any{"port": port, "addrs": []string{fmt.Sprintf("127.0.0.1:%d", port)}})
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+	makeAdmin(t, pi, m2)
+	if _, err := m2.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	// The root names the hub's forwarder (the forwarder's credentials list
+	// only the hubs the root names), so the root's hub command makes m2 the
+	// hub; an admin phone's "Make it a hub" is
+	// TestFFIAdminPhoneMakesAHubAndFreezes.
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "m2", Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf)}, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitUpTo(t, 30*time.Second, "pi took the phone hub's offer", func() bool {
+	waitUpTo(t, 30*time.Second, "pi took m2's offer as the hub's", func() bool {
 		a := pi.status(t).Away
-		return a != nil && a.HubDevice == phoneID
+		return a != nil && a.HubDevice == string(m2ID)
 	})
 
 	m2.stop()
@@ -1123,47 +1145,19 @@ func TestAloneMember(t *testing.T) {
 		}
 		return false
 	})
-	// The small device offers its key for sealed messages, and the root
-	// records it, so the command below is sealed to it. On the records of
-	// 0.6 the key comes in the device's own statement, which the root
-	// keeps beside the records: the command goes once the root has it.
-	sealedOff := func() bool {
+	// The small device offers its key for sealed messages in its own
+	// statement, which the root keeps beside the records: the root's
+	// command, sealed to that key, goes once the root has it.
+	waitFor(t, "the root commands the small device, sealed to its key", func() bool {
 		_, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(false)}, "")
 		return err == nil
-	}
-	if pi.on06() {
-		waitFor(t, "the root commands the small device, sealed to its key", sealedOff)
-	} else {
-		waitFor(t, "the root records the small device's key for sealed messages", func() bool {
-			id, err := group.Load(pi.dir)
-			if err != nil {
-				return false
-			}
-			recs, err := group.LoadRecords(pi.dir, id.GroupCA.Cert)
-			if err != nil {
-				return false
-			}
-			for _, d := range recs.Devices() {
-				if string(d.ID) == st.Device {
-					return len(d.Seal) > 0
-				}
-			}
-			return false
-		})
-		if !sealedOff() {
-			t.Fatal("the root's sync command did not go")
-		}
-	}
+	})
 	if m := small.status(t).Mode; m != "own" {
 		t.Errorf("after the root's command the small device's mode is %q, want own", m)
 	}
-	opened := "opened a sealed mode command"
-	if pi.on06() {
-		// A command of 0.6 with orders is always sealed (format section
-		// 6); the device says what it carried out.
-		opened = "turned sync off here"
-	}
-	if !small.logged(opened) {
+	// A command with orders is always sealed (format section 6); the
+	// device says what it carried out.
+	if !small.logged("turned sync off here") {
 		t.Error("the small device did not open the command sealed to it")
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, syncFile)); err != nil || !strings.Contains(string(b), `"off":true`) {

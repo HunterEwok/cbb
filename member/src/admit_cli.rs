@@ -18,12 +18,12 @@ use crate::{Global, check, flag, open, request};
 /// its addresses, ID and key, with room to spare.
 const MAX_QR_TEXT: usize = 1024;
 
-/// How long an invitation is valid by default, and at most, as Go's
-/// invite.DefaultLifetime and invite.MaxLifetime.
+/// How long an invitation is valid by default, and at most, as the
+/// service keeps it (`crate::inviter`).
 const INVITE_LIFETIME_MS: i64 = 3_600_000;
 const INVITE_MAX_MS: i64 = 24 * 3_600_000;
 
-/// The file cbb invite writes by default, as Go's defaultInviteFile.
+/// The file cbb invite writes by default.
 const INVITE_FILE: &str = "cbb.cbbinvite";
 
 /// A request on its own connection, for the operations that answer more
@@ -87,7 +87,8 @@ pub(crate) const PAIR_USAGE: &str =
                                 makes the phone that joins an admin; -app writes the window
                                 into an app's FILE
        cbb pair -code [address:port]   in no group: join a pairing window by its six digits
-       cbb pair -invite FILE    in no group: join from afar with an invitation";
+       cbb pair -invite FILE [-app FILE]   in no group: join from afar with an invitation;
+                                -app writes the key fingerprint into an app's FILE";
 
 /// Opens a pairing window and waits for the device that joins with its
 /// code.

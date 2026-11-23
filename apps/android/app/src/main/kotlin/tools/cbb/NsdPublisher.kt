@@ -10,11 +10,9 @@ import tools.cbb.kit.Discovery
 
 /**
  * Publishes the service <device ID>._cbb._tcp with port and the TXT record
- * txt on the home network (docs/protocol.md, section 3). The phone that is
- * the group's hub publishes itself with hub() while its app is open, so that
- * the other phones and the Android TVs, which only dial, find it; a phone
- * that waits to join publishes Discovery.joinerTXT, so that a computer of
- * the group finds it by the code typed there.
+ * txt on the home network (docs/protocol.md, section 3): an admin phone
+ * that opens a home window publishes Discovery.windowTXT while it is open,
+ * so that a device without a camera finds it by the six digits.
  */
 class NsdPublisher(context: Context, private val device: String, private val port: Int, private val txt: Map<String, String>) {
     private val nsd = context.getSystemService(NsdManager::class.java)
@@ -50,14 +48,5 @@ class NsdPublisher(context: Context, private val device: String, private val por
         published = false
         runCatching { nsd.unregisterService(listener) }
         Unit
-    }
-
-    companion object {
-        /**
-         * The hub phone: the TXT v=1, g=<tag>, r=phone. The members note
-         * it but do not dial it: it dials them.
-         */
-        fun hub(context: Context, device: String, tag: String, memberPort: Int) =
-            NsdPublisher(context, device, memberPort, mapOf("v" to "1", "g" to tag, "r" to "phone"))
     }
 }

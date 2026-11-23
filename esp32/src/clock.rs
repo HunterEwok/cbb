@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The time that TLS sees. The board has no clock of the day yet; the
-//! pairing's certificates are checked by the code, not by their dates, so a
-//! fixed time after 1970 serves. Syncing with members needs the real time
+//! self-test's certificates are checked by the code, not by their dates, so
+//! a fixed time after 1970 serves. Syncing with members needs the real time
 //! (their certificates expire), which comes with SNTP later.
 
 use alloc::sync::Arc;
@@ -21,7 +21,7 @@ impl TimeProvider for Fixed {
     }
 }
 
-/// A clock that always says the same time, for the pairing and the self-test.
+/// A clock that always says the same time, for the self-test.
 pub fn fixed() -> Clock {
     Arc::new(Fixed)
 }

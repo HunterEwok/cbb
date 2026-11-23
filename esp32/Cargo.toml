@@ -19,7 +19,6 @@ test = false
 
 [dependencies]
 cbb-core = { path = "../core", features = ["tls"] }
-cbb-embassy = { path = "../embassy", optional = true }
 esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d5387dac82e4fbe937e95e496e1", features = ["esp32s3"] }
 esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d5387dac82e4fbe937e95e496e1", features = ["esp32s3", "panic-handler", "println"] }
 esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d5387dac82e4fbe937e95e496e1", features = ["esp32s3"] }
@@ -53,7 +52,6 @@ xtensa-lx = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d53
 default = ["board"]
 board = [
   "esp-println/jtag-serial",
-  "dep:cbb-embassy",
   "dep:esp-radio",
   "dep:esp-rtos",
   "dep:embassy-executor",

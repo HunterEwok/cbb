@@ -17,6 +17,8 @@ struct DeviceDetailView: View {
     @State private var removing = false
     @State private var promoting = false
     @State private var thawing = false
+    @State private var freezing = false
+    @State private var hubbing = false
     @State private var renaming = false
     @State private var newName = ""
     @State private var pasting = false
@@ -59,7 +61,7 @@ struct DeviceDetailView: View {
             } label: { Text("Remove") }
         } message: {
             if device?.isRoot == true {
-                Text("It made the group. This phone takes the group over with a new key, and the other devices follow it.")
+                Text("It made the group. This phone moves the group to itself with a new key, and the other devices follow it.")
             } else {
                 Text("It will no longer sync with your devices. To add it again, scan its QR code again.")
             }
@@ -70,7 +72,7 @@ struct DeviceDetailView: View {
             } label: { Text("Make it an admin") }
         } message: {
             if device?.role == "phone" {
-                Text("It can then add and remove devices, and take the group over if this phone is lost.")
+                Text("It can then add and remove devices, and move the group to itself if this phone is lost.")
             } else if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
                 Text("It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.")
                     + Text(verbatim: " ")
@@ -115,6 +117,20 @@ struct DeviceDetailView: View {
             } label: { Text("Unfreeze") }
         } message: {
             Text("Another admin froze this computer, as one does with a stolen one: it changes nothing and the others refuse it. Unfreeze it only if it is in safe hands; otherwise remove it.")
+        }
+        .confirmationDialog(Text("Freeze \(device?.name ?? "")?"), isPresented: $freezing, titleVisibility: .visible) {
+            Button(role: .destructive) {
+                Task { await model.freeze(id) }
+            } label: { Text("Freeze") }
+        } message: {
+            Text("For a stolen admin computer: it changes nothing more and the others refuse it until the main device unfreezes or removes it.")
+        }
+        .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing, titleVisibility: .visible) {
+            Button {
+                Task { await model.makeHub(id) }
+            } label: { Text("Make it a hub") }
+        } message: {
+            Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
         }
     }
 
@@ -173,11 +189,11 @@ struct DeviceDetailView: View {
         }
     }
 
-    /// Its badges: this phone, root or admin, hub, frozen.
+    /// Its badges: this phone, main device or admin, hub, frozen.
     static func badges(_ d: AppModel.Computer, hub: Bool) -> [String] {
         var out: [String] = []
         if d.isSelf { out.append(String(localized: "This phone", bundle: .app)) }
-        if d.isRoot { out.append(String(localized: "root", bundle: .app)) } else if d.admin { out.append(String(localized: "admin", bundle: .app)) }
+        if d.isRoot { out.append(String(localized: "main device", bundle: .app)) } else if d.admin { out.append(String(localized: "admin", bundle: .app)) }
         if hub { out.append(String(localized: "hub", bundle: .app)) }
         if d.frozen { out.append(String(localized: "frozen", bundle: .app)) }
         return out
@@ -220,8 +236,9 @@ struct DeviceDetailView: View {
         }
     }
 
-    /// The menu of what an admin phone may do with it: rename, unfreeze,
-    /// make it an admin, remove.
+    /// The menu of what an admin phone may do with it: rename, freeze or
+    /// unfreeze, make it an admin, make an admin computer a hub (never a
+    /// phone, D-134), remove.
     private func menu(_ d: AppModel.Computer) -> some View {
         Menu {
             Button { newName = d.name; renaming = true } label: { Label { Text("Rename") } icon: { Image(systemName: "pencil") } }
@@ -230,6 +247,12 @@ struct DeviceDetailView: View {
             }
             if d.canMakeAdmin {
                 Button { promoting = true } label: { Label { Text("Make it an admin") } icon: { Image(systemName: "person.badge.key") } }
+            }
+            if model.isAdmin, !d.isSelf, d.role == "member", d.admin, !d.frozen {
+                Button { hubbing = true } label: { Label { Text("Make it a hub") } icon: { Image(systemName: "antenna.radiowaves.left.and.right") } }
+            }
+            if model.isAdmin, !d.isSelf, d.role == "member", d.admin, !d.isRoot, !d.frozen {
+                Button(role: .destructive) { freezing = true } label: { Label { Text("Freeze") } icon: { Image(systemName: "snowflake") } }
             }
             if !d.isSelf {
                 Button(role: .destructive) { removing = true } label: { Label { Text("Remove") } icon: { Image(systemName: "trash") } }

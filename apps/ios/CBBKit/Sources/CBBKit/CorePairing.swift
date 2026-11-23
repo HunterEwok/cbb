@@ -66,9 +66,8 @@ public enum CorePairing {
     }
 
     /// A remote invitation an admin phone makes (docs/protocol.md, section
-    /// 12) through member: its guest tunnel opens on this phone when it is
-    /// the group's hub, else through a connected hub of the group (hub
-    /// names one, empty for any). publicKey is the key sign holds (the admin
+    /// 12) through member: its guest tunnel opens on a connected hub of the
+    /// group (hub names one, empty for any). publicKey is the key sign holds (the admin
     /// key or the root's key); sign is called when a device the user confirmed is
     /// admitted. expires is in seconds: an hour when 0, a day at most. It
     /// waits for the hub, so the app makes it off its main thread.

@@ -105,6 +105,8 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: go run ./tools/repocheck -tests-since "$BASE"
+      - name: the apps' words, by the termbase and Vale
+        run: go run ./tools/strings -lint
       - name: design tokens up to date and readable
         run: go run ./tools/tokens -check
       - name: app icon up to date
@@ -264,6 +266,10 @@ jobs:
           CBB_E2E_COVERDIR="$RUNNER_TEMP/e2e-cover" sh tools/e2e/e2e.sh "$RUNNER_TEMP/e2e/cbb"
           sudo chown -R "$(id -u)" "$RUNNER_TEMP/e2e-cover"
           go tool covdata textfmt -i "$RUNNER_TEMP/e2e-cover" -o cover-go-e2e.out
+      - name: the desktop connector against that cbb's service
+        env:
+          CBB_TEST_RUST_SERVICE: ${{ runner.temp }}/e2e/cbb
+        run: go test -coverpkg="$COVERPKG" -coverprofile=cover-go-connector.out ./internal/connector
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-go-linux-all
@@ -276,7 +282,7 @@ jobs:
   # format rule no vector refuses.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, androidkit, rust-coverage, service, service-coverage]
+    needs: [changes, test, gocover, kit, androidkit, android, rust-coverage, service, service-coverage, trayapp, phonelogic]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -305,6 +311,11 @@ jobs:
           [ -f cov/coverage-rust-service.json ] && set -- "$@" -llvm rust-service=cov/coverage-rust-service.json
           [ -f cov/coverage-swift-kit.json ] && set -- "$@" -llvm swift-kit=cov/coverage-swift-kit.json
           [ -f cov/jacocoTestReport.xml ] && set -- "$@" -jacoco kotlin-kit=cov/jacocoTestReport.xml
+          [ -f cov/coverage-kotlin-watch.xml ] && set -- "$@" -jacoco kotlin-watch=cov/coverage-kotlin-watch.xml
+          [ -f cov/coverage-js-tray.info ] && set -- "$@" -lcov js-tray=cov/coverage-js-tray.info
+          [ -f cov/coverage-cpp-aurora.info ] && set -- "$@" -lcov cpp-aurora=cov/coverage-cpp-aurora.info
+          [ -f cov/coverage-ets-harmony.info ] && set -- "$@" -lcov ets-harmony=cov/coverage-ets-harmony.info
+          [ -f cov/coverage-ets-harmony-watch.info ] && set -- "$@" -lcov ets-harmony-watch=cov/coverage-ets-harmony-watch.info
           go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 \
             -audit testdata/audit/closed.json -rules core/src -vectors testdata/format \
             -summary "$GITHUB_STEP_SUMMARY" "$@"
@@ -629,7 +640,7 @@ jobs:
       - name: go test the network and the group under qemu-mips
         run: >-
           go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
-          ./internal/hlc ./internal/mdns ./internal/netguard ./internal/openwrt
+          ./internal/mdns ./internal/netguard ./internal/openwrt
           ./internal/tunnel
           ./internal/vless </dev/null
 
@@ -647,6 +658,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: the runner's processor, which the FreeBSD machine sees as its own
+        run: lscpu
       - name: cbb for FreeBSD, linked with zig as the release links it, and cbb-helper beside it
         run: |
           python3 -m venv "$RUNNER_TEMP/zig"
@@ -657,8 +670,21 @@ jobs:
           mkdir -p freebsd-bin
           cp "$dir/cbb" freebsd-bin/cbb
           CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath -o freebsd-bin/cbb-helper ./cmd/cbb-helper
+      - name: the runner's own load while the FreeBSD machine runs
+        # The machine's processor can stand still under the runner's KVM
+        # (steal, or the host's exits), which the guest counts as user time;
+        # the runner sees it: its steal time and KVM's exits, every 30 s.
+        run: |
+          (
+            sudo dmesg | grep -i 'split.lock' || echo "no split lock in dmesg"
+            while sleep 30; do
+              date -u +%T
+              grep -E '^cpu ' /proc/stat
+              sudo cat /sys/kernel/debug/kvm/exits 2>/dev/null || true
+            done
+          ) >"$RUNNER_TEMP/runner-load.log" 2>&1 &
       - name: go test in a FreeBSD 15.1 virtual machine
-        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
         with:
           release: "15.1"
           usesh: true
@@ -670,11 +696,34 @@ jobs:
             set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
             go version
-            # The release tools sign with SLH-DSA-SHA2-128s, a third of a
-            # second a signature natively and far slower in this machine:
-            # release-sign alone takes about ten minutes here, Go's default
-            # limit for a package.
+            # The processor the machine got and what a hash costs on it: the
+            # release tools sign with SLH-DSA-SHA2-128s, nearly all SHA-256,
+            # and their packages take about 40 s here, but ran past the 25
+            # minutes in some runs of the whole suite while SHA-256 alone ran
+            # at 1.8 GB/s under KVM. So the clock too: a time counter that
+            # traps to the host (i8254, ACPI) makes every reading of the time
+            # cost microseconds, and the scheduler reads it all the time.
+            # kern.vm_guest is kvm when the machine runs under KVM rather
+            # than QEMU's emulation (TCG).
+            sysctl -n hw.model hw.ncpu kern.vm_guest
+            sysctl kern.timecounter.hardware kern.timecounter.choice kern.eventtimer.timer || true
+            go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256 || true
+            go test -run '^$' -bench '^BenchmarkNow$' -benchtime 200000x time || true
+            # The release package alone took over 10 minutes here in a run,
+            # user time equal to real time, where a Mac takes 13 s: the short
+            # runs above last milliseconds and miss a processor that stands
+            # still now and then. The same hashes over 10 s each, and where
+            # the release test spends its time.
+            go test -run '^$' -bench 'Hash8K$|Hash1K$' -benchtime 10s crypto/sha256 || true
+            go test -c -o /tmp/release.test ./internal/release
+            /usr/bin/time /tmp/release.test -test.run 'TestCheckErrors$' -test.timeout 4m -test.cpuprofile /tmp/cpu.out </dev/null || true
+            go tool pprof -top -nodecount 25 /tmp/release.test /tmp/cpu.out || true
+            # What uses the processors while the suite runs, every five
+            # minutes, so a slow run shows what it waited behind.
+            (while sleep 300; do date; top -b -d1 -o cpu 12 | tail -n 16; done) &
+            top_pid=$!
             go test -timeout 25m ./... </dev/null
+            kill "$top_pid" 2>/dev/null || true
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
             Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
@@ -765,6 +814,12 @@ jobs:
             sh packaging/freebsd/firewall.sh hub-close
             sh packaging/freebsd/firewall.sh close
             if ipfw list | grep -qE 'to me (8764|51820)'; then echo "ipfw kept the rules" >&2; ipfw list; exit 1; fi
+      - name: how QEMU ran the machine (-enable-kvm or accel=kvm under KVM)
+        if: always()
+        run: ps -ww -o args= -C qemu-system-x86_64 || true
+      - name: the runner's load while the machine ran
+        if: always()
+        run: cat "$RUNNER_TEMP/runner-load.log" || true
 
   openwrt:
     name: OpenWrt
@@ -1999,9 +2054,26 @@ jobs:
       - name: vet and test
         env:
           CBB_SCREENSHOT_OUT: ${{ runner.temp }}/screenshots
+          # The window's scripts' coverage, for the coverage job's row js-tray.
+          CBB_JS_COVERAGE: ${{ runner.os == 'Linux' && format('{0}/coverage-js-tray.info', github.workspace) || '' }}
+        shell: bash
         run: |
           go vet ./...
-          go test ./...
+          if [ "$RUNNER_OS" = Linux ]; then
+            # The tray app's Go code, for the coverage job's row go-tray.
+            go test -coverprofile="$GITHUB_WORKSPACE/cover-go-tray.out" ./...
+          else
+            go test ./...
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: runner.os == 'Linux'
+        with:
+          name: coverage-js-tray
+          path: |
+            coverage-js-tray.info
+            cover-go-tray.out
+          retention-days: 7
+          if-no-files-found: ignore
       # The new pictures and their differences when a screenshot does not match.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure() && runner.os == 'Linux'
@@ -2064,13 +2136,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the protocol core's tests
         working-directory: apps/android
@@ -2109,13 +2183,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
@@ -2135,7 +2211,15 @@ jobs:
           # screenshots compared with app/src/test/screenshots (ScreenshotTest).
           ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease \
             :app:verifyRoborazziFullDebug :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
-            :shared:testDebugUnitTest :shared:lintDebug :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+            :shared:testDebugUnitTest :shared:createDebugUnitTestCoverageReport :shared:lintDebug \
+            :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+          cp shared/build/reports/coverage/test/debug/report.xml "$GITHUB_WORKSPACE/coverage-kotlin-watch.xml"
+      # What the phone and the watch share (WatchState and the design), for the
+      # coverage job's row kotlin-watch.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-kotlin-watch
+          path: coverage-kotlin-watch.xml
       # The new pictures and their differences when a screenshot does not match.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
@@ -2189,13 +2273,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
@@ -2248,8 +2334,8 @@ jobs:
             "$adb" shell settings put global "$s" 0
           done
           # The emulator has a mobile network beside its Wi-Fi, and the
-          # default network can stay on it, while the tests that make the
-          # phone's network home (c1_phoneHub) need the Wi-Fi. Mobile data
+          # default network can stay on it, while the tests that pair at
+          # home (the window's addresses) need the Wi-Fi. Mobile data
           # goes off in the emulated modem and in Android; right after boot
           # telephony can drop the request, so it is asked again until the
           # Wi-Fi carries the default route, with the Wi-Fi turned off and
@@ -2349,13 +2435,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('one/apps/android/**/*.gradle.kts', 'one/apps/android/gradle.properties', 'one/apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('one/apps/android/**/*.gradle.kts', 'one/apps/android/gradle.properties', 'one/apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: build twice and compare
         run: sh one/packaging/fdroid/reproduce.sh "$PWD/one" "$RUNNER_TEMP/elsewhere/cbb"
@@ -2794,7 +2882,6 @@ jobs:
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-member --features benchtime --all-targets -- -D warnings # the bench's time-scaled build
           cargo clippy --locked -p cbb-member --features testhooks --all-targets -- -D warnings # the hooks of Go's service tests
-          cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
@@ -2903,6 +2990,7 @@ jobs:
     timeout-minutes: 45
     env:
       RUST_PARTS: 4
+      CBB_TEST_IPV6: "1" # the runner has the IPv6 loopback: its tests run, never skip
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2930,11 +3018,31 @@ jobs:
           CBB_FULL_SIZE: "1" # the records' tests at real size too
           PART: ${{ matrix.part }}
         # nextest unpacks the archive into target/llvm-cov-target, which
-        # has to be there already.
+        # has to be there already, empty. The two longest tests (minutes
+        # each) are left out of the shares and run after them in parts of
+        # their own, 1 and 4: the hash put both into part 1. That second
+        # run unpacks the archive again into an emptied directory, with
+        # the first run's profiles kept aside.
         run: |
-          mkdir -p target/llvm-cov-target
-          cargo llvm-cov nextest --archive-file "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" --no-report \
-            --partition "hash:$PART/$RUST_PARTS"
+          long_1='test(=powerloss::a_power_cut_at_every_byte_of_every_save)'
+          long_4='test(=records::tests::differential::a_set_agrees_with_evaluate)'
+          tests() {
+            rm -rf target/llvm-cov-target
+            mkdir -p target/llvm-cov-target
+            cargo llvm-cov nextest --archive-file "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" --no-report "$@"
+          }
+          tests --partition "hash:$PART/$RUST_PARTS" -E "not ($long_1 | $long_4)"
+          long=
+          case $PART in
+          1) long=$long_1 ;;
+          4) long=$long_4 ;;
+          esac
+          if [ -n "$long" ]; then
+            mkdir -p "$RUNNER_TEMP/profiles"
+            mv target/llvm-cov-target/*.profraw "$RUNNER_TEMP/profiles/"
+            tests -E "$long"
+            mv "$RUNNER_TEMP"/profiles/*.profraw target/llvm-cov-target/
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: success() || failure()
         with:
@@ -3020,7 +3128,6 @@ jobs:
       - name: cargo build
         run: |
           cargo build --locked --release
-          cargo build --locked --release -p cbb-embassy --features host
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -3405,6 +3512,54 @@ jobs:
           "$RUNNER_TEMP/der_test"
           sh apps/harmony/check.sh "$RUNNER_TEMP/ohos-sdk"
 
+  phonelogic:
+    name: Aurora and HarmonyOS apps' code on the computer
+    needs: changes
+    if: needs.changes.outputs.silica == 'true' || needs.changes.outputs.harmony == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust build from this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: phonelogic
+      - name: apt packages for the next steps
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: qtbase5-dev gcovr
+          cache: phonelogic
+      - name: the core for the computer, which both apps' tests call
+        run: cargo build --locked -p cbb-ffi
+      - name: the Rust build into this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: phonelogic
+          save: "true"
+      # The Aurora app's code that needs no screen (errors, the saved
+      # membership, the device events, the calls into the core, the key in
+      # a file) on desktop Qt 5, with gcov.
+      - name: the Aurora app's tests (apps/silica/tests/qt)
+        env:
+          CBB_FFI_LIB: ${{ github.workspace }}/target/debug/libcbb_ffi.a
+        run: apps/silica/tests/qt/run.sh "$GITHUB_WORKSPACE/coverage-cpp-aurora.info"
+      # The HarmonyOS app's ohosTest suite under Node, its ArkTS turned
+      # into JavaScript by TypeScript, with the real core behind the native
+      # module's call.
+      - name: the HarmonyOS app's tests (apps/harmony/nodetest)
+        env:
+          CBB_FFI_LIB: ${{ github.workspace }}/target/debug/libcbb_ffi.a
+        run: apps/harmony/nodetest/run.sh "$GITHUB_WORKSPACE/coverage-ets-harmony.info" "$GITHUB_WORKSPACE/coverage-ets-harmony-watch.info"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-phonelogic
+          path: |
+            coverage-cpp-aurora.info
+            coverage-ets-harmony.info
+            coverage-ets-harmony-watch.info
+
   phonecore:
     name: phone core (${{ matrix.target }})
     needs: changes
@@ -3473,13 +3628,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the versions Gradle resolves
         working-directory: apps/android
@@ -3638,16 +3795,18 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: a corpus of the fixed seed, read by all three
-        run: sh .github/differential.sh 1 20000 500 "$RUNNER_TEMP/differential"
+        run: sh .github/differential.sh 1 20000 "$RUNNER_TEMP/differential"
       - name: the cases read differently
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -3657,21 +3816,33 @@ jobs:
           if-no-files-found: ignore
 
   model:
-    name: model of the records' rules (Quint)
+    name: model of the records' rules (Quint, ${{ matrix.part }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # docs/model/records-v3.qnt: the record rules of 0.6, which
+        # core/tests/records_model.rs pins against the core. Its tests by
+        # first letter, in four parts of a few minutes each. Two scenarios
+        # take more than five minutes each in this simulator,
+        # headWithoutFirstTest and honestRefusesKnownKeyTest, and run with
+        # the random runs of the promises on a server (the model's header).
+        part: ["a-e s-z", "f-h", "i-l", "m-r"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: the scenarios, and the promises over random runs
-        # docs/model/claims.qnt: the rules for handing the group over as docs/records-v2.md
-        # words them. The simulator runs in Node (the typescript backend), so nothing but
+      - name: the model's scenarios
+        # The simulator runs in Node (the typescript backend), so nothing but
         # the Quint package is downloaded.
+        env:
+          PART: ${{ matrix.part }}
         run: |
-          quint="npx --yes @informalsystems/quint@0.33.1"
-          $quint test --backend=typescript docs/model/claims.qnt
-          $quint run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
+          letters=$(printf '%s' "$PART" | sed 's/ //g')
+          npx --yes @informalsystems/quint@0.33.1 test --backend=typescript \
+            --match="^(?!headWithoutFirstTest$|honestRefusesKnownKeyTest$)[$letters][A-Za-z0-9]*Test$" \
+            docs/model/records-v3.qnt
 
   format:
     name: the frozen format (testdata/format)
@@ -3709,7 +3880,7 @@ jobs:
           (cd testdata/format/check && CGO_ENABLED=0 go build -o "$RUNNER_TEMP/slh-signer" .)
           docker run --rm -v "$PWD:/src:ro" -v "$out:/out" -v "$RUNNER_TEMP/slh-signer:/usr/local/bin/slh-signer:ro" \
             -e CBB_SLH_SIGNER=/usr/local/bin/slh-signer -w /src python:3.13-slim sh -euc '
-            pip install -q --no-cache-dir --root-user-action=ignore cryptography==50.0.1
+            pip install -q --no-cache-dir --root-user-action=ignore --require-hashes --only-binary :all: -r testdata/format/requirements.txt
             python3 -I testdata/format/gen.py /out'
           # The files gen.py writes; bounds.json, push.json and the mutants
           # come from their own generators.
@@ -3727,7 +3898,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust-build, rust, rust-coverage, rustinstall, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model, format]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust-build, rust, rust-coverage, rustinstall, rustmips, esp32, zxnext, silica, harmony, phonelogic, advisories, docker, differential, model, format]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

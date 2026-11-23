@@ -47,6 +47,12 @@ final class MacModel: ObservableObject {
     @Published private(set) var invitation: Invitation?
     private var inviteFiles: (state: URL, answers: URL)?
     private var inviteCancelled = false
+    /// Whether a join by invitation is under way (JoinInviteSheet), and
+    /// this Mac's key fingerprint once cbb wrote it.
+    @Published private(set) var joiningByInvite = false
+    @Published private(set) var joinFingerprint: String?
+    private var joinFile: URL?
+    private var joinCancelled = false
     /// Whether macOS lets the app press keys for remote paste.
     @Published private(set) var pasteAllowed = Injector.allowed
 
@@ -256,20 +262,38 @@ final class MacModel: ObservableObject {
     /// Makes a new group with this Mac as its root, as cbb new does as the
     /// administrator.
     func createGroup() async {
-        await admin(["new"], done: String(localized: "The group is made: this Mac is its root. Add a device with the + button."))
+        await admin(["new"], done: String(localized: "The group is made: this Mac is its main device. Add a device with the + button."))
     }
 
     /// Installs the newest signed release the group passed around, as cbb
     /// update does as the administrator.
     func update() async { await admin(["update"], done: String(localized: "CBB is updated.")) }
 
-    /// Claims the group with its recovery key, typed from the sheet or its
-    /// QR code's text, on cbb recovery's standard input; the claim waits as
-    /// a takeover does.
-    func recover(_ key: String) async {
-        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        await admin(["recovery"], input: key + "\n", done: String(localized: "The claim is made: it takes effect after the group's takeover delay."))
+    /// Moves the group to this Mac with its recovery key, typed from the
+    /// sheet or its QR code's text, on cbb recovery's standard input; this
+    /// Mac is the group's main device at once. The devices in leave (their
+    /// IDs) leave the group in the same act; with card, secret is the PIN
+    /// of the YubiKey that holds the key.
+    func recover(_ secret: String, leave: [String] = [], card: Bool = false) async {
+        let secret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !secret.isEmpty else { return }
+        var arguments = ["recovery"]
+        for id in leave { arguments += ["-leave", id] }
+        if card { arguments.append("-yubikey") }
+        await admin(arguments, input: secret + "\n", done: String(localized: "This Mac is the group's main device now."))
+    }
+
+    /// Sets how long a copy and a secret live in the group (cbb ttl,
+    /// D-129), in milliseconds; nil keeps one as it is.
+    func setTTL(copyMS: Int64?, secretMS: Int64?) async {
+        func value(_ ms: Int64?) -> String { ms.map { "\($0 / 1000)s" } ?? "-" }
+        await admin(["ttl", value(copyMS), value(secretMS)], done: String(localized: "Saved. Every device of the group follows it."))
+    }
+
+    /// Sets which keys may be the group's admins and hubs (cbb keys), on the
+    /// main device: proven, hardware or files.
+    func setKeyLevel(_ level: String) async {
+        await admin(["keys", level], done: String(localized: "Saved. Every device of the group follows it."))
     }
 
     func rename(_ id: String, to name: String) async {
@@ -546,6 +570,76 @@ final class MacModel: ObservableObject {
         await admin(["pair", "-code"], input: digits + "\n", done: String(localized: "Joined the group."))
     }
 
+    /// What cbb pair -invite -app writes (member/src/lib.rs, join_invited):
+    /// this Mac's key fingerprint, and done once it joined.
+    struct JoinState: Decodable, Equatable {
+        let fingerprint: String
+        let done: Bool?
+    }
+
+    /// Joins a group far away by an invitation (docs/protocol.md, section
+    /// 12): cbb pair -invite - -app as the administrator, with the
+    /// invitation's text and the user's yes to sync away from home on its
+    /// standard input, never its command line; it writes this Mac's key
+    /// fingerprint into a file the app made, which whoever invited it
+    /// compares. cancelJoin removes the file, and cbb gives up.
+    func joinInvite(_ text: String) async {
+        guard !joiningByInvite, !busy else { return }
+        let invitation = text.filter { !$0.isWhitespace }
+        guard invitation.hasPrefix("cbb://join#") else {
+            message = String(localized: "This is not a CBB invitation.")
+            return
+        }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-join-\(UUID().uuidString).json")
+        guard FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+            message = Self.describe(Admin.Failure.failed(String(localized: "The app could not make the file for the QR code."), detail: file.path))
+            return
+        }
+        joiningByInvite = true
+        joinFile = file
+        joinCancelled = false
+        let poll = Task { [weak self] in
+            while !Task.isCancelled {
+                if let data = try? Data(contentsOf: file), let j = try? JSONDecoder().decode(JoinState.self, from: data),
+                   self?.joinFingerprint != j.fingerprint {
+                    self?.joinFingerprint = j.fingerprint
+                }
+                try? await Task.sleep(for: .milliseconds(400))
+            }
+        }
+        let details = Self.showsErrorDetails
+        await act { [weak self] in
+            do {
+                _ = try await Admin.run(["pair", "-invite", "-", "-app", file.path], input: invitation + "\nyes\n", details: details)
+            } catch {
+                if self?.joinCancelled == true { throw Admin.Failure.cancelled }
+                throw error
+            }
+            return String(localized: "Joined the group.")
+        }
+        poll.cancel()
+        try? FileManager.default.removeItem(at: file)
+        joinFile = nil
+        joinFingerprint = nil
+        joiningByInvite = false
+    }
+
+    /// Gives up the join by invitation: cbb sees its file gone and hangs up.
+    func cancelJoin() {
+        guard let file = joinFile else { return }
+        joinCancelled = true
+        try? FileManager.default.removeItem(at: file)
+    }
+
+    /// Hides the group's notice on this Mac, as a phone's user hides it
+    /// (Control.Status.notices); any user of the Mac may, over the plain
+    /// socket.
+    func dismiss(_ notice: Control.Notice) async {
+        var h = Control.Header(op: "dismiss")
+        h.value = notice.id
+        await plain(h, done: "")
+    }
+
     /// What cbb invite -app writes (member/src/admit_cli.rs): the
     /// invitation's text, how long it is valid, the device that asks to
     /// join, and the name of the one that joined; with when it ends.
@@ -654,7 +748,8 @@ final class MacModel: ObservableObject {
         busy = true
         defer { busy = false }
         do {
-            message = try await work()
+            let done = try await work()
+            message = done.isEmpty ? nil : done
         } catch Admin.Failure.cancelled {
             message = nil
         } catch {

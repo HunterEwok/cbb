@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! A device as the group's hub (docs/protocol.md, section 11; docs/design.md,
-//! "The phone as the hub"): the end of every client's WireGuard tunnel, on
+//! A computer as the group's hub (docs/protocol.md, section 11): the end of every client's WireGuard tunnel, on
 //! GotaTun with AmneziaWG when the group hides its tunnel, with smoltcp's
 //! TCP behind it. A connection a client opens through its tunnel to the
 //! hub's member port goes to a loopback port the caller names for the
 //! client's tunnel address: the app's member listener, or a guest's pairing
-//! window. The phones' apps run it through ffi/ in place of the Go hub.
+//! window.
 
 use std::collections::{HashMap, HashSet};
 use std::net::{Ipv6Addr, Shutdown, SocketAddr, TcpStream, UdpSocket};
@@ -91,7 +90,7 @@ pub struct Limits {
 }
 
 /// A device's hub: its clients each open one or two connections, and a
-/// guest one; a phone or a computer holds a few hundred clients at most.
+/// guest one; a computer or a board holds a few hundred clients at most.
 pub const DEVICE_LIMITS: Limits = Limits {
     bridges: 1024,
     per_client: 8,

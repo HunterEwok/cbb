@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +30,7 @@ import (
 //	forge -state DIR -endpoint HOST:PORT ports        each TCP port of the hub that answers
 //	forge -state DIR -endpoint HOST:PORT reach:ID,... whether other members answer through the hub
 //	forge -state DIR -endpoint HOST:PORT stranger     a key the group does not know
-//	forge -state DIR -hub-state DIR2 member           whether the hub of DIR2's offer answers
+//	forge -state DIR -hub-state DIR2 member         whether the hub of DIR2's offer answers
 //	forge -state DIR -endpoint HOST:PORT outside:A:P,... whether any address beyond the hub answers
 //
 // Each prints one line per case: "ports: open 8764", "reach ID: no answer"
@@ -38,7 +40,9 @@ import (
 // hostile client would, and tries TCP and UDP to each address: the
 // internet, the hub's own network, its loopback (W44). With -hub-state, the member's own keys go to the
 // hub of another device's offer, with that device's preshared key, as a
-// member of another group that learned it would (W33, S8).
+// member of another group that learned it would (W33, S8). The member's
+// device ID is -device, or the bench-device-id file the bench leaves in
+// DIR, since the state keeps it sealed.
 
 // tunnelCase tells whether c is one of the tunnel's cases.
 func tunnelCase(c string) bool {
@@ -48,7 +52,7 @@ func tunnelCase(c string) bool {
 
 // runTunnel runs the tunnel's cases as the client whose service state is in
 // state, to its first hub, at endpoint or the hub's first address.
-func runTunnel(state, hubState, endpoint string, cases []string) error {
+func runTunnel(state, selfID, hubState, endpoint string, cases []string) error {
 	st, err := tunnel.LoadState(state)
 	if err != nil {
 		return err
@@ -77,7 +81,14 @@ func runTunnel(state, hubState, endpoint string, cases []string) error {
 	if err != nil {
 		return err
 	}
-	self, err := deviceAddr(state)
+	if selfID == "" {
+		b, err := os.ReadFile(filepath.Join(state, "bench-device-id"))
+		if err != nil {
+			return fmt.Errorf("give -device: %v", err)
+		}
+		selfID = strings.TrimSpace(string(b))
+	}
+	self, err := tunnel.Addr(selfID)
 	if err != nil {
 		return err
 	}
@@ -192,15 +203,6 @@ func runTunnel(state, hubState, endpoint string, cases []string) error {
 		}
 	}
 	return nil
-}
-
-// deviceAddr is the tunnel address of the device whose state is in dir.
-func deviceAddr(dir string) (netip.Addr, error) {
-	id, err := loadID(dir)
-	if err != nil {
-		return netip.Addr{}, err
-	}
-	return tunnel.Addr(id)
 }
 
 // startProbe brings up a WireGuard client with key that routes the whole

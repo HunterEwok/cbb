@@ -13,7 +13,6 @@
 
 #include <QByteArray>
 #include <QDateTime>
-#include <QHash>
 #include <QImage>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -76,6 +75,17 @@ class Member : public QObject
     Q_PROPERTY(QString awayStatus READ awayStatus NOTIFY awayChanged)
     Q_PROPERTY(QString awayHub READ awayHub NOTIFY awayChanged)
     Q_PROPERTY(QString awayError READ awayError NOTIFY awayChanged)
+    // The group's blind relay (docs/design.md, "Blind relay"): its address,
+    // "" for none; whether the phone is there, how many other devices of
+    // the group are, and what went wrong last. periodDue: the root's next
+    // period of the group's server keys waits for its key; periodOverdue:
+    // they expired, and the relay and the hubs take nobody until it signs.
+    Q_PROPERTY(QString relayAt READ relayAt NOTIFY awayChanged)
+    Q_PROPERTY(bool relayConnected READ relayConnected NOTIFY awayChanged)
+    Q_PROPERTY(int relayOnline READ relayOnline NOTIFY awayChanged)
+    Q_PROPERTY(QString relayError READ relayError NOTIFY awayChanged)
+    Q_PROPERTY(bool periodDue READ periodDue NOTIFY awayChanged)
+    Q_PROPERTY(bool periodOverdue READ periodOverdue NOTIFY awayChanged)
 
 public:
     explicit Member(QObject *parent = nullptr);
@@ -107,6 +117,12 @@ public:
     QString awayStatus() const { return m_awayStatus; }
     QString awayHub() const { return m_awayHub; }
     QString awayError() const { return m_awayError; }
+    QString relayAt() const { return m_relayAt; }
+    bool relayConnected() const { return m_relayConnected; }
+    int relayOnline() const { return m_relayOnline; }
+    QString relayError() const { return m_relayError; }
+    bool periodDue() const { return m_periodDue; }
+    bool periodOverdue() const { return m_periodOverdue; }
 
     // Starts the member of membership as the phone named name.
     void start(const Membership &membership, const QString &name, const QByteArray &publicKey, const QString &os,
@@ -153,10 +169,6 @@ signals:
     void awayChanged();
     // The images or files of a copy are in folder, for a notification.
     void saved(const QString &folder, int count);
-    // A paste or paste-off command an admin signed for this phone, checked
-    // and opened (the member's check_command answer, with the event's
-    // token): the receiver carries it out and answers.
-    void commandArrived(const QJsonObject &checked);
     // Something in the member broke (docs/core-api.md, "Panics"): details
     // say what and where. The app shows it and starts the member again.
     void panicked(const QString &details);
@@ -164,22 +176,17 @@ signals:
 public:
     // Brings the devices up to date now, as after an admin's change.
     void pollDevices();
+    // Brings where sync away from home and the relay stand up to date.
+    void pollAway();
     // The device tiles as the member keeps them (docs/apps.md, "What the
     // member shows"), with the user's change op applied and kept first
     // (null for none): {tiles, online, others, custom}; empty with failure
     // set when there is no member or the change does not fit.
     QJsonObject view(const QJsonValue &op, Failure *failure) const;
-    // Answers the command of the token: done, refused or failed, and why
-    // (in English: the sender's log shows it).
-    void answer(double token, const QString &status, const QString &reason);
 
 private:
     Q_INVOKABLE void event(const QByteArray &json);
     void write(const QString &text, bool secret, qint64 ttlMs);
-    // A command for the phone itself (docs/protocol.md, section 15) that
-    // the node passed on: checked with the records, not carried out before
-    // and signed after the member started.
-    void command(double token, const QString &from, const QJsonObject &record);
     void pollPeers();
     // A device's name as the member's devices list it, else its ID.
     QString deviceName(const QString &id) const;
@@ -201,7 +208,6 @@ private:
     void pollMuted();
     // Reads where sync away from home stands from the core's answer.
     void readAway(const QJsonValue &away);
-    void pollAway();
 
     cbb_member *m_member = nullptr;
     bool m_listening = false; // the member port is open (listen)
@@ -237,8 +243,11 @@ private:
     QString m_awayError;
     // The core's last error message, so that each is shown and logged once.
     QString m_awayFailure;
-    // The commands carried out, by ID, until they expire.
-    static const int maxCommands = 4096;
-    QHash<QString, qint64> m_seen;
-    qint64 m_startedMs = 0;
+    QString m_relayAt;
+    bool m_relayConnected = false;
+    int m_relayOnline = 0;
+    QString m_relayError;
+    QString m_relayFailure;
+    bool m_periodDue = false;
+    bool m_periodOverdue = false;
 };

@@ -1,0 +1,9 @@
+{
+  "name": "cbb-harmony-nodetest",
+  "private": true,
+  "description": "The HarmonyOS app's ohosTest suite under Node (run.sh)",
+  "license": "AGPL-3.0-only",
+  "devDependencies": {
+    "typescript": "6.0.2"
+  }
+}

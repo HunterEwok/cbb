@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The manifest of a media event: images or files (docs/protocol.md,
-//! section 4, "Media"). The core never fetches the content; it takes
-//! the event, so that the group converges, and its plain-text alternative.
-//! It checks the manifest as Go's package clip does, since it passes the
-//! event on.
+//! The manifest of a media copy: images or files (docs/format.md,
+//! section 10.3). The core never fetches the content; it takes the copy,
+//! so that the group converges, and its plain-text alternative. It checks
+//! the manifest as Go's package clip does, since it passes the copy on.
 
 use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
@@ -27,7 +26,7 @@ pub const MAX_TYPES: usize = 8;
 /// The most bytes of all the paths of a manifest.
 pub const MAX_PATHS: usize = 2 << 20;
 /// The longest path, and the longest name in it: 255 characters of three
-/// bytes each in a name (format 20.6). A name past what the receiver's
+/// bytes each in a name (format 13). A name past what the receiver's
 /// file system takes is shortened when it is saved, not refused.
 pub const MAX_PATH: usize = 16 << 10;
 pub const MAX_NAME: usize = 765;
@@ -93,7 +92,7 @@ impl Manifest {
 
     /// Reads a manifest received from another member: in the strict form
     /// of signed bodies and in its canonical form, with no member its
-    /// table does not name (docs/protocol.md, section 4, "Media"), and
+    /// table does not name (docs/format.md, section 10.3), and
     /// valid.
     pub fn parse(data: &[u8]) -> Result<Manifest> {
         crate::strict::check_canonical(data, &["parts", "size"])

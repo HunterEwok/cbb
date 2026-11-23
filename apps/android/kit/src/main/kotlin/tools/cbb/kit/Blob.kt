@@ -4,7 +4,7 @@
 package tools.cbb.kit
 
 /**
- * The sealed blob of a copy's images and files (docs/protocol.md, section 4,
+ * The sealed blob of a copy's images and files (docs/format.md, section 10.2,
  * "The blob"): the core seals and opens it; the app needs only its size, to
  * bound a fetch.
  */

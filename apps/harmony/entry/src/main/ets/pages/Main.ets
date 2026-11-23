@@ -25,8 +25,9 @@ import { glyph, line, mark, nameOf } from '../common/Devices';
 import { app, Tile } from '../model/AppModel';
 import { Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
+import { GroupCards } from '../components/GroupCards';
 import { BusyLine, ErrorText, NORMAL_BUTTON } from '../components/Common';
-import { DeviceDetail, takesPastes } from '../components/DeviceDetail';
+import { DeviceDetail, isMuted, muteMenu, takesPastes } from '../components/DeviceDetail';
 import { Orbit } from '../components/Orbit';
 import { SettingsBody } from '../components/SettingsBody';
 
@@ -74,8 +75,8 @@ function settingsLabel(key: string): string {
       return t('recovery_title');
     case 'p:change_root':
       return t('change_root');
-    case 'p:hub':
-      return t('hub_title');
+    case 'p:relay':
+      return t('relay_title');
     case 's:group':
       return t('settings_group');
     case 's:lab':
@@ -153,7 +154,7 @@ struct Main {
       rows.push('p:change_root');
     }
     if (app.member.running) {
-      rows.push('p:hub');
+      rows.push('p:relay');
     }
     if (app.membership !== undefined) {
       rows.push('s:group');
@@ -185,8 +186,8 @@ struct Main {
       router.pushUrl({ url: 'pages/Recovery' });
     } else if (section === 'p:change_root') {
       router.pushUrl({ url: 'pages/ChangeRoot' });
-    } else if (section === 'p:hub') {
-      router.pushUrl({ url: 'pages/Hub' });
+    } else if (section === 'p:relay') {
+      router.pushUrl({ url: 'pages/Relay' });
     } else if (section !== this.section) {
       this.section = section;
       this.selected = '';
@@ -239,8 +240,11 @@ struct Main {
       } });
     }
     if (d !== undefined && d.self !== true && app.isAdmin() && app.member.running) {
-      sheets.push({ title: t('device_mute_hour'), action: () => { app.manage('mute', d.id, '', 60); } });
-      sheets.push({ title: t('device_unmute'), action: () => { app.manage('unmute', d.id); } });
+      if (isMuted(d)) {
+        sheets.push({ title: t('device_unmute'), action: () => { app.manage('unmute', d.id); } });
+      } else if (d.online === true) {
+        sheets.push({ title: t('device_mute'), action: () => { muteMenu(this.getUIContext(), d.id); } });
+      }
     }
     sheets.push({ title: t('arrange_title'), action: () => { this.arrangeTile(item); } });
     this.getUIContext().showActionSheet({ title: item.kind === 'collection' ? item.name : nameOf(d as Device), message: '', sheets: sheets });
@@ -672,6 +676,7 @@ struct Main {
     }
 
     BugCard({ bugs: app.bugs })
+    GroupCards()
 
     // "Lost phone?" on the group's only admin: how a second phone
     // becomes one. Closed once, it stays closed.

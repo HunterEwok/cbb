@@ -7,7 +7,7 @@
     {"name": "act_remove", "value": "Quitar del grupo"},
     {"name": "ask_actions_off", "value": "¿Desactivar todas las acciones rápidas en %1$s?"},
     {"name": "ask_away_off", "value": "¿Desactivar la sincronización fuera de casa en %1$s?"},
-    {"name": "ask_freeze", "value": "¿Congelar %1$s? Sigue siendo administrador de nombre, pero nada de lo que firme cuenta hasta que la raíz lo descongele."},
+    {"name": "ask_freeze", "value": "¿Congelar %1$s? Sigue siendo administrador de nombre, pero nada de lo que firme cuenta hasta que el dispositivo principal lo descongele."},
     {"name": "ask_paste_off", "value": "¿Desactivar el pegado remoto en %1$s?"},
     {"name": "ask_remove", "value": "¿Quitar %1$s del grupo?"},
     {"name": "away", "value": "En todas partes"},

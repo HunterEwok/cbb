@@ -31,8 +31,8 @@ A hub is one of two kinds, and you choose which when you make it one:
   need no security chip: a Raspberry Pi or a NAS in Docker with its keys in a file is a good
   one. It makes, reads and pastes no copies of its own.
 
-On the phone, tap the computer, then **Make it a hub** and the kind; the Mac app and the tray
-app ask the same. From an admin computer, `sudo cbb global hub -on DEVICE -forward-only`
+On an admin phone, tap an admin computer, then **Make it a hub**: it becomes a hub that reads
+the copies. The Mac app and the tray app ask which kind. From an admin computer, `sudo cbb global hub -on DEVICE -forward-only`
 makes another computer a hub that only passes copies on. Sync away from home must be on there
 first (step 2 below, with `sudo cbb global on`).
 
@@ -72,10 +72,7 @@ At home, with the hub on:
 - **Computers**: `sudo cbb global on` (on Windows, in an administrator terminal).
 - **Phones**: in the app, Settings, **Sync away from home**. Then keep the app open for a
   moment at home, so it meets the hub. An iPhone syncs away from home while the app is
-  open; Android also in the background. In a group made on a phone, that phone starts as the
-  hub, and the switch shows once it is no longer: under **Move the hub to a computer** make
-  the computer the hub (with the forwarder saved on the phone first), or turn **This phone
-  as the hub** off.
+  open; Android also in the background.
 - **A small device** (a router, a Raspberry Pi): `sudo cbb global on` on the device ([small devices](../../member/README.md#sync-away-from-home)).
 
 ## 4. Check it
@@ -106,10 +103,9 @@ sudo cbb global hub
 ```
 
 Without addresses of its own, the hub goes through the project's forwarder at `cbb.tools`:
-cbb knows its address and key, and a phone that is the hub uses it too. `-forwarder default`
+cbb knows its address and key. `-forwarder default`
 adds it to a hub that has its own addresses as well. For [your own forwarder](../admin/self-hosting.md#a-forwarder), on any small server, give its
-address and key instead: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`; on a
-phone, under **This phone as the hub**.
+address and key instead: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`.
 
 The hub may have its own address and a forwarder at once: devices try the hub first and the
 forwarder last.
@@ -139,11 +135,9 @@ Other ways to join from afar, through SSH or your own VPN, are in
 
 ## No computer for a hub
 
-A phone can be the hub while its app is open (Settings, **This phone as the hub**). The
-switch is only in Settings, not on the phone's page in the device list as on a computer: a
-phone serves only while its app is open (an Android phone also in the background, at the cost
-of its battery), so a computer that is always on is the better hub. Or the
-devices meet at a **blind relay** on a server of your own instead of a hub: the computers with
+A phone is never the hub: a hub is a computer, a router or a small board such as a
+Raspberry Pi. Without one, the devices meet at a **blind relay** instead of a hub, the
+project's or one on a server of your own: the computers with
 `cbb global relay`, the phones under **Blind relay** in Settings. The relay cannot read the
 clipboard but sees which devices talk, when and how much. See
 [running your own servers](../admin/self-hosting.md#a-blind-relay).

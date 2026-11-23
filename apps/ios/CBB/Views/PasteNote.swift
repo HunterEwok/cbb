@@ -37,8 +37,8 @@ struct PasteNote: View {
 }
 
 /// A remote invitation for a device far away (docs/protocol.md, section
-/// 12), from Home's +: on an admin phone, the button that opens it (on this
-/// phone while it is the hub, else through a connected hub of the group),
+/// 12), from Home's +: on an admin phone, the button that opens it through
+/// a connected hub of the group,
 /// its QR code, which the new device scans, its file to share as the
 /// fallback, and the question about the device that used it, with the
 /// fingerprint to compare. Elsewhere it says who makes one.

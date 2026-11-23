@@ -166,22 +166,20 @@ var dangerousScreens = []dangerousScreen{
 		tearDown: closeConfirm,
 	},
 	{
-		id: "alerts", title: "The takeover warning and the owners split: a claim waits, admins removed each other, two claims, a key with two histories",
+		id: "alerts", title: "The group stopped: admins removed each other, a key with two histories",
 		setUp: func(w *window, _ string) {
 			w.svc.mu.Lock()
 			w.svc.status.Stop = "full"
-			w.svc.status.Claims = []control.Claim{{By: "iPhone", State: "pending", LeftMS: 70 * 3600 * 1000}}
 			w.svc.status.Conflicts = []control.Conflict{
 				{Kind: "admins", Devices: []string{"MacBook", "Windows PC"}},
-				{Kind: "claims", Devices: []string{"iPhone", "Pixel"}},
 				{Kind: "two_histories", Devices: []string{"Home server"}},
 			}
 			w.svc.mu.Unlock()
-			w.wait(`$all("#alerts .alert").length === 5`)
+			w.wait(`$all("#alerts .alert").length === 3`)
 		},
 		tearDown: func(w *window) {
 			w.svc.mu.Lock()
-			w.svc.status.Stop, w.svc.status.Claims, w.svc.status.Conflicts = "", nil, nil
+			w.svc.status.Stop, w.svc.status.Conflicts = "", nil
 			w.svc.mu.Unlock()
 			w.wait(`$q("#alerts").hidden`)
 		},
@@ -210,25 +208,11 @@ var dangerousScreens = []dangerousScreen{
 			w.eval(`$click("#settings")`, nil)
 			w.wait(`$q("#settings-dialog").open && $q("#advanced-recovery")`)
 			w.eval(`$click("#advanced-recovery")`, nil)
-			w.wait(`$q("#confirm").open && !$q("#confirm-input").hidden`)
-		},
-		tearDown: closeConfirm,
-	},
-	{
-		id: "taken-over", title: "This device's group was taken over",
-		setUp: func(w *window, _ string) {
-			w.svc.mu.Lock()
-			w.svc.status.Why = []control.WhyReason{{Code: "taken_over", Level: "stop", Device: "iPhone"}}
-			w.svc.mu.Unlock()
-			// The dialog shows the status the window last read: opened
-			// again until it has read the new one.
-			w.wait(`(() => { const d = $q("#why-dialog"); if (!d.open) $click("#advanced-why"); if ($q("#why-list").textContent.includes("iPhone")) return true; d.close(); return false; })()`)
+			w.wait(`$q("#recover-dialog").open && $all("#recover-who input").length > 0`)
 		},
 		tearDown: func(w *window) {
-			w.eval(`$q("#why-dialog").close(); true`, nil)
-			w.svc.mu.Lock()
-			w.svc.status.Why = nil
-			w.svc.mu.Unlock()
+			w.eval(`$q("#recover-dialog").close(); true`, nil)
+			w.wait(`!$q("#recover-dialog").open`)
 		},
 	},
 }
@@ -255,7 +239,7 @@ func fakeDangerousRun(args []string, _ string, _ bool) error {
 				file = args[i+1]
 			}
 		}
-		line = appInvite{Invite: "cbb://invite?g=cbb-7f3a&h=203.0.113.9%3A8764&t=q83vEjRWeJA", Expires: inviteSeconds,
+		line = appInvite{Invite: "cbb://join#pAFQq83vEjRWeJA", Expires: inviteSeconds,
 			Joining: &InviteJoining{Name: "Anna's laptop", OS: "Windows", Fingerprint: "3F9A 1C2E 88B0 D45E 7A19"}}
 	default:
 		return errCancelled
@@ -364,7 +348,6 @@ var phoneScreens = []struct{ id, title string }{
 	{"invite-fingerprint", "An invitation used: admit the device only if its fingerprint is the same"},
 	{"remove", "Removing a device"},
 	{"remove-root", "Removing the root phone: taking the group over"},
-	{"alerts", "The takeover warning and the owners split: a claim waits, admins removed each other, two claims, a key with two histories"},
 	{"recovery-sheet", "The recovery sheet, shown once"},
 	{"recovery-kept", "Closing the recovery sheet: did you keep it?"},
 }

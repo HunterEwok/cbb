@@ -21,23 +21,6 @@ use crate::{print, println};
 /// bytes, a text to type may be longer.
 const MAX_LINE: usize = 256;
 
-/// The name the board joins a group under when pair names none.
-const DEFAULT_NAME: &str = "Nano ESP32";
-
-/// Starts listening for the phone and shows the code to paste in the app.
-fn pair(board: &mut dyn Board, name: &str) {
-    match board.join(name) {
-        Ok(text) => {
-            println!("In the CBB app, tap \"Connect a new device\" and paste this:");
-            println!();
-            println!("{text}");
-            println!();
-            println!("The board waits up to 5 minutes; type status to see how it went.");
-        }
-        Err(e) => println!("{}", e.for_user()),
-    }
-}
-
 /// Whether the console has the type command: it types any text on the
 /// keyboard for whatever reaches the console, a program on the computer at
 /// the USB port among them, so only a build with the feature console-type
@@ -50,9 +33,6 @@ pub trait Board {
     fn network(&self) -> String;
     /// Joins this Wi-Fi network instead of the one before, or leaves it.
     fn wifi(&mut self, wifi: Option<Wifi>);
-    /// Starts listening for the phone, under this name; returns the QR
-    /// code's text.
-    fn join(&mut self, name: &str) -> Result<String>;
     /// Types these reports, gap_ms apart, on a connected Bluetooth host or
     /// else the USB keyboard, and returns at once; an error when neither is
     /// there or the keyboard is still typing.
@@ -148,31 +128,6 @@ impl Console {
         }
     }
 
-    /// Starts pairing by itself once the board has an address and is in
-    /// no group, as if pair had been typed, so that a board without a
-    /// keyboard at hand shows its code as soon as its Wi-Fi is up. A board
-    /// in a group, or one whose settings cannot be read, stays quiet.
-    #[cfg_attr(feature = "qemu", allow(dead_code))]
-    pub fn offer_pair(&mut self, store: &Result<Store>, board: &mut dyn Board) {
-        match store {
-            Ok(s) if s.identity().is_none() => {}
-            _ => return,
-        }
-        println!();
-        println!("The board is in no group yet, so it starts pairing (type pair again later if it times out).");
-        pair(board, DEFAULT_NAME);
-        // What was being typed stays, so show it again after the prompt.
-        self.prompt();
-        match self.ask {
-            Ask::Password(_) => {
-                for _ in core::str::from_utf8(&self.line).unwrap_or("").chars() {
-                    print!("*");
-                }
-            }
-            _ => print!("{}", core::str::from_utf8(&self.line).unwrap_or("")),
-        }
-    }
-
     fn line_done(&mut self, line: &str, store: &mut Result<Store>, board: &mut dyn Board) {
         match core::mem::replace(&mut self.ask, Ask::Command) {
             Ask::Command => self.command(line, store, board),
@@ -214,8 +169,6 @@ impl Console {
                 println!("  status        what the board knows and how its network is doing");
                 println!("  wifi          set the Wi-Fi network to join (asks for its name and password)");
                 println!("  wifi forget   leave the Wi-Fi network and forget it");
-                println!("  pair [NAME]   join a group: shows a code to scan with the phone (name: Nano ESP32);");
-                println!("                the board starts it by itself once its Wi-Fi is up while it is in no group");
                 println!("  leave         forget the group (remove the board in the app too)");
                 println!("  debug on|off  show the details of errors, or not (debug build: on by default)");
                 println!("  selftest      run the TLS 1.3 self-test");
@@ -250,7 +203,7 @@ impl Console {
                     match s.identity() {
                         Some(Ok(id)) => println!("  group: {} as {}", id.tag(), id.id),
                         Some(Err(e)) => println!("  group: {}", e.for_user()),
-                        None => println!("  group: none, type pair"),
+                        None => println!("  group: none; joining a group comes in 0.7"),
                     }
                 }
                 println!("  network: {}", board.network());
@@ -284,16 +237,6 @@ impl Console {
                     println!("{}", e.for_user());
                 }
                 println!("Error details are {mode}.");
-            }
-            (Some("pair"), ..) => {
-                if let Ok(s) = store
-                    && let Some(Ok(id)) = s.identity()
-                {
-                    println!("The board is in the group {} already; type leave first to join another.", id.tag());
-                    return;
-                }
-                let name = line["pair".len()..].trim();
-                pair(board, if name.is_empty() { DEFAULT_NAME } else { name });
             }
             (Some("leave"), None, _) => match edit(store, |f| f.remove(tag::IDENTITY)) {
                 Ok(()) => println!("The board left its group. Remove it in the app too, so the group revokes it."),
@@ -437,11 +380,4 @@ fn edit(store: &mut Result<Store>, change: impl FnOnce(&mut Fields)) -> Result<(
 #[cfg_attr(feature = "qemu", allow(dead_code))]
 pub fn save_bonds(store: &mut Result<Store>, bonds: &[crate::store::Bond]) -> Result<()> {
     edit(store, |f| f.set(tag::BONDS, crate::store::Bond::encode_all(bonds)))
-}
-
-/// Saves the identity the board joined with.
-#[cfg_attr(feature = "qemu", allow(dead_code))]
-pub fn save_identity(store: &mut Result<Store>, id: &cbb_core::identity::Identity) -> Result<()> {
-    let file = id.to_file()?;
-    edit(store, |f| f.set(tag::IDENTITY, file))
 }

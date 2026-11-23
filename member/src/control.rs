@@ -276,7 +276,7 @@ impl core::fmt::Debug for Header {
             .field("keyboard", &self.keyboard)
             .field("act", &self.act)
             .field("command", &self.command)
-            .field("invite", &self.invite)
+            .field("invite", &cbb_core::secret::Redacted(self.invite.len()))
             .field("joining", &self.joining)
             .finish()
     }
@@ -402,9 +402,6 @@ pub struct Status {
     /// The records freeze this admin computer's admin key, as Go's.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub frozen: bool,
-    /// The admin that took the group over from this root, as Go's.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub taken_over_by: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media: Option<Media>,
     /// The group's key level: which keys may be its root, an admin or a hub.
@@ -420,9 +417,6 @@ pub struct Status {
     /// How long a secret lives in the group.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub secret_ttl_ms: i64,
-    /// The claims to take the group over that wait or stop the group.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub claims: Vec<Claim>,
     /// The conflicts that stop the group until its root decides.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conflicts: Vec<Conflict>,
@@ -444,21 +438,15 @@ pub struct Status {
     /// everything syncs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub why: Vec<cbb_core::why::Reason>,
-}
-
-/// A claim to take the group over, as Go's control.Claim: who claims it
-/// (a device's name, or the key hash), pending, competing or disputed, and
-/// how long a pending one still waits.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct Claim {
-    pub by: String,
-    pub state: String,
-    #[serde(default, skip_serializing_if = "is_zero_i")]
-    pub left_ms: i64,
+    /// The member's notices about the group (`crate::notices`; docs/apps.md,
+    /// "Notices"), as the phones' apps get them: `{id, kind, args,
+    /// dismissable}`; the op `dismiss` hides one whose dismissable is true.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<serde_json::Value>,
 }
 
 /// A conflict of the group's records, as Go's control.Conflict: admins,
-/// claims or two_histories, and the signers' devices.
+/// fork, two_histories, admits or ids, and the signers' devices.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Conflict {
     pub kind: String,
@@ -875,6 +863,9 @@ pub fn is_admin(op: &str) -> bool {
             | "bug"
             | "bug_allow"
             | "bug_cancel"
+            // A notice of the group hidden on this device, as a phone's
+            // user hides it: the other devices still show theirs.
+            | "dismiss"
     )
 }
 
@@ -938,6 +929,9 @@ mod tests {
                 (m.header.op, m.header.name, m.header.seq, m.payload)
             );
         }
+        // A request with args of null has none.
+        let got = Reader::new(&b"{\"op\":\"status\",\"args\":null}\n"[..]).read().unwrap().unwrap();
+        assert_eq!(got.header.op, "status");
         for bad in [&b"[]\n"[..], b"{\"op\":\"copy\",\"args\":[]}\n", b"{\"ok\":1}\n"] {
             assert!(Reader::new(bad).read().is_err(), "{}", String::from_utf8_lossy(bad));
         }
@@ -1024,7 +1018,7 @@ mod tests {
     #[test]
     fn which_requests_need_the_admin_socket() {
         let h = |op: &str, device: &str| Header { op: op.into(), device: device.into(), ..Default::default() };
-        for op in ["copy", "paste", "status", "watch", "reply", "keys"] {
+        for op in ["copy", "paste", "status", "watch", "reply", "keys", "dismiss"] {
             assert!(!is_admin(op) && !needs_admin(&h(op, "")), "{op}");
         }
         for op in ["pair", "remove", "leave", "mode"] {
@@ -1034,5 +1028,26 @@ mod tests {
         assert!(!needs_admin(&h("sync", "")));
         assert!(needs_admin(&h("sync", "desk")));
         assert!(needs_admin(&h("mode", "desk")));
+    }
+
+    #[test]
+    fn this_devices_own_requests() {
+        assert!(is_own_device_op("mute") && is_own_device_op("unmute"));
+        assert!(!is_own_device_op("sync") && !is_own_device_op("remove"));
+    }
+
+    /// The debug form names the fields but never shows a pairing code or
+    /// an invitation.
+    #[test]
+    fn the_debug_form_keeps_the_secrets_out() {
+        let h = Header {
+            op: "invite".into(),
+            code: "123456".into(),
+            invite: "cbb://join#secret-part".into(),
+            ..Default::default()
+        };
+        let d = format!("{h:?}");
+        assert!(d.starts_with("Header {") && d.contains(r#"op: "invite""#), "{d}");
+        assert!(!d.contains("123456") && !d.contains("secret-part"), "{d}");
     }
 }

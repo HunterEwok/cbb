@@ -17,6 +17,15 @@ android {
         minSdk = 29
     }
 
+    // The unit tests' coverage, for tools/coverage's row kotlin-watch:
+    // createDebugUnitTestCoverageReport writes it as JaCoCo XML to
+    // build/reports/coverage/test/debug/report.xml.
+    buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

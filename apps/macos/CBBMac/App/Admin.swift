@@ -34,7 +34,7 @@ enum Admin {
     /// update, and joining a group, where cbb writes the service's files
     /// when the service does not run.
     static func needsRoot(_ arguments: [String]) -> Bool {
-        arguments.first == "update" || (arguments.first == "pair" && arguments.contains("-code"))
+        arguments.first == "update" || (arguments.first == "pair" && (arguments.contains("-code") || arguments.contains("-invite")))
     }
 
     /// Runs cbb with the arguments, typing yes when a question follows

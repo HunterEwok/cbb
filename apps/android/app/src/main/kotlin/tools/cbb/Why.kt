@@ -96,10 +96,7 @@ internal fun whyTitle(r: WhyReason): String {
     return when (r.code) {
         "not_in_group" -> stringResource(R.string.why_not_in_group_t)
         "removed" -> stringResource(R.string.why_removed_t)
-        "taken_over" -> stringResource(R.string.why_taken_over_t, r.device)
         "frozen" -> stringResource(R.string.why_frozen_t)
-        "cert_expired" -> stringResource(R.string.why_cert_expired_t, date)
-        "cert_ending" -> stringResource(R.string.why_cert_ending_t, date)
         "stopped" -> stringResource(R.string.why_stopped_t)
         "secrets_stopped" -> stringResource(R.string.why_secrets_stopped_t)
         "sync_off" -> if (r.untilMS > 0) stringResource(R.string.why_sync_off_until_t, date) else stringResource(R.string.why_sync_off_t)
@@ -139,10 +136,7 @@ internal fun whyTitle(r: WhyReason): String {
 internal fun whyAction(r: WhyReason): String? = when (r.code) {
     "not_in_group" -> stringResource(R.string.why_not_in_group_d)
     "removed" -> stringResource(R.string.why_removed_d)
-    "taken_over" -> stringResource(R.string.why_taken_over_d, r.device)
     "frozen" -> stringResource(R.string.why_frozen_d)
-    "cert_expired" -> stringResource(R.string.why_cert_expired_d)
-    "cert_ending" -> stringResource(R.string.why_cert_ending_d)
     "stopped" -> stringResource(R.string.why_stopped_d)
     "sync_off" -> stringResource(R.string.why_sync_off_d)
     "only_device" -> stringResource(R.string.why_only_device_d)

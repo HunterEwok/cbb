@@ -51,12 +51,13 @@ watch's state, content hashes, join QR codes and a CPace exchange.
 - The files named `go-*.json` and those without a prefix are written by Go tests with
   `-update` and read by the Swift kit, the Kotlin kit and, for what it implements, the lite
   core (`core/src/vectors.rs`).
-- Files named `swift-*.json` were written by the Swift kit of 0.5 and stay as they are: Go's
-  tests of the records of 0.5 read them until that code goes (D-126).
+- `seal-go.json` holds messages Go's `crypto/hpke` sealed with the sealing suite, and
+  `seal-rust.json` what the core seals; the core opens both, and no Go test writes the first
+  again.
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
 - `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
-  from the draft; Go and the Rust core open its messages, and no test writes it.
+  from the draft; the Rust core opens its messages, and no test writes it.
 
 A change to the wire format changes the vectors in the same pull request, together with
 [the protocol](protocol.md) and every implementation.
@@ -70,7 +71,7 @@ becomes a vector here.
 - The Swift and Kotlin kits join groups of 0.6 through the core and sync through its member
   (`CoreMemberTests`, `CorePairingTests`, `WindowTests`; `CoreMemberTest`, `CorePairingTest`).
 - `TestAloneMember`, `TestAloneRemotePaste` and `TestAloneQuickActions` run the built cbb
-  without its helper (`CBB_TEST_ALONE`) among Go members at home. Sync away from home runs only in
+  without its helper (`CBB_TEST_ALONE`) among other services at home. Sync away from home runs only in
   a group of 0.6 (D-122): `member/tests/away_live.rs` and `away_hubs.rs` (the latter with
   `--features testhooks`) run real services of such a group through the hub's tunnel.
 
@@ -134,7 +135,8 @@ simulator are two jobs, the Rust workspace's checks and Raspberry Pi builds
 which run as the service tests do: one job builds them once into a cargo-nextest archive,
 four parts run a share of its tests each (`--partition`; within a part cargo-nextest runs the
 test binaries side by side, `.config/nextest.toml`, and the tests that time their own run
-run alone), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
+run alone; the two longest, the power cut at every byte and the record sets' differential
+check, run after the shares, one in part 1 and one in part 4), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
 and the Kotlin kit's tests (`Android kit`) beside the Android apps' build (`Android app`).
 
 The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
@@ -330,7 +332,10 @@ A9 and U14 to U18).
   the texts checked against the app's catalog, the iPhone's top row swapping sides from right
   to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets; on the
   iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
-  Hindi) passing; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`), and the English ones
+  Hindi) passing, and on the iPhone and the iPad also Home's cards about the group itself (a
+  group from before 0.6 and the member's notices, from the made-up group with
+  `-showcase -showcaseAlerts`) in English and Arabic, with Hide hiding only the notice that may
+  be hidden; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`), and the English ones
   are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
   of each element the audit fails and of the screen a lost tap met (the test taps Settings
   again and says so in its output). For each failed iPhone test CI also keeps its activities,
@@ -405,7 +410,10 @@ job prints the table, coverage by kind, in the run's summary. `tools/coverage` a
 reports up and fails when a row falls more than one point below its floor in
 `tools/coverage/floor.json`. The project aims at 90% of the lines in every part
 (`-target 90`): a part below that is marked in the table and gets a warning, without failing
-the run, and the tests are written up to 90 again before it reaches its floor of 85.
+the run. A floor only rises: it is set at the whole percent under the part's last measure
+whenever tests raise it, so coverage once won is not lost again. Code that only tests compile (the
+simulation, the tests' kits, the service's network tests in `member/src/nettest/`) counts in
+no part: `rustTestOnly` in `tools/coverage` lists it.
 
 Branches are rows of their own (`PART/branches` in the table and in `floor.json`) where the
 report counts them: JaCoCo for the Kotlin kit, llvm-cov for the Swift kit, and for the Rust
@@ -438,14 +446,22 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | Part | What counts | Measured by |
 |---|---|---|
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` jobs' tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
-| `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
+| `go-core` | the same, in `internal/group`, `clip` and `hlc` | as `go` |
+| `go-tray` | statements of the tray app (`apps/desktop`, a module of its own) | `go test -coverprofile` in the `tray app (ubuntu-latest)` job, the window's tests in a headless browser among them |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov nextest` in the four `cbb (Rust)` parts, put together by `cbb (Rust), the coverage` |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
 | `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
+| `kotlin-watch` | lines of what the Android phone app and its Wear OS app share (`apps/android/shared`: `WatchState`, what the phone tells the watch, and the design) | the unit tests' coverage (`createDebugUnitTestCoverageReport`, JaCoCo) in the `Android app` job |
+| `js-tray` | lines of the tray app's scripts (`apps/desktop/frontend`) | the browser's count under `TestWindow` (`CBB_JS_COVERAGE`), as LCOV, in the `tray app (ubuntu-latest)` job |
+| `cpp-aurora` | lines of the Aurora app's code that runs without a screen (`apps/silica/src`: `errors`, `membership`, `events`, `core` and `platform/keystore_file`) | `apps/silica/tests/qt/run.sh` in the `Aurora and HarmonyOS apps' code on the computer` job: the tests on desktop Qt 5 against the core built for the computer, with gcov |
+| `ets-harmony` | lines of code of the HarmonyOS app's model, core and common ArkTS (`apps/harmony/entry/src/main/ets`, without the pages and components), every module loaded | `apps/harmony/nodetest/run.sh` in the same job: the app's ohosTest suite under Node's test runner, its ArkTS turned into JavaScript by TypeScript, with the real core behind the native module's `call` |
+| `ets-harmony-watch` | the same of the HarmonyOS watch's app (`apps/harmony/wearable/src/main/ets`) | as `ets-harmony`, with `apps/harmony/nodetest/watch.test.cjs`, the watch's link to its phone under a fake Wear Engine |
 
 A test that compares two times of its own run is not timed under `cargo llvm-cov`, which counts every step of the code under test and none of its dependencies (`cfg(coverage)`): the full group's fill against its signatures (`records::tests::insert_cost`) is ignored there and runs in the `cbb (Rust), the checks` job's plain build.
+
+The core's tests too slow for a pull request are `#[ignore]` there and run in the nightly `the core's slow tests` job: the record set's restores step by step (`core/tests/read_records.rs`) and the timing tests of the secrets' comparisons (`core/src/secret.rs`, dudect's method, one thread). A coverage build leaves the timing tests out (`cfg(coverage)`), since they never run there. An `#[ignore]` names where the test runs or why it waits.
 
 The Go packages of the `service tests on the Rust cbb` jobs run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and each part's profile (`cover-go-service-PART.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
@@ -513,19 +529,16 @@ Miri cannot.
 ## Mutation testing
 
 Coverage says a line ran; mutation testing says whether a test would notice if it were wrong.
-The nightly workflow changes the records' code one place at a time (drops a check, turns `<`
+The nightly workflow changes the code one place at a time (drops a check, turns `<`
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
-`core/src/authority.rs` and `strict.rs`, in eight shards, and `gremlins` on
-`internal/authority`. A change that every test still passes is listed as missed, in the run's
+the strict form of signed bodies (`core/src/strict.rs`), in eight shards. A change that every test still passes is listed as missed, in the run's
 summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
-does not name (no new survivor, from the first day); the list holds the records' baseline of
-2026-11-11, and each of those gets a test or a note why it cannot matter. `gremlins` reports
-and does not fail yet.
+does not name (no new survivor, from the first day); the list holds the baseline of
+2026-11-11, and each of those gets a test or a note why it cannot matter.
 
 The service's readers of outside input already fail on a new one: `cargo mutants` on the
 control socket's messages (`member/src/control.rs`), the pairing window
-(`member/src/window.rs`), the server credentials (`core/src/credential.rs`) and the seals of
-the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
+(`member/src/window.rs`) and the seals of the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
 compares what lived with the known list, `tools/mutants/missed.txt`, line and column aside. A
 mutant on that list either changes nothing a caller can see (an equivalent mutant, with why
 in a comment) or lives in code that only Go's end-to-end tests reach, which `cargo mutants`
@@ -535,10 +548,9 @@ the tests now catch can leave the list.
 To run them locally:
 
 ```sh
-cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
+cargo mutants --in-place -p cbb-core -f core/src/strict.rs
 cargo mutants --in-place -p cbb-member -f member/src/control.rs -f member/src/window.rs
 tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
-go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/authority
 ```
 
 ## Not tested yet
@@ -553,6 +565,11 @@ these before the bench has run them.
 
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
+
+A test that needs something of its machine (an X server, a compositor, the IPv6 loopback, a
+tool) skips without it on a developer's machine and says why, but fails in CI, where that
+thing is set up on purpose: the environment variable `CI`, or the test's own switch
+(`CBB_TEST_IPV6=1`, `CBB_TEST_UINPUT=1`), turns the skip into a failure.
 
 ## Known failures
 
@@ -569,7 +586,8 @@ No step is marked at the moment.
 A test that fails only now and then is a red test too, with a cause to find: a race in the
 code, a wait too short for a slow runner, or an order the test assumes. The nightly
 workflow's `unstable` job runs the members' tests ten times over, against the Rust service with
-its helper and with `cbb` alone, and its summary lists every test that failed and how often. A test
+its helper and with `cbb` alone, and `unstable-tray` runs the tray app's (its window's in a
+browser among them) as often; the summary lists every test that failed and how often. A test
 found there goes into this table with what is known of its cause, and leaves it with the
 fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
 -scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed

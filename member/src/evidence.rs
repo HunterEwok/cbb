@@ -133,7 +133,12 @@ pub(crate) fn b64_value(b: &[u8]) -> Value {
 }
 
 pub(crate) fn call(op: &str, req: &impl Serialize) -> Result<Vec<u8>> {
-    let helper = crate::helper::shared().ok_or_else(|| Error::msg("attestations need cbb-helper beside cbb"))?;
+    call_by(crate::helper::shared(), op, req)
+}
+
+/// [`call`] through the helper given, none when there is no helper.
+fn call_by(helper: Option<Arc<crate::helper::Helper>>, op: &str, req: &impl Serialize) -> Result<Vec<u8>> {
+    let helper = helper.ok_or_else(|| Error::msg("attestations need cbb-helper beside cbb"))?;
     let payload = serde_json::to_vec(req).context("cannot encode an attestation request")?;
     Ok(helper.call(Header { op: op.into(), ..Default::default() }, payload, HELPER_TIME)?.payload)
 }
@@ -153,10 +158,14 @@ impl Attestations {
     /// comes: a restart while the mirror cannot be reached drops no
     /// revocation.
     fn load_status(&self) {
+        self.load_status_under(&crate::update::release_roots(), crate::update::now_ms());
+    }
+
+    /// [`Attestations::load_status`] under roots at now_ms.
+    fn load_status_under(&self, roots: &[release::Key], now_ms: i64) {
         let Ok(data) = std::fs::read(self.dir.join(STATUS_FILE)) else { return };
         let Ok(k) = serde_json::from_slice::<Kept>(&data) else { return };
-        let roots = crate::update::release_roots();
-        if let Some((revoked, stale)) = kept_revocations(&k, &roots, crate::update::now_ms()) {
+        if let Some((revoked, stale)) = kept_revocations(&k, roots, now_ms) {
             if let Some(why) = stale {
                 eprintln!(
                     "cbb: the kept revocation list of Android attestations is not current ({why}); it counts until a newer one comes"
@@ -175,12 +184,17 @@ impl Attestations {
     /// not older than the kept one; whether it changed, for the caller to
     /// check the peers' evidence again.
     pub fn fetch_status_with(&self, log: &dyn Fn(&str)) -> Result<bool> {
+        self.fetch_status_by(crate::helper::shared(), log)
+    }
+
+    /// [`Attestations::fetch_status_with`] through the helper given.
+    fn fetch_status_by(&self, helper: Option<Arc<crate::helper::Helper>>, log: &dyn Fn(&str)) -> Result<bool> {
         #[derive(Deserialize)]
         struct Files {
             keys: File,
             status: File,
         }
-        let f: Files = serde_json::from_slice(&call("attest-status", &serde_json::json!({}))?)
+        let f: Files = serde_json::from_slice(&call_by(helper, "attest-status", &serde_json::json!({}))?)
             .context("the revocation list's files do not decode")?;
         Ok(self.take_status(f.keys, f.status, log)?.1)
     }
@@ -190,17 +204,30 @@ impl Attestations {
     /// the release roots and are not older than the kept list: how many
     /// certificates the list revokes, and whether it changed.
     pub fn take_status(&self, keys: File, status: File, log: &dyn Fn(&str)) -> Result<(usize, bool)> {
+        self.take_status_under(keys, status, &crate::update::release_roots(), crate::update::now_ms(), log)
+    }
+
+    /// [`Attestations::take_status`] under roots at now_ms.
+    fn take_status_under(
+        &self,
+        keys: File,
+        status: File,
+        roots: &[release::Key],
+        now_ms: i64,
+        log: &dyn Fn(&str),
+    ) -> Result<(usize, bool)> {
         let path = self.dir.join(STATUS_FILE);
         let kept_seen = std::fs::read(&path)
             .ok()
             .and_then(|d| serde_json::from_slice::<Kept>(&d).ok())
             .map(|k| k.seen)
             .unwrap_or_default();
-        let roots = crate::update::release_roots();
-        let (st, seen) = release::check_status(&keys, &status, &roots, crate::update::now_ms(), &kept_seen)?;
+        let (st, seen) = release::check_status(&keys, &status, roots, now_ms, &kept_seen)?;
         let n = st.android_revoked.len();
-        if seen == kept_seen {
-            return Ok((n, false)); // the same list
+        // The same list is the same seq under the same keys; the rest of
+        // Seen (channel_keys_seq) may be filled in on a later check.
+        if (seen.status_seq, seen.status_keys_seq) == (kept_seen.status_seq, kept_seen.status_keys_seq) {
+            return Ok((n, false));
         }
         let data = serde_json::to_vec(&Kept { keys, status, seen }).context("cannot encode the list")?;
         write_atomic(&path, &data, 0o600)?;
@@ -216,9 +243,115 @@ impl Attestations {
 #[cfg(test)]
 mod tests {
 
-    use super::{Kept, kept_revocations};
-    use cbb_core::release::Seen;
+    use super::{Attestations, Kept, STATUS_FILE, kept_revocations};
     use cbb_core::release::testing::TestKey;
+    use cbb_core::release::{File, Seen};
+    #[cfg(unix)]
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
+    const AT: i64 = 1_800_000_000_000;
+    const DAY: i64 = 86_400_000;
+
+    /// The keys file root signs for status, and a list status signs of seq
+    /// at time_ms revoking revoked.
+    fn list(root: &TestKey, status: &TestKey, seq: u64, time_ms: i64, revoked: &[&str]) -> (File, File) {
+        let sign = |k: &TestKey, v: serde_json::Value| k.sign(&serde_json::to_vec(&v).unwrap());
+        let keys = sign(
+            root,
+            serde_json::json!({"v": 1, "type": "keys", "seq": 1, "time_ms": AT, "expires_ms": AT + 90 * DAY,
+                "keys": status.keys("status", "status")}),
+        );
+        let list = sign(
+            status,
+            serde_json::json!({"v": 1, "type": "attest-status", "seq": seq, "time_ms": time_ms,
+                "expires_ms": time_ms + 7 * DAY, "android_revoked": revoked}),
+        );
+        (keys, list)
+    }
+
+    fn tempdir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("cbb-evidence-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A list that checks out is taken and kept, the same one again changes
+    /// nothing, a newer one replaces it, one under other roots is refused,
+    /// and a member started again takes the kept list, even once it ran out.
+    #[test]
+    fn a_list_is_taken_kept_and_taken_again() {
+        let dir = tempdir("take");
+        let (root, status) = (TestKey::new(1), TestKey::new(2));
+        let roots = root.root("root-1");
+        let a = Attestations::new(&dir);
+        assert!(a.revoked().is_empty());
+        let said = Mutex::new(Vec::new());
+        let log = |l: &str| said.lock().unwrap().push(l.to_string());
+
+        let (keys, first) = list(&root, &status, 1, AT, &["1f", "2a"]);
+        assert_eq!(a.take_status_under(keys.clone(), first.clone(), &roots, AT + DAY, &log).unwrap(), (2, true));
+        assert_eq!(a.revoked(), ["1f", "2a"]);
+        assert!(said.lock().unwrap()[0].contains("2 certificates"));
+        assert!(dir.join(STATUS_FILE).exists());
+        assert_eq!(a.take_status_under(keys.clone(), first, &roots, AT + DAY, &log).unwrap(), (2, false));
+        assert_eq!(said.lock().unwrap().len(), 1);
+
+        let (_, newer) = list(&root, &status, 2, AT + DAY, &["3c"]);
+        assert_eq!(a.take_status_under(keys.clone(), newer.clone(), &roots, AT + 2 * DAY, &log).unwrap(), (1, true));
+        assert_eq!(a.revoked(), ["3c"]);
+        assert!(a.take_status_under(keys, newer, &status.root("root-2"), AT + 2 * DAY, &log).is_err());
+        assert_eq!(a.revoked(), ["3c"]);
+
+        let again = Attestations { dir: dir.clone(), revoked: Mutex::new(Vec::new()) };
+        again.load_status_under(&roots, AT + 2 * DAY);
+        assert_eq!(again.revoked(), ["3c"]);
+        let stale = Attestations { dir: dir.clone(), revoked: Mutex::new(Vec::new()) };
+        stale.load_status_under(&roots, AT + 60 * DAY);
+        assert_eq!(stale.revoked(), ["3c"]);
+        let other = Attestations { dir: dir.clone(), revoked: Mutex::new(Vec::new()) };
+        other.load_status_under(&status.root("root-2"), AT + 2 * DAY);
+        assert!(other.revoked().is_empty());
+
+        // A kept file that does not decode is no list.
+        std::fs::write(dir.join(STATUS_FILE), b"not json").unwrap();
+        let broken = Attestations { dir: dir.clone(), revoked: Mutex::new(Vec::new()) };
+        broken.load_status_under(&roots, AT + 2 * DAY);
+        assert!(broken.revoked().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Fetching the list needs the helper, and its answer must decode.
+    #[test]
+    fn fetching_the_list_needs_the_helper() {
+        let dir = tempdir("fetch");
+        let a = Attestations::new(&dir);
+        let none = a.fetch_status_by(None, &|_| {}).err().unwrap();
+        assert!(none.message().contains("need cbb-helper"), "{}", none.message());
+        // The fake helper runs this test program, which only Unix can.
+        #[cfg(unix)]
+        {
+            let helper = Arc::new(crate::helper::tests::fake(Arc::new(Mutex::new(Vec::new()))));
+            let bad = a.fetch_status_by(Some(helper), &|_| {}).err().unwrap();
+            assert!(bad.message().contains("do not decode"), "{}", bad.message());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An Android evidence that is not understood, made for another group
+    /// or with no chain is refused.
+    #[cfg(feature = "tunnel")]
+    #[test]
+    fn android_evidence_is_refused() {
+        use super::check_android_here;
+        let refused = |e: serde_json::Value| check_android_here(&e, &[1, 2, 3], "tag", &[]).err().unwrap();
+        assert!(refused(serde_json::json!("text")).message().contains("not understood"));
+        assert!(refused(serde_json::json!({"group_tag": "other"})).message().contains("another group"));
+        let empty = refused(serde_json::json!({"group_tag": "tag", "salt": "AAAA", "chain": []}));
+        assert!(!empty.message().is_empty());
+        assert_eq!(super::b64_value(&[1, 2, 3]), serde_json::json!("AQID"));
+    }
 
     /// A kept list counts after it ran out, as at its signing, so a restart
     /// without the mirror drops no revocation; one that never checked out

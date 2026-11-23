@@ -20,8 +20,9 @@ extend-exclude = [
 
 # The translated keys of desktop entries (Name[es]=..., Comment[ru]=...).
 [default]
-# Long base64 strings in tests are bytes, not words.
-extend-ignore-re = ['(?m)^[A-Za-z]+\[[A-Za-z_@]+\]=.*$', '[A-Za-z0-9_-]{60,}']
+# Long base64 strings in tests are bytes, not words, and a Markdown link to
+# a heading spells the heading as the anchor does (#7-the-leafs-grant).
+extend-ignore-re = ['(?m)^[A-Za-z]+\[[A-Za-z_@]+\]=.*$', '[A-Za-z0-9_-]{60,}', '\]\(#[a-z0-9-]+\)']
 
 # Words that are right where they stand: names in the code, registers of the
 # Z80, Qt's and other libraries' names, and test inputs.

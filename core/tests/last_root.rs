@@ -262,9 +262,10 @@ fn the_new_root_is_a_fresh_key() {
     assert!(err.is_err(), "an admin key of the old root does not become the root");
 }
 
-/// L3.2: the new root does not name an old root's admin key again.
+/// L3.2: the new root's writer does not name an old root's admin key
+/// again (ADMIN_KEY_NOT_NEW), and names a fresh one; what a reader does with
+/// such a naming signed by hand is the attack tests' below.
 #[test]
-#[ignore = "rule changed by architecture 05:33Z: the core lets the new root name it (kit rule); see the attack test below"]
 fn the_new_root_does_not_name_an_old_admin_key_again() {
     let (mut g, _, _) = changed("l9", &[]);
     let r2 = k("l9 root 2");

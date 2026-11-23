@@ -1,0 +1,7 @@
+# Typographic quotes, not the typewriter's ".
+extends: existence
+message: "Use the language's quotes (“…” in English, «…» in Russian), not '\"'."
+level: error
+nonword: true
+tokens:
+  - '"'

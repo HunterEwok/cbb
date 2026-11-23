@@ -7,7 +7,7 @@
 //! forwarder's face, the proof of the hub's WireGuard key and the face's
 //! hubs' credential in the format's messages (`v3`), then hellos from the
 //! hub's WireGuard port so that the forwarder learns where that port is
-//! reached. The phones' hub in Rust (ffi/) registers through it.
+//! reached.
 //!
 //! When the forwarder's TCP port does not answer and the group's clients
 //! come over VLESS, the registration goes inside VLESS with XHTTP, as the Go
@@ -88,7 +88,7 @@ pub struct Config {
 
 /// Whether the hub's forwarder is the project's, and the ways in over VLESS
 /// that the newest signed entry points name for it (docs/protocol.md,
-/// section 16, "Entry points"), as the phones' hub_set_project_ways takes them.
+/// section 16, "Entry points").
 #[derive(Clone, Default, Debug)]
 pub struct Ways {
     pub project: bool,
@@ -344,7 +344,7 @@ fn once(
         .ok_or_else(|| Error::msg("registering with the forwarder: a bad challenge"))?;
     let obfuscation = match &cfg.obfuscation {
         Some(o) => Some(
-            cbb_core::invite::obfuscation_from_json(o)
+            cbb_core::awg::from_json(o)
                 .and_then(|o| obfuscation_encoding(&o))
                 .ok_or_else(|| Error::msg("the group's obfuscation settings do not fit the format"))?,
         ),
@@ -449,7 +449,7 @@ fn vless_offer(endpoint: SocketAddr, id: &str, v: v3::Way) -> Value {
 
 /// The group's AmneziaWG settings as the format's table `obfuscation`
 /// writes them; None when they do not fit it.
-fn obfuscation_encoding(o: &cbb_core::invite::Obfuscation) -> Option<Vec<u8>> {
+fn obfuscation_encoding(o: &cbb_core::awg::Obfuscation) -> Option<Vec<u8>> {
     use cbb_core::format::cbor::Value as V;
     let s: Vec<V<'_>> = o.s.iter().map(|x| V::Uint(u64::from(*x))).collect();
     let h: Vec<V<'_>> =

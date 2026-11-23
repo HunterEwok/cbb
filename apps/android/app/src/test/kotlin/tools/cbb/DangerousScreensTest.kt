@@ -110,7 +110,7 @@ class DangerousScreensTest(private val lang: String) {
     @Test
     fun recoverySheet() {
         // Not a key: the sheet's words in its layout, as the phone shows them once.
-        val sheet = Core.RecoverySheet("CBB-RECOVERY-EXAMPLE-NOT-A-KEY", "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567", ByteArray(0))
+        val sheet = Core.RecoverySheet("CBB-RECOVERY-EXAMPLE-NOT-A-KEY", "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567")
         show { RecoverySheetDialog(sheet, Instant.parse("2026-11-12T09:00:00Z")) {} }
         // First the choice of where to save it; the sheet shows once chosen.
         shoot("recovery-choice")

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The keys statement (format-0.6 section 5): a device's own statement of
+//! The keys statement (format section 5): a device's own statement of
 //! the key copies are sealed to it with, signed by its member key, which
 //! no admin and no root can sign in its place (rule 4).
 

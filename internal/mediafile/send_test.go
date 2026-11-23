@@ -11,14 +11,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // service listens on a socket in a temporary folder and gives what one
-// client sends, in order.
-func service(t *testing.T) (string, <-chan []*control.Message) {
+// client sends, in order, once that client closed the connection or the
+// test ended. Its dial connects that client and returns once the service
+// took the connection. On Windows the accepted end of a Unix socket does
+// not always see the client's close and can read for ever, so the service
+// closes its own end when the test ends: a test that needs what was sent
+// waits for it, a test that only needs Send's error does not.
+func service(t *testing.T) (func() *control.Client, <-chan []*control.Message) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "s")
 	l, err := net.Listen("unix", path)
@@ -26,14 +32,27 @@ func service(t *testing.T) (string, <-chan []*control.Message) {
 		t.Skip("no Unix sockets:", err)
 	}
 	t.Cleanup(func() { l.Close() })
+	accepted := make(chan net.Conn, 1)
 	got := make(chan []*control.Message, 1)
+	t.Cleanup(func() {
+		select {
+		case c := <-accepted:
+			c.Close()
+		default:
+		}
+	})
 	go func() {
 		c, err := l.Accept()
 		if err != nil {
+			close(accepted)
 			got <- nil
 			return
 		}
+		accepted <- c
 		defer c.Close()
+		// However the client's close reaches it, the service stops reading
+		// in a minute, so a test never waits on it for longer.
+		c.SetReadDeadline(time.Now().Add(time.Minute))
 		r := control.NewReader(c)
 		var ms []*control.Message
 		for {
@@ -45,7 +64,23 @@ func service(t *testing.T) (string, <-chan []*control.Message) {
 			ms = append(ms, m)
 		}
 	}()
-	return path, got
+	dial := func() *control.Client {
+		t.Helper()
+		c, err := control.Dial(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case a, ok := <-accepted:
+			if ok {
+				accepted <- a
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("the service did not take the connection")
+		}
+		return c
+	}
+	return dial, got
 }
 
 func TestSend(t *testing.T) {
@@ -61,11 +96,8 @@ func TestSend(t *testing.T) {
 	if n := Size(parts); n != int64(len(big))+2 {
 		t.Errorf("Size = %d", n)
 	}
-	path, got := service(t)
-	c, err := control.Dial(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dial, got := service(t)
+	c := dial()
 	if err := Send(c, control.OpCopyMedia, parts, "text"); err != nil {
 		t.Fatal(err)
 	}
@@ -108,25 +140,17 @@ func TestSendFails(t *testing.T) {
 		"a file that is gone":     {Part: control.Part{Path: "x", Size: 2}, File: filepath.Join(dir, "gone")},
 		"a file that got shorter": {Part: control.Part{Path: "x", Size: 10}, File: short},
 	} {
-		path, got := service(t)
-		c, err := control.Dial(path)
-		if err != nil {
-			t.Fatal(err)
-		}
+		dial, _ := service(t)
+		c := dial()
 		if err := Send(c, control.OpCopyMedia, []Part{part}, ""); err == nil {
 			t.Errorf("%s was sent", name)
 		}
 		c.Close()
-		<-got
 	}
 	// A closed connection fails at once.
-	path, got := service(t)
-	c, err := control.Dial(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dial, _ := service(t)
+	c := dial()
 	c.Close()
-	<-got
 	if err := Send(c, control.OpCopyMedia, nil, ""); err == nil {
 		t.Error("sent over a closed connection")
 	}

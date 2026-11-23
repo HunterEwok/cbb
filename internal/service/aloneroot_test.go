@@ -24,7 +24,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
-	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
@@ -510,11 +509,7 @@ func (s *testService) isAdmin(t *testing.T) bool {
 	}
 	for _, d := range m.Devices {
 		if d.Self {
-			if !d.Admin || s.on06() {
-				return d.Admin
-			}
-			id, err := group.Load(s.dir)
-			return err == nil && id.AdminCA != nil
+			return d.Admin
 		}
 	}
 	return false

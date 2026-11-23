@@ -56,7 +56,6 @@ int main(int argc, char *argv[])
     qmlRegisterUncreatableType<Joiner>("tools.cbb", 1, 0, "Joiner", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<Member>("tools.cbb", 1, 0, "Member", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<BleKeyboard>("tools.cbb", 1, 0, "BleKeyboard", QStringLiteral("the app makes it"));
-    qmlRegisterUncreatableType<PasteReceiver>("tools.cbb", 1, 0, "PasteReceiver", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<Events>("tools.cbb", 1, 0, "Events", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<Bugs>("tools.cbb", 1, 0, "Bugs", QStringLiteral("the app makes it"));
     App app;

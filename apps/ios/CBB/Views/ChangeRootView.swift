@@ -22,10 +22,21 @@ struct ChangeRootView: View {
     @State private var loading = false
     @State private var askingCard = false
     @State private var pin = ""
+    /// Why the last step failed, from the model's message: the sheet
+    /// covers Home, where the message shows otherwise.
+    @State private var failure: String?
 
     var body: some View {
         NavigationStack {
             Form {
+                if let failure {
+                    Section {
+                        Text(failure)
+                            .foregroundStyle(palette.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("change-root-failure")
+                    }
+                }
                 if let preview {
                     list(preview)
                 } else {
@@ -41,7 +52,7 @@ struct ChangeRootView: View {
             .disabled(loading || model.busy)
             .alert(Text("Use the YubiKey with the recovery key"), isPresented: $askingCard) {
                 YubiKeyPinField(pin: $pin)
-                Button { openCard() } label: { Text("Hold the YubiKey") }.disabled(!YubiKeyPinField.fits(pin))
+                Button { openCard() } label: { Text("Use the YubiKey") }.disabled(!YubiKeyPinField.fits(pin))
                 Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
             } message: {
                 Text("Type the YubiKey's PIN, then hold the YubiKey to the phone or plug it into the USB-C port until it is done.")
@@ -130,7 +141,9 @@ struct ChangeRootView: View {
         Task {
             let old = model.devices.first(where: \.isRoot).map { [$0.id] } ?? []
             if let p = await model.changePreview(r, leaveOut: old) {
-                (recovery, leaveOut, preview) = (r, Set(old), p)
+                (recovery, leaveOut, preview, failure) = (r, Set(old), p, nil)
+            } else {
+                failure = model.message
             }
             loading = false
         }
@@ -141,7 +154,7 @@ struct ChangeRootView: View {
         let pin = pin
         self.pin = ""
         Task {
-            if let secret = await model.openCard(pin: pin) { start(.secret(secret)) }
+            if let secret = await model.openCard(pin: pin) { start(.secret(secret)) } else { failure = model.message }
         }
     }
 
@@ -151,7 +164,7 @@ struct ChangeRootView: View {
         if stays { leaveOut.remove(device) } else { leaveOut.insert(device) }
         let out = Array(leaveOut)
         Task {
-            if let p = await model.changePreview(recovery, leaveOut: out) { preview = p }
+            if let p = await model.changePreview(recovery, leaveOut: out) { (preview, failure) = (p, nil) } else { failure = model.message }
         }
     }
 
@@ -159,7 +172,7 @@ struct ChangeRootView: View {
         guard let recovery else { return }
         let out = Array(leaveOut)
         Task {
-            if await model.changeRoot(recovery, leaveOut: out, overWaiting: overWaiting) { dismiss() }
+            if await model.changeRoot(recovery, leaveOut: out, overWaiting: overWaiting) { dismiss() } else { failure = model.message }
         }
     }
 }

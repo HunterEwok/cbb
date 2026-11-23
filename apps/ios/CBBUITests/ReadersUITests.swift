@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import UIKit
 import XCTest
 
 /// The app in each of the project's eight languages and for every reader
@@ -98,6 +99,10 @@ final class ReadersUITests: XCTestCase {
     /// its darkest and lightest pixels at least 4.5:1 (WCAG AA), or 3:1 for
     /// large text, which the app marks with the identifier largeText.
     private func contrast(_ app: XCUIApplication, _ screen: String) {
+        // The audit before it can leave the screen moving (on an iPad its
+        // tree shrank during the walk by index below), and the picture and
+        // the elements must be of one still screen.
+        app.settle(screen)
         let shot = XCUIScreen.main.screenshot()
         let bounds = app.frame
         let status = app.statusBars.firstMatch.exists ? app.statusBars.firstMatch.frame : .null
@@ -214,6 +219,36 @@ final class ReadersUITests: XCTestCase {
             XCTAssertTrue(app.buttons[tr("Blueprint", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
             audit(app, checks, "Settings in \(language)")
+            app.terminate()
+        }
+    }
+
+    /// Home's cards about the group itself, with the debug build's made-up
+    /// group (-showcase -showcaseAlerts): a group from before 0.6 with its
+    /// Leave, and the member's notices, each in its sentence, pass the
+    /// audit in English and in Arabic; Hide hides the notice that may be
+    /// hidden and only it.
+    func testGroupCards() {
+        // Text on the clipboard, so that the system's paste button under
+        // the cards is on and is audited as a person sees it, not dimmed
+        // for a clipboard with nothing it takes.
+        UIPasteboard.general.string = "cbb"
+        for language in ["en", "ar"] {
+            let app = launch(language: language, extra: ["-showcase", "-showcaseAlerts", "-PasteChoice", "button"])
+            let before = app.staticTexts[tr("A group from before 0.6", language)]
+            XCTAssertTrue(before.waitForExistence(timeout: 30), "\(language): no card about a group from before 0.6 in \(app.debugDescription)")
+            let recovery = app.staticTexts[tr("The group's recovery key is not saved yet: without it, losing this phone means making the group again.", language)]
+            XCTAssertTrue(recovery.exists, "\(language): no notice of the recovery key")
+            let silent = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'steamdeck'")).firstMatch
+            XCTAssertTrue(silent.exists, "\(language): no notice of the silent admin")
+            picture("group-cards-\(language)")
+            audit(app, checks, "Home's cards about the group in \(language)")
+
+            let hide = app.buttons[tr("Hide", language)]
+            XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", tr("Hide", language))).count, 1, "\(language): only the recovery key's notice may be hidden")
+            hide.tap()
+            XCTAssertTrue(recovery.waitForNonExistence(timeout: 10), "\(language): Hide did not hide the notice")
+            XCTAssertTrue(silent.exists, "\(language): Hide hid the notice that may not be hidden")
             app.terminate()
         }
     }

@@ -40,12 +40,6 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> S
         w.push_str("This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair.\n");
     } else if st.frozen {
         w.push_str("Another admin froze this computer's admin key: its members refuse it until the group's root or an admin phone unfreezes it (cbb unfreeze on the root).\n");
-    } else if !st.taken_over_by.is_empty() {
-        let by = &st.taken_over_by;
-        let _ = writeln!(
-            w,
-            "{by}, an admin, took the group over from this computer, its root, while it was away. If this computer is not lost, sudo cbb remove {by} undoes it; otherwise the group is {by}'s now."
-        );
     } else if let Some(c) = renewal_line(st.cert_ends_ms, now_ms) {
         let _ = writeln!(w, "{c}");
     }
@@ -328,54 +322,16 @@ fn stop_lines(st: &Status) -> Vec<String> {
             "admins" => format!(
                 "Admins removed or froze each other without seeing it ({who}): the root decides by removing one of them (cbb remove NAME on a root computer, or on the root phone)."
             ),
-            "claims" => {
-                format!("Two claims to take the group over ({who}): the root cancels one or both by removing its admin.")
-            }
             "two_histories" => format!(
                 "{who} signed two histories with one key, as a stolen key or a device brought back from a backup would: the group's root voids both (cbb resolve on a root computer, or on the root phone), and the device signs its records again."
             ),
             k => format!("A conflict of kind {k} ({who}): the root decides."),
         });
     }
-    for c in &st.claims {
-        match c.state.as_str() {
-            "pending" => {
-                let left = if c.left_ms > 0 {
-                    format!("in {}", roughly(c.left_ms))
-                } else {
-                    "once this device knows how long it has held it".to_string()
-                };
-                out.push(format!(
-                    "{} claims the group, to take it over from its root: it takes effect {left}, unless the root cancels it by removing {}.",
-                    c.by, c.by
-                ));
-            }
-            "disputed" => out.push(format!(
-                "{} claims the group, and another admin removed it: the group is stopped until the root decides.",
-                c.by
-            )),
-            "competing" => out.push(format!(
-                "{} claims the group while another admin claims it too: the group is stopped until the root decides.",
-                c.by
-            )),
-            _ => {}
-        }
-    }
     if st.newer > 0 {
         out.push(format!("The group holds {} records of a later version of CBB: update it to read them.", st.newer));
     }
     out
-}
-
-/// A duration in days, hours or minutes, as Go's roughly.
-fn roughly(ms: i64) -> String {
-    let (h, m) = (ms / 3_600_000, ms / 60_000);
-    match () {
-        _ if h >= 48 => format!("{} days", h / 24),
-        _ if h >= 2 => format!("{h} hours"),
-        _ if m >= 2 => format!("{m} minutes"),
-        _ => "a minute".to_string(),
-    }
 }
 
 /// Whether sync is on, and until when it is off, as Go's syncLine.
@@ -690,6 +646,45 @@ mod tests {
         assert!(!write_status(&off, &devs, 1, "").contains("Why it does not sync"));
     }
 
+    /// Every reason docs/apps.md lists has its own words here, with what
+    /// to do; a code it does not know is shown as it is.
+    #[test]
+    fn every_reason_has_its_words() {
+        let doc = include_str!("../../docs/apps.md");
+        let table = doc.split("| Code | Level |").nth(1).unwrap().split("\n\n").next().unwrap();
+        let codes: Vec<&str> = table
+            .lines()
+            .filter_map(|l| l.strip_prefix("| `"))
+            .flat_map(|l| l.split(" |").next().unwrap().split(", "))
+            .map(|c| c.trim_matches('`'))
+            .collect();
+        assert!(codes.len() >= 30, "{codes:?}");
+        let mut once = codes.clone();
+        once.sort_unstable();
+        once.dedup();
+        assert_eq!(once.len(), codes.len(), "a code twice in docs/apps.md: {codes:?}");
+        let reason = |code: &str, until_ms: i64| cbb_core::why::Reason {
+            code: code.into(),
+            level: cbb_core::why::Level::Stop,
+            until_ms,
+            device: "mac".into(),
+            devices: vec!["deck".into(), "pi".into()],
+            value: "0.7.0".into(),
+            detail: String::new(),
+        };
+        for code in codes {
+            for until in [0, 1_800_000_000_000] {
+                let line = why_line(&reason(code, until));
+                assert!(line != code && line.ends_with('.'), "{code}: {line}");
+            }
+        }
+        assert!(why_line(&reason("owner_disagrees", 0)).contains("deck, pi"));
+        assert!(why_line(&reason("tunnel_blocked", 0)).contains("mac"));
+        assert!(why_line(&reason("update", 0)).contains("0.7.0"));
+        assert_ne!(why_line(&reason("muted", 0)), why_line(&reason("muted", 1_800_000_000_000)));
+        assert_eq!(why_line(&reason("from_later", 0)), "from_later");
+    }
+
     #[test]
     fn unreached() {
         let mut w = String::new();
@@ -767,19 +762,83 @@ mod tests {
     }
 
     #[test]
-    fn durations() {
-        assert_eq!(roughly(3 * 24 * 3_600_000), "3 days");
-        assert_eq!(roughly(5 * 3_600_000), "5 hours");
-        assert_eq!(roughly(10 * 60_000), "10 minutes");
-        assert_eq!(roughly(30_000), "a minute");
-    }
-
-    #[test]
     fn no_group() {
         let st = Status { version: "cbb dev".into(), ..Default::default() };
         assert_eq!(
             write_status(&st, &[], 0, ""),
             "cbb dev\nNot in a group. Run cbb new here to start one, or cbb pair to join one.\n"
         );
+        let left = Status { left_old_group: true, update: "0.7.0".into(), ..st };
+        let w = write_status(&left, &[], 0, "");
+        assert!(w.contains("CBB 0.7.0 is available") && w.contains("made before 0.6"), "{w}");
+    }
+
+    /// The lines of a device the group refuses, of a stopped group, of a
+    /// certificate that ends, of a mute and of quiet networks.
+    #[test]
+    fn what_status_warns_of() {
+        let day = 24 * 3_600_000;
+        let now = 1_800_000_000_000;
+        let base = Status {
+            version: "cbb dev".into(),
+            device: "me".into(),
+            group: "g".into(),
+            role: "member".into(),
+            os: "linux".into(),
+            ..Default::default()
+        };
+        let w = |st: &Status| write_status(st, &[], now, "");
+        assert!(w(&Status { removed: true, frozen: true, ..base.clone() }).contains("was removed from the group"));
+        assert!(w(&Status { frozen: true, ..base.clone() }).contains("froze this computer's admin key"));
+        assert!(w(&Status { cert_ends_ms: now - day, ..base.clone() }).contains("certificate ended on"));
+        assert!(w(&Status { cert_ends_ms: now + day, ..base.clone() }).contains("certificate ends on"));
+        assert!(!w(&Status { cert_ends_ms: now + 60 * day, ..base.clone() }).contains("certificate"));
+        let stopped = Status {
+            stop: "full".into(),
+            conflicts: vec![
+                crate::control::Conflict { kind: "admins".into(), devices: vec!["a".into(), "b".into()] },
+                crate::control::Conflict { kind: "two_histories".into(), devices: vec!["pi".into()] },
+                crate::control::Conflict { kind: "fork".into(), devices: Vec::new() },
+            ],
+            newer: 3,
+            ..base.clone()
+        };
+        let text = w(&stopped);
+        for want in [
+            "The group is stopped",
+            "Admins removed or froze each other without seeing it (a, b)",
+            "pi signed two histories",
+            "devices unknown here",
+            "3 records of a later version",
+        ] {
+            assert!(text.contains(want), "{want}: {text}");
+        }
+        assert!(w(&Status { stop: "secrets".into(), ..base.clone() }).contains("sends no secrets"));
+        assert!(w(&Status { muted: true, ..base.clone() }).contains("until an admin unmutes it"));
+        assert!(
+            w(&Status { muted: true, muted_until_ms: now + day, ..base.clone() }).contains("muted this device until")
+        );
+        assert!(w(&Status { quiet: vec!["Cafe".into()], ..base.clone() }).contains("Quiet on Cafe"));
+        assert!(w(&Status { mode: "own".into(), ..base.clone() }).contains("Sync is off until cbb sync on"));
+        assert!(
+            w(&Status { mode: "own".into(), sync_until_ms: now + day, ..base.clone() })
+                .contains("Sync is off until 20")
+        );
+        for os in [
+            "linux",
+            "windows",
+            "macos",
+            "ios",
+            "android",
+            "aurora",
+            "sailfish",
+            "harmonyos",
+            "watchos",
+            "wearos",
+            "none",
+        ] {
+            assert_ne!(os_name(os), "?", "{os}");
+        }
+        assert_eq!(os_name("plan9"), "?");
     }
 }

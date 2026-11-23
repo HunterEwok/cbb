@@ -88,10 +88,7 @@ struct WhyList: View {
         return switch r.code {
         case "not_in_group": Text("This device is in no group.")
         case "removed": Text("This device was removed from the group.")
-        case "taken_over": Text("\(device) took the group over from this device.")
         case "frozen": Text("This device's rights as a trusted device are paused.")
-        case "cert_expired": Text("This device's certificate ended on \(date).")
-        case "cert_ending": Text("This device's certificate ends on \(date).")
         case "stopped": Text("The group's records stop the exchange.")
         case "secrets_stopped": Text("The group sends no secrets until its owner decides.")
         case "sync_off": r.until == nil ? Text("Sync is off on this device.") : Text("Sync is off on this device until \(date).")
@@ -133,10 +130,7 @@ struct WhyList: View {
         return switch r.code {
         case "not_in_group": Text("Start a group or join one.")
         case "removed": Text("Leave the group on this device, then join again.")
-        case "taken_over": Text("If this device was not lost, remove \(device) from the group.")
         case "frozen": Text("Ask the group's owner to restore its rights.")
-        case "cert_expired": Text("Bring it home to a trusted device of the group, which renews the certificate.")
-        case "cert_ending": Text("Connect it at home to a trusted device of the group before then.")
         case "stopped": Text("The group's owner decides on its alerts.")
         case "sync_off": Text("Turn sync on.")
         case "only_device": Text("Add a phone or a computer.")

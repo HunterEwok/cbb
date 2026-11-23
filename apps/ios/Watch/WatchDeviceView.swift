@@ -62,7 +62,7 @@ struct WatchDeviceView: View {
     private var question: String {
         guard let a = asking else { return "" }
         let what = switch a.action {
-        case "freeze": String(localized: "Freeze \(device.name)? It stays an admin in name, but nothing it signs counts until the root unfreezes it.")
+        case "freeze": String(localized: "Freeze \(device.name)? It stays an admin in name, but nothing it signs counts until the main device unfreezes it.")
         case "remove": String(localized: "Remove \(device.name) from the group?")
         case "paste-off": String(localized: "Turn remote paste off on \(device.name)?")
         case "actions-off": String(localized: "Turn every quick action off on \(device.name)?")

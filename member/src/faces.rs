@@ -861,7 +861,7 @@ pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -
 
 /// The servers a group of 0.6 shows a face to: the project's
 /// (`project_servers`), then the relays of its own that the root set in the
-/// group's settings (format 4.5, field 15; D-121), then the forwarders of
+/// group's settings (format 4.4, field 15; D-121), then the forwarders of
 /// its hubs that the root named (`HubForwarders`), each pin and address
 /// pin once. The project's come first: a member keeps at most [`MAX_FACES`],
 /// and a hub registers with the project's forwarder.

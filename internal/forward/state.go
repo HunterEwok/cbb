@@ -209,7 +209,7 @@ func (v *versions) keep(p *shown, from netip.Addr) error {
 	defer v.mu.Unlock()
 	t := v.hash([]byte(p.tag))
 	key := v.hash([]byte(p.tag), p.signer[:])
-	// A period lasts PeriodLifetime: a credential that claims to last
+	// A period lasts periodLifetime: a credential that claims to last
 	// longer, which no group makes, holds its entry no longer than that.
 	expires := min(p.expiresMs, v.now().Add(periodLifetime).UnixMilli())
 	e, ok := v.entries[t]

@@ -5,9 +5,9 @@
 //! `cbb_member_start` runs when the app's folder holds the group's
 //! `group.cbor`. The member key stays in the app and signs through its
 //! callback; the app finds the members itself and hands them in with
-//! `found`, as on 0.5. The operations that have not moved to the records of
-//! 0.6 yet answer the error of `cbb_member::live::not_yet`, whose cause
-//! debug builds show, never a silent no-op.
+//! `found`. The operations this version does not have answer the error of
+//! `cbb_member::live::not_yet`, whose cause debug builds show, never a
+//! silent no-op.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -145,8 +145,10 @@ struct ManageArgs {
     /// keeps the group's.
     #[serde(default)]
     secret_ttl_ms: Option<u64>,
-    /// With forwarder, on the root: the hub's forwarder, `host:port` or
-    /// `default` for the project's, and its key's pin in base64 (`key`).
+    /// With forwarder, on the root, and with hub, on the root or an admin:
+    /// the hub's forwarder, `host:port`, and its key's pin in base64 or
+    /// `default` for the project's (`key`); with hub, neither for the
+    /// project's forwarder.
     #[serde(default)]
     forwarder: String,
     #[serde(default)]
@@ -167,7 +169,9 @@ struct ManageArgs {
     /// its admin key is `key`, a SubjectPublicKeyInfo in base64.
     #[serde(default)]
     os: String,
-    #[serde(with = "certs::b64")]
+    /// The signing key's SubjectPublicKeyInfo in base64; absent for a step
+    /// that signs nothing, as change_preview.
+    #[serde(default, with = "certs::b64")]
     public: Vec<u8>,
 }
 
@@ -271,8 +275,7 @@ fn swap_json(s: cbb_member::button::Swap) -> Value {
     json!({ "sends": s.sends, "copy": s.takes.map(|e| event_json(&e)) })
 }
 
-/// A copy the button's rule gives, as the app reads it, in the shape of
-/// 0.5's.
+/// A copy the button's rule gives, as the app reads it.
 fn event_json(e: &cbb_core::clip::Event) -> Value {
     json!({
         "id": e.id,
@@ -285,7 +288,7 @@ fn event_json(e: &cbb_core::clip::Event) -> Value {
     })
 }
 
-/// The group's current copy as the app reads it, in the shape of 0.5's.
+/// The group's current copy as the app reads it.
 fn current_json(c: &Current, now_ms: i64) -> Value {
     let kind = if c.content.manifest.is_some() {
         Kind::Media
@@ -585,51 +588,6 @@ impl Phone {
                 }
                 Ok(self.away_answer())
             }
-            // The phone as a hub of the group (the records must make it
-            // one: the root's own device or an admin key), as cbb global hub does on a computer and
-            // with the arguments of the phone of 0.5: reached away from
-            // home through the forwarder (`forwarder`, its key's pin `key`,
-            // or `default` for the project's) or at `addrs` ("ip:port") on
-            // the UDP `port`, hidden as `obfuscate_off` and `vless_off` say.
-            // The Live hub serves its clients and the guests of invitations
-            // at the guest address.
-            "hub" => {
-                if !l.mesh.may_be_hub(&l.mesh.device()) {
-                    return Err(Error::msg(
-                        "the group's records do not make this phone a hub; only the root's phone or an admin phone can be one",
-                    ));
-                }
-                let away = l.away().ok_or_else(|| Error::msg("sync away from home did not start on this phone"))?;
-                let text = |k: &str| arg(k).as_str().unwrap_or_default().to_string();
-                let addrs = arg("addrs")
-                    .as_array()
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
-                    .unwrap_or_default();
-                // No forwarder given: the one the group's root set, if any.
-                let (forwarder, key) = match (text("forwarder"), root_forwarder(&self.dir)) {
-                    (f, Some(r)) if f.is_empty() => (r.endpoint, r.key),
-                    (f, _) => (resolve(&f)?, text("key")),
-                };
-                let h = cbb_member::control::Header {
-                    name: "hub".into(),
-                    forwarder,
-                    forwarder_key: key,
-                    obfuscate_off: arg("obfuscate_off").as_bool().unwrap_or(false),
-                    vless_off: arg("vless_off").as_bool().unwrap_or(false),
-                    port: arg("port").as_i64().unwrap_or(0),
-                    addrs,
-                    consent: true,
-                    ..Default::default()
-                };
-                away.make_hub(&h)?;
-                Ok(self.away_answer())
-            }
-            // A Live hub that stops hands its clients to the next hub in
-            // the group's order (D-122), so `anyway` of 0.5 is not needed.
-            "hub_off" => {
-                l.stop_being_hub()?;
-                Ok(self.away_answer())
-            }
             // Push to this phone while its app is closed (docs/core-api.md,
             // "Push"): the group's face the registration names, the
             // registration the members get, and the members' push-renew.
@@ -696,12 +654,14 @@ impl Phone {
             // A notice the person hid: the set keeps it dismissed.
             "dismiss" => {
                 let id = arg("id");
-                let id = id.as_str().and_then(record_id).ok_or_else(|| Error::msg("dismiss needs a notice's id"))?;
+                let id = id
+                    .as_str()
+                    .and_then(cbb_member::notices::record_id)
+                    .ok_or_else(|| Error::msg("dismiss needs a notice's id"))?;
                 lock(&l.mesh.set()).dismiss(&id);
                 l.mesh.changed()?;
                 done()
             }
-            "check_command" | "answer" => Err(not_yet("a command for this phone")),
             _ => Err(not_yet(&format!("the operation {op:?}"))),
         }
     }
@@ -744,7 +704,6 @@ impl Phone {
             kind,
             text: c.content.text.clone().unwrap_or_default(),
             media: c.content.manifest.clone(),
-            ..Default::default()
         })
     }
 
@@ -794,17 +753,15 @@ impl Phone {
         cbb_core::why::diagnose(&facts, cbb_member::uptime::wall_ms())
     }
 
-    /// The member's notices about the group (`notices_of`).
+    /// The member's notices about the group (`cbb_member::notices`).
     fn notices(&self) -> Vec<Value> {
         let held = self.live.mesh.set();
         let set = lock(&held);
-        notices_of(&set, &self.live.mesh.device())
+        cbb_member::notices::of(&set, &self.live.mesh.device(), wall_ms_u64())
     }
 
     /// Sync away from home as the away ops answer it: its state, null
-    /// while it is off, and the forwarder the group's root set for this
-    /// phone as a hub (`endpoint`, `key`), null while it set none, which
-    /// the apps show as the root's setting; and on the root phone whether
+    /// while it is off; and on the root phone whether
     /// the group's server credentials need its root key (`period_due`,
     /// which the manage action `period` renews) and whether they expired
     /// already (`period_overdue`), so that the group's relay and its hubs'
@@ -813,13 +770,12 @@ impl Phone {
         let (due, overdue) = self.live.mesh.periods();
         json!({
             "away": self.live.away_status(),
-            "root_forwarder": root_forwarder(&self.dir),
             "period_due": due,
             "period_overdue": overdue,
         })
     }
 
-    /// Whether sync is off and whether the phone is muted, as on 0.5.
+    /// Whether sync is off and whether the phone is muted.
     fn state(&self) -> Value {
         serde_json::to_value(cbb_member::sync::standing(&self.live.board)).unwrap_or_default()
     }
@@ -838,7 +794,7 @@ impl Phone {
     /// An admin's change to a device, signed with the app's admin or root
     /// key: remove, rename, freeze and thaw, or a command for another
     /// device (mute, unmute, sync_off, sync_on, paste, paste_off,
-    /// actions_off, away_off), sent as the computer's service sends it and
+    /// actions_off, away_off, hub), sent as the computer's service sends it and
     /// answered by that device (`{status, reason}`); the records judge
     /// whether the key may.
     pub fn manage(&self, request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
@@ -908,12 +864,22 @@ impl Phone {
                     let (due, overdue) = mesh.periods();
                     return Ok(json!({ "period_due": due, "period_overdue": overdue }));
                 }
-                // The root names the forwarder of an admin phone that is a
+                // The root names the forwarder of a computer that may be a
                 // hub (`forwarder`, its key's pin `key`, or `default` for the
                 // project's) with the hub command, as cbb global hub -on
                 // does, and makes the group's credentials for it there.
                 "forwarder" => {
-                    let r = self.name_forwarder(&a, &key)?;
+                    let r = self.hub_command(&a, &key, true)?;
+                    self.renew_by(&key);
+                    return Ok(r);
+                }
+                // An admin phone's "Make it a hub": the root or an admin
+                // makes a computer a hub of the group as well with the hub
+                // command, through the forwarder given or the project's, as
+                // cbb global hub -on NAME does on an admin computer; the
+                // computer refuses while its sync away from home is off.
+                "hub" => {
+                    let r = self.hub_command(&a, &key, false)?;
                     self.renew_by(&key);
                     return Ok(r);
                 }
@@ -955,27 +921,33 @@ impl Phone {
         })())
     }
 
-    /// The root's hub command that names the forwarder of the device
-    /// `a.device`, a hub of the group by the records, which takes it as its
-    /// forwarder setting: answered as a command is (`{status, reason}`).
-    fn name_forwarder(&self, a: &ManageArgs, key: &AppKey) -> Result<Value> {
+    /// The hub command to the device `a.device`, a hub of the group by the
+    /// records, with the forwarder `a.forwarder` (the project's when none is
+    /// given), which it takes as its forwarder setting and serves through:
+    /// answered as a command is (`{status, reason}`). Only the root names a
+    /// forwarder when `root_only`; otherwise the records judge whether the
+    /// key may send a hub command, as for every command.
+    fn hub_command(&self, a: &ManageArgs, key: &AppKey, root_only: bool) -> Result<Value> {
         let mesh = &self.live.mesh;
         let st = mesh.state();
-        if st.roots.last() != Some(&cbb_core::records::Key::es256(key.public.clone()).hash()) {
+        let root = st.roots.last() == Some(&cbb_core::records::Key::es256(key.public.clone()).hash());
+        if root_only && !root {
             return Err(Error::msg("only the group's root names a hub's forwarder"));
         }
         let d = writers::find(&st, &a.device)?.clone();
-        if d.id == mesh.device() {
-            return Err(Error::msg("this phone sets its own forwarder when it turns its hub on"));
-        }
         if !st.may_be_hub(&d.id) {
             return Err(Error::msg(format!(
-                "the group's records do not make {} a hub; only an admin or a hub the root names can be one",
+                "the group's records do not make {} a hub; only a computer with an admin key or one the root names can be one",
                 d.name
             )));
         }
         drop(st);
-        let f = cbb_member::forwarder_named(&resolve(&a.forwarder)?, &a.key)?
+        let (fwd, fkey) = if a.forwarder.trim().is_empty() && a.key.is_empty() && !root_only {
+            (PROJECT_FORWARDER, "default")
+        } else {
+            (a.forwarder.as_str(), a.key.as_str())
+        };
+        let f = cbb_member::forwarder_named(&resolve(fwd)?, fkey)?
             .ok_or_else(|| Error::msg("name the forwarder: its address with its key's pin, or default"))?;
         let o = cbb_member::orders::Order::Hub(cbb_member::orders::Hub {
             forwarders: vec![f.clone()],
@@ -989,7 +961,7 @@ impl Phone {
             s if s == cbb_core::commands::STATUS_REFUSED => "refused",
             _ => "failed",
         };
-        if status == "done" {
+        if status == "done" && root {
             mesh.set_hub_forwarders(d.id, vec![cbb_member::faces::Server { pin: f.1, address: f.0 }])?;
         }
         Ok(json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }))
@@ -1071,7 +1043,7 @@ impl Phone {
         let devices = self.devices();
         let own = devices.iter().find(|d| d.id == me).map(|d| d.store.clone()).unwrap_or_default();
         cbb_core::keylevel::allows(&a.level, &own, "this phone, the group's root,", "", true)?;
-        // The default, hardware, is written as no level at all (format 4.5).
+        // The default, hardware, is written as no level at all (format 4.4).
         let kept = if level == LEVEL_HARDWARE { 0 } else { level };
         mesh.write_by(key, |set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
         let st = mesh.state();
@@ -1143,7 +1115,6 @@ impl Phone {
         crate::window::Window::open(self.live.clone(), port, request, sign, ctx)
     }
 
-    /// What the watch asks is not on the records of 0.6 yet.
     /// An action from the watch's wrist: none on 0.6, where the watch
     /// signs nothing and only shows the group (D-124; signing on the watch
     /// comes with 0.7).
@@ -1312,79 +1283,10 @@ fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::comm
         // does not sync away from home: each of them is off already.
         Order::PasteOff | Order::ActionsOff | Order::AwayOff => Ok(()),
         Order::Action(_) => Err(refuse("a phone has no quick actions")),
-        Order::Hub(h) => {
-            if !root {
-                return Err(refuse("only the group's root sets a phone's forwarder"));
-            }
-            if h.stop {
-                return Err(refuse("a phone stops being a hub by its own switch, not by a command"));
-            }
-            take_forwarder(live, dir, &h)?;
-            log(&format!("cbb: {who} set this phone's forwarder"));
-            Ok(())
-        }
+        Order::Hub(_) => Err(refuse("a phone is no hub: a hub is a computer, a router or a board")),
         Order::Device { .. } => Err(refuse("a phone carries out no small device's own command")),
         Order::Paste { .. } => Err(not_yet("a remote paste on a phone")),
     }
-}
-
-/// The forwarder the group's root set for this phone as a hub, in the
-/// phone's folder: the root's hub command names it, and the root
-/// makes the blind credentials the forwarder asks of it.
-/// The share of the root's room that removals waiting for admins take
-/// before the root phone says so (docs/apps.md, "Notices").
-const ROOT_ROOM_WARN_PERCENT: u64 = 50;
-
-/// The member's notices about the group (docs/apps.md, "Notices"), as
-/// the apps show them: `{id, kind, args, dismissable}`. Only the notices of
-/// removed devices that count again (`returned_after_removal`, by the
-/// removal's or the change's record ID) may be hidden; the others stay
-/// until what they say is over. `root_room_waiting` shows on the root's
-/// own device.
-fn notices_of(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId) -> Vec<Value> {
-    let st = set.state();
-    let device_of = |k: &cbb_core::records::KeyHash| {
-        st.devices.iter().find(|d| d.key.hash() == *k || d.admin.as_ref() == Some(k)).map(|d| id_text(&d.id))
-    };
-    let notice = |id: String, kind: &str, args: Value, dismissable: bool| json!({ "id": id, "kind": kind, "args": args, "dismissable": dismissable });
-    let mut out = Vec::new();
-    if set.change_arriving(&st).is_some() {
-        out.push(notice("change_arriving".into(), "change_arriving", json!({}), false));
-    }
-    if !set.removals_waiting(&st).is_empty() {
-        out.push(notice("removals_waiting".into(), "removals_waiting", json!({}), false));
-    }
-    if let Some(w) = set.root_room_waiting(&st, ROOT_ROOM_WARN_PERCENT).filter(|_| st.root_device == Some(*me)) {
-        let percent = w.waiting_units.saturating_mul(100).checked_div(w.room.cap.max(1)).unwrap_or(0);
-        out.push(notice("root_room_waiting".into(), "root_room_waiting", json!({ "percent": percent }), false));
-    }
-    let own_admin = st.devices.iter().find(|d| d.id == *me).and_then(|d| d.admin);
-    if let Some(o) = own_admin.and_then(|k| set.ack_owed(&st, &k, wall_ms_u64())) {
-        out.push(notice(
-            "ack_owed".into(),
-            "ack_owed",
-            json!({ "removals": o.removals, "days_left": o.days_left }),
-            false,
-        ));
-    }
-    for f in set.frozen_holding(&st) {
-        let d = id_text(&f.device);
-        out.push(notice(format!("frozen_holding:{d}"), "frozen_holding", json!({ "device": d }), false));
-    }
-    if !set.stuck_checkpoints().is_empty() {
-        out.push(notice("checkpoint_stuck".into(), "checkpoint_stuck", json!({}), false));
-    }
-    for (id, keys) in set.notices(&st) {
-        let devices: Vec<String> = keys.iter().filter_map(device_of).collect();
-        let Some(first) = devices.first() else { continue };
-        out.push(notice(
-            certs::b64::encode(&id.0),
-            "returned_after_removal",
-            json!({ "device": first, "devices": devices.len() }),
-            true,
-        ));
-    }
-    out
 }
 
 /// Where the phone keeps the group's root as it last told its app of it.
@@ -1466,7 +1368,7 @@ fn watch_records(live: &Arc<Live>, dir: &Path, ev: Events, log: Arc<dyn Fn(&str)
             log(&format!("cbb: the group's root as seen: {}", e.for_log()));
         }
         let mut ids = Vec::new();
-        new_notices(&mut ids, &notices_of(&set, &me));
+        new_notices(&mut ids, &cbb_member::notices::of(&set, &me, wall_ms_u64()));
         (Arc::new(Mutex::new(ids)), root_seen(dir).and_then(|s| s.pending))
     };
     if let Some(c) = pending {
@@ -1499,7 +1401,7 @@ fn watch_records(live: &Arc<Live>, dir: &Path, ev: Events, log: Arc<dyn Fn(&str)
             Ok(None) => {}
             Err(e) => log(&format!("cbb: the group's root as seen: {}", e.for_log())),
         }
-        let now = notices_of(set, &me);
+        let now = cbb_member::notices::of(set, &me, wall_ms_u64());
         for n in new_notices(&mut lock(&shown), &now) {
             queue(&Event::Notice { notice: n });
         }
@@ -1512,66 +1414,9 @@ fn away_arg(v: &Value) -> Result<Option<cbb_core::why::AwayFacts>> {
     serde_json::from_value(v.clone()).map_err(|e| Error::msg(format!("away: {e}")))
 }
 
-/// A record's ID in base64, as the notices name it.
-fn record_id(s: &str) -> Option<cbb_core::records::RecordId> {
-    let b = certs::b64::decode_str(s)?;
-    Some(cbb_core::records::RecordId(b.try_into().ok()?))
-}
-
 /// The wall clock in milliseconds, as the records count it.
 fn wall_ms_u64() -> u64 {
     u64::try_from(cbb_member::uptime::wall_ms()).unwrap_or(0)
-}
-
-const ROOT_FORWARDER: &str = "root_forwarder.json";
-
-/// A forwarder as the root set it: its address and its key's pin.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
-struct RootForwarder {
-    endpoint: String,
-    /// The pin of the forwarder's key, standard base64.
-    key: String,
-}
-
-/// The forwarder the root set for this phone, if any.
-fn root_forwarder(dir: &Path) -> Option<RootForwarder> {
-    let b = std::fs::read(dir.join(ROOT_FORWARDER)).ok()?;
-    serde_json::from_slice(&b).ok()
-}
-
-/// Takes the root's hub command on a phone only as the phone's forwarder
-/// setting: it keeps the first forwarder the command names (none clears
-/// it) and, while the user's switch has the phone serve as a hub, serves
-/// again through it, hidden as before. It never turns the hub on: that is
-/// the user's switch on the phone.
-fn take_forwarder(live: &Live, dir: &Path, h: &cbb_member::orders::Hub) -> Result<()> {
-    let path = dir.join(ROOT_FORWARDER);
-    let Some((endpoint, pin)) = h.forwarders.first() else {
-        return match std::fs::remove_file(&path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                Err(Error::with("cannot forget the root's forwarder", e))
-            }
-            _ => Ok(()),
-        };
-    };
-    let fw = RootForwarder { endpoint: endpoint.clone(), key: certs::b64::encode(pin) };
-    let b = serde_json::to_vec(&fw).map_err(|e| Error::with("cannot write the root's forwarder", e))?;
-    cbb_member::files::write_atomic(&path, &b, 0o600)?;
-    let Some(away) = live.away().filter(|a| a.is_hub_now()) else { return Ok(()) };
-    let st = live.away_status().unwrap_or_default();
-    let port = away.hub_settings().map_or(0, |(_, _, port)| i64::from(port));
-    let hdr = cbb_member::control::Header {
-        name: "hub".into(),
-        forwarder: fw.endpoint,
-        forwarder_key: fw.key,
-        obfuscate_off: !st.obfuscated,
-        vless_off: !st.vless,
-        port,
-        consent: true,
-        ..Default::default()
-    };
-    away.make_hub(&hdr)?;
-    Ok(())
 }
 
 /// A copy from the group to write to the phone's clipboard: its text, and
@@ -1668,6 +1513,10 @@ fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
 
 /// A forwarder's address as `ip:port`, looked up when it is a name (an IPv4
 /// address first); empty stays empty.
+/// The project's forwarder, which a hub command goes through when the app
+/// names none (protocol.md, section 13, "The project's forwarder").
+const PROJECT_FORWARDER: &str = "cbb.tools:8764";
+
 fn resolve(s: &str) -> Result<String> {
     use std::net::{SocketAddr, ToSocketAddrs as _};
     let s = s.trim();
@@ -1747,6 +1596,18 @@ mod tests {
         v["error"]["message"].as_str().unwrap_or_else(|| panic!("no error: {v}")).to_string()
     }
 
+    /// A step that signs nothing, as the preview of a change of root, comes
+    /// without a key, as the apps send it.
+    #[test]
+    fn a_step_that_signs_nothing_needs_no_key() {
+        let a: ManageArgs =
+            serde_json::from_str(r#"{"action":"change_preview","recovery":{"qr":"x"},"leave_out":["pc"]}"#).unwrap();
+        assert!(a.public.is_empty());
+        assert_eq!(a.leave_out, ["pc"]);
+        let a: ManageArgs = serde_json::from_str(r#"{"action":"rename","public":"AQI="}"#).unwrap();
+        assert_eq!(a.public, [1, 2]);
+    }
+
     #[test]
     fn a_phone_on_a_group_of_0_6_runs_the_member_of_0_6() {
         let dir = std::env::temp_dir().join(format!("cbb-ffi-live-{}", std::process::id()));
@@ -1805,9 +1666,6 @@ mod tests {
         for op in ["records", "answer"] {
             assert!(error(&call(op, Value::Null)).contains("does not work in this build yet"), "{op}");
         }
-        // The root's phone may be a hub without an admin key: the records
-        // let it through to the hub's own checks.
-        assert!(!error(&call("hub", Value::Null)).contains("do not make this phone a hub"));
         let manage = |action: &str, device: &str, name: &str| {
             let r = json!({ "action": action, "device": device, "name": name, "public": b64(&root.0.public()) });
             m.manage(r.to_string().as_bytes(), sign, ctx(root))
@@ -1858,7 +1716,7 @@ mod tests {
         assert_eq!(ok(&m.manage(none.to_string().as_bytes(), sign, ctx(root)))["relays"], json!([]));
         // The root names its hubs, which the records judge: the hubs record
         // names only a device whose record gives it the hub's right, which a
-        // phone's does not; the root's phone is a hub without it.
+        // phone's does not.
         let hubs = json!({ "action": "hubs", "hubs": ["tablet"], "public": b64(&root.0.public()) });
         assert!(error(&m.manage(hubs.to_string().as_bytes(), sign, ctx(root))).contains("may not be a hub"));
         let none = json!({ "action": "hubs", "hubs": [], "public": b64(&root.0.public()) });
@@ -2072,7 +1930,7 @@ mod tests {
         let id = certs::b64::encode(&[9; 32]);
         ok(&call("dismiss", json!({ "id": id })));
         let phone = &*m.0;
-        let rid = record_id(&id).unwrap();
+        let rid = cbb_member::notices::record_id(&id).unwrap();
         assert!(lock(&phone.live.mesh.set()).dismissed().any(|d| *d == rid));
         assert_eq!(ok(&call("notices", Value::Null))["notices"], json!([]));
 
@@ -2080,13 +1938,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The root's hub command on a phone only sets the phone's forwarder:
-    /// it never switches the hub on, a command of another key or one to
-    /// stop is refused, and a command with no forwarder clears it.
+    /// A phone is no hub (D-134): it refuses the hub command, the root's
+    /// too, and has no op to turn a hub on.
     #[test]
-    fn a_hub_command_on_a_phone_sets_its_forwarder_and_does_not_switch_the_hub_on() {
+    fn a_phone_refuses_to_be_a_hub() {
         use cbb_member::orders::{Hub, Order};
-        let dir = std::env::temp_dir().join(format!("cbb-ffi-live-fw-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cbb-ffi-live-nohub-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let me = cbb_member::founding::Me { name: "phone", os: 0, caps: 0 };
@@ -2104,50 +1961,25 @@ mod tests {
         let m = m.unwrap();
         let phone = &*m.0;
         let call = |op: &str, args: Value| m.call(json!({ "op": op, "args": args }).to_string().as_bytes());
-        ok(&call("away", json!({ "on": true })));
-        let none = ok(&call("away_status", Value::Null));
-        assert!(none["root_forwarder"].is_null(), "{none}");
+        for op in ["hub", "hub_off"] {
+            assert!(!error(&call(op, Value::Null)).is_empty(), "{op}");
+        }
 
         let ev = Events { f: events, ctx: 0 };
-        let st = phone.live.mesh.state();
-        let root = *st.roots.last().unwrap();
-        let other = phone.live.mesh.own().hash();
-        drop(st);
-        let taken = |o: &Order, signer| cbb_member::commands::Taken {
+        let root = *phone.live.mesh.state().roots.last().unwrap();
+        let taken = |o: &Order| cbb_member::commands::Taken {
             kind: o.kind(),
             id: [1; 16],
-            signer,
+            signer: root,
             orders: o.orders().unwrap(),
         };
-        let set = Order::Hub(Hub { forwarders: vec![("203.0.113.9:8764".into(), [7; 32])], ..Hub::default() });
-        assert!(
-            carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&set, other))
-                .unwrap_err()
-                .message()
-                .contains("only the group's root")
-        );
-        assert!(root_forwarder(&dir).is_none(), "a command of another key changed nothing");
-        let stop = Order::Hub(Hub { stop: true, ..Hub::default() });
-        assert!(
-            carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&stop, root))
-                .unwrap_err()
-                .message()
-                .contains("its own switch")
-        );
-
-        carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&set, root)).unwrap();
-        let got = ok(&call("away_status", Value::Null));
-        assert_eq!(
-            got["root_forwarder"],
-            json!({ "endpoint": "203.0.113.9:8764", "key": certs::b64::encode(&[7; 32]) }),
-            "{got}"
-        );
-        assert!(!got["away"]["hub"].as_bool().unwrap_or(false), "the command did not switch the hub on: {got}");
-
-        // A command that names the phone's own address and no forwarder clears it.
-        let clear = Order::Hub(Hub { hub: Some(("198.51.100.7:8764".into(), other.0)), ..Hub::default() });
-        carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&clear, root)).unwrap();
-        assert!(ok(&call("away_status", Value::Null))["root_forwarder"].is_null());
+        for o in [
+            Order::Hub(Hub { forwarders: vec![("203.0.113.9:8764".into(), [7; 32])], ..Hub::default() }),
+            Order::Hub(Hub { stop: true, ..Hub::default() }),
+        ] {
+            let e = carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&o)).unwrap_err();
+            assert!(e.message().contains("a phone is no hub"), "{}", e.message());
+        }
         m.stop();
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -41,7 +41,7 @@ pub const T_CONFIRM: u64 = 66;
 pub const T_WELCOME: u64 = 67;
 pub const T_DONE: u64 = 68;
 pub const T_ERROR: u64 = 69;
-/// The intro of a peer whose key the other side does not know (format 11.3).
+/// The intro of a peer whose key the other side does not know (format 11.4).
 pub const T_INTRO: u64 = 8;
 
 /// Reads one frame of pairing. Before CPace is confirmed every message

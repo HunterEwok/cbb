@@ -10,7 +10,7 @@
     <string name="ask_action">¿Ejecutar %1$s en %2$s?</string>
     <string name="ask_actions_off">¿Desactivar todas las acciones rápidas en %1$s?</string>
     <string name="ask_away_off">¿Desactivar la sincronización fuera de casa en %1$s?</string>
-    <string name="ask_freeze">¿Congelar %1$s? Sigue siendo administrador de nombre, pero nada de lo que firme cuenta hasta que la raíz lo descongele.</string>
+    <string name="ask_freeze">¿Congelar %1$s? Sigue siendo administrador de nombre, pero nada de lo que firme cuenta hasta que el dispositivo principal lo descongele.</string>
     <string name="ask_paste_off">¿Desactivar el pegado remoto en %1$s?</string>
     <string name="ask_remove">¿Quitar %1$s del grupo?</string>
     <string name="away">En todas partes</string>

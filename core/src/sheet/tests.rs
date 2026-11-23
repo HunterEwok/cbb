@@ -104,8 +104,8 @@ fn versions_and_earlier_sheets() {
     assert_eq!(read(&later).err(), Some(Reason::Newer));
     assert_eq!(read("2").err(), Some(Reason::Newer));
     // 0.5's text (56 characters) and QR code.
-    let earlier = crate::recovery::text(&crate::recovery::secret_key(&[9; 32]).unwrap());
-    assert_eq!(read(&earlier).err(), Some(Reason::Earlier));
+    let earlier = "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ-0123-4567-89AB-CDEF-GHJK-MNPQ";
+    assert_eq!(read(earlier).err(), Some(Reason::Earlier));
     assert_eq!(read("cbb://recover?g=0011223344556677&k=AA&c=BB").err(), Some(Reason::Earlier));
     assert_eq!(read("").err(), Some(Reason::NotSheet));
     assert_eq!(read("https://example.com/").err(), Some(Reason::NotSheet));

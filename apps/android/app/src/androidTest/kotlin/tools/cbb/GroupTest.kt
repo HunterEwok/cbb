@@ -11,7 +11,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
-import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -58,15 +57,6 @@ class GroupTest {
 
     private val context: Context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
-    /** The phone's networks for a failure message: which is the default, each one's capabilities and addresses. */
-    @Suppress("DEPRECATION")
-    private fun networks(): String {
-        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return "no ConnectivityManager"
-        val active = cm.activeNetwork
-        return cm.allNetworks.joinToString("; ", prefix = "default ${active ?: "none"}: ") { n ->
-            "$n ${cm.getNetworkCapabilities(n)} ${cm.getLinkProperties(n)?.linkAddresses}"
-        }
-    }
     private lateinit var model: AppModel
 
     private fun str(id: Int) = context.getString(id)
@@ -138,7 +128,7 @@ class GroupTest {
      * Waits until the phone is connected to name and no sync is going: a
      * step that presses the button once, or sends once, starts as a person
      * does who sees the computer online. Right after joining the phone's
-     * node starts again (the phone's hub), and the sync the app runs as its
+     * node starts again, and the sync the app runs as its
      * window takes the focus may still wait for a computer; a copy set
      * meanwhile would go out with that sync, and the step's own press would
      * then find nothing new.
@@ -327,7 +317,7 @@ class GroupTest {
     /** Admits a member in no group from Home's + menu, through the phone's pairing window. */
     private fun admit(dev: String) {
         compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
-        compose.onNodeWithText(str(R.string.scan_code)).performClick()
+        compose.onNodeWithText(str(R.string.add_device)).performClick()
         joinWindow(dev)
         until(30, "$dev in the phone's devices") { model.group.devices.any { it.name == dev } }
     }
@@ -471,55 +461,6 @@ class GroupTest {
             sensitive = clipboard().primaryClip?.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
         }
         assertTrue("the secret is not marked sensitive on the phone", sensitive)
-    }
-
-    /**
-     * G14: the phone is the group's hub while its app is open. In a group
-     * of 0.6 its forwarder is the root's setting, and this phone, the root,
-     * names none, so the hub serves at home only; an invitation the phone
-     * serves admits a computer, and the network the phone is on becomes a
-     * home network.
-     */
-    @Test
-    fun c1_phoneHubAtHome() {
-        val hubNow = { runBlocking { model.refresh() }; model.hub ?: throw AssertionError("the phone cannot be the hub") }
-        // A hub turns sync away from home on; the tests after this one find
-        // it as it was.
-        val awayWasOff = (model.away?.status ?: AwayFromHome.Status.OFF) == AwayFromHome.Status.OFF
-        runBlocking { model.setHub(true) }
-        assertEquals("turning the hub on says ${model.hubNote}", null, model.hubNote)
-        try {
-            until(60, "the hub at home only, with no forwarder the root named; the app says ${model.hub}") {
-                hubNow().let { it.status == HubOnPhone.Status.HOME_ONLY && it.forwarder == null }
-            }
-
-            // G14: an invitation the phone makes and serves, used by a new computer.
-            runBlocking { model.openInvite() }
-            val invite = model.invite ?: throw AssertionError("no invitation: ${model.inviteNote}")
-            val guest = Bench.add()
-            Bench.run(guest, "umask 077 && cat >/tmp/invite", stdin = invite.file.readText())
-            val join = Bench.start(guest, "echo yes | cbb pair -invite /tmp/invite")
-            try {
-                until(120, "the phone asks about $guest") { model.invite?.request != null }
-            } catch (e: AssertionError) {
-                throw AssertionError("${e.message}; the job says ${join.output().first}\n$guest's log:\n${Bench.logs(guest)}")
-            }
-            InstrumentationRegistry.getInstrumentation().runOnMainSync { model.answer(true) }
-            val out = join.finish(120)
-            assertTrue("cbb pair -invite on $guest did not join:\n$out", out.contains("Joined the group"))
-            until(30, "the invitation says it admitted $guest: ${model.inviteNote}") { model.inviteNote?.text == R.string.invite_admitted }
-            until(60, "$guest in the phone's devices") { model.group.devices.any { it.name == guest } }
-
-            // "This is my home network".
-            runBlocking { model.addHomeNetwork() }
-            assertEquals("adding the home network says (${networks()})", null, model.hubNote)
-            assertTrue("the hub does not count this network as home: ${model.hub}", hubNow().home)
-        } finally {
-            runBlocking { model.setHub(false) }
-            if (awayWasOff) runBlocking { model.setAway(false) }
-        }
-        assertEquals("the hub turned off", HubOnPhone.Status.OFF, hubNow().status)
-        if (awayWasOff) assertEquals("sync away from home off again", AwayFromHome.Status.OFF, model.away?.status ?: AwayFromHome.Status.OFF)
     }
 
     /**

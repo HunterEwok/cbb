@@ -29,7 +29,7 @@ struct CBBApp: App {
             RootView()
                 .environmentObject(model)
         }
-        // The phone is the group's hub while the app is open (D-64).
+        // The member follows the app to the front and to the background.
         .onChange(of: scenePhase, initial: true) { _, phase in
             model.group.setForeground(phase == .active)
             model.group.setBackground(phase == .background)

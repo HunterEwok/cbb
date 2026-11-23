@@ -1,5 +1,5 @@
 {
- "draft": "format-0.6-bytes.md, draft of 2026-11-11",
+ "draft": "docs/format.md",
  "source": "the template task 2 tested on five TLS stacks (research-0.6/key-container/report-ru.md, sections 2 and 7)",
  "reader": "the TBS byte for byte the template with the point and its serial; the point on the curve; ecdsa-with-SHA256; the signature a BIT STRING with no unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33 bytes in DER (no needless zero in front, not negative), every length exact, at most 72 bytes; its value is not read",
  "tbs_template_hex": "3081c0a0030201020210<16-byte serial>300a06082a8648ce3d040302300e310c300a06035504030c036362623020170d3730303130313030303030305a180f39393939313233313233353935395a300e310c300a06035504030c036362623059301306072a8648ce3d020106082a8648ce3d030107034200<65-byte key>",

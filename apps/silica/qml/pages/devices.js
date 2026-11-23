@@ -40,12 +40,9 @@ function can(d, c) {
     return d.role === "member" && (d.caps || []).indexOf(c) >= 0
 }
 
-// Whether it takes a remote paste: a member, or a phone with Android,
-// Aurora OS or Sailfish OS (through its Bluetooth keyboard); an iPhone
-// takes none.
+// Whether it takes a remote paste: a member; the phones take none in 0.6.
 function takesPaste(d) {
-    return !d.self && (d.role === "member"
-                       || (d.role === "phone" && ["android", "aurora", "sailfish"].indexOf(d.os) >= 0))
+    return !d.self && d.role === "member"
 }
 
 // Its kind, from its role and system.
@@ -71,14 +68,14 @@ function icon(d) {
     return "image://theme/icon-m-computer"
 }
 
-// Its mark: this phone, the root, an admin, frozen, or none.
+// Its mark: this phone, the main device, an admin, frozen, or none.
 function mark(d) {
     if (d.self)
         return qsTr("this phone")
     if (d.frozen)
         return qsTr("frozen")
     if (d.root)
-        return qsTr("root")
+        return qsTr("main device")
     if (d.admin)
         return qsTr("admin")
     return ""
@@ -89,9 +86,9 @@ function role(d) {
     if (d.frozen)
         return qsTr("Admin, frozen by another admin")
     if (d.root && d.admin)
-        return qsTr("Root and admin")
+        return qsTr("Main device and admin")
     if (d.root)
-        return qsTr("Root")
+        return qsTr("Main device")
     if (d.admin)
         return qsTr("Admin")
     if (!d.listed)

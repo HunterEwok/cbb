@@ -68,7 +68,7 @@ Page {
                     { kind: "devices", text: qsTr("Devices join or leave") },
                     { kind: "admins", text: qsTr("A device becomes an admin") },
                     { kind: "frozen", text: qsTr("A device is frozen or unfrozen") },
-                    { kind: "takeover", text: qsTr("Another phone takes the group over") }
+                    { kind: "takeover", text: qsTr("Another phone moves the group to itself") }
                 ]
                 TextSwitch {
                     text: modelData.text
@@ -111,12 +111,20 @@ Page {
                 visible: app.group !== ""
                 text: qsTr("Group")
             }
+            // Where the devices meet away from home when the group has no
+            // hub: the root sets it, the others see where it stands.
+            ValueButton {
+                visible: app.member.running
+                label: qsTr("Blind relay")
+                value: app.member.relayAt !== "" ? app.member.relayAt : qsTr("Off")
+                onClicked: pageStack.push(Qt.resolvedUrl("RelayPage.qml"))
+            }
             // The root's settings, each signed with the root key: which keys
             // may be admins, and the recovery key.
             ComboBox {
                 id: level
                 visible: app.root && app.member.running
-                label: qsTr("Keys an admin may keep")
+                label: qsTr("Admin keys")
                 description: app.belowLevel.length > 0
                              ? qsTr("Some admins keep weaker keys; they stay until removed") : ""
                 property var levels: ["proven", "hardware", "files"]
@@ -220,7 +228,7 @@ Page {
                 visible: app.group !== ""
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Leave the group")
-                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting its root key")
+                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting the main device's key")
                                                     : qsTr("Leaving the group"), function() { app.leave(); pageStack.pop() })
             }
 

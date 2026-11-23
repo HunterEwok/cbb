@@ -3,8 +3,8 @@
 
 import Foundation
 
-/// The manifest of a media event: images or files (docs/protocol.md,
-/// section 4, "Media"), checked as Go's package clip does. The kit takes the
+/// The manifest of a media event: images or files (docs/format.md,
+/// section 10.3), checked as Go's package clip does. The kit takes the
 /// event and its plain-text alternative; fetching the content comes later.
 public enum Media {
     /// The largest copy, all its parts together, that the group carries.

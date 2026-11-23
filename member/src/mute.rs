@@ -16,7 +16,9 @@ use crate::sync::Switches;
 pub const FILE_NAME: &str = "mute.json";
 
 /// The longest mute, as a mute command's: 30 days.
-pub const MAX_MS: i64 = cbb_core::command::MAX_MUTE_MS;
+// 30 days fits an i64 with room to spare.
+#[allow(clippy::cast_possible_wrap)]
+pub const MAX_MS: i64 = cbb_core::commands::orders::MAX_MUTE_MS as i64;
 
 /// What the file holds: the end of the mute, in Unix milliseconds, 0 for
 /// until it is lifted, and the device whose admin muted this one.
@@ -83,20 +85,13 @@ pub fn until(ms: i64) -> Result<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cbb_core::clip::Engine;
+    use crate::board::Board;
 
     #[test]
     fn lasts_across_a_restart() {
         let dir = std::env::temp_dir().join(format!("cbb-mute-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let new = || {
-            Engine::new(
-                &"a".repeat(32),
-                cbb_core::hlc::Clock::new(Box::new(crate::uptime::wall_ms), Default::default(), None),
-                Box::new(crate::uptime::wall_ms),
-                Box::new(crate::uptime::now),
-            )
-        };
+        let new = || Board::new(Box::new(crate::uptime::wall_ms));
         let e = new();
         e.set_mute(crate::uptime::wall_ms() + 3_600_000);
         save(&dir, &e, "admin-a").unwrap();

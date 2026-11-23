@@ -10,7 +10,7 @@
     <string name="ask_action">تشغيل %1$s على %2$s؟</string>
     <string name="ask_actions_off">إيقاف كل الإجراءات السريعة على %1$s؟</string>
     <string name="ask_away_off">إيقاف المزامنة بعيدًا عن المنزل على %1$s؟</string>
-    <string name="ask_freeze">تجميد %1$s؟ يبقى مشرفًا بالاسم، لكن لا يُحتسب أي شيء يوقّعه حتى يلغي الجذر تجميده.</string>
+    <string name="ask_freeze">تجميد %1$s؟ يبقى مشرفًا بالاسم، لكن لا يُحتسب أي شيء يوقّعه حتى يلغي الجهاز الرئيسي تجميده.</string>
     <string name="ask_paste_off">إيقاف اللصق عن بُعد على %1$s؟</string>
     <string name="ask_remove">إزالة %1$s من المجموعة؟</string>
     <string name="away">في كل مكان</string>

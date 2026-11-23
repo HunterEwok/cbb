@@ -14,17 +14,16 @@
 //! alone as a background push (`content-available`, priority 5), which
 //! wakes the app without showing anything.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
-use rustls::ClientConfig;
 
-use super::h2::{Answer, Conn, Tls, dial};
+use super::h2::{Answer, Conn, Reach, Tls};
 use super::{Challenge, Delivery, Outcome, Platform};
-use crate::error::{Context, Error, Result};
+use crate::error::{Error, Result};
 
 /// Apple's hosts.
 pub const PRODUCTION: &str = "api.push.apple.com";
@@ -110,7 +109,7 @@ struct Link {
 pub struct Apns {
     env: u64,
     key: Key,
-    tls: Arc<ClientConfig>,
+    reach: Reach,
     token: Mutex<Option<(String, Instant)>>,
     link: Mutex<Link>,
 }
@@ -122,13 +121,8 @@ impl Apns {
             cbb_core::push::ENV_APNS_SANDBOX => SANDBOX,
             _ => return Err(Error::msg("APNs has two environments only")),
         };
-        let mut cfg = ClientConfig::builder_with_provider(Arc::new(cbb_core::tls::web::provider()))
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .context("cannot set up the TLS toward APNs")?
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-        cfg.alpn_protocols = vec![b"h2".to_vec()];
-        Ok(Apns { env, key, tls: Arc::new(cfg), token: Mutex::new(None), link: Mutex::new(Link { host, conn: None }) })
+        let reach = Reach::web(roots, "APNs")?;
+        Ok(Apns { env, key, reach, token: Mutex::new(None), link: Mutex::new(Link { host, conn: None }) })
     }
 
     fn provider_token(&self) -> String {
@@ -145,7 +139,7 @@ impl Apns {
     }
 
     fn connect(&self, host: &'static str) -> Result<Conn<Tls>> {
-        dial(&self.tls, host, TIMEOUT)
+        self.reach.dial(host, TIMEOUT)
     }
 }
 
@@ -238,5 +232,67 @@ mod tests {
         assert_eq!(outcome(&a(None, r#"{"reason":"BadDeviceToken"}"#)), Outcome::Gone);
         assert_eq!(outcome(&a(None, r#"{"reason":"TooManyRequests"}"#)), Outcome::Later(Duration::from_secs(60)));
         assert_eq!(outcome(&a(Some(500), "")), Outcome::Later(Duration::from_secs(30)));
+    }
+
+    fn apns(reach: Reach) -> Apns {
+        let link = Mutex::new(Link { host: PRODUCTION, conn: None });
+        Apns { env: cbb_core::push::ENV_APNS, key: key(), reach, token: Mutex::new(None), link }
+    }
+
+    fn delivery<'a>(token: &'a [u8], body: Option<&'a [u8]>, challenge: Option<Challenge>) -> Delivery<'a> {
+        Delivery { env: cbb_core::push::ENV_APNS, token, body, challenge, expires_s: 1_790_000_000, tag: [0; 32] }
+    }
+
+    fn has(block: &[u8], s: &str) -> bool {
+        block.windows(s.len()).any(|w| w == s.as_bytes())
+    }
+
+    /// An alert and a background push reach Apple with their headers and
+    /// one provider token; a connection Apple closed after its answer is
+    /// dialed again; a token Apple no longer knows is gone.
+    #[test]
+    fn a_send_reaches_apple_with_its_headers() {
+        let (reach, taken) = crate::pushd::tests::platform(1, |block, _| {
+            if has(block, "/3/device/dead") {
+                (410, br#"{"reason":"Unregistered"}"#.to_vec())
+            } else {
+                (200, Vec::new())
+            }
+        });
+        let a = apns(reach);
+        let c = Challenge { value: [1; 16], key: [2; 8] };
+        assert_eq!(a.send(&delivery(&[1, 2], Some(b"body"), None)), Outcome::Sent);
+        assert_eq!(a.send(&delivery(&[1, 2], None, Some(c))), Outcome::Sent);
+        assert_eq!(a.send(&delivery(&[0xde, 0xad], Some(b"body"), None)), Outcome::Gone);
+        let t = taken.lock().unwrap();
+        assert_eq!(t.len(), 3, "each request was posted once");
+        let (block, body) = &t[0];
+        for h in ["/3/device/0102", "alert", "tools.cbb", "1790000000", "apns-priority"] {
+            assert!(has(block, h), "{h}");
+        }
+        let v: serde_json::Value = serde_json::from_slice(body).unwrap();
+        assert_eq!(STANDARD.decode(v["c"].as_str().unwrap()).unwrap(), b"body");
+        assert!(has(&t[1].0, "background"));
+        assert!(serde_json::from_slice::<serde_json::Value>(&t[1].1).unwrap()["aps"]["content-available"] == 1);
+        let tok = a.provider_token();
+        assert!(t.iter().all(|(b, _)| has(b, &format!("bearer {tok}"))));
+    }
+
+    #[test]
+    fn what_is_not_sent() {
+        let a = apns(crate::pushd::tests::nowhere());
+        let mut d = delivery(&[1], Some(b"x"), None);
+        assert_eq!(a.send(&d), Outcome::Later(Duration::from_secs(30)));
+        d.body = None;
+        assert_eq!(a.send(&d), Outcome::NoPath);
+        d.env = cbb_core::push::ENV_FCM;
+        assert_eq!(a.send(&d), Outcome::NoPath);
+        let roots = rustls::RootCertStore::empty;
+        assert!(Apns::new(cbb_core::push::ENV_FCM, key(), roots()).is_err());
+        let s = Apns::new(cbb_core::push::ENV_APNS_SANDBOX, key(), roots()).unwrap();
+        assert_eq!(s.link.lock().unwrap().host, SANDBOX);
+        assert!(Key::from_p8("-----BEGIN-----\nAAAA\n-----END-----", "ABCDE12345", "KEY0000001").is_err());
+        let pem = STANDARD.encode(cbb_core::identity::new_key().unwrap());
+        assert!(Key::from_p8(&pem, "short", "KEY0000001").is_err());
     }
 }

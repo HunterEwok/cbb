@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-"""The vectors of push (format section 20.4): the tables of message `push`
+"""The vectors of push (format section 9.6): the tables of message `push`
 (t 28), the UnifiedPush token, the push service's messages (t 100-104) and
 the body's plaintext; registrations and their send keys; sealed bodies; and the cases a
 later version may write, which a 0.6 reader holds or treats neutrally.
@@ -266,7 +266,7 @@ def main():
     challenge = fake("challenge", 16)
     face = fake("face", 16)
     out = {
-        "draft": "format-0.6-bytes.md section 20.4, 2026-11-13",
+        "draft": "docs/format.md, section 9.6",
         "labels": {"body": LABEL_BODY.decode(), "nonce": LABEL_NONCE.decode(), "ad": LABEL_AD.decode(),
                    "send": LABEL_SEND},
         "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]

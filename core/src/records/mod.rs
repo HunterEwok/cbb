@@ -4,7 +4,7 @@
 //! Records v3: the group's records in the 0.6 format and the rules that
 //! turn a set of them into the group's state.
 //!
-//! The rules (plans: design-records-v3, format-0.6 sections 3–5 and 13):
+//! The rules (plans: design-records-v3, format sections 3–5 and 13):
 //!
 //! 1. A record is `[body, sig]`; its ID is SHA-256 over the body, and a set
 //!    holds each record once, by ID. A signature has one form (64 bytes,

@@ -25,7 +25,7 @@ func runDesktop(ctx context.Context, socket string, logf func(string, ...any)) e
 		logf("cbb: another agent links this session's clipboard already")
 		return nil
 	}
-	backoff := time.Second
+	backoff := firstWait
 	failures := 0
 	for ctx.Err() == nil {
 		b, how, err := desktop.Open(logf)
@@ -36,7 +36,7 @@ func runDesktop(ctx context.Context, socket string, logf func(string, ...any)) e
 				return err
 			}
 		} else {
-			failures, backoff = 0, time.Second
+			failures, backoff = 0, firstWait
 			logf("cbb: linked the clipboard through %s", how)
 			err = connector.Run(ctx, connector.Config{Socket: socket, Board: b, Commands: true, Files: ReceivedFiles(), Logf: logf})
 			b.Close()
@@ -53,6 +53,10 @@ func runDesktop(ctx context.Context, socket string, logf func(string, ...any)) e
 	}
 	return nil
 }
+
+// firstWait is the first wait before the display is opened again; each
+// failure doubles it, up to 30 seconds.
+var firstWait = time.Second
 
 // lockAgent reports whether this is the user's only agent: the user unit
 // and the autostart entry may both start one. The lock lasts as long as

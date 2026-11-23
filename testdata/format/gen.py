@@ -2121,7 +2121,7 @@ def between_rule(name, v):
 
 
 # What a reader of this version does with an optional field whose value is
-# out of range (format 20.5): one row a field; every optional field not
+# out of range (format 9.1): one row a field; every optional field not
 # listed refuses. core/src/msg/later.rs holds the same rows.
 LATER = {
     ("welcome", 4): "absent", ("welcome", 7): "absent",
@@ -2861,7 +2861,7 @@ def invitation_vectors():
         if paths is not None:
             # The writer's check refuses it; a reader of this version takes
             # it with the path whose settings it cannot read skipped
-            # (format 20.5: a transport's table makes only its way unusable).
+            # (format 9.1: a transport's table makes only its way unusable).
             e["reader_paths"] = paths
         if rights is not None:
             # Rights are bits: a reader of this version ignores those it
@@ -4162,7 +4162,7 @@ def main():
             dec(env[0])
     for name, data in files.items():
         with open(os.path.join(outdir, name), "w") as f:
-            json.dump({"draft": "format-0.6-bytes.md, draft of 2026-11-11", **data}, f,
+            json.dump({"draft": "docs/format.md", **data}, f,
                       indent=1, ensure_ascii=False)
             f.write("\n")
     print("wrote", len(files), "files to", outdir)

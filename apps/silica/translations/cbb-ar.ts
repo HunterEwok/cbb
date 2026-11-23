@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>لا يحتوي تخطيط الجهاز على مفتاح لـ: %1. اختر تخطيطه في الأعلى.</translation>
+        <translation>لا يحتوي تخطيط الجهاز على مفتاح لـ: %1. اختر تخطيطه أعلاه.</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -352,6 +352,14 @@
         <translation>معرّف الجهاز</translation>
     </message>
     <message>
+        <source>Freeze</source>
+        <translation>تجميد</translation>
+    </message>
+    <message>
+        <source>Freezing %1</source>
+        <translation>جارٍ تجميد %1</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>في المجموعة</translation>
     </message>
@@ -364,6 +372,14 @@
         <translation>اجعله مشرفًا</translation>
     </message>
     <message>
+        <source>Make it a hub</source>
+        <translation>جعله محورًا</translation>
+    </message>
+    <message>
+        <source>Making %1 a hub</source>
+        <translation>جارٍ جعل %1 محورًا</translation>
+    </message>
+    <message>
         <source>Making %1 an admin</source>
         <translation>جارٍ جعل %1 مشرفًا</translation>
     </message>
@@ -372,16 +388,8 @@
         <translation>المزيد</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>كتم لمدة ساعة</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>كتم حتى الإلغاء</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>جارٍ كتم %1</translation>
+        <source>Mute</source>
+        <translation>كتم</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -553,10 +561,6 @@
         <translation>لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</translation>
     </message>
     <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>انتهت صلاحية الدعوة. اطلب دعوة جديدة.</translation>
-    </message>
-    <message>
         <source>The phone could not delete its key.</source>
         <translation>تعذّر على الهاتف حذف مفتاحه.</translation>
     </message>
@@ -645,6 +649,10 @@
         <translation>هذا الإصدار من CBB معطوب.</translation>
     </message>
     <message>
+        <source>This invitation is for another kind of device. Ask for one for this phone.</source>
+        <translation>هذه الدعوة لنوع آخر من الأجهزة. اطلب دعوة لهذا الهاتف.</translation>
+    </message>
+    <message>
         <source>This is not a CBB invitation.</source>
         <translation>هذه ليست دعوة CBB.</translation>
     </message>
@@ -684,12 +692,12 @@
         <translation>انضم %1 إلى المجموعة.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>استولى %1 على المجموعة: أصبح يحمل جذر المجموعة الآن.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>نقل %1 المجموعة إليه: أصبح الآن الجهاز الرئيسي للمجموعة.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>جُمّد %1: يرفضه الآخرون حتى يُلغي مشرف تجميده.</translation>
+        <translation>جُمّد %1: يرفضه الآخرون حتى يلغي مشرف تجميده.</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
@@ -755,6 +763,10 @@
         <translation>المشرف المجمّد %1 يؤخر عمليات الإزالة: ألغِ تجميده أو أزله.</translation>
     </message>
     <message>
+        <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
+        <translation>ترفضه أجهزة المجموعة الآن. غادر المجموعة لحذف مفاتيحه هنا؛ ثم يمكنه الانضمام إلى مجموعة مرة أخرى.</translation>
+    </message>
+    <message>
         <source>The group's main device changed</source>
         <translation>تغيّر الجهاز الرئيسي للمجموعة</translation>
     </message>
@@ -771,6 +783,10 @@
         <translation>لدى هذا الهاتف إزالة ليؤكدها؛ وسيفعل ذلك مع إجرائك التالي كمشرف.</translation>
     </message>
     <message>
+        <source>This phone was removed from the group</source>
+        <translation>أُزيل هذا الهاتف من المجموعة</translation>
+    </message>
+    <message>
         <source>This wasn't me</source>
         <translation>لم أكن أنا</translation>
     </message>
@@ -780,14 +796,6 @@
     <message>
         <source>Decline</source>
         <translation>رفض</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>المجموعة</translation>
-    </message>
-    <message>
-        <source>Hub</source>
-        <translation>المحور</translation>
     </message>
     <message>
         <source>Join</source>
@@ -802,8 +810,8 @@
         <translation>الانضمام بدعوة</translation>
     </message>
     <message>
-        <source>Or paste the invitation's text, cbb://invite…</source>
-        <translation>أو الصق نص الدعوة، cbb://invite…</translation>
+        <source>Or paste the invitation's text, cbb://join…</source>
+        <translation>أو الصق نص الدعوة، cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -812,10 +820,6 @@
     <message>
         <source>The camera does not start: %1</source>
         <translation>لا تبدأ الكاميرا: %1</translation>
-    </message>
-    <message>
-        <source>Valid until</source>
-        <translation>صالحة حتى</translation>
     </message>
     <message>
         <source>You are invited to a group</source>
@@ -922,16 +926,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 بايت</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 حرفًا في الثانية</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(غير موثّق)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -942,16 +938,8 @@
         <translation>أثناء ظهوره، يجد الجهاز الجديد هذا الهاتف باسم “CBB keyboard” في إعدادات البلوتوث.</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>يحتاجه أيضًا النص الذي فيه سطر جديد: تكتب لوحة المفاتيح السطر الجديد على أنه Enter.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>العمل كلوحة مفاتيح بلوتوث</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>عندها يكتب مشرف المجموعة نصًا عبر هذا الهاتف على الجهاز المتصل به، من تطبيقه أو باستخدام cbb paste. يعرض هذا الهاتف من قام باللصق، ويحتفظ بسجل لآخر عمليات اللصق دون نصها.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -959,7 +947,7 @@
     </message>
     <message>
         <source>Connected to %1.</source>
-        <translation>متصل بـ %1.</translation>
+        <translation>متصل بـ%1.</translation>
     </message>
     <message>
         <source>English (US)</source>
@@ -970,28 +958,12 @@
         <translation>جارٍ التحضير…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>آخر عمليات اللصق</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>السماح للصق بالضغط على Enter</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>السماح لمشرفي المجموعة باللصق هناك</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>اجعل هذا الهاتف مرئيًا</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>لا يوجد جهاز متصل. اتصل بهذا الهاتف من الجهاز، من إعدادات البلوتوث فيه.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>اللصق عن بُعد</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1024,14 +996,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>مرئي لمدة %1 ث</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>فشل</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>مرفوض</translation>
     </message>
 </context>
 <context>
@@ -1257,6 +1221,33 @@
     </message>
 </context>
 <context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>لمدة 15 دقيقة</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>لمدة 8 ساعات</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>لمدة ساعة</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>عندها لا تصل نسخه إلى أي جهاز في المجموعة؛ لكنه لا يزال يتلقى نسخها.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>كتم</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>حتى يلغي مشرف كتمه</translation>
+    </message>
+</context>
+<context>
     <name>NewGroupPage</name>
     <message>
         <source>Make</source>
@@ -1267,24 +1258,24 @@
         <translation>إنشاء مجموعة</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>اجعل هاتفًا آخر مشرفًا قريبًا: إذا فُقد هذا الهاتف، يستولي هاتف مشرف على المجموعة.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>اجعل هاتفًا آخر مشرفًا قريبًا: إذا فُقد هذا الهاتف، ينقل هاتف مشرف المجموعة إليه.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>يُحفظ مفتاح جذر المجموعة في ملف على الهاتف: أي شخص ينسخه يمكنه التصرف كجذر المجموعة.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>يُحفظ مفتاح الجهاز الرئيسي في ملف على الهاتف: أي شخص ينسخه يمكنه التصرف كالجهاز الرئيسي للمجموعة.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>يُنشأ مفتاح جذر المجموعة في العنصر الآمن للهاتف ولا يغادره أبدًا.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>يُنشأ مفتاح الجهاز الرئيسي في العنصر الآمن للهاتف ولا يغادره أبدًا.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>ليس لهذا الجهاز شريحة آمنة للمفاتيح أو مستشعر موثوق للبصمة أو للوجه: فهو كجهاز رئيسي للمجموعة يحميها أقل من هاتف لديه الاثنان.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>يصبح هذا الهاتف جذر المجموعة: يضيف الأجهزة الأخرى عبر رموز QR الخاصة بها ويجعل الهواتف التي تطلب ذلك مشرفين.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>يصبح هذا الهاتف الجهاز الرئيسي للمجموعة: يضيف الأجهزة الأخرى عبر رموز QR الخاصة بها ويجعل الهواتف التي تطلب ذلك مشرفين.</translation>
     </message>
 </context>
 <context>
@@ -1296,10 +1287,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 من المجموعة في المعرض</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>تم اللصق من %1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1435,8 +1422,8 @@
         <translation>أدخل YubiKey في منفذ USB-C واكتب رمز PIN الخاص به.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع الاستيلاء على مجموعتك.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع نقل مجموعتك إلى ذلك الجهاز.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1504,6 +1491,84 @@
     </message>
 </context>
 <context>
+    <name>RelayDialog</name>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>الالتقاء عند هذا المُرحِّل</translation>
+    </message>
+    <message>
+        <source>Meet at this relay?</source>
+        <translation>الالتقاء عند هذا المُرحِّل؟</translation>
+    </message>
+    <message>
+        <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
+        <translation>تبقى الحافظة مشفّرة من طرف إلى طرف بين الأجهزة: لا يستطيع المُرحِّل قراءتها أو انتحال صفة جهاز. لكنه يعرف، ما دامت الأجهزة تستخدمه، أيّ أجهزة المجموعة متصلة وعناوينها على الإنترنت، وأيّها يتحدث مع الآخر، ومتى وكم يُرسل. محور المجموعة الخاص لا يُسرّب شيئًا من هذا. استخدم مُرحِّلًا تديره بنفسك، أو مُرحِّلًا تثق بمشغّله في هذا.</translation>
+    </message>
+</context>
+<context>
+    <name>RelayPage</name>
+    <message>
+        <source>At the relay: no other device of the group is there now.</source>
+        <translation>عند المُرحِّل: لا يوجد جهاز آخر من المجموعة هناك الآن.</translation>
+    </message>
+    <message>
+        <source>At the relay; devices of the group there: %1.</source>
+        <translation>عند المُرحِّل؛ أجهزة المجموعة هناك: %1.</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>مُرحِّل أعمى</translation>
+    </message>
+    <message>
+        <source>Connecting to the relay…</source>
+        <translation>جارٍ الاتصال بالمُرحِّل…</translation>
+    </message>
+    <message>
+        <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
+        <translation>لمجموعة ليس لها محور خاص بها: تلتقي الأجهزة عند مُرحِّل، مثل مُرحِّل مُعدّ باستخدام cbb relay، أثناء مزامنة التطبيق. تبقى الحافظة مشفّرة بين الأجهزة، لكن المُرحِّل يعرف أيّها متصل وعناوينها، وأيّها يتحدث مع الآخر، ومتى وبأي قدر. اترك الحقلين فارغين للإيقاف.</translation>
+    </message>
+    <message>
+        <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
+        <translation>أدخل عنوان المُرحِّل مع منفذه ومفتاحه، كما يطبعهما cbb relay، أو اترك الاثنين فارغين.</translation>
+    </message>
+    <message>
+        <source>Leave the relay</source>
+        <translation>مغادرة المُرحِّل</translation>
+    </message>
+    <message>
+        <source>Meet at this relay</source>
+        <translation>الالتقاء عند هذا المُرحِّل</translation>
+    </message>
+    <message>
+        <source>Off: this phone meets nobody at a relay.</source>
+        <translation>متوقف: لا يلتقي هذا الهاتف بأحد عند مُرحِّل.</translation>
+    </message>
+    <message>
+        <source>Relay address, such as 198.51.100.9:8764</source>
+        <translation>عنوان المُرحِّل، مثل 198.51.100.9:8764</translation>
+    </message>
+    <message>
+        <source>Relay key, 44 characters</source>
+        <translation>مفتاح المُرحِّل، 44 حرفًا</translation>
+    </message>
+    <message>
+        <source>Renew the group's keys for sync away from home</source>
+        <translation>تجديد مفاتيح المجموعة للمزامنة بعيدًا عن المنزل</translation>
+    </message>
+    <message>
+        <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
+        <translation>انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجهاز الرئيسي.</translation>
+    </message>
+    <message>
+        <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
+        <translation>يعيّن الجهاز الرئيسي للمجموعة المُرحِّل لكل الأجهزة؛ ويلتقي هذا الهاتف بالأجهزة الأخرى هناك ما دامت المزامنة خارج المنزل مفعّلة.</translation>
+    </message>
+    <message>
+        <source>Waiting: the relay works while the app syncs.</source>
+        <translation>في الانتظار: يعمل المُرحِّل أثناء مزامنة التطبيق.</translation>
+    </message>
+</context>
+<context>
     <name>RenameDevicePage</name>
     <message>
         <source>Every device of the group shows the new name.</source>
@@ -1549,12 +1614,16 @@
         <translation>العمل كلوحة مفاتيح بلوتوث</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>مفاتيح المشرفين</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>إعدادات متقدمة</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>هاتف آخر يستولي على المجموعة</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>هاتف آخر ينقل المجموعة إليه</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1563,6 +1632,10 @@
     <message>
         <source>As the phone</source>
         <translation>مثل الهاتف</translation>
+    </message>
+    <message>
+        <source>Blind relay</source>
+        <translation>مُرحِّل أعمى</translation>
     </message>
     <message>
         <source>Change the admin PIN</source>
@@ -1621,10 +1694,6 @@
         <translation>بصمة المفتاح</translation>
     </message>
     <message>
-        <source>Keys an admin may keep</source>
-        <translation>المفاتيح التي يجوز للمشرف حفظها</translation>
-    </message>
-    <message>
         <source>Lab</source>
         <translation>المختبر</translation>
     </message>
@@ -1641,8 +1710,8 @@
         <translation>جارٍ مغادرة المجموعة</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>مغادرة المجموعة وحذف مفتاح جذرها</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>مغادرة المجموعة وحذف مفتاح الجهاز الرئيسي</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1732,10 +1801,6 @@
 <context>
     <name>WhySection</name>
     <message>
-        <source>%1 took the group over from this device.</source>
-        <translation>استولى %1 على المجموعة من هذا الجهاز.</translation>
-    </message>
-    <message>
         <source>A change of the group's main device is on its way.</source>
         <translation>تغيير الجهاز الرئيسي للمجموعة في الطريق.</translation>
     </message>
@@ -1760,10 +1825,6 @@
         <translation>اطلب من مالك المجموعة إعادة صلاحياته.</translation>
     </message>
     <message>
-        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
-        <translation>صِله في المنزل بجهاز موثوق في المجموعة، فيجدّد الشهادة.</translation>
-    </message>
-    <message>
         <source>CBB %1 is available.</source>
         <translation>يتوفر CBB %1.</translation>
     </message>
@@ -1778,10 +1839,6 @@
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>تحقق من الاتصال بالإنترنت؛ يعيد CBB المحاولة تلقائيًا.</translation>
-    </message>
-    <message>
-        <source>Connect it at home to a trusted device of the group before then.</source>
-        <translation>قبل ذلك، صِله في المنزل بجهاز موثوق في المجموعة.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1802,10 +1859,6 @@
     <message>
         <source>Everywhere is on, but the group has no base.</source>
         <translation>«في كل مكان» مفعّل، لكن ليس للمجموعة قاعدة.</translation>
-    </message>
-    <message>
-        <source>If this device was not lost, remove %1 from the group.</source>
-        <translation>إن لم يكن هذا الجهاز مفقودًا، فأزل %1 من المجموعة.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1952,14 +2005,6 @@
         <translation>أُزيل هذا الجهاز من المجموعة.</translation>
     </message>
     <message>
-        <source>This device's certificate ended on %1.</source>
-        <translation>انتهت شهادة هذا الجهاز في %1.</translation>
-    </message>
-    <message>
-        <source>This device's certificate ends on %1.</source>
-        <translation>تنتهي شهادة هذا الجهاز في %1.</translation>
-    </message>
-    <message>
         <source>This device's rights as a trusted device are paused.</source>
         <translation>صلاحيات هذا الجهاز كجهاز موثوق موقوفة مؤقتًا.</translation>
     </message>
@@ -2058,6 +2103,14 @@
         <translation>حاسوب</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>الجهاز الرئيسي</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>الجهاز الرئيسي ومشرف</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>عضو</translation>
     </message>
@@ -2076,14 +2129,6 @@
     <message>
         <source>Phone</source>
         <translation>هاتف</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>الجذر</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>الجذر ومشرف</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2106,8 +2151,8 @@
         <translation>مجمَّد</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>الجذر</translation>
+        <source>main device</source>
+        <translation>الجهاز الرئيسي</translation>
     </message>
     <message>
         <source>this phone</source>

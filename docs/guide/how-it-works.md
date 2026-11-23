@@ -18,7 +18,7 @@ device that only passes it on cannot read it, change it or forge one. Each devic
 | **Admin** | a second phone, or a computer the root chose | adds and removes devices, like the root |
 | **Member** | every computer, phone and small device (a router, a Raspberry Pi: [small devices](../../member/README.md)) | syncs the clipboard |
 | **Rootless member** | a Linux computer installed without `sudo` | syncs like a member, never the root, an admin or a hub ([below](#rootless-members)) |
-| **Hub** | a computer at home, or a phone while its app is open, if you want one | lets your devices sync when they are away from home; one that only passes copies on reads none |
+| **Hub** | a computer, a router or a small board at home, if you want one | lets your devices sync when they are away from home; one that only passes copies on reads none |
 
 The phone's keys are made in its security chip (the Secure Enclave, Android's Keystore) and
 never leave it; each signature with the group's root key or an admin key asks for your face,
@@ -48,7 +48,7 @@ often on, for the reason below the table.
 |---|---|---|
 | Who holds the group's key | the phone (in its security chip), or the computer [without the app](without-app.md) | the phone, in its security chip |
 | Sync at home | every device directly | every device directly |
-| Sync away from home | through the computer as the hub, at any time | through the phone as the hub while its app is open (on Android also in the background), or a blind relay |
+| Sync away from home | through the computer as the hub, at any time | through a blind relay, while the apps run |
 | What you need | a computer that is often on | nothing more |
 
 Why we recommend a computer: it is on far more often than an app is open on a phone, and the
@@ -125,30 +125,23 @@ group's tunnel unless you turn it off:
 
 `cbb global hub -no-vless` turns VLESS off, and `-no-obfuscate` with it plain WireGuard.
 
-## Phones only: the phone as the hub
+## Phones only: a blind relay
 
-A group of just phones, or phones and a Mac, has no computer to be the hub. Two ways keep it
-syncing away from home:
-
-- **The phone as the hub**, while its app is open (Settings, **This phone as the hub**; on
-  from the start in a group made on a phone). The other phones, TVs and small devices connect
-  to it at home, and with a forwarder they reach it from afar too. On Android it can keep
-  running in the background; an iPhone serves only while the app is open.
-- **A blind relay of your own** (`cbb relay` on your server). It stands in for the hub as
-  the meeting point, but it is not a member: the devices' encryption runs end to end through
-  it, so it cannot read the clipboard. It does see which of your devices talk, and when.
-  Computers and both phone apps can use it.
+A phone is never the hub: a hub is a computer, a router or a small board such as a Raspberry
+Pi, which stays on and takes connections. A group of just phones meets at a **blind relay**
+instead, the project's or one of your own (`cbb relay` on your server). It stands in for the
+hub as the meeting point, but it is not a member: the devices' encryption runs end to end
+through it, so it cannot read the clipboard. It does see which of your devices talk, and
+when. Computers and every phone app can use it.
 
 ![A blind relay joins the laptop away and the Mac at home; the encryption runs end to end through it](../images/relay.svg)
 
-A group may have several hubs: the root, every admin with a hub set up, and the hubs that only
-pass copies on. Devices away from
-home use the first one that answers, the computers before the phones, so a group of phones and
-a computer keeps working while the phone's app is closed.
+A group may have several hubs: the root's computer, every admin computer with a hub set up,
+and the hubs that only pass copies on. Devices away from home use the first one that answers.
 
-**Planned:** a blind relay at `cbb.tools` for everyone who does not want to run a hub or a
-relay. It will see which devices talk and when, never what they copy, and you turn it on
-yourself.
+The project runs a blind relay at `cbb.tools` for everyone who does not want to run a hub or
+a relay of their own. It sees which devices talk and when, never what they copy, and the
+group's root turns it on.
 
 ## What each server can see
 

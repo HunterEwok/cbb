@@ -15,30 +15,16 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
-	"strings"
 )
 
 // A Case is one line of the corpus.
 type Case struct {
-	Kind    string   `json:"kind"`
-	Body    []byte   `json:"body,omitempty"`
-	CA      []byte   `json:"ca,omitempty"`
-	Records []Record `json:"records,omitempty"`
-	Keys    [][]byte `json:"keys,omitempty"`
+	Kind string `json:"kind"`
+	Body []byte `json:"body,omitempty"`
 }
 
-// A Record is a signed record as the interop vectors and the member
-// protocol carry it.
-type Record struct {
-	Body  []byte   `json:"body"`
-	Sig   []byte   `json:"sig"`
-	Chain [][]byte `json:"chain,omitempty"`
-}
-
-// A vector is a body of strict-generated-*.json, strict-files.json or
-// strict-mutants-*.json.
+// A vector is a body of strict-generated-*.json or strict-files.json.
 type vector struct {
 	Body  []byte `json:"body"`
 	Pad   int    `json:"pad"`
@@ -53,13 +39,6 @@ func (v vector) full() []byte {
 	b := append([]byte{}, v.Body[:v.PadAt]...)
 	b = append(b, bytes.Repeat([]byte("a"), v.Pad)...)
 	return append(b, v.Body[v.PadAt:]...)
-}
-
-// A setSource is a record set of the interop vectors.
-type setSource struct {
-	name    string
-	ca      []byte
-	records []Record
 }
 
 // seeds reads the bodies the corpus starts from, by kind.
@@ -117,140 +96,22 @@ func seeds(dir string) ([]Case, error) {
 			generated[s] = append(generated[s], l...)
 		}
 	}
-	if err := take("strict-generated-*.json", generated, map[string]string{"records": "record", "commands": "command", "manifests": "manifest"}); err != nil {
+	if err := take("strict-generated-*.json", generated, map[string]string{"manifests": "manifest"}); err != nil {
 		return nil, err
 	}
-	if err := read("strict-files.json", map[string]string{"credentials": "credential", "releases": ""}); err != nil {
+	if err := read("strict-files.json", map[string]string{"releases": ""}); err != nil {
 		return nil, err
-	}
-	// More record bodies in the same form, as many files as there are.
-	mutants, err := filepath.Glob(filepath.Join(dir, "strict-mutants-*.json"))
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(mutants)
-	for _, f := range mutants {
-		if err := read(filepath.Base(f), map[string]string{"records": "record"}); err != nil {
-			return nil, err
-		}
-	}
-	// The bodies of records v2, which the others read, from the cases of
-	// the state's vectors, when the directory has them.
-	data, err := os.ReadFile(filepath.Join(dir, "v2-records.json"))
-	if errors.Is(err, fs.ErrNotExist) {
-		return out, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var v2 struct {
-		Cases []struct {
-			Records []Record `json:"records"`
-		} `json:"cases"`
-	}
-	if err := json.Unmarshal(data, &v2); err != nil {
-		return nil, fmt.Errorf("v2-records.json: %w", err)
-	}
-	for _, c := range v2.Cases {
-		for _, r := range c.Records {
-			out = append(out, Case{Kind: "record", Body: r.Body})
-		}
 	}
 	return out, nil
-}
-
-// setSources reads every record set of the interop vectors: a file with a
-// group_ca and records, or a list of such cases, alone or under "cases".
-// The records of a set's "later" go with it, so the set holds both.
-func setSources(dir string) ([]setSource, error) {
-	files, err := filepath.Glob(filepath.Join(dir, "*.json"))
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(files)
-	type raw struct {
-		Name    string   `json:"name"`
-		GroupCA []byte   `json:"group_ca"`
-		Records []Record `json:"records"`
-		Later   []Record `json:"later"`
-	}
-	var out []setSource
-	add := func(name string, r raw) {
-		if len(r.GroupCA) == 0 || len(r.Records) == 0 {
-			return
-		}
-		out = append(out, setSource{name: name, ca: r.GroupCA, records: append(r.Records, r.Later...)})
-	}
-	for _, f := range files {
-		data, err := os.ReadFile(f)
-		if err != nil {
-			return nil, err
-		}
-		base := strings.TrimSuffix(filepath.Base(f), ".json")
-		var one raw
-		if json.Unmarshal(data, &one) == nil {
-			add(base, one)
-		}
-		var many struct {
-			Cases []raw `json:"cases"`
-		}
-		if json.Unmarshal(data, &many) == nil {
-			for _, c := range many.Cases {
-				add(base+"/"+c.Name, c)
-			}
-		}
-		var list []raw
-		if json.Unmarshal(data, &list) == nil {
-			for _, c := range list {
-				add(base+"/"+c.Name, c)
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("%s: no record sets", dir)
-	}
-	return out, nil
-}
-
-// keysOf returns every key hash the records' bodies name, sorted: the keys
-// whose state a set's verdict reports.
-func keysOf(rs []Record) [][]byte {
-	seen := map[string]bool{}
-	for _, r := range rs {
-		var b struct {
-			Key   []byte   `json:"key"`
-			Admin []byte   `json:"admin"`
-			Keys  [][]byte `json:"keys"`
-			Keep  [][]byte `json:"keep"`
-		}
-		if json.Unmarshal(r.Body, &b) != nil {
-			continue
-		}
-		for _, k := range append(append([][]byte{b.Key, b.Admin}, b.Keys...), b.Keep...) {
-			if len(k) == 32 {
-				seen[string(k)] = true
-			}
-		}
-	}
-	out := make([][]byte, 0, len(seen))
-	for k := range seen {
-		out = append(out, []byte(k))
-	}
-	sort.Slice(out, func(i, j int) bool { return bytes.Compare(out[i], out[j]) < 0 })
-	return out
 }
 
 // maxSeed is the size of the largest body the corpus changes.
 const maxSeed = 9 << 10
 
-// generate returns the corpus: every seed body as it is, n changed bodies
-// and sets record sets, from the seed.
-func generate(dir string, seed uint64, n, sets int) ([]Case, error) {
+// generate returns the corpus: every seed body as it is and n changed
+// bodies, from the seed.
+func generate(dir string, seed uint64, n int) ([]Case, error) {
 	base, err := seeds(dir)
-	if err != nil {
-		return nil, err
-	}
-	srcs, err := setSources(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -288,66 +149,7 @@ func generate(dir string, seed uint64, n, sets int) ([]Case, error) {
 		seen[key] = true
 		out = append(out, Case{Kind: c.Kind, Body: body})
 	}
-	// Every set as it is, reversed and in two other orders: what a set
-	// decides must not depend on the order its records come in.
-	for _, s := range srcs {
-		out = append(out, Case{Kind: "set", CA: s.ca, Records: s.records, Keys: keysOf(s.records)})
-		reversed := slices.Clone(s.records)
-		slices.Reverse(reversed)
-		out = append(out, Case{Kind: "set", CA: s.ca, Records: reversed, Keys: keysOf(s.records)})
-		for range 2 {
-			rs := slices.Clone(s.records)
-			r.Shuffle(len(rs), func(i, j int) { rs[i], rs[j] = rs[j], rs[i] })
-			out = append(out, Case{Kind: "set", CA: s.ca, Records: rs, Keys: keysOf(s.records)})
-		}
-	}
-	for i := 0; i < sets; i++ {
-		s := srcs[r.IntN(len(srcs))]
-		out = append(out, m.set(s))
-	}
 	return out, nil
-}
-
-// set returns a changed copy of a record set: some of its records, in
-// another order, some twice, some with their chain or signature changed.
-func (m mutator) set(s setSource) Case {
-	keep := []float64{1, 1, 0.9, 0.7, 0.5}[m.r.IntN(5)]
-	var rs []Record
-	for _, rec := range s.records {
-		if m.r.Float64() < keep {
-			rs = append(rs, rec)
-		}
-	}
-	m.r.Shuffle(len(rs), func(i, j int) { rs[i], rs[j] = rs[j], rs[i] })
-	if len(rs) > 0 && m.r.IntN(4) == 0 {
-		rs = append(rs, rs[m.r.IntN(len(rs))])
-	}
-	if len(rs) > 0 && m.r.IntN(6) == 0 {
-		i := m.r.IntN(len(rs))
-		c := rs[i]
-		switch m.r.IntN(4) {
-		case 0:
-			c.Chain = nil
-		case 1:
-			c.Sig = flip(m.r, c.Sig)
-		case 2:
-			c.Body = flip(m.r, c.Body)
-		default:
-			// Another record's signature.
-			c.Sig = rs[m.r.IntN(len(rs))].Sig
-		}
-		rs[i] = c
-	}
-	return Case{Kind: "set", CA: s.ca, Records: rs, Keys: keysOf(s.records)}
-}
-
-func flip(r *rand.Rand, b []byte) []byte {
-	if len(b) == 0 {
-		return b
-	}
-	out := append([]byte{}, b...)
-	out[r.IntN(len(out))] ^= byte(1 << r.IntN(8))
-	return out
 }
 
 // writeCorpus writes the cases one to a line.
@@ -393,8 +195,8 @@ var b64 = base64.StdEncoding
 
 // fuzzTargets names the cargo fuzz target of each kind of body.
 var fuzzTargets = map[string]string{
-	"record": "record_body", "command": "command", "credential": "credential", "manifest": "wire",
-	"keys": "release", "release": "release", "channel": "release",
+	"manifest": "wire",
+	"keys":     "release", "release": "release", "channel": "release",
 }
 
 // writeSeeds writes every seed body to out/<target>/<n>.
@@ -426,7 +228,7 @@ func writeSeeds(dir, out string) error {
 // writeFormatSeeds writes the seeds of the 0.6 readers' targets from the
 // vectors of testdata/format: sheet (each sheet's text and QR code, and the
 // inputs read and refused), yubikey_object (the objects sealed and
-// refused), welcome_fields (the Welcome a good tag covers) and
+// refused), command (the commands and orders of wave4.json), welcome_fields (the Welcome a good tag covers) and
 // welcome_parts (that Welcome with its length in front, then the `records`
 // frame of frames.json once for each part it announces, each with a step
 // of one second and its length; the target tries them in both orders).
@@ -461,7 +263,11 @@ func writeFormatSeeds(dir string, out string) error {
 			Frame string `json:"frame"`
 		} `json:"take"`
 	}
-	for name, v := range map[string]any{"sheet.json": &sheet, "messages3.json": &msgs, "frames.json": &frames} {
+	var wave4 struct {
+		Commands []struct{ Envelope string } `json:"commands"`
+		Orders   []struct{ Orders string }   `json:"orders"`
+	}
+	for name, v := range map[string]any{"sheet.json": &sheet, "messages3.json": &msgs, "frames.json": &frames, "wave4.json": &wave4} {
 		if err := load(name, v); err != nil {
 			return err
 		}
@@ -484,6 +290,20 @@ func writeFormatSeeds(dir string, out string) error {
 			return err
 		}
 		add("yubikey_object", b)
+	}
+	for _, c := range wave4.Commands {
+		b, err := hex.DecodeString(c.Envelope)
+		if err != nil {
+			return err
+		}
+		add("command", b)
+	}
+	for _, o := range wave4.Orders {
+		b, err := hex.DecodeString(o.Orders)
+		if err != nil {
+			return err
+		}
+		add("command", b)
 	}
 	var part []byte
 	for _, f := range frames.Take {
@@ -531,21 +351,10 @@ func writeFormatSeeds(dir string, out string) error {
 }
 
 // writeAPISeeds writes the seeds of the cargo fuzz target api, requests to
-// the core's entry point (docs/core-api.md): each case of v2-records.json
-// as the arguments of evaluate, and of evaluate_saved with a secret, the
-// version, and the first 100 record bodies for check_body and
-// canonicalize, and each chain of member-chains.json for check_member.
+// the core's entry point (docs/core-api.md): the version, each body of the
+// corpus's seeds of a kind parse_body reads, and a few invitations'
+// shapes for read_invite.
 func writeAPISeeds(dir, out string, base []Case) error {
-	data, err := os.ReadFile(filepath.Join(dir, "v2-records.json"))
-	if err != nil {
-		return err
-	}
-	var v struct {
-		Cases []map[string]json.RawMessage `json:"cases"`
-	}
-	if err := json.Unmarshal(data, &v); err != nil {
-		return fmt.Errorf("v2-records.json: %w", err)
-	}
 	var reqs [][]byte
 	add := func(op string, args any) error {
 		b, err := json.Marshal(map[string]any{"abi": 1, "op": op, "args": args})
@@ -558,51 +367,19 @@ func writeAPISeeds(dir, out string, base []Case) error {
 	if err := add("version", nil); err != nil {
 		return err
 	}
-	for _, c := range v.Cases {
-		args := map[string]json.RawMessage{}
-		for _, k := range []string{"group_ca", "group", "now_ms", "time_unknown", "first_seen", "records"} {
-			if c[k] != nil {
-				args[k] = c[k]
-			}
-		}
-		if err := add("evaluate", args); err != nil {
-			return err
-		}
-		args["secret"] = json.RawMessage(`"c2VjcmV0IG9mIHRoZSBtZW1iZXIhIQ=="`)
-		if err := add("evaluate_saved", args); err != nil {
-			return err
-		}
-	}
-	bodies := 0
+	bodies := map[string]int{}
 	for _, c := range base {
-		if c.Kind != "record" || len(c.Body) > maxSeed || bodies >= 100 {
+		if len(c.Body) > maxSeed || bodies[c.Kind] >= 50 {
 			continue
 		}
-		bodies++
-		body := map[string][]byte{"body": c.Body}
-		if err := add("check_body", body); err != nil {
-			return err
-		}
-		if err := add("canonicalize", body); err != nil {
+		bodies[c.Kind]++
+		if err := add("parse_body", map[string]any{"kind": c.Kind, "body": c.Body}); err != nil {
 			return err
 		}
 	}
-	chains, err := os.ReadFile(filepath.Join(dir, "member-chains.json"))
-	if err != nil {
-		return err
-	}
-	var mc struct {
-		Cases []map[string]json.RawMessage `json:"cases"`
-	}
-	if err := json.Unmarshal(chains, &mc); err != nil {
-		return fmt.Errorf("member-chains.json: %w", err)
-	}
-	for _, c := range mc.Cases {
-		args := map[string]json.RawMessage{}
-		for _, k := range []string{"chain", "trusted", "usage", "now_ms"} {
-			args[k] = c[k]
-		}
-		if err := add("check_member", args); err != nil {
+	// Invitations: a few shapes, the corpus's mutations do the rest.
+	for _, text := range []string{"cbb://join#", "cbb://join#oA", "cbb://join#pAFQ", "cbb://invite#e30"} {
+		if err := add("read_invite", map[string]string{"text": text}); err != nil {
 			return err
 		}
 	}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The bodies of records v3 (format-0.6 section 4): their fields as Rust
+//! The bodies of records v3 (format section 4): their fields as Rust
 //! types, the checks of each field's row, and their encoding and reading
 //! on the format's codec.
 
@@ -345,7 +345,7 @@ impl Device {
     }
 }
 
-/// The fields of settings (section 4.5); a field at its default is 0 here
+/// The fields of settings (section 4.4); a field at its default is 0 here
 /// and left out of the encoding.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Settings {

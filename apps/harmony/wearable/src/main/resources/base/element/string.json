@@ -8,7 +8,7 @@
     {"name": "app_name", "value": "CBB"},
     {"name": "ask_actions_off", "value": "Turn every quick action off on %1$s?"},
     {"name": "ask_away_off", "value": "Turn sync away from home off on %1$s?"},
-    {"name": "ask_freeze", "value": "Freeze %1$s? It stays an admin in name, but nothing it signs counts until the root unfreezes it."},
+    {"name": "ask_freeze", "value": "Freeze %1$s? It stays an admin in name, but nothing it signs counts until the main device unfreezes it."},
     {"name": "ask_paste_off", "value": "Turn remote paste off on %1$s?"},
     {"name": "ask_remove", "value": "Remove %1$s from the group?"},
     {"name": "away", "value": "Everywhere"},
