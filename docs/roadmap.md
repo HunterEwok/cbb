@@ -138,7 +138,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     their phone's collections as sections. See "Collections" below.
 - **35.** The review of all the documentation against the code for 0.6: in progress.
 - **42.** **A simpler protocol for the group's authority**, so that fewer of its rules can be
-    read two ways ([protocol.md](protocol.md), section 10; [records-v2.md](records-v2.md)).
+    read two ways ([protocol.md](protocol.md), section 10).
     Done in 0.6, so that 0.7 does not change the core, without a migration from `v:1` (groups
     made before are set up again):
     1. records `v:2`: the signer inside the body, powers written down, each signer's records

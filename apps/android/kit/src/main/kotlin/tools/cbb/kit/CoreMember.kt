@@ -534,7 +534,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     private val signing = mutableListOf<SignFn>()
 
     // The root's own records (cbb_member_manage, docs/protocol.md, section 10,
-    // "Handing the group over" and "The recovery key"): the core builds and
+    // "Who signs what" and "The recovery key"): the core builds and
     // checks them, signs them with the root key public through sign, adds
     // them and sends them to every member.
 

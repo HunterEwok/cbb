@@ -2975,6 +2975,10 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The specification of the records of 0.5 (`docs/records-v2.md`, and the part of
+  `docs/protocol.md`, section 10, that described them); section 10 now gives for the records of
+  0.6 who signs what, the admins and watches, the hubs table, the copies setting, voiding two
+  histories, stopping the exchange and the state.
 - The takeover claims of 0.5 from the status and the apps: `cbb status`, the computer and Mac
   apps no longer have lines for an admin's claim to take the group over, and `control.Status`
   has no `claims` or `taken_over_by`; the apps say no reason `taken_over`, `cert_expired` or

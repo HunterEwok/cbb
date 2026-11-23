@@ -207,7 +207,7 @@ which the feature `tunnel` builds into the Rust core's library (`ffi/bind.sh` bu
 every app); `cargo test --workspace` and the service tests (`TestFFIPhoneAway`,
 `TestFFIPhoneHub`) run it.
 
-The group rules of records `v:2` (docs/records-v2.md) reach the phones from the Rust core:
+The group rules of the records of 0.6 (docs/protocol.md, section 10) reach the phones from the Rust core:
 `ffi/` exports the core's one entry point (`cbb_core::api`, docs/core-api.md) as the C
 functions of `ffi/include/cbb_core.h`, which the Swift kit links as its module `CCbbCore`
 and the Kotlin kit calls through JNA (`Core.swift`, `Core.kt`). Its `bind.sh` builds the
