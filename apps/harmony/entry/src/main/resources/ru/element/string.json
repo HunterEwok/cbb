@@ -315,7 +315,7 @@
     {"name": "settings_group", "value": "Группа"},
     {"name": "settings_group_tag", "value": "Группа"},
     {"name": "settings_key", "value": "Ключ"},
-    {"name": "settings_key_level", "value": "Какие ключи может хранить администратор"},
+    {"name": "settings_key_level", "value": "Ключи администраторов"},
     {"name": "settings_key_level_below", "value": "У некоторых администраторов ключи слабее; они остаются, пока их не удалят"},
     {"name": "settings_key_tee", "value": "В защищённом элементе (HUKS)"},
     {"name": "settings_language", "value": "Язык"},

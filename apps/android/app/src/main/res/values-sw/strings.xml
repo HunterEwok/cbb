@@ -208,7 +208,7 @@
     <string name="join_scan_hint">Kwenye simu ya kikundi, gusa + kisha changanua msimbo inaoonyesha, au andika tarakimu sita zilizo chini yake. Weka simu zote mbili kwenye mtandao mmoja.</string>
     <string name="join_title">Jiunge na kikundi</string>
     <string name="join_tv">Jiunge na kikundi cha simu</string>
-    <string name="join_tv_hint">TV hii inajiunga na kikundi cha simu yako: inaonyesha msimbo wa QR, na simu inauchanganua.</string>
+    <string name="join_tv_hint">Kwenye kifaa cha kikundi, fungua dirisha la kuoanisha: gusa + huko. Kisha andika tarakimu sita zinazoonyeshwa.</string>
     <string name="key_guard_weak">Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</string>
     <string name="key_level_body">Vifaa vipi vinaweza kuwa wasimamizi na vitovu vya kikundi. Funguo zilizo kwenye maunzi haziondoki kwenye kifaa kamwe; yeyote anayepata ufunguo ulio kwenye faili anaweza kuunakili. Wasimamizi walio tayari kwenye kikundi wanabaki hadi uwaondoe.</string>
     <string name="key_level_files">Funguo pia kwenye faili</string>
@@ -454,7 +454,6 @@
     <string name="root_changed_title">Kifaa kikuu cha kikundi kimebadilika</string>
     <string name="save">Hifadhi</string>
     <string name="saved_to_gallery">Imehifadhiwa kwenye matunzio, katika albamu CBB.</string>
-    <string name="scan_code">Changanua msimbo</string>
     <string name="search_devices">Tafuta vifaa</string>
     <string name="send">Tuma</string>
     <string name="send_copy">Tuma nilichonakili</string>

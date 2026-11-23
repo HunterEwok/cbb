@@ -315,7 +315,7 @@
     {"name": "settings_group", "value": "群组"},
     {"name": "settings_group_tag", "value": "群组"},
     {"name": "settings_key", "value": "密钥"},
-    {"name": "settings_key_level", "value": "管理员可保存的密钥"},
+    {"name": "settings_key_level", "value": "管理员密钥"},
     {"name": "settings_key_level_below", "value": "部分管理员的密钥较弱；在被移除之前他们仍会保留"},
     {"name": "settings_key_tee", "value": "在安全元件中（HUKS）"},
     {"name": "settings_language", "value": "语言"},

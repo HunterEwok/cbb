@@ -208,7 +208,7 @@
     <string name="join_scan_hint">En un teléfono del grupo, toca + y escanea el código que muestra, o escribe los seis dígitos que hay debajo. Mantén ambos teléfonos en la misma red.</string>
     <string name="join_title">Unirse a un grupo</string>
     <string name="join_tv">Unirse al grupo de un teléfono</string>
-    <string name="join_tv_hint">Este televisor se une al grupo de tu teléfono: muestra un código QR y el teléfono lo escanea.</string>
+    <string name="join_tv_hint">En un dispositivo del grupo, abra una ventana de emparejamiento: toque + allí. Luego escriba los seis dígitos que muestra.</string>
     <string name="key_guard_weak">Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</string>
     <string name="key_level_body">Qué dispositivos pueden ser administradores y hubs del grupo. Las claves en hardware nunca salen del dispositivo; quien consiga una clave en un archivo puede copiarla. Los administradores que ya están en el grupo siguen hasta que los quites.</string>
     <string name="key_level_files">Claves también en archivos</string>
@@ -454,7 +454,6 @@
     <string name="root_changed_title">El dispositivo principal del grupo cambió</string>
     <string name="save">Guardar</string>
     <string name="saved_to_gallery">Guardado en la galería, en el álbum CBB.</string>
-    <string name="scan_code">Escanear un código</string>
     <string name="search_devices">Buscar dispositivos</string>
     <string name="send">Enviar</string>
     <string name="send_copy">Enviar lo que copié</string>

@@ -208,7 +208,7 @@
     <string name="join_scan_hint">على هاتف من المجموعة، اضغط + وامسح الرمز الذي يعرضه، أو اكتب الأرقام الستة التي تحته. أبقِ الهاتفين على الشبكة نفسها.</string>
     <string name="join_title">الانضمام إلى مجموعة</string>
     <string name="join_tv">الانضمام إلى مجموعة هاتف</string>
-    <string name="join_tv_hint">ينضم هذا التلفاز إلى مجموعة هاتفك: يعرض رمز QR، ويمسحه الهاتف.</string>
+    <string name="join_tv_hint">على جهاز من المجموعة، افتح نافذة الاقتران: اضغط + هناك. ثم اكتب الأرقام الستة التي تعرضها.</string>
     <string name="key_guard_weak">ليس لهذا الجهاز شريحة آمنة للمفاتيح أو مستشعر موثوق للبصمة أو للوجه: فهو كجهاز رئيسي للمجموعة يحميها أقل من هاتف لديه الاثنان.</string>
     <string name="key_level_body">أيّ الأجهزة يمكن أن تكون مشرفي المجموعة ومحاورها. المفاتيح في العتاد لا تغادر الجهاز أبدًا؛ ومن يحصل على مفتاح في ملف يمكنه نسخه. يبقى المشرفون الموجودون في المجموعة حتى تزيلهم.</string>
     <string name="key_level_files">المفاتيح في الملفات أيضًا</string>
@@ -454,7 +454,6 @@
     <string name="root_changed_title">تغيّر الجهاز الرئيسي للمجموعة</string>
     <string name="save">حفظ</string>
     <string name="saved_to_gallery">حُفظ في المعرض، في الألبوم CBB.</string>
-    <string name="scan_code">مسح رمز</string>
     <string name="search_devices">البحث في الأجهزة</string>
     <string name="send">إرسال</string>
     <string name="send_copy">إرسال ما نسخته</string>

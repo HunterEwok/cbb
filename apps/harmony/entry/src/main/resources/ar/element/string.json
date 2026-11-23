@@ -315,7 +315,7 @@
     {"name": "settings_group", "value": "المجموعة"},
     {"name": "settings_group_tag", "value": "المجموعة"},
     {"name": "settings_key", "value": "المفتاح"},
-    {"name": "settings_key_level", "value": "المفاتيح التي يجوز للمشرف حفظها"},
+    {"name": "settings_key_level", "value": "مفاتيح المشرفين"},
     {"name": "settings_key_level_below", "value": "بعض المشرفين يحفظون مفاتيح أضعف؛ ويبقون حتى تتم إزالتهم"},
     {"name": "settings_key_tee", "value": "في العنصر الآمن (HUKS)"},
     {"name": "settings_language", "value": "اللغة"},

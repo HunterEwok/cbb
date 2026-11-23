@@ -207,7 +207,7 @@ they look, so both apps are built to the same plan.
    on in debug builds, and the launch argument `ShowErrorDetails` sets it too; Android takes the
    extra in debug builds only, since any app can start the activity with one).
    The advanced ones: why it does not sync (below), away from home (where it stands and the
-   blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Security level": root,
+   blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Admin keys": root,
    admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
    two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
    away from home is turned on by the globe on Home (docs/design.md, "Sync away from
@@ -844,8 +844,9 @@ its banner. It needs no touch screen and no camera, and every control takes the 
 focus, with a ring in the accent colour around the focused one. The app tells a TV by
 `UiModeManager` and then differs from a phone in a few ways:
 
-- **Joining.** The start screen offers only to join a phone's group: the TV shows its QR
-  code and an admin phone scans it in Add a device, so nothing is typed on the TV. It joins
+- **Joining.** The start screen offers only to join a phone's group: an admin phone opens a
+  pairing window in Add a device, and the TV, which has no camera, takes its six digits from
+  the remote (docs/protocol.md, section 6). It joins
   as a plain member, without an admin key, as a TV has no fingerprint or face to guard one;
   its hello says `tv`.
 - **Receive only.** It starts in the receive sync mode and never sends copies of its own:

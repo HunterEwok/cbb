@@ -26,6 +26,11 @@ with 0.5 is set up again once. The details follow.
   main device changed, with "This wasn't me", and Aurora's "OK" on that card is kept by the
   member (`root_change_seen`), so it does not come back when the app starts again
   ([apps](docs/apps.md), "Notices").
+- Small fixes from a review of the apps' screens: the HarmonyOS app shows "Show error details"
+  only after seven taps on the version, as the other phones do; the "+" menu's item that opens
+  the pairing window is "Add a device" (it said "Scan a code"); the Android TV's start screen
+  says to type a pairing window's six digits, since nothing draws a code on the TV; and the
+  setting of which keys may be admins is "Admin keys" in every phone app.
 - The Aurora app has the blind relay page the other phones have (Settings, "Blind relay"):
   where the phone stands at the group's relay, and on the root the relay's address and key,
   set after what a relay learns, and "Renew the group's keys for sync away from home" while

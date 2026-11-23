@@ -1614,6 +1614,10 @@
         <translation>Работать как Bluetooth-клавиатура</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>Ключи администраторов</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>Дополнительные настройки</translation>
     </message>
@@ -1688,10 +1692,6 @@
     <message>
         <source>Key fingerprint</source>
         <translation>Отпечаток ключа</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>Какие ключи может хранить администратор</translation>
     </message>
     <message>
         <source>Lab</source>

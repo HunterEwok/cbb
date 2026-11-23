@@ -315,7 +315,7 @@
     {"name": "settings_group", "value": "समूह"},
     {"name": "settings_group_tag", "value": "समूह"},
     {"name": "settings_key", "value": "कुंजी"},
-    {"name": "settings_key_level", "value": "व्यवस्थापक कौन-सी कुंजियाँ रख सकता है"},
+    {"name": "settings_key_level", "value": "एडमिन कुंजियाँ"},
     {"name": "settings_key_level_below", "value": "कुछ व्यवस्थापकों की कुंजियाँ कमज़ोर हैं; हटाए जाने तक वे बने रहते हैं"},
     {"name": "settings_key_tee", "value": "सुरक्षित एलिमेंट में (HUKS)"},
     {"name": "settings_language", "value": "भाषा"},

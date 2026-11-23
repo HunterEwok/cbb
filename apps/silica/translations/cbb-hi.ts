@@ -1614,6 +1614,10 @@
         <translation>ब्लूटूथ कीबोर्ड की तरह काम करें</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>एडमिन कुंजियाँ</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>उन्नत सेटिंग्स</translation>
     </message>
@@ -1688,10 +1692,6 @@
     <message>
         <source>Key fingerprint</source>
         <translation>कुंजी फ़िंगरप्रिंट</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>व्यवस्थापक कौन-सी कुंजियाँ रख सकता है</translation>
     </message>
     <message>
         <source>Lab</source>

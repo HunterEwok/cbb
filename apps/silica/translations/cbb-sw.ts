@@ -1614,6 +1614,10 @@
         <translation>Fanya kazi kama kibodi ya Bluetooth</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>Funguo za msimamizi</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>Mipangilio ya kina</translation>
     </message>
@@ -1688,10 +1692,6 @@
     <message>
         <source>Key fingerprint</source>
         <translation>Alama ya ufunguo</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>Funguo ambazo msimamizi anaweza kuweka</translation>
     </message>
     <message>
         <source>Lab</source>

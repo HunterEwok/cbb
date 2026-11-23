@@ -208,7 +208,7 @@
     <string name="join_scan_hint">在群组中的一部手机上点按 +，扫描它显示的码，或输入码下方的六位数字。请让两部手机连接同一网络。</string>
     <string name="join_title">加入群组</string>
     <string name="join_tv">加入手机的群组</string>
-    <string name="join_tv_hint">这台电视加入你手机的群组：它显示一个二维码，由手机扫描。</string>
+    <string name="join_tv_hint">在群组中的某台设备上打开配对窗口：在那里点按 +。然后输入它显示的六位数字。</string>
     <string name="key_guard_weak">此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</string>
     <string name="key_level_body">哪些设备可以成为群组的管理员和中心节点。硬件中的密钥永远不会离开设备；任何获得文件中密钥的人都能复制它。已在群组中的管理员会保留，直到你移除他们。</string>
     <string name="key_level_files">密钥也可在文件中</string>
@@ -454,7 +454,6 @@
     <string name="root_changed_title">群组的主设备已更换</string>
     <string name="save">保存</string>
     <string name="saved_to_gallery">已保存到图库的 CBB 相册中。</string>
-    <string name="scan_code">扫描代码</string>
     <string name="search_devices">搜索设备</string>
     <string name="send">发送</string>
     <string name="send_copy">发送我复制的内容</string>

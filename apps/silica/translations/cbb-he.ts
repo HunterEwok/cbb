@@ -1614,6 +1614,10 @@
         <translation>שימוש כמקלדת בלוטות'</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>מפתחות מנהל</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>הגדרות מתקדמות</translation>
     </message>
@@ -1688,10 +1692,6 @@
     <message>
         <source>Key fingerprint</source>
         <translation>טביעת האצבע של המפתח</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>מפתחות שמנהל רשאי לשמור</translation>
     </message>
     <message>
         <source>Lab</source>

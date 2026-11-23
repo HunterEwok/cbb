@@ -149,7 +149,7 @@ struct AddMenu: View {
         if model.isAdmin {
             Menu {
                 Button { adding = true } label: {
-                    Label { Text("Scan a code") } icon: { Image(systemName: "qrcode.viewfinder") }
+                    Label { Text("Add a device") } icon: { Image(systemName: "qrcode.viewfinder") }
                 }
                 Button { inviting = true } label: {
                     Label { Text("Send an invitation") } icon: { Image(systemName: "envelope") }

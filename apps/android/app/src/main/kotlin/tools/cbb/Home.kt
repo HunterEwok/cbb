@@ -295,7 +295,7 @@ private fun TopBar(model: AppModel, layout: DeviceLayout, layouts: List<DeviceLa
             Box {
                 IconText("+", stringResource(R.string.add_device)) { adding = true }
                 DropdownMenu(expanded = adding, onDismissRequest = { adding = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.scan_code)) }, onClick = {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.add_device)) }, onClick = {
                         adding = false
                         open(HomePage.ADD)
                     })

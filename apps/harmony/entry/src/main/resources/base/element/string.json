@@ -316,7 +316,7 @@
     {"name": "settings_group", "value": "Group"},
     {"name": "settings_group_tag", "value": "Group"},
     {"name": "settings_key", "value": "Key"},
-    {"name": "settings_key_level", "value": "Keys an admin may keep"},
+    {"name": "settings_key_level", "value": "Admin keys"},
     {"name": "settings_key_level_below", "value": "Some admins keep weaker keys; they stay until removed"},
     {"name": "settings_key_tee", "value": "In the secure element (HUKS)"},
     {"name": "settings_language", "value": "Language"},

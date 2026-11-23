@@ -317,7 +317,7 @@ class GroupTest {
     /** Admits a member in no group from Home's + menu, through the phone's pairing window. */
     private fun admit(dev: String) {
         compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
-        compose.onNodeWithText(str(R.string.scan_code)).performClick()
+        compose.onNodeWithText(str(R.string.add_device)).performClick()
         joinWindow(dev)
         until(30, "$dev in the phone's devices") { model.group.devices.any { it.name == dev } }
     }

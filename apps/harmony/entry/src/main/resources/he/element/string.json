@@ -315,7 +315,7 @@
     {"name": "settings_group", "value": "קבוצה"},
     {"name": "settings_group_tag", "value": "קבוצה"},
     {"name": "settings_key", "value": "מפתח"},
-    {"name": "settings_key_level", "value": "מפתחות שמנהל רשאי לשמור"},
+    {"name": "settings_key_level", "value": "מפתחות מנהל"},
     {"name": "settings_key_level_below", "value": "לחלק מהמנהלים יש מפתחות חלשים יותר; הם נשארים עד שיוסרו"},
     {"name": "settings_key_tee", "value": "ברכיב המאובטח (HUKS)"},
     {"name": "settings_language", "value": "שפה"},

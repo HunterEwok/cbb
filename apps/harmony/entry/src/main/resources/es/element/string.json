@@ -315,7 +315,7 @@
     {"name": "settings_group", "value": "Grupo"},
     {"name": "settings_group_tag", "value": "Grupo"},
     {"name": "settings_key", "value": "Clave"},
-    {"name": "settings_key_level", "value": "Claves que puede guardar un administrador"},
+    {"name": "settings_key_level", "value": "Claves de administrador"},
     {"name": "settings_key_level_below", "value": "Algunos administradores guardan claves más débiles; siguen hasta que se eliminen"},
     {"name": "settings_key_tee", "value": "En el elemento seguro (HUKS)"},
     {"name": "settings_language", "value": "Idioma"},

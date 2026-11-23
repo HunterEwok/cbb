@@ -188,7 +188,8 @@ private fun StartScreen(model: AppModel) {
         Text(stringResource(R.string.full_name), fontFamily = FontFamily.Monospace, color = palette.accent)
         Text(stringResource(R.string.tagline), textAlign = TextAlign.Center, color = palette.textDim)
         if (model.isTv) {
-            // A TV has no camera to scan a code: it shows its own, for the phone.
+            // A TV has no camera to scan a code: it types the six digits a
+            // pairing window shows.
             Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
             AccentButton(stringResource(R.string.join_tv), onClick = { model.startJoining() }, modifier = Modifier.widthIn(max = 480.dp))
             Text(stringResource(R.string.join_tv_hint), textAlign = TextAlign.Center, color = palette.textDim)

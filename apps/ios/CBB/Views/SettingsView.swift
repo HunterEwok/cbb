@@ -181,7 +181,7 @@ struct SettingsView: View {
                 Text("Keys in files too").tag(Records.levelFiles)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Security level")
+                    Text("Admin keys")
                     Text("Main device, admins, hubs").font(.caption).foregroundStyle(palette.textDim)
                 }
             }
@@ -590,7 +590,7 @@ struct SettingTip: Tip {
         message: Text("For a group without a hub: the devices meet at a relay. It cannot read the clipboard, but it sees which devices are online and talk to each other."))
     static let copyLifetime = SettingTip(id: "copyLifetime", title: Text("Copy lifetime"),
         message: Text("How long the latest copy shows as received, for the whole group. A secret also leaves the clipboard when its time is up."))
-    static let securityLevel = SettingTip(id: "securityLevel", title: Text("Security level"),
+    static let securityLevel = SettingTip(id: "securityLevel", title: Text("Admin keys"),
         message: Text("Which devices may be admins and hubs. Keys in hardware never leave the device; a key in a file can be copied."))
 }
 

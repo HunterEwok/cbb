@@ -1614,6 +1614,10 @@
         <translation>Actuar como teclado Bluetooth</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>Claves de administrador</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>Ajustes avanzados</translation>
     </message>
@@ -1688,10 +1692,6 @@
     <message>
         <source>Key fingerprint</source>
         <translation>Huella de la clave</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>Claves que puede guardar un administrador</translation>
     </message>
     <message>
         <source>Lab</source>

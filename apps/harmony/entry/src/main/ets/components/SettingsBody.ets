@@ -48,6 +48,9 @@ export struct SettingsBody {
   @Local core: string = '';
   @Local notify: boolean[] = [];
   @Local error: string = '';
+  // Taps on the version: seven show the switch for the error details, as
+  // on the other phones.
+  @Local taps: number = 0;
 
   aboutToAppear(): void {
     try {
@@ -158,10 +161,6 @@ export struct SettingsBody {
               })
           }
           .width('100%')
-
-          this.switchRow(t('settings_error_details'), t('settings_error_details_note'), app.errorDetails, (on: boolean) => {
-            app.setErrorDetails(on);
-          })
         }
 
         if (this.shows('notifications')) {
@@ -300,7 +299,21 @@ export struct SettingsBody {
 
         if (this.shows('about')) {
           this.section(t('settings_about'))
-          this.detail(t('settings_version'), AppStorage.get<string>('version') ?? '')
+          Row({ space: 8 }) {
+            Text(t('settings_version')).fontSize(13).fontColor($r('app.color.secondary')).width('35%')
+            Text(AppStorage.get<string>('version') ?? '').fontSize(13).fontColor($r('app.color.text')).layoutWeight(1)
+          }
+          .width('100%')
+          .onClick(() => {
+            this.taps++;
+          })
+          // Seven taps on the version show the error details switch, as the
+          // build number shows the developer options; it stays while on.
+          if (this.taps >= 7 || app.errorDetails) {
+            this.switchRow(t('settings_error_details'), t('settings_error_details_note'), app.errorDetails, (on: boolean) => {
+              app.setErrorDetails(on);
+            })
+          }
           this.detail(t('settings_core'), this.core)
           this.detail(t('settings_system'), osVersion())
           this.detail(t('settings_key'), t('settings_key_tee'))

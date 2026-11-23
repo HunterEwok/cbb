@@ -211,7 +211,7 @@
     <string name="join_scan_hint">On a phone of the group, tap + and scan the code it shows, or type the six digits under it. Keep both phones on the same network.</string>
     <string name="join_title">Join a group</string>
     <string name="join_tv">Join a phone\'s group</string>
-    <string name="join_tv_hint">This TV joins the group of your phone: it shows a QR code, and the phone scans it.</string>
+    <string name="join_tv_hint">On a device of the group, open a pairing window: tap + there. Then type the six digits it shows.</string>
     <string name="key_guard_weak">This device has no secure key chip or no strong fingerprint or face sensor: as the group\'s main device it guards the group less well than a phone that has both.</string>
     <string name="key_level_body">Which devices may be the group\'s admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.</string>
     <string name="key_level_files">Keys in files too</string>
@@ -457,7 +457,6 @@
     <string name="root_changed_title">The group\'s main device changed</string>
     <string name="save">Save</string>
     <string name="saved_to_gallery">Saved in the gallery, in the album CBB.</string>
-    <string name="scan_code">Scan a code</string>
     <string name="search_devices">Search devices</string>
     <string name="send">Send</string>
     <string name="send_copy">Send what I copied</string>

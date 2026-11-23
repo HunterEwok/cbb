@@ -208,7 +208,7 @@
     <string name="join_scan_hint">समूह के किसी फ़ोन पर + टैप करें और दिखाया गया कोड स्कैन करें, या उसके नीचे के छह अंक लिखें। दोनों फ़ोन एक ही नेटवर्क पर रखें।</string>
     <string name="join_title">समूह से जुड़ें</string>
     <string name="join_tv">किसी फ़ोन के समूह से जुड़ें</string>
-    <string name="join_tv_hint">यह टीवी आपके फ़ोन के समूह से जुड़ता है: यह एक QR कोड दिखाता है, और फ़ोन उसे स्कैन करता है।</string>
+    <string name="join_tv_hint">समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें: वहाँ + पर टैप करें। फिर वह जो छह अंक दिखाती है उन्हें टाइप करें।</string>
     <string name="key_guard_weak">इस डिवाइस में कुंजियों के लिए सुरक्षित चिप या भरोसेमंद फ़िंगरप्रिंट या चेहरा सेंसर नहीं है: समूह के मुख्य डिवाइस के रूप में यह समूह की रक्षा उस फ़ोन से कम करता है जिसमें दोनों हों।</string>
     <string name="key_level_body">कौन-से डिवाइस समूह के एडमिन और हब हो सकते हैं। हार्डवेयर में रखी कुंजियाँ डिवाइस से कभी बाहर नहीं जातीं; जिसे फ़ाइल में रखी कुंजी मिले वह उसे कॉपी कर सकता है। समूह में पहले से मौजूद एडमिन तब तक रहते हैं जब तक आप उन्हें न हटाएँ।</string>
     <string name="key_level_files">कुंजियाँ फ़ाइलों में भी</string>
@@ -454,7 +454,6 @@
     <string name="root_changed_title">समूह का मुख्य डिवाइस बदल गया</string>
     <string name="save">सहेजें</string>
     <string name="saved_to_gallery">गैलरी में, CBB एल्बम में सहेजा गया।</string>
-    <string name="scan_code">कोड स्कैन करें</string>
     <string name="search_devices">डिवाइस खोजें</string>
     <string name="send">भेजें</string>
     <string name="send_copy">मैंने जो कॉपी किया वह भेजें</string>

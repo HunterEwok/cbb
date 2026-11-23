@@ -1614,6 +1614,10 @@
         <translation>العمل كلوحة مفاتيح بلوتوث</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>مفاتيح المشرفين</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>إعدادات متقدمة</translation>
     </message>
@@ -1688,10 +1692,6 @@
     <message>
         <source>Key fingerprint</source>
         <translation>بصمة المفتاح</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>المفاتيح التي يجوز للمشرف حفظها</translation>
     </message>
     <message>
         <source>Lab</source>

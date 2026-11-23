@@ -124,7 +124,7 @@ Page {
             ComboBox {
                 id: level
                 visible: app.root && app.member.running
-                label: qsTr("Keys an admin may keep")
+                label: qsTr("Admin keys")
                 description: app.belowLevel.length > 0
                              ? qsTr("Some admins keep weaker keys; they stay until removed") : ""
                 property var levels: ["proven", "hardware", "files"]

@@ -1614,6 +1614,10 @@
         <translation>充当蓝牙键盘</translation>
     </message>
     <message>
+        <source>Admin keys</source>
+        <translation>管理员密钥</translation>
+    </message>
+    <message>
         <source>Advanced settings</source>
         <translation>高级设置</translation>
     </message>
@@ -1688,10 +1692,6 @@
     <message>
         <source>Key fingerprint</source>
         <translation>密钥指纹</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>管理员可保存的密钥</translation>
     </message>
     <message>
         <source>Lab</source>

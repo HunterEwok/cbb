@@ -315,7 +315,7 @@
     {"name": "settings_group", "value": "Kikundi"},
     {"name": "settings_group_tag", "value": "Kikundi"},
     {"name": "settings_key", "value": "Ufunguo"},
-    {"name": "settings_key_level", "value": "Funguo ambazo msimamizi anaweza kuweka"},
+    {"name": "settings_key_level", "value": "Funguo za msimamizi"},
     {"name": "settings_key_level_below", "value": "Baadhi ya wasimamizi wana funguo dhaifu zaidi; wanabaki hadi waondolewe"},
     {"name": "settings_key_tee", "value": "Kwenye kipengele salama (HUKS)"},
     {"name": "settings_language", "value": "Lugha"},
