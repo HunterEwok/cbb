@@ -683,8 +683,10 @@ jobs:
             # release tools sign with SLH-DSA-SHA2-128s, nearly all SHA-256,
             # and their packages take about 40 s here, but once ran 40 times
             # slower on another host while the rest ran as usual.
-            sysctl -n hw.model hw.ncpu
-            grep -E '^ +(Features|Structured Extended Features)' /var/run/dmesg.boot || true
+            # kern.vm_guest is kvm, and dmesg names KVMKVMKVM, when the
+            # machine runs under KVM rather than QEMU's emulation (TCG).
+            sysctl -n hw.model hw.ncpu kern.vm_guest
+            grep -E '^ *(Hypervisor:|Features|Structured Extended Features)' /var/run/dmesg.boot || true
             go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256 || true
             go test -timeout 25m ./... </dev/null
             # The desktop connector against X11 under Xvfb, as on Linux.
@@ -777,6 +779,9 @@ jobs:
             sh packaging/freebsd/firewall.sh hub-close
             sh packaging/freebsd/firewall.sh close
             if ipfw list | grep -qE 'to me (8764|51820)'; then echo "ipfw kept the rules" >&2; ipfw list; exit 1; fi
+      - name: how QEMU ran the machine (-enable-kvm or accel=kvm under KVM)
+        if: always()
+        run: ps -ww -o args= -C qemu-system-x86_64 || true
 
   openwrt:
     name: OpenWrt
