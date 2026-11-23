@@ -375,15 +375,3 @@ func writeAPISeeds(dir, out string, base []Case) error {
 	}
 	return nil
 }
-
-// readJSON reads the JSON file path into v.
-func readJSON(path string, v any) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(data, v); err != nil {
-		return fmt.Errorf("%s: %w", filepath.Base(path), err)
-	}
-	return nil
-}
