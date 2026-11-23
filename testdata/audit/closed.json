@@ -306,11 +306,6 @@
     "lang": "rust",
     "file": "core/src/vectors.rs",
     "name": "strict"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "strict_mutants"
    }
   ]
  },
@@ -1641,11 +1636,6 @@
     "lang": "go",
     "file": "internal/vless/vless_test.go",
     "name": "TestUserOfEachClient"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_commands"
    }
   ]
  },
@@ -2078,11 +2068,6 @@
   "id": "cbb-audit-71",
   "tests": [
    {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_commands"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testSyncsTheButtonAndCommands"
@@ -2459,8 +2444,13 @@
   "tests": [
    {
     "lang": "rust",
-    "file": "core/src/authority.rs",
-    "name": "v2_vectors"
+    "file": "core/src/records/tests/recovery.rs",
+    "name": "two_heads_at_one_seq_stop_the_group_for_good"
+   },
+   {
+    "lang": "rust",
+    "file": "core/src/records/tests/recovery.rs",
+    "name": "a_head_naming_an_earlier_root_is_void"
    }
   ]
  },
