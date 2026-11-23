@@ -26,6 +26,9 @@ func TestWaylandPaste(t *testing.T) {
 		t.Skip("set CBB_TEST_WAYLAND in a session with a compositor with virtual keyboards and foot")
 	}
 	if _, err := exec.LookPath("foot"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("foot is not installed")
+		}
 		t.Skip("foot is not installed")
 	}
 	w, err := OpenWayland(t.Logf)

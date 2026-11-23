@@ -553,6 +553,11 @@ these before the bench has run them.
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
 
+A test that needs something of its machine (an X server, a compositor, the IPv6 loopback, a
+tool) skips without it on a developer's machine and says why, but fails in CI, where that
+thing is set up on purpose: the environment variable `CI`, or the test's own switch
+(`CBB_TEST_IPV6=1`, `CBB_TEST_UINPUT=1`), turns the skip into a failure.
+
 ## Known failures
 
 A step that fails for a reason outside the project, shown with evidence, is not skipped: it

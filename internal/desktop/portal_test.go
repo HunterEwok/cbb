@@ -124,6 +124,9 @@ func startPortal(t *testing.T, version uint32) (*fakePortal, string) {
 func startBus(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("dbus-daemon"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("no dbus-daemon")
+		}
 		t.Skip("no dbus-daemon")
 	}
 	cmd := exec.Command("dbus-daemon", "--session", "--nofork", "--print-address=1", "--address=unix:dir="+t.TempDir())

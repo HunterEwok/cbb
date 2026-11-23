@@ -129,7 +129,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_PUSH_LIVE_REG` | the same test | The phone's push registration, base64, as the app's test row copies it (launch argument `-PushTestTools YES`). |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`); tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
-| `CBB_TEST_IPV6` | `cbb`'s tests | `1` makes the tests of the tunnel and the relay over IPv6 fail where the system has no IPv6 loopback, instead of skipping them; the bench sets it. |
+| `CBB_TEST_IPV6` | `cbb`'s tests | `1` makes the tests over IPv6 (the tunnel, the relay, the push service's dual-stack payer) fail where the system has no IPv6 loopback, instead of skipping them; CI and the bench set it. |
 | `CBB_TEST_RUST_SERVICE` | the Go end-to-end tests (`internal/service`) | The `cbb` binary the tests run as a Linux member with the default configuration, finding their peers by mDNS. |
 | `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (features `member` and `testhooks`, so it reads the tests' hooks): the Aurora app's joining and syncing with a software key. |
 | `CBB_REAL_FORWARDER` | `TestAwayThroughRealForwarder` | A forwarder on the internet, host:port (`cbb.tools:8764` for the project's): a Rust `cbb` hub registers with it and another, for which no UDP passes, reaches the hub over VLESS with XHTTP and syncs both ways, a check from a network that blocks WireGuard; without it the test is skipped. |
@@ -149,7 +149,6 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_DEAD_UDP` | the Rust service, in the service's tests | An address (host:port) that never answers, which replaces the hubs' UDP addresses, as on a network that blocks WireGuard, so that the tunnel goes over VLESS. Never set by hand. |
 | `CBB_FULL_SIZE` | the core's records tests | `1` runs the records' tests at real size too (minutes; CI's rust job sets it). |
 | `CBB_UPDATE_VECTORS` | the core's keyboard and push tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
-| `CBB_REQUIRE_IPV6` | cbb-push's tests | `1` makes the dual-stack payer test fail instead of skip on a machine without IPv6 loopback (`cargo test -p cbb-member pushd`). |
 | `CBB_ARCH` | the build of `cbb` in Rust (`packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
 | `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |
 | `CBB_TEAM` | `apps/ios/device.sh` | The Apple team that signs the iPhone app for your own phone, its 10-character ID; without it the script takes the Personal Team of the Apple ID signed in to Xcode. |

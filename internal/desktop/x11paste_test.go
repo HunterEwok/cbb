@@ -28,6 +28,9 @@ func TestX11Paste(t *testing.T) {
 		t.Skip("set CBB_TEST_X11 with an X server in DISPLAY and xterm installed")
 	}
 	if _, err := exec.LookPath("xterm"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("xterm is not installed")
+		}
 		t.Skip("xterm is not installed")
 	}
 	t.Setenv("WAYLAND_DISPLAY", "")

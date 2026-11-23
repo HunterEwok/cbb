@@ -480,10 +480,10 @@ fn an_ipv4_client_pays_as_its_own_address() {
     assert_eq!(payer_addr("2001:db8:1:2:3:4:5:6".parse().unwrap()), "2001:db8:1:2::".parse::<IpAddr>().unwrap());
     // On a dual-stack listener the kernel hands an IPv4 client over as
     // ::ffff:a.b.c.d; its payer is the IPv4 address. Where the machine has
-    // no IPv6 socket, there is nothing to check, unless CBB_REQUIRE_IPV6
-    // says the machine has one (the stands that run this check on purpose).
+    // no IPv6 socket, there is nothing to check, unless CBB_TEST_IPV6=1
+    // says the machine has one (CI and the bench).
     let skip = |why: &str| {
-        assert!(std::env::var_os("CBB_REQUIRE_IPV6").is_none(), "CBB_REQUIRE_IPV6 is set, but {why}");
+        assert!(std::env::var("CBB_TEST_IPV6").as_deref() != Ok("1"), "CBB_TEST_IPV6=1 is set, but {why}");
         eprintln!("an_ipv4_client_pays_as_its_own_address: skipped, {why}");
     };
     let Ok(l) = TcpListener::bind("[::]:0") else { return skip("no IPv6 socket") };

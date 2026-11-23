@@ -2916,6 +2916,7 @@ jobs:
     timeout-minutes: 45
     env:
       RUST_PARTS: 4
+      CBB_TEST_IPV6: "1" # the runner has the IPv6 loopback: its tests run, never skip
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
