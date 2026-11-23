@@ -44,7 +44,6 @@ pub mod api;
 pub mod arrange;
 #[cfg(feature = "web")]
 pub mod attest;
-pub mod authority;
 pub mod beacon;
 pub mod benchtime;
 pub mod blind;
@@ -57,13 +56,11 @@ pub mod commands;
 pub mod content;
 pub mod copies;
 pub mod copy;
-pub mod credential;
 pub mod error;
 pub mod format;
 #[cfg(feature = "fuzzing")]
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
-pub mod group;
 #[cfg(any(test, feature = "testkit"))]
 pub mod groupgen;
 pub mod hlc;
@@ -79,7 +76,6 @@ pub mod keystore;
 mod longrules;
 pub mod media;
 pub mod msg;
-pub mod pair;
 pub mod peer;
 #[cfg(test)]
 mod powerloss;

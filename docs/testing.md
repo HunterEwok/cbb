@@ -513,17 +513,16 @@ Miri cannot.
 ## Mutation testing
 
 Coverage says a line ran; mutation testing says whether a test would notice if it were wrong.
-The nightly workflow changes the records' code one place at a time (drops a check, turns `<`
+The nightly workflow changes the code one place at a time (drops a check, turns `<`
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
-`core/src/authority.rs` and `strict.rs`, in eight shards. A change that every test still passes is listed as missed, in the run's
+the strict form of signed bodies (`core/src/strict.rs`), in eight shards. A change that every test still passes is listed as missed, in the run's
 summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
-does not name (no new survivor, from the first day); the list holds the records' baseline of
+does not name (no new survivor, from the first day); the list holds the baseline of
 2026-11-11, and each of those gets a test or a note why it cannot matter.
 
 The service's readers of outside input already fail on a new one: `cargo mutants` on the
 control socket's messages (`member/src/control.rs`), the pairing window
-(`member/src/window.rs`), the server credentials (`core/src/credential.rs`) and the seals of
-the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
+(`member/src/window.rs`) and the seals of the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
 compares what lived with the known list, `tools/mutants/missed.txt`, line and column aside. A
 mutant on that list either changes nothing a caller can see (an equivalent mutant, with why
 in a comment) or lives in code that only Go's end-to-end tests reach, which `cargo mutants`
@@ -533,7 +532,7 @@ the tests now catch can leave the list.
 To run them locally:
 
 ```sh
-cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
+cargo mutants --in-place -p cbb-core -f core/src/strict.rs
 cargo mutants --in-place -p cbb-member -f member/src/control.rs -f member/src/window.rs
 tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
 ```

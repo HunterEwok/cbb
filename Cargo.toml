@@ -2,11 +2,10 @@
 # Copyright (C) 2026 HunterEwok
 
 # The Rust workspace: the core (core/), the member's program cbb (member/), the
-# core's C functions (ffi/), the firmware's network code (embassy/), the ring
-# stand-in (ring-shim/). The ESP32 firmware
+# core's C functions (ffi/), the ring stand-in (ring-shim/). The ESP32 firmware
 # (esp32/) and the fuzz targets (core/fuzz/) are workspaces of their own.
 [workspace]
-members = ["core", "embassy", "ffi", "member", "ring-shim", "tools/size"]
+members = ["core", "ffi", "member", "ring-shim", "tools/size"]
 exclude = ["esp32", "core/fuzz", "member/fuzz"]
 # A cargo build or run without -p or --workspace means the program cbb.
 default-members = ["member"]
@@ -25,7 +24,7 @@ panic = "abort"
 strip = true
 
 # The tests check signatures by the thousand (the record sets at the limits
-# in testdata/interop/v2-records.json); unoptimized elliptic curves make
+# that core/src/groupgen.rs builds); unoptimized elliptic curves make
 # that minutes instead of seconds. Only the dependencies: the crates of this
 # workspace still build as the tests want them, with overflow checks.
 [profile.dev.package."*"]

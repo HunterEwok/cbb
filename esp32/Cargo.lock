@@ -252,21 +252,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "cbb-embassy"
-version = "0.1.0"
-dependencies = [
- "cbb-core",
- "embassy-net",
- "embassy-time",
- "embedded-io-async 0.7.0",
-]
-
-[[package]]
 name = "cbb-esp32"
 version = "0.1.0"
 dependencies = [
  "cbb-core",
- "cbb-embassy",
  "embassy-executor",
  "embassy-futures",
  "embassy-net",

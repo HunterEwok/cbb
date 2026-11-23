@@ -444,31 +444,3 @@ fn vectors() {
         }
     }
 }
-
-/// testdata/interop/go-copy-checks.json, which Go's TestCopyCheckVectors
-/// writes: the copies a member takes by the group's records, the readers
-/// the records give, and the order of the hubs, a hub that only passes
-/// copies on last.
-#[test]
-fn go_copy_checks() {
-    let v: Value = serde_json::from_str(&std::fs::read_to_string(dir().join("go-copy-checks.json")).unwrap()).unwrap();
-    let ca = Cert::parse(&b64(&v["group_ca"])).unwrap();
-    let now = v["now_ms"].as_i64().unwrap();
-    let mut s = Records::new(&ca);
-    s.set_clock(move || now);
-    let rs: Vec<crate::authority::Record> = serde_json::from_value(v["records"].clone()).unwrap();
-    s.add_all(&rs);
-    let copies = v["copies"].as_array().unwrap();
-    assert!(copies.len() >= 8);
-    for c in copies {
-        let e: Sealed = serde_json::from_value(c["event"].clone()).unwrap();
-        let got = e.check(&s, now / 1000);
-        assert_eq!(got.is_ok(), c["ok"].as_bool().unwrap(), "{}: {got:?}", c["name"]);
-    }
-    let ids = |secret: bool| -> Vec<Value> {
-        crate::copy::readers(&s, secret).into_iter().map(|(id, _)| Value::from(id)).collect()
-    };
-    assert_eq!(Value::from(ids(false)), v["readers"]);
-    assert_eq!(Value::from(ids(true)), v["secret_readers"]);
-    assert_eq!(serde_json::to_value(s.hub_order()).unwrap(), v["hub_order"]);
-}

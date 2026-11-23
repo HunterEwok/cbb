@@ -2975,6 +2975,15 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The rest of the core's code of 0.5: the records of version 2 and their rules
+  (`cbb_core::authority`, `group`), the pairing of 0.5 (`cbb_core::pair`), the server
+  credentials on those records (`cbb_core::credential`), the JSON operations on them
+  (`evaluate`, `evaluate_saved`, `canonical_body`, `check_body`, `canonicalize`,
+  `check_member`, with the error codes `strict` and `rollback`), their fuzz targets
+  (`record_body`, `credential`), their kinds in the differential run and their vectors (D-130).
+- The ESP32 firmware's pairing of 0.5 (its `pair` command and the crate `embassy/` with
+  `esp32-on-linux`): it could join only a group of 0.5; the board joins a group of 0.6 in 0.7
+  (D-130).
 - The core's signing of the records of 0.5 (`cbb_core::admit`, `manage`, `root`, `takeover`,
   `pair_session`): making a group with a group CA, admitting into it, the root's settings and
   handover, the claims, and an admin's records on version 2 (D-130).

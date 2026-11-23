@@ -39,7 +39,7 @@ static STATE: Mutex<CriticalSectionRawMutex, RefCell<State>> = Mutex::new(RefCel
 static ADDRESS: Mutex<CriticalSectionRawMutex, RefCell<Option<Ipv4Cidr>>> = Mutex::new(RefCell::new(None));
 
 /// Starts Wi-Fi and the network stack, joining wifi if one is set.
-pub fn start(spawner: Spawner, device: WIFI<'static>, wifi: Option<Wifi>) -> Result<Stack<'static>> {
+pub fn start(spawner: Spawner, device: WIFI<'static>, wifi: Option<Wifi>) -> Result<()> {
     let controller = WifiController::new(device, ControllerConfig::default()).context("cannot start Wi-Fi")?;
     let mut seed = [0u8; 8];
     getrandom::fill(&mut seed).context("cannot seed the network stack")?;
@@ -53,7 +53,7 @@ pub fn start(spawner: Spawner, device: WIFI<'static>, wifi: Option<Wifi>) -> Res
     spawner.spawn(connection(controller, wifi).map_err(|_| Error::msg("cannot start the Wi-Fi task"))?);
     spawner.spawn(run_stack(runner).map_err(|_| Error::msg("cannot start the network task"))?);
     spawner.spawn(address(stack).map_err(|_| Error::msg("cannot start the address task"))?);
-    Ok(stack)
+    Ok(())
 }
 
 /// Joins wifi instead of the network before, or leaves it with None.

@@ -5,7 +5,7 @@ ESP32-S3), written in Rust on the same protocol core as cbb on computers (`core/
 the member TLS 1.3 on the chip itself (docs/roadmap.md, item 15).
 
 So far the board keeps its settings in flash, joins the Wi-Fi network set on its console
-and takes an address by DHCP, joins a group by the phone, and runs a self-test of the
+and takes an address by DHCP, and runs a self-test of the
 protocol core: it makes two keys
 and self-signed certificates with the chip's true random number generator (fed by the
 ADC's noise), runs a pairing TLS 1.3 handshake between them in memory, passes a message
@@ -70,8 +70,7 @@ cbb> status
 | `status` | what the board knows and how its network is doing |
 | `wifi` | sets the Wi-Fi network to join: asks for its name and password, saves them and joins it |
 | `wifi forget` | leaves the Wi-Fi network and forgets it |
-| `pair [NAME]` | joins a group by the phone, under NAME (default: Nano ESP32); a board in no group starts this by itself once its Wi-Fi is up: see below |
-| `leave` | forgets the group; remove the board in the app too, so the group revokes it |
+| `leave` | forgets a group the board holds; remove the board in the app too, so the group revokes it |
 | `debug on`, `debug off` | shows the details of errors under their message, or not; saved in flash. Without it a debug build shows them and a release build does not |
 | `selftest` | runs the TLS 1.3 self-test |
 | `usb keyboard`, `usb console` | makes the USB port a keyboard with the console beside it, or the console again; saved, and the board restarts |
@@ -88,20 +87,8 @@ again after the connection drops.
 
 ## Joining a group
 
-Once the board has an address while it is in no group, it starts pairing by itself, once
-each boot, as if `pair` had been typed: a board set up for the first time shows its link as
-soon as its Wi-Fi is up. Otherwise, or after five minutes, type `pair`. It prints a `cbb://join?...` link
-with a new pairing code, its address and port 8764 and the fingerprint of its pairing
-certificate; in the app, tap "Connect a new device" and paste it. The phone dials the
-board, and the two run the pairing of docs/protocol.md over TLS 1.3 (`embassy/`, the
-same exchange as `cbb pair`, with the core's `Joiner`). The phone proves the code
-first; three wrong codes, or five minutes without a phone, end the attempt. The board
-takes connections from private addresses only. It saves the identity the phone's Welcome
-gives it, as a member without CA keys, and `status` shows the group.
-
-The board announces itself as a Linux member: the pairing knows only Linux and macOS
-as systems so far. A QR code drawn on the console, so the phone can scan the terminal, may
-follow.
+The board does not join a group in 0.6: joining a group of 0.6 by its home window, and sync,
+come in 0.7. `status` says so.
 
 ## The USB keyboard
 
@@ -171,21 +158,11 @@ QEMU=path/to/qemu-system-xtensa ESPFLASH=path/to/espflash ./qemu-test.sh
 
 The script builds with the `qemu` feature (which includes `console-type`), writes a flash image with the partition table,
 and `qemu-test.py` boots it in [Espressif's QEMU](https://github.com/espressif/qemu)
-(machine `esp32s3`) three times, typing on the console over UART0: it checks that `pair`
-says the build has no network, sets a Wi-Fi network and debug mode, runs the self-test, sets the keyboard's layout and rate, checks that `type` refuses what the layout cannot type and that the build has no keyboard and no Bluetooth, checks that all of it is still there after a restart,
+(machine `esp32s3`) three times, typing on the console over UART0: it checks that `status`
+says the board is in no group, sets a Wi-Fi network and debug mode, runs the self-test, sets the keyboard's layout and rate, checks that `type` refuses what the layout cannot type and that the build has no keyboard and no Bluetooth, checks that all of it is still there after a restart,
 forgets the network and checks that it stays forgotten.
 
 That build has no Wi-Fi (QEMU does not emulate the S3's radio) and skips esp-hal's init,
 because QEMU does not emulate the clock calibration it waits for; without init the chip's
 generator does not work, so it uses a fixed pseudo-random sequence instead: its keys are
 not secret, and it says so when it starts. Never flash the `qemu` build to a board.
-
-## Test the network code on Linux
-
-The pairing lives in the crate [`embassy/`](../embassy), on embassy-net and nothing of
-the chip. Its feature `host` builds `esp32-on-linux`, which runs the same code on Linux:
-embassy-net over a TAP interface with a fixed address takes the place of the Wi-Fi and
-DHCP, and `esp32-on-linux` joins a group by the phone as the board's `pair` does. The Go test
-`TestEmbassyJoiner` plays the phone and has a Go member admit it (CONTRIBUTING.md, "The
-other parts", has the commands; CI's `rust` job runs it). Only the Wi-Fi driver and the
-flash stay for a real board.

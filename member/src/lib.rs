@@ -431,15 +431,15 @@ pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
 /// "Capabilities"); the Pi inside a ZX Spectrum Next joins through its link
 /// with none (nextlink).
 fn default_caps() -> Vec<String> {
-    cbb_core::authority::CAPS.iter().map(|c| (*c).to_string()).collect()
+    cbb_core::wire::CAPS.iter().map(|c| (*c).to_string()).collect()
 }
 
-/// Reads -caps: names of cbb_core::authority::CAPS joined by commas, or
+/// Reads -caps: names of cbb_core::wire::CAPS joined by commas, or
 /// none for an empty list; sorted, each once.
 fn parse_caps(list: &str) -> Result<Vec<String>> {
     let mut out = Vec::new();
     for c in list.split(',').map(str::trim).filter(|c| !c.is_empty() && *c != "none") {
-        if !cbb_core::authority::CAPS.contains(&c) {
+        if !cbb_core::wire::CAPS.contains(&c) {
             return Err(Error::msg(format!("-caps: {c:?} is none of admin, dials and hub")));
         }
         out.push(c.to_string());

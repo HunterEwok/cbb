@@ -73,8 +73,7 @@ zeroize = { version = "1.9", default-features = false, features = ["alloc", "ser
 [dev-dependencies]
 # The tests in tests/ use the generator of groups (feature testkit).
 cbb-core = { path = ".", features = ["testkit"] }
-# Property tests (tests/props.rs): random inputs against the parsers and the
-# rules' promises, such as the order of records not changing the state.
+# Property tests (tests/props.rs): random inputs against the parsers.
 proptest = { version = "1", default-features = false, features = ["std"] }
 # The tests compare the exporter with rustls's own, which needs std.
 rustls = { version = "0.23.46", default-features = false, features = ["std"] }

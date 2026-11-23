@@ -3,9 +3,6 @@
 
 package tools.cbb.kit
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
@@ -15,23 +12,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class CoreTest {
-    /**
-     * Evaluates every case of testdata/interop/v2-records.json in the linked
-     * core, which must give its state byte for byte, as Go's
-     * internal/authority does.
-     */
-    @Test
-    fun vectors() {
-        val cases = Interop.read("v2-records.json").jsonObject.getValue("cases").jsonArray
-        assertTrue(cases.isNotEmpty())
-        for (c in cases) {
-            val o = c as JsonObject
-            val request = """{"abi":1,"op":"evaluate","args":$o}"""
-            val answer = Core.call(request.toByteArray()).decodeToString()
-            assertEquals("""{"abi":1,"ok":${o.str("state")}}""", answer, o.str("name"))
-        }
-    }
-
     /** Asks the version, and sees a refusal come back as a Refusal. */
     /** A panic in the core's library is an answer, code 5 with what broke and where, and the core answers again after it. */
     @Test

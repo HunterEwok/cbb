@@ -199,11 +199,19 @@ mod tests {
 
     #[test]
     fn find_takes_a_typed_cause() {
-        use crate::pair::Refusal;
-        let e = Error::with("pair: wrong code", Refusal::WrongCode).context("the attempt failed").context("join");
-        assert_eq!(e.find::<Refusal>(), Some(&Refusal::WrongCode));
+        #[derive(Debug, PartialEq)]
+        struct Refusal(&'static str);
+        impl core::fmt::Display for Refusal {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.write_str(self.0)
+            }
+        }
+        impl core::error::Error for Refusal {}
+        let wrong = Refusal("the code is wrong");
+        let e = Error::with("pair: wrong code", Refusal(wrong.0)).context("the attempt failed").context("join");
+        assert_eq!(e.find::<Refusal>(), Some(&wrong));
         // Words alone are no refusal.
-        let e = Error::msg(Refusal::WrongCode.message()).context("join");
+        let e = Error::msg(wrong.0).context("join");
         assert_eq!(e.find::<Refusal>(), None);
         let io = std::io::Error::other("x");
         assert!(Error::with("read", io).find::<Refusal>().is_none());

@@ -7,15 +7,14 @@
 # each of Go, the Rust core and the Kotlin kit, then the comparison, which fails on any case they read differently and writes
 # those cases to OUT/failures.jsonl.
 #
-# Usage: differential.sh SEED BODIES SETS OUT, from the repository's root.
+# Usage: differential.sh SEED BODIES OUT, from the repository's root.
 set -eu
 
 seed=$1
 bodies=$2
-sets=$3
-out=$(mkdir -p "$4" && cd "$4" && pwd)
+out=$(mkdir -p "$3" && cd "$3" && pwd)
 
-go run ./tools/difffuzz gen -seed "$seed" -n "$bodies" -sets "$sets" -o "$out/corpus.jsonl"
+go run ./tools/difffuzz gen -seed "$seed" -n "$bodies" -o "$out/corpus.jsonl"
 export CBB_VERDICTS="$out/corpus.jsonl"
 
 CBB_VERDICTS_OUT="$out/go-release.txt" go test ./internal/release -run '^TestVerdicts$' -count=1

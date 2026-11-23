@@ -3,7 +3,7 @@
 
 # The cargo fuzz targets of the protocol core: the readers of
 # what comes from the network. Nightly CI runs them (.github/workflows/nightly.yml):
-#   cargo +nightly fuzz run record_body -- -max_total_time=60
+#   cargo +nightly fuzz run command -- -max_total_time=60
 [package]
 name = "cbb-core-fuzz"
 version = "0.0.0"
@@ -23,22 +23,8 @@ cbb-core = { path = "..", features = ["std", "fuzzing"] }
 members = ["."]
 
 [[bin]]
-name = "record_body"
-path = "fuzz_targets/record_body.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
 name = "command"
 path = "fuzz_targets/command.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "credential"
-path = "fuzz_targets/credential.rs"
 test = false
 doc = false
 bench = false

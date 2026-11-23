@@ -3,8 +3,8 @@
 
 //! Turns a set of records v3 into the group's state.
 //!
-//! The way conflicts between records are decided is that of records v2
-//! (`crate::authority`), which the model and the vectors checked: chains
+//! The way conflicts between records are decided is that of records v2,
+//! which the model and the vectors checked: chains
 //! by `prev`, a resolve voiding a branch, the grounded labelling of admins'
 //! removals, freezes and thaws, claims and their disputes, epochs along the
 //! path of roots, checkpoints. What changes is around it: keys in place of

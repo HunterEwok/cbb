@@ -282,9 +282,6 @@ fn a_pairing_session_takes_the_v3_exporter() {
     let mut by_hand = [0u8; 32];
     cx.export(b"EXPERIMENTAL-cbb-pair-v3", &[], &mut by_hand).unwrap();
     assert_eq!(&by_hand[..], ours.bytes());
-    let mut v2 = [0u8; 32];
-    cx.export(crate::pair::EXPORTER_LABEL, &[], &mut v2).unwrap();
-    assert_ne!(&v2[..], ours.bytes(), "0.5's label gives another value of the same session");
     let (c, cx, _, _) = session(alpn::MEMBER);
     assert!(pairing_exporter(&c, &cx).is_err(), "a member session is no pairing session");
 }

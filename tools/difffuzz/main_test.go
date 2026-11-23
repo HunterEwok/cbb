@@ -6,7 +6,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,12 +17,12 @@ const vectors = "../../testdata/interop"
 // TestGenerateSeeded checks that a seed gives one corpus and that its bodies
 // are changed ones, of every kind.
 func TestGenerateSeeded(t *testing.T) {
-	a, err := generate(vectors, 7, 2000, 50)
+	a, err := generate(vectors, 7, 2000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := generate(vectors, 7, 2000, 50)
-	c, _ := generate(vectors, 8, 2000, 50)
+	b, _ := generate(vectors, 7, 2000)
+	c, _ := generate(vectors, 8, 2000)
 	enc := func(l []Case) []byte {
 		j, _ := json.Marshal(l)
 		return j
@@ -39,76 +38,61 @@ func TestGenerateSeeded(t *testing.T) {
 	for _, x := range a[len(base):] {
 		kinds[x.Kind]++
 	}
-	for _, k := range []string{"record", "command", "manifest", "credential", "keys", "release", "channel", "attest-status", "set"} {
+	for _, k := range []string{"command", "manifest", "keys", "release", "channel", "attest-status"} {
 		if kinds[k] == 0 {
 			t.Errorf("no changed %s", k)
 		}
 	}
 }
 
-// TestSeedsMutants checks that the bodies of strict-mutants-*.json are
-// record seeds too, after those of the other files.
-func TestSeedsMutants(t *testing.T) {
+// TestSeedsPad checks that a vector's padding goes into its seed, as the
+// readers' tests apply it.
+func TestSeedsPad(t *testing.T) {
 	dir := t.TempDir()
-	files, err := filepath.Glob(filepath.Join(vectors, "strict-generated-*.json"))
-	if err != nil || len(files) == 0 {
-		t.Fatalf("no generated vectors: %v", err)
-	}
-	for _, f := range append(files, filepath.Join(vectors, "strict-files.json")) {
-		f = filepath.Base(f)
-		data, err := os.ReadFile(filepath.Join(vectors, f))
-		if err != nil {
+	gen := `{"commands":[{"name":"c","rule":"r","valid":false,"body":"e30=","pad":2,"pad_at":1}],"manifests":[{"name":"m","rule":"r","valid":false,"body":"e30="}]}`
+	files := `{"releases":[{"name":"k","rule":"r","valid":false,"kind":"keys","body":"e30="}]}`
+	for f, data := range map[string]string{"strict-generated-1.json": gen, "strict-files.json": files} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte(data), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, f), data, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	base, err := seeds(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mutant := `{"records":[{"name":"m","rule":"mutant","valid":false,"body":"e30=","pad":2,"pad_at":1}]}`
-	if err := os.WriteFile(filepath.Join(dir, "strict-mutants-1.json"), []byte(mutant), 0o644); err != nil {
-		t.Fatal(err)
 	}
 	got, err := seeds(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != len(base)+1 {
-		t.Fatalf("%d seeds, want %d", len(got), len(base)+1)
+	want := []Case{{Kind: "command", Body: []byte("{aa}")}, {Kind: "manifest", Body: []byte("{}")}, {Kind: "keys", Body: []byte("{}")}}
+	if len(got) != len(want) {
+		t.Fatalf("%d seeds, want %d", len(got), len(want))
 	}
-	if last := got[len(got)-1]; last.Kind != "record" || string(last.Body) != "{aa}" {
-		t.Fatalf("seed %s %q", last.Kind, last.Body)
+	for i := range want {
+		if got[i].Kind != want[i].Kind || !bytes.Equal(got[i].Body, want[i].Body) {
+			t.Errorf("seed %d: %s %q, want %s %q", i, got[i].Kind, got[i].Body, want[i].Kind, want[i].Body)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "strict-files.json"), []byte(`{"releases":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := seeds(dir); err == nil {
+		t.Error("took a file with no releases")
 	}
 }
 
-// TestSetSources checks the three forms a file of record sets takes.
-func TestSetSources(t *testing.T) {
-	dir := t.TempDir()
-	set := `{"name":"%s","group_ca":"Y2E=","records":[{"body":"e30=","sig":"c2ln"}]}`
-	files := map[string]string{
-		"one.json":   fmt.Sprintf(set, "x"),
-		"cases.json": `{"cases":[` + fmt.Sprintf(set, "a") + `,` + fmt.Sprintf(set, "b") + `]}`,
-		"list.json":  `[` + fmt.Sprintf(set, "c") + `]`,
-		"none.json":  `{"records":[]}`,
-	}
-	for f, data := range files {
-		if err := os.WriteFile(filepath.Join(dir, f), []byte(data), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got, err := setSources(dir)
-	if err != nil {
+// TestWriteSeeds checks that the seeds of the fuzz targets go to a
+// directory of each target, the api target's requests among them.
+func TestWriteSeeds(t *testing.T) {
+	out := t.TempDir()
+	if err := writeSeeds(vectors, out); err != nil {
 		t.Fatal(err)
 	}
-	var names []string
-	for _, s := range got {
-		names = append(names, s.name)
+	for _, target := range []string{"command", "wire", "release", "api", "sheet", "yubikey_object", "welcome_fields", "welcome_parts"} {
+		files, err := os.ReadDir(filepath.Join(out, target))
+		if err != nil || len(files) == 0 {
+			t.Errorf("no seeds for %s: %v", target, err)
+		}
 	}
-	if want := "cases/a cases/b list/c one"; strings.Join(names, " ") != want {
-		t.Fatalf("sets %q, want %q", strings.Join(names, " "), want)
+	data, err := os.ReadFile(filepath.Join(out, "api", "1"))
+	if err != nil || !strings.Contains(string(data), `"op":"version"`) {
+		t.Errorf("the api's first seed: %s %v", data, err)
 	}
 }
 
@@ -170,10 +154,10 @@ func TestCompare(t *testing.T) {
 	if _, err := compare(&out, corpus, []string{"a=" + write("short", "refused\n")}, 5, "", nil); err == nil {
 		t.Fatal("took verdicts for fewer cases")
 	}
-	if err := checkFields("record", "taken type=00 group=00"); err == nil {
-		t.Fatal("took a record's verdict with other fields")
+	if err := checkFields("command", "taken type=00 group=00"); err == nil {
+		t.Fatal("took a command's verdict with other fields")
 	}
-	if err := checkFields("credential", "taken type= group= version=1 expires_ms=2 tag= key= hubs= admins= members="); err != nil {
+	if err := checkFields("command", "taken type= group= by= to= id= time_ms=1 expires_ms=2 mode= enter=0 kind= text= action="); err != nil {
 		t.Fatal(err)
 	}
 }

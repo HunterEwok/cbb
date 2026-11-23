@@ -115,11 +115,7 @@ func compare(w io.Writer, corpus string, impls []string, max int, failures strin
 		}
 		c := cases[i]
 		fmt.Fprintf(w, "\ncase %d (%s):\n", i+1, c.Kind)
-		if c.Kind == "set" {
-			fmt.Fprintf(w, "  %d records\n", len(c.Records))
-		} else {
-			fmt.Fprintf(w, "  body %q\n  base64 %s\n", c.Body, b64.EncodeToString(c.Body))
-		}
+		fmt.Fprintf(w, "  body %q\n  base64 %s\n", c.Body, b64.EncodeToString(c.Body))
 		for _, n := range names {
 			fmt.Fprintf(w, "  %-6s %s\n", n, verdicts[n][i])
 		}

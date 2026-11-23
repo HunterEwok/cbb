@@ -7,16 +7,6 @@
 
 use alloc::vec::Vec;
 
-/// A record's body: one it takes is in the strict form.
-pub fn record_body(data: &[u8]) {
-    if crate::authority::Body::parse(data).is_ok() {
-        assert!(
-            crate::strict::check(data, &["v", "alg", "type", "signer", "time_ms", "group", "seq"]).is_ok(),
-            "took a record not in the strict form"
-        );
-    }
-}
-
 /// A command's body: one it takes is in the strict form.
 pub fn command(data: &[u8]) {
     if crate::command::Command::parse(data).is_ok() {
@@ -25,11 +15,6 @@ pub fn command(data: &[u8]) {
             "took a command not in the strict form"
         );
     }
-}
-
-/// A server credential's body.
-pub fn credential(data: &[u8]) {
-    let _ = crate::credential::Body::parse(data);
 }
 
 /// The files of a release: keys.json, release.json and a channel's file.

@@ -4,7 +4,7 @@
 //! The core's verdicts on a corpus of tools/difffuzz
 //! (docs/differential.md): one line per case, which the comparison checks
 //! against the other implementations' lines. A child of `command`, so that
-//! it reads a command's fields; records are of version 2 (`crate::group`). It runs on the corpus that
+//! it reads a command's fields. It runs on the corpus that
 //! CBB_VERDICTS names and writes to CBB_VERDICTS_OUT; without them, on a
 //! corpus of its own.
 
@@ -15,23 +15,13 @@ use base64::engine::general_purpose::STANDARD;
 use serde_json::Value;
 
 use super::Command;
-use crate::authority::{Hash, Record};
-use crate::certs::{Cert, KeyHash, sha256};
-use crate::group::Records;
+use crate::certs::sha256;
 
 fn hex(b: &[u8]) -> String {
     b.iter().fold(String::new(), |mut s, x| {
         let _ = write!(s, "{x:02x}");
         s
     })
-}
-
-fn hashes(l: &[KeyHash]) -> String {
-    l.iter().map(|k| hex(k)).collect::<Vec<_>>().join(".")
-}
-
-fn opt(k: &Option<KeyHash>) -> String {
-    k.as_ref().map(|k| hex(k)).unwrap_or_default()
 }
 
 fn bit(b: bool) -> &'static str {
@@ -54,34 +44,6 @@ fn verdict(c: &Value) -> String {
     let kind = c["kind"].as_str().unwrap();
     let body = bytes(&c["body"]);
     match kind {
-        "record" => match crate::authority::Body::parse(&body) {
-            Err(_) => "refused".into(),
-            Ok(b) => {
-                let h = |k: &Option<Hash>| k.map(|k| hex(&k.0)).unwrap_or_default();
-                let l = |ks: &[Hash]| ks.iter().map(|k| hex(&k.0)).collect::<Vec<_>>().join(".");
-                taken(&[
-                    ("type", hex(b.kind.as_bytes())),
-                    ("group", hex(b.group.as_bytes())),
-                    ("signer", hex(&b.signer.0)),
-                    ("seq", b.seq.to_string()),
-                    ("prev", h(&b.prev)),
-                    ("time_ms", b.time_ms.to_string()),
-                    ("device", hex(b.device.as_bytes())),
-                    ("name", hex(b.name.as_bytes())),
-                    ("role", hex(b.role.as_bytes())),
-                    ("os", hex(b.os.as_bytes())),
-                    ("store", hex(b.store.as_bytes())),
-                    ("key", h(&b.key)),
-                    ("admin", h(&b.admin)),
-                    ("powers", b.powers.join(".")),
-                    ("commands", b.commands.join(".")),
-                    ("holds_root", bit(b.holds_root).into()),
-                    ("keys", l(&b.keys)),
-                    ("root", hex(&b.root)),
-                    ("records", l(&b.records)),
-                ])
-            }
-        },
         "command" => match Command::parse(&body) {
             Err(_) => "refused".into(),
             Ok(b) => taken(&[
@@ -99,20 +61,6 @@ fn verdict(c: &Value) -> String {
                 ("action", hex(b.action.as_bytes())),
             ]),
         },
-        "credential" => match crate::credential::Body::parse(&body) {
-            Err(_) => "refused".into(),
-            Ok(b) => taken(&[
-                ("type", hex(b.kind.as_bytes())),
-                ("group", hex(b.group.as_bytes())),
-                ("version", b.version.to_string()),
-                ("expires_ms", b.expires_ms.to_string()),
-                ("tag", hex(b.tag.as_bytes())),
-                ("key", hex(&b.key)),
-                ("hubs", hashes(&b.hubs)),
-                ("admins", hashes(&b.admins)),
-                ("members", hashes(&b.members)),
-            ]),
-        },
         "manifest" => {
             let ok = crate::media::Manifest::parse(&body).is_ok();
             if ok { "taken" } else { "refused" }.into()
@@ -127,45 +75,8 @@ fn verdict(c: &Value) -> String {
                 };
             if ok { "taken" } else { "refused" }.into()
         }
-        "set" => set(c),
         _ => panic!("unknown kind {kind}"),
     }
-}
-
-fn set(c: &Value) -> String {
-    let mut s = Records::new(&Cert::parse(&bytes(&c["ca"])).unwrap());
-    let rs: Vec<Record> = serde_json::from_value(c.get("records").cloned().unwrap_or(Value::Array(vec![]))).unwrap();
-    let (fresh, _) = s.add_all(&rs);
-    let roots: Vec<String> = s.roots().iter().map(|r| hex(&sha256(&r.der))).collect();
-    let devices: Vec<String> = s
-        .devices()
-        .iter()
-        .map(|d| {
-            [
-                hex(d.id.as_bytes()),
-                hex(d.name.as_bytes()),
-                hex(d.role.as_bytes()),
-                hex(d.store.as_bytes()),
-                bit(d.admin).into(),
-                opt(&d.admin_key),
-                bit(d.frozen).into(),
-            ]
-            .join(":")
-        })
-        .collect();
-    let (mut revoked, mut frozen) = (String::new(), String::new());
-    for k in c.get("keys").and_then(Value::as_array).into_iter().flatten() {
-        let k: KeyHash = bytes(k).try_into().unwrap();
-        revoked.push_str(bit(s.revoked(&k)));
-        frozen.push_str(bit(s.frozen(&k)));
-    }
-    format!(
-        "set taken={} roots={} devices={} revoked={revoked} frozen={frozen} digest={}",
-        fresh.len(),
-        roots.join("."),
-        devices.join("."),
-        s.digest()
-    )
 }
 
 #[test]
@@ -173,7 +84,7 @@ fn verdicts() {
     let (input, out) = match (std::env::var("CBB_VERDICTS"), std::env::var("CBB_VERDICTS_OUT")) {
         (Ok(i), Ok(o)) if !i.is_empty() => (std::fs::read_to_string(i).unwrap(), Some(o)),
         _ => (
-            "{\"kind\":\"record\",\"body\":\"e30=\"}\n{\"kind\":\"attest-status\",\"body\":\"e30=\"}\n".to_string(),
+            "{\"kind\":\"command\",\"body\":\"e30=\"}\n{\"kind\":\"attest-status\",\"body\":\"e30=\"}\n".to_string(),
             None,
         ),
     };

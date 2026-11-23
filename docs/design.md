@@ -1452,8 +1452,7 @@ hub commands are gone with the phones' groups of 0.5, which sync at home only (D
    with an admin phone's takeover; `TestMoveHub` moves a hub with a client away from home.
    Still to do on the bench: moving from a phone to the Linux desktop with a small device far away.
 7. Done: several hubs with a priority (D-65; docs/protocol.md, section 11, "Several hubs"):
-   the order of hubs from the records (`v2-hubs.json` checks Go, both kits and
-   `cbb`), the clients keeping every hub's offer with a preshared key of their own, the
+   the order of hubs from the records, the clients keeping every hub's offer with a preshared key of their own, the
    hubs sharing their clients and passing each other's offers on, and a computer's hub
    yielding to a higher one and serving again when it goes; `TestSeveralHubs` switches both
    ways; the signed table of main hubs the user orders (`hubs` records, `cbb global hubs`). Still

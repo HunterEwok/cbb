@@ -22,14 +22,11 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use base64::Engine as _;
-use hmac::{Hmac, KeyInit, Mac};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
-use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use crate::authority::{self, Body, Hash, Input, Record, SigCache, State};
-use crate::certs::{self, Cert, b64};
+use crate::certs::b64;
 use crate::error::Error;
 use crate::strict;
 
@@ -71,13 +68,7 @@ pub enum Code {
     Body = 10,
     /// A certificate is refused.
     Cert = 11,
-    /// A signed body is not in the strict canonical form.
-    Strict = 12,
-    /// The record set is older than the one the member saved: a signer's
-    /// highest seq is lower than the saved one.
-    Rollback = 13,
-    /// The saved state cannot be read, is of another version or group, or
-    /// its check with the member's secret does not match.
+    /// The group's saved set file cannot be read.
     Saved = 14,
     /// A command is refused: its signer, its target, its time or its
     /// limits.
@@ -105,8 +96,6 @@ impl Code {
             Code::Panic => "panic",
             Code::Body => "body",
             Code::Cert => "cert",
-            Code::Strict => "strict",
-            Code::Rollback => "rollback",
             Code::Saved => "saved",
             Code::Command => "command",
             Code::Signed => "signed",
@@ -202,12 +191,6 @@ fn answer(result: Result<Vec<u8>, Refusal>) -> Vec<u8> {
 fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
     match op {
         "version" => Ok(version()),
-        "evaluate" => evaluate(serde_json::from_value(args).map_err(bad_args)?),
-        "evaluate_saved" => evaluate_saved(serde_json::from_value(args).map_err(bad_args)?),
-        "canonical_body" => canonical_body(args),
-        "check_body" => check_body(serde_json::from_value(args).map_err(bad_args)?),
-        "canonicalize" => canonicalize(serde_json::from_value(args).map_err(bad_args)?),
-        "check_member" => check_member(serde_json::from_value(args).map_err(bad_args)?),
         "read_invite" => read_invite(serde_json::from_value(args).map_err(bad_args)?),
         "recovery_sheet" => recovery_sheet(serde_json::from_value(args).map_err(bad_args)?),
         "read_recovery_sheet" => read_recovery_sheet(serde_json::from_value(args).map_err(bad_args)?),
@@ -511,238 +494,10 @@ fn version() -> Vec<u8> {
     json(Value::Object(m))
 }
 
-/// The arguments of `evaluate`, as a case of v2-records.json holds them.
-#[derive(Deserialize)]
-struct EvalArgs {
-    #[serde(with = "b64")]
-    group_ca: Vec<u8>,
-    group: String,
-    now_ms: i64,
-    #[serde(default)]
-    time_unknown: bool,
-    #[serde(default)]
-    first_seen: Vec<FirstSeen>,
-    records: Vec<Record>,
-}
-
-#[derive(Deserialize)]
-struct FirstSeen {
-    record: Hash,
-    ms: i64,
-}
-
-/// `evaluate`: the group's state from a record set (docs/records-v2.md,
-/// "The state"). Records that do not verify are left out, never an error.
-fn evaluate(a: EvalArgs) -> Result<Vec<u8>, Refusal> {
-    Ok(run(&a)?.0.encode())
-}
-
-/// The signatures this core checked, shared by every call of the process.
-static SIGS: SigCache = SigCache::new();
-
-fn run(a: &EvalArgs) -> Result<(State, BTreeMap<Hash, i64>), Refusal> {
-    let ca = Cert::parse(&a.group_ca)
-        .map_err(|e| refuse(Code::Cert, e.context("The group's certificate could not be read.")))?;
-    let first_seen: BTreeMap<Hash, i64> = a.first_seen.iter().map(|f| (f.record, f.ms)).collect();
-    Ok(authority::evaluate_seqs(&Input {
-        group_ca: &ca,
-        group: &a.group,
-        records: &a.records,
-        now_ms: a.now_ms,
-        first_seen: &first_seen,
-        time_unknown: a.time_unknown,
-        sigs: Some(&SIGS),
-    }))
-}
-
-/// The version of the saved state's format.
-pub const SAVED_VERSION: u32 = 1;
-
-/// The shortest secret a member keeps for its saved state.
-pub const MIN_SECRET: usize = 16;
-
-#[derive(Deserialize)]
-struct SavedArgs {
-    #[serde(flatten)]
-    eval: EvalArgs,
-    #[serde(with = "b64::secret")]
-    secret: Zeroizing<Vec<u8>>,
-    #[serde(default, with = "b64::opt")]
-    saved: Option<Vec<u8>>,
-}
-
-/// What a member saves between evaluations (docs/core-api.md, "The saved
-/// state"), without its check.
-#[derive(Serialize, Deserialize)]
-struct Saved {
-    v: u32,
-    group: String,
-    seqs: Vec<SavedSeq>,
-    #[serde(with = "b64::list")]
-    sigs: Vec<Vec<u8>>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct SavedSeq {
-    key: Hash,
-    seq: i64,
-}
-
-fn saved_mac(secret: &[u8], body: &[u8]) -> Result<Hmac<Sha256>, Refusal> {
-    // HMAC takes a key of any length; the error is never expected.
-    let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(secret)
-        .map_err(|e| refuse(Code::Request, Error::msg(alloc::format!("the device's secret: {e}"))))?;
-    m.update(b"cbb saved state v1\n");
-    m.update(body);
-    Ok(m)
-}
-
-/// Reads a saved state: canonical JSON of Saved with `mac`, the HMAC with
-/// the member's secret over the rest.
-fn read_saved(secret: &[u8], data: &[u8], group: &str) -> Result<Saved, Refusal> {
-    let bad = |e: Error| refuse(Code::Saved, e.context("The device's saved group state could not be read."));
-    let mut v: Value = serde_json::from_slice(data).map_err(|e| bad(Error::with("not JSON", e)))?;
-    let mac = v
-        .as_object_mut()
-        .and_then(|m| m.remove("mac"))
-        .and_then(|m| m.as_str().map(String::from))
-        .ok_or_else(|| bad(Error::msg("no mac")))?;
-    let mac = base64::engine::general_purpose::STANDARD
-        .decode(mac)
-        .map_err(|e| bad(Error::msg(alloc::format!("its mac: {e}"))))?;
-    if saved_mac(secret, &json(v.clone()))?.verify_slice(&mac).is_err() {
-        return Err(bad(Error::msg("its check with this device's secret does not match")));
-    }
-    let s: Saved = serde_json::from_value(v).map_err(|e| bad(Error::with("its fields", e)))?;
-    if s.v != SAVED_VERSION {
-        return Err(bad(Error::msg(alloc::format!("version {} is not {SAVED_VERSION}", s.v))));
-    }
-    if s.group != group {
-        return Err(bad(Error::msg("it is of another group")));
-    }
-    Ok(s)
-}
-
-fn write_saved(secret: &[u8], s: &Saved) -> Result<Vec<u8>, Refusal> {
-    let mut v = serde_json::to_value(s).unwrap_or_default();
-    let mac = saved_mac(secret, &json(v.clone()))?.finalize().into_bytes();
-    if let Some(m) = v.as_object_mut() {
-        m.insert("mac".into(), b64_value(&mac));
-    }
-    Ok(json(v))
-}
-
-/// `evaluate_saved`: evaluate, with the state the member saved after its
-/// last evaluation. It refuses a record set in which a signer's whole
-/// chain ends below the seq saved, and answers `{"state", "saved"}`, the state
-/// and the new saved state.
-fn evaluate_saved(a: SavedArgs) -> Result<Vec<u8>, Refusal> {
-    if a.secret.len() < MIN_SECRET {
-        return Err(refuse(Code::Request, Error::msg("The device's secret for its saved state is too short.")));
-    }
-    let old = match &a.saved {
-        Some(data) => Some(read_saved(&a.secret, data, &a.eval.group)?),
-        None => None,
-    };
-    if let Some(old) = &old {
-        SIGS.add(old.sigs.iter().filter_map(|e| <[u8; 32]>::try_from(e.as_slice()).ok()));
-    }
-    let (state, mut seqs) = run(&a.eval)?;
-    for o in old.iter().flat_map(|o| &o.seqs) {
-        let now = seqs.get(&o.key).copied().unwrap_or(0);
-        if now < o.seq {
-            return Err(refuse(
-                Code::Rollback,
-                Error::msg("The group's records are older than the ones this device held before.").context(
-                    alloc::format!("signer {} has records up to seq {now}, the device saw seq {}", o.key.text(), o.seq),
-                ),
-            ));
-        }
-        let s = seqs.entry(o.key).or_insert(0);
-        *s = o.seq.max(*s);
-    }
-    let saved = Saved {
-        v: SAVED_VERSION,
-        group: a.eval.group.clone(),
-        seqs: seqs.into_iter().map(|(key, seq)| SavedSeq { key, seq }).collect(),
-        sigs: SIGS.entries().into_iter().map(|e| e.to_vec()).collect(),
-    };
-    let saved = write_saved(&a.secret, &saved)?;
-    let mut out = b"{\"saved\":".to_vec();
-    strict::write_canonical(&mut out, &b64_value(&saved));
-    out.extend_from_slice(b",\"state\":");
-    out.extend_from_slice(&state.encode());
-    out.push(b'}');
-    Ok(out)
-}
-
-/// `canonical_body`: a body the caller built (any order, `v` and `signer`
-/// set) as the canonical bytes it signs, after each field is checked
-/// against its row. The answer is `{"body": base64}`.
-fn canonical_body(args: Value) -> Result<Vec<u8>, Refusal> {
-    let mut body: Body = serde_json::from_value(args)
-        .map_err(|e| refuse(Code::Body, Error::with("The record could not be written.", e)))?;
-    body.sort();
-    let bytes = body.encode().map_err(|e| refuse(Code::Body, e))?;
-    Ok(json(body_answer(&bytes)))
-}
-
 fn body_answer(bytes: &[u8]) -> Value {
     let mut m = serde_json::Map::new();
     m.insert("body".into(), b64_value(bytes));
     Value::Object(m)
-}
-
-#[derive(Deserialize)]
-struct BodyArgs {
-    #[serde(with = "b64")]
-    body: Vec<u8>,
-}
-
-/// `check_body`: checks a received body (its size, the canonical form, no
-/// unknown or empty field, each field against its row) and answers with
-/// the body as it is.
-fn check_body(a: BodyArgs) -> Result<Vec<u8>, Refusal> {
-    Body::parse(&a.body).map_err(|e| refuse(Code::Body, e))?;
-    Ok(json(body_answer(&a.body)))
-}
-
-/// `canonicalize`: the strict canonical form of a signed body, for the
-/// other signed files of version 2.
-fn canonicalize(a: BodyArgs) -> Result<Vec<u8>, Refusal> {
-    let bytes = strict::canonicalize(&a.body).map_err(|e| refuse(Code::Strict, e))?;
-    Ok(json(body_answer(&bytes)))
-}
-
-/// The arguments of `check_member`.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct MemberArgs {
-    #[serde(with = "b64::list")]
-    chain: Vec<Vec<u8>>,
-    #[serde(with = "b64::list")]
-    trusted: Vec<Vec<u8>>,
-    usage: String,
-    now_ms: i64,
-}
-
-/// `check_member`: a peer's member chain checked against the roots the
-/// member trusts, the current root first, at now_ms raised to that root's
-/// start, as a member whose clock is years behind still connects.
-fn check_member(a: MemberArgs) -> Result<Vec<u8>, Refusal> {
-    let usage = match a.usage.as_str() {
-        "server" => certs::Usage::Server,
-        "client" => certs::Usage::Client,
-        _ => return Err(refuse(Code::Request, Error::msg("The usage is neither \"server\" nor \"client\"."))),
-    };
-    let parse = |ders: &[Vec<u8>]| ders.iter().map(|d| Cert::parse(d)).collect::<crate::error::Result<Vec<_>>>();
-    let trusted = parse(&a.trusted).map_err(|e| refuse(Code::Cert, e))?;
-    let current = trusted.first().ok_or_else(|| refuse(Code::Request, Error::msg("No root is trusted.")))?;
-    let chain = parse(&a.chain).map_err(|e| refuse(Code::Cert, e))?;
-    let t = a.now_ms.div_euclid(1000).max(current.not_before);
-    let (dev, used) = certs::member_chain(chain, &trusted, t, usage).map_err(|e| refuse(Code::Cert, e))?;
-    let used: Vec<Value> = used.iter().map(|c| b64_value(&c.der)).collect();
-    Ok(json(serde_json::json!({ "device": dev.as_str(), "used": used })))
 }
 
 /// The arguments of `read_invite`.
@@ -828,12 +583,7 @@ fn read_recovery_sheet(a: InviteArgs) -> Result<Vec<u8>, Refusal> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sha2::Digest as _;
-
-    fn vectors() -> Value {
-        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/v2-records.json");
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap()
-    }
+    use sha2::{Digest as _, Sha256};
 
     fn ask(op: &str, args: Value) -> Value {
         let req = serde_json::json!({"abi": ABI, "op": op, "args": args});
@@ -950,17 +700,6 @@ mod tests {
         assert_eq!(code(&ask("keyboard", serde_json::json!({"layout": "dvorak"}))), Code::Request as u64);
     }
 
-    /// evaluate gives each case's state from the case's own JSON.
-    #[test]
-    fn evaluates_the_vectors() {
-        for c in vectors()["cases"].as_array().unwrap() {
-            let req = serde_json::json!({"abi": ABI, "op": "evaluate", "args": c});
-            let out = call(&serde_json::to_vec(&req).unwrap());
-            let want = alloc::format!("{{\"abi\":{ABI},\"ok\":{}}}", c["state"].as_str().unwrap());
-            assert_eq!(String::from_utf8(out).unwrap(), want, "{}", c["name"]);
-        }
-    }
-
     /// recovery_sheet and read_recovery_sheet give what
     /// testdata/interop/recovery-sheet.json says, and refuse bad requests.
     #[test]
@@ -1024,82 +763,6 @@ mod tests {
         assert_eq!(code(&ask("read_invite", serde_json::json!({}))), Code::Request as u64);
     }
 
-    /// A body built in any order comes back canonical and checks; the
-    /// refusals carry their codes.
-    #[test]
-    fn writes_and_checks_bodies() {
-        let v = vectors();
-        let b64 = v["cases"][0]["records"][0]["body"].clone();
-        let body = base64::engine::general_purpose::STANDARD.decode(b64.as_str().unwrap()).unwrap();
-        let mut value: Value = serde_json::from_slice(&body).unwrap();
-        let ok = ask("canonical_body", value.clone());
-        assert_eq!(ok["ok"]["body"], b64);
-        let ok = ask("check_body", serde_json::json!({"body": b64}));
-        assert_eq!(ok["ok"]["body"], b64);
-        let ok = ask("canonicalize", serde_json::json!({"body": b64}));
-        assert_eq!(ok["ok"]["body"], b64);
-
-        value["v"] = 1.into();
-        let refused = ask("canonical_body", value);
-        assert_eq!(code(&refused), Code::Body as u64);
-        assert!(refused["error"]["message"].as_str().unwrap().contains("version 1"), "{refused}");
-        // A body every receiver would refuse for its size is not written.
-        let revoke = v["cases"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .flat_map(|c| c["records"].as_array().unwrap())
-            .map(|r| base64::engine::general_purpose::STANDARD.decode(r["body"].as_str().unwrap()).unwrap())
-            .find(|b| b.windows(15).any(|w| w == b"\"type\":\"revoke\""))
-            .unwrap();
-        let mut big: Value = serde_json::from_slice(&revoke).unwrap();
-        let keys: Vec<Value> = (0..200u32)
-            .map(|i| base64::engine::general_purpose::STANDARD.encode(Sha256::digest(i.to_be_bytes())).into())
-            .collect();
-        big["keys"] = keys.into();
-        let refused = ask("canonical_body", big);
-        assert_eq!(code(&refused), Code::Body as u64);
-        assert!(refused["error"]["message"].to_string().contains("over"), "{refused}");
-        let empty = base64::engine::general_purpose::STANDARD.encode(b"{}");
-        assert_eq!(code(&ask("check_body", serde_json::json!({"body": empty}))), Code::Body as u64);
-        let cut = base64::engine::general_purpose::STANDARD.encode(b"{\"a\":");
-        assert_eq!(code(&ask("canonicalize", serde_json::json!({"body": cut}))), Code::Strict as u64);
-        assert_eq!(
-            code(&ask("evaluate", serde_json::json!({"group_ca": "AAAA", "group": "x", "now_ms": 0, "records": []}))),
-            Code::Cert as u64
-        );
-    }
-
-    /// A device's seal is a key of crate::seal's size, not a byte more or
-    /// less, and only in a device record.
-    #[test]
-    fn checks_the_seal() {
-        let v = vectors();
-        let bodies: Vec<Value> = v["cases"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .flat_map(|c| c["records"].as_array().unwrap())
-            .map(|r| {
-                let b = base64::engine::general_purpose::STANDARD.decode(r["body"].as_str().unwrap()).unwrap();
-                serde_json::from_slice(&b).unwrap()
-            })
-            .collect();
-        let device = bodies.iter().find(|b| b["type"] == "device").unwrap();
-        let revoke = bodies.iter().find(|b| b["type"] == "revoke").unwrap();
-        let with = |b: &Value, n: usize| {
-            let mut b = b.clone();
-            b["seal"] = base64::engine::general_purpose::STANDARD.encode(vec![7u8; n]).into();
-            b
-        };
-        let size = crate::seal::PUBLIC_KEY_SIZE;
-        assert!(ask("canonical_body", with(device, size)).get("ok").is_some());
-        for n in [size - 1, size + 1] {
-            assert_eq!(code(&ask("canonical_body", with(device, n))), Code::Body as u64, "{n}");
-        }
-        assert_eq!(code(&ask("canonical_body", with(revoke, size))), Code::Body as u64);
-    }
-
     /// Requests of the wrong shape, version or size are refused with their
     /// codes, and any bytes at all get an answer.
     #[test]
@@ -1110,211 +773,14 @@ mod tests {
         assert_eq!(code(&read(b"[]")), Code::Request as u64);
         assert_eq!(code(&read(br#"{"abi":2,"op":"version"}"#)), Code::Abi as u64);
         assert_eq!(code(&read(br#"{"abi":1,"op":"nothing"}"#)), Code::Op as u64);
-        assert_eq!(code(&read(br#"{"abi":1,"op":"evaluate","args":{}}"#)), Code::Request as u64);
+        assert_eq!(code(&read(br#"{"abi":1,"op":"read_invite","args":{}}"#)), Code::Request as u64);
         assert_eq!(code(&read(&alloc::vec![b' '; MAX_REQUEST + 1])), Code::TooLarge as u64);
-        let names: Vec<_> = [
-            Code::Request,
-            Code::Abi,
-            Code::Op,
-            Code::TooLarge,
-            Code::Body,
-            Code::Cert,
-            Code::Strict,
-            Code::Rollback,
-            Code::Saved,
-            Code::Command,
-        ]
-        .iter()
-        .map(|c| c.name())
-        .collect();
-        assert_eq!(
-            names,
-            ["request", "abi", "op", "too_large", "body", "cert", "strict", "rollback", "saved", "command"]
-        );
-    }
-
-    /// evaluate_saved gives evaluate's state and a saved state that the
-    /// next call takes; it refuses a set rolled back and a saved state
-    /// changed, of another secret or of another group.
-    #[test]
-    fn saves_and_refuses_rollback() {
-        let v = vectors();
-        // The case with a record of the highest seq, which is dropped below.
-        let (case, drop) = v["cases"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(|c| {
-                let recs = c["records"].as_array()?;
-                let (i, seq) = recs
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, r)| {
-                        let body = base64::engine::general_purpose::STANDARD.decode(r["body"].as_str()?).ok()?;
-                        let b: Value = serde_json::from_slice(&body).ok()?;
-                        Some((i, b["seq"].as_i64()?))
-                    })
-                    .max_by_key(|(_, seq)| *seq)?;
-                (seq > 1 && c["state"].as_str()?.contains("\"devices\"")).then_some((c.clone(), i))
-            })
-            .next()
-            .unwrap();
-        let secret = base64::engine::general_purpose::STANDARD.encode([7u8; 32]);
-        let mut args = case.clone();
-        args["secret"] = secret.clone().into();
-        let first = ask("evaluate_saved", args.clone());
-        let state = &first["ok"]["state"];
-        let want: Value = serde_json::from_str(case["state"].as_str().unwrap()).unwrap();
-        assert_eq!(state, &want, "{first}");
-        let saved = first["ok"]["saved"].clone();
-        assert!(saved.is_string(), "{first}");
-        args["saved"] = saved.clone();
-        let again = ask("evaluate_saved", args.clone());
-        assert_eq!(&again["ok"]["state"], state, "{again}");
-
-        let mut rolled = args.clone();
-        rolled["records"].as_array_mut().unwrap().remove(drop);
-        assert_eq!(code(&ask("evaluate_saved", rolled)), Code::Rollback as u64);
-
-        let mut other = args.clone();
-        other["secret"] = base64::engine::general_purpose::STANDARD.encode([8u8; 32]).into();
-        assert_eq!(code(&ask("evaluate_saved", other)), Code::Saved as u64);
-        let mut raw = base64::engine::general_purpose::STANDARD.decode(saved.as_str().unwrap()).unwrap();
-        let at = raw.windows(6).position(|w| w == b"\"seq\":").unwrap() + 6;
-        raw[at] = b'9';
-        let mut changed = args.clone();
-        changed["saved"] = base64::engine::general_purpose::STANDARD.encode(&raw).into();
-        assert_eq!(code(&ask("evaluate_saved", changed)), Code::Saved as u64);
-        let mut group = args.clone();
-        group["group"] = "another".into();
-        assert_eq!(code(&ask("evaluate_saved", group)), Code::Saved as u64);
-        let mut short = args.clone();
-        short["secret"] = "AAAA".into();
-        assert_eq!(code(&ask("evaluate_saved", short)), Code::Request as u64);
-    }
-
-    /// A record taken from the middle of a chain is a rollback too, though
-    /// the chain's highest seq is still held.
-    #[test]
-    fn refuses_a_hole_in_a_chain() {
-        let v = vectors();
-        let secret = base64::engine::general_purpose::STANDARD.encode([7u8; 32]);
-        let mut found = 0;
-        for case in v["cases"].as_array().unwrap() {
-            let recs = case["records"].as_array().unwrap();
-            let bodies: Vec<Value> = recs
+        let names: Vec<_> =
+            [Code::Request, Code::Abi, Code::Op, Code::TooLarge, Code::Body, Code::Cert, Code::Saved, Code::Command]
                 .iter()
-                .map(|r| {
-                    let body = base64::engine::general_purpose::STANDARD.decode(r["body"].as_str().unwrap()).unwrap();
-                    serde_json::from_slice(&body).unwrap()
-                })
+                .map(|c| c.name())
                 .collect();
-            // A case with a checkpoint may drop the record
-            // (a_pruned_set_is_no_rollback).
-            if bodies.iter().any(|b| b["type"] == "checkpoint") {
-                continue;
-            }
-            let heads: Vec<(String, i64)> = bodies
-                .iter()
-                .map(|b| (b["signer"].as_str().unwrap_or_default().into(), b["seq"].as_i64().unwrap_or(0)))
-                .collect();
-            // A record with the next seq of its signer after it, and no
-            // other record of that seq.
-            let Some(hole) = (0..heads.len()).find(|&i| {
-                let (k, s) = &heads[i];
-                heads.iter().filter(|h| h == &&heads[i]).count() == 1
-                    && heads.iter().any(|(k2, s2)| k2 == k && *s2 == s + 1)
-            }) else {
-                continue;
-            };
-            let mut args = case.clone();
-            args["secret"] = secret.clone().into();
-            let first = ask("evaluate_saved", args.clone());
-            args["saved"] = first["ok"]["saved"].clone();
-            args["records"].as_array_mut().unwrap().remove(hole);
-            assert_eq!(code(&ask("evaluate_saved", args)), Code::Rollback as u64, "{}", case["name"]);
-            found += 1;
-        }
-        assert!(found > 0);
-    }
-
-    /// The set a root's checkpoint prunes evaluates as the full one did,
-    /// and is no rollback.
-    #[test]
-    fn a_pruned_set_is_no_rollback() {
-        let v = vectors();
-        let dec = |s: &Value| base64::engine::general_purpose::STANDARD.decode(s.as_str().unwrap()).unwrap();
-        let mut found = 0;
-        for case in v["cases"].as_array().unwrap() {
-            let bodies: Vec<Value> = case["records"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|r| serde_json::from_slice(&dec(&r["body"])).unwrap())
-                .collect();
-            // The checkpoint that counts, as the state names it.
-            let state: Value = serde_json::from_str(case["state"].as_str().unwrap()).unwrap();
-            let Some(cp) = state["checkpoint"].as_str() else { continue };
-            let recs = case["records"].as_array().unwrap();
-            let cp = bodies
-                .iter()
-                .zip(recs)
-                .find(|(_, r)| base64::engine::general_purpose::STANDARD.encode(Sha256::digest(dec(&r["body"]))) == cp)
-                .map(|(b, _)| b)
-                .unwrap();
-            let heads = cp["heads"].as_array().unwrap();
-            let mut anchors: Vec<Value> = heads.iter().map(|h| h["id"].clone()).collect();
-            anchors.extend(cp["keep"].as_array().into_iter().flatten().cloned());
-            let mut args = case.clone();
-            args["secret"] = base64::engine::general_purpose::STANDARD.encode([7u8; 32]).into();
-            let first = ask("evaluate_saved", args.clone());
-            args["saved"] = first["ok"]["saved"].clone();
-            let kept: Vec<Value> = case["records"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .zip(&bodies)
-                .filter(|(r, b)| {
-                    let id: Value =
-                        base64::engine::general_purpose::STANDARD.encode(Sha256::digest(dec(&r["body"]))).into();
-                    let below = heads.iter().any(|h| h["key"] == b["signer"] && b["seq"].as_i64() <= h["seq"].as_i64());
-                    !below || anchors.contains(&id)
-                })
-                .map(|(r, _)| r.clone())
-                .collect();
-            if kept.len() == bodies.len() {
-                continue;
-            }
-            args["records"] = kept.into();
-            let again = ask("evaluate_saved", args);
-            assert_eq!(again["ok"]["state"], first["ok"]["state"], "{}: {again}", case["name"]);
-            found += 1;
-        }
-        assert!(found > 0);
-    }
-
-    /// Records under a root that only a stranger's claim names can be taken
-    /// away again: they never counted, so it is no rollback.
-    #[test]
-    fn saves_only_the_groups_signers() {
-        let v = vectors();
-        let case = v["cases"].as_array().unwrap().iter().find(|c| c["name"] == "stranger's claim 2").unwrap();
-        let mut args = case.clone();
-        args["secret"] = base64::engine::general_purpose::STANDARD.encode([7u8; 32]).into();
-        let first = ask("evaluate_saved", args.clone());
-        args["saved"] = first["ok"]["saved"].clone();
-        let recs = args["records"].as_array_mut().unwrap();
-        recs.truncate(recs.len() - 2);
-        let mut again = ask("evaluate_saved", args);
-        let mut first = first;
-        // Only the list of records left out changes.
-        for v in [&mut again, &mut first] {
-            if let Some(s) = v["ok"]["state"].as_object_mut() {
-                s.remove("ignored");
-            }
-        }
-        assert!(again["ok"]["state"].is_object(), "{again}");
-        assert_eq!(again["ok"]["state"], first["ok"]["state"], "{again}");
+        assert_eq!(names, ["request", "abi", "op", "too_large", "body", "cert", "saved", "command"]);
     }
 
     /// version names the ABI and the core's version.
@@ -1323,41 +789,6 @@ mod tests {
         let v = ask("version", Value::Null);
         assert_eq!(v["ok"]["abi"], ABI);
         assert_eq!(v["ok"]["core"], VERSION);
-    }
-
-    /// check_member gives each case of member-chains.json, written by Go
-    /// from crypto/tls's chain building, the device and the certificates
-    /// Go gives, or refuses it with code 11.
-    #[test]
-    fn checks_member_chains() {
-        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/member-chains.json");
-        let v: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        let cases = v["cases"].as_array().unwrap();
-        assert!(cases.len() >= 20);
-        for c in cases {
-            let name = c["name"].as_str().unwrap();
-            let mut args = c.clone();
-            let m = args.as_object_mut().unwrap();
-            for k in ["name", "device", "used"] {
-                m.remove(k);
-            }
-            let a = ask("check_member", args);
-            let want = c["device"].as_str().unwrap();
-            if want.is_empty() {
-                assert_eq!(code(&a), Code::Cert as u64, "{name}: {a}");
-                continue;
-            }
-            assert_eq!(a["ok"]["device"], want, "{name}: {a}");
-            assert_eq!(a["ok"]["used"], c["used"], "{name}");
-        }
-        // A request of the wrong shape is no certificate's fault.
-        let bad = serde_json::json!({"chain": [], "trusted": [], "usage": "server", "now_ms": 0});
-        assert_eq!(code(&ask("check_member", bad)), Code::Request as u64);
-        let first = &cases[0];
-        let mut bad = first.clone();
-        bad["usage"] = "both".into();
-        bad.as_object_mut().unwrap().retain(|k, _| ["chain", "trusted", "usage", "now_ms"].contains(&k.as_str()));
-        assert_eq!(code(&ask("check_member", bad)), Code::Request as u64);
     }
 
     /// seal_segment and open_segment round-trip a blob's segment, which

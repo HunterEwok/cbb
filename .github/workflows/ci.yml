@@ -2798,7 +2798,6 @@ jobs:
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-member --features benchtime --all-targets -- -D warnings # the bench's time-scaled build
           cargo clippy --locked -p cbb-member --features testhooks --all-targets -- -D warnings # the hooks of Go's service tests
-          cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
@@ -3024,7 +3023,6 @@ jobs:
       - name: cargo build
         run: |
           cargo build --locked --release
-          cargo build --locked --release -p cbb-embassy --features host
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -3651,7 +3649,7 @@ jobs:
           key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: a corpus of the fixed seed, read by all three
-        run: sh .github/differential.sh 1 20000 500 "$RUNNER_TEMP/differential"
+        run: sh .github/differential.sh 1 20000 "$RUNNER_TEMP/differential"
       - name: the cases read differently
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

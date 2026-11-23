@@ -31,9 +31,9 @@ class VerdictTest {
             }
         }
         return when (kind) {
-            // The phones read records, commands and credentials only through the Rust core (docs/core-api.md),
-            // which the comparison reads as rust: the kit has no reader of its own for them (D-126).
-            "record", "set", "command", "credential" -> "skip"
+            // The phones read commands only through the Rust core (docs/core-api.md), which the
+            // comparison reads as rust: the kit has no reader of its own for them (D-126).
+            "command" -> "skip"
             "manifest" -> if (Media.Manifest.parse(body) != null) "taken" else "refused"
             "keys", "release", "channel", "attest-status" -> refused {
                 // The core reads release files for the kit (docs/core-api.md).
@@ -47,7 +47,7 @@ class VerdictTest {
     @Test
     fun verdicts() {
         val input = System.getenv("CBB_VERDICTS")?.takeIf { it.isNotEmpty() }
-        val lines = (input?.let { File(it).readLines() } ?: listOf("""{"kind":"record","body":"e30="}""", """{"kind":"keys","body":"e30="}"""))
+        val lines = (input?.let { File(it).readLines() } ?: listOf("""{"kind":"command","body":"e30="}""", """{"kind":"keys","body":"e30="}"""))
             .filter { it.isNotEmpty() }
             .joinToString("") { verdict(Json.parseToJsonElement(it).jsonObject) + "\n" }
         if (input != null) {

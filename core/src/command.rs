@@ -3,8 +3,7 @@
 
 //! Commands (docs/protocol.md, section 15), as their receiver reads them,
 //! and the names, systems and key stores that device records and commands
-//! share. Whether a command counts for a member is the record set's to say
-//! (`crate::group::Records::verify_command`).
+//! share. Whether a command counts for a member is the record set's to say.
 
 use alloc::collections::BTreeSet;
 use alloc::format;

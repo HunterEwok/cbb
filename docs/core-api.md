@@ -4,15 +4,15 @@
 For engineers and anyone binding the Rust core into another program: the one call through
 which every program uses the core's rules (`cbb_core::api`, `core/src/api.rs`). Every
 program reaches it through the same C functions of `ffi/`, which the phone kits link; the Go
-programs do not link it. The rules themselves are in
-[records-v2.md](records-v2.md).
+programs do not link it. The rules themselves are in [protocol.md](protocol.md) and the bytes in
+[format.md](format.md).
 
 ## Requests and answers
 
 A request is a JSON object in UTF-8, at most 8 MiB:
 
 ```json
-{"abi": 1, "op": "evaluate", "args": {...}}
+{"abi": 1, "op": "version"}
 ```
 
 | Field | Meaning |
@@ -365,12 +365,6 @@ names they share.
 | `op` | `args` | `ok` |
 |---|---|---|
 | `version` | none | `{"abi", "core", "source"}`: the ABI, the core's version and, when the build passed it in `CBB_SOURCE`, the commit |
-| `evaluate` | `group_ca` (base64 DER), `group` (its tag), `now_ms` (the member's clock that counts sleep), `time_unknown` (optional, `true` when the member does not know how long it has held its claims), `first_seen` (`[{record, ms}]`, optional), `records` (`[{body, sig, chain}]`, base64) | the group's state ([protocol.md](protocol.md), section 10, "The state"); records that do not verify are left out, never an error |
-| `evaluate_saved` | the arguments of `evaluate`, `secret` (base64, at least 16 bytes) and `saved` (base64, optional) | `{"saved", "state"}`: the new saved state, base64, and the group's state; see "The saved state" |
-| `canonical_body` | a record body as an object, in any order, with `v` and `signer` set | `{"body"}`: the canonical bytes to sign, base64, after each field is checked against its row |
-| `check_body` | `{"body"}`, base64 | `{"body"}` as it came, once its size, canonical form and fields check |
-| `canonicalize` | `{"body"}`, base64 | `{"body"}`: the strict canonical form of a signed body of version 2 |
-| `check_member` | `chain` (the peer's certificates as it sent them, leaf first, base64 DER), `trusted` (the roots the member trusts, the current root first), `usage` (`"server"` for a member this one dialed, `"client"` for one that dialed it), `now_ms` | `{"device", "used"}`: the device the leaf names and the certificates the records then judge, base64: the leaf and the admin CA that issued it, if one did, wherever the peer put it; see "Member chains" |
 | `read_invite` | `text`: a remote invitation's text ([protocol.md](protocol.md), section 12) | `{"invitation"}` with `group`, `hub`, `hub_key`, `endpoints`, `guest_key`, `guest_psk`, `secret`, `expires` (Unix seconds) and `obfuscation` (or `null`), as the valid cases of `testdata/interop/invites.json` write them; or `{"refused": {"reason", "message"}}`, the reason one of the names of section 12 and the message a sentence for the user. A refused invitation is an answer, not an error. The caller checks `expires` against its clock |
 | `recovery_sheet` | `key` (the recovery key's 32 bytes, base64), `cert` (its admin CA, DER, base64), `group` (the group's tag) | `{"qr", "text", "admin"}`: the sheet's QR code and text ([protocol.md](protocol.md), section 10, "The recovery key") and the key hash the `recovery` record names. An admin CA that is not the key's is refused with `cert` |
 | `read_recovery_sheet` | `text`: what the user scanned or typed | `{"sheet"}` with `key` (32 bytes), `pkcs8`, `public` (uncompressed), `admin` (its key hash), all base64, and from the QR code `cert` and `group`; or `{"refused": {"reason", "message"}}` as `read_invite`, with the reasons of protocol.md's "The recovery sheet" |
@@ -397,8 +391,6 @@ names they share.
 | `push_registration` | `now_ms` (the phone's clock), `highest_seq` (the highest seq the app ever gave this group's registrations, left out when none), `restart` (true once after a member's `push-renew` said `ahead`), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64), `slot` (the group's, base64), `face` (the group's face for the push service: the `group` of its hubs credential, base64, 16 bytes), `challenge` (the last one the push service sent for this send key, base64, left out when none) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq", "highest", "key_hint"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key over [env, token, slot, face, seq] and the challenge when there is one; its seq, max(`highest_seq` + 1, `now_ms`), so that a phone restored from a backup still moves forward, or `now_ms` with `restart` (the service found the number more than a day ahead of its clock, and the member that said so takes this one registration whatever its number); `highest`, the larger of `highest_seq` and seq, or seq with `restart` when the phone's own clock also finds `highest_seq` more than a day ahead, which the app saves before it sends the frame (the cost: a member that says `ahead` falsely while the phone's clock is over a day behind lowers the highest, and members keep refusing the phone's own registrations until its clock is right); and with push on the send key's hint (the first 8 bytes of its hash, base64), which the push service puts beside each challenge. Code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes, a slot, face or challenge not 16, push on without `face`) |
 | `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's sealing secrets of the epochs in the group's window), `too_old`, `halted`, `hints_only` (booleans; one left out gives the neutral `hint`: `halted` opens nothing, `hints_only` after an event of removal, a new root or a stop until the app has applied it and drawn a new push key), `now_ms` and `window_ms` (the extension's clock and how old a copy may be) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold and the copy is within the window; `waits` with `id` and `origin` when the copy did not fit, does not open here or is older; `event` with `id`, `event`, `device`, `time_ms` for an event less than a day old; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". The extension keeps the IDs it showed and shows none twice. Code 18 when no key opens the body |
 
-The arguments of `evaluate` are a case of `testdata/interop/v2-records.json` as it is.
-
 `cbb version` names the core it was built with in a second line,
 `rules: the Rust core 0.6.0, abi 1, source <commit> (built in)`; the release builds pass the
 tag's commit in `CBB_SOURCE`, and other builds say `source unknown`.
@@ -416,9 +408,7 @@ The numbers and names never change meaning; new codes are added at the end of th
 | 5 | `panic` | something in CBB broke while it answered, and the request did nothing; `details` says what broke and where (see "Panics") |
 | 10 | `body` | a record body is refused: its size, form or a field |
 | 11 | `cert` | a certificate is refused |
-| 12 | `strict` | a signed body is not in the strict canonical form |
-| 13 | `rollback` | the record set is older than the saved one: a signer's whole chain ends below the seq saved |
-| 14 | `saved` | the saved state cannot be read, is of another version or group, or its check with the secret does not match |
+| 14 | `saved` | the group's saved set file cannot be read, is of another version, or its pin does not hold under the local key |
 | 15 | `command` | a command is refused: its signer, its target, its time or its limits |
 | 16 | `signed` | a signed body that is not a record (a command, a server credential, a release file or a manifest) is refused: its size, form or a field |
 | 17 | `copy` | a copy is refused or cannot be sealed: its origin, its signature or a field, or it does not open with the device's key |
@@ -686,19 +676,6 @@ IPv6 /64 six reports a minute. The robot opens the reports elsewhere with its se
 key goes into `cbb_core::bug::ROBOT_KEY_B64`), and `cbb-bug read SECRET FOLDER...` opens the
 reports copied from the server.
 
-## Member chains
-
-`check_member` is the check of a peer's certificates in member TLS, for a TLS stack's verify
-callback (Go's `VerifyConnection`, the phones' trust evaluation): the leaf is no CA, lists the
-usage in its extended key usage, names its device as its CN and its one DNS name
-(`cb-<device>.local`), and is in its lifetime; a trusted root issued it, or an admin CA (path
-length 0, a P-256 key, certificate signing) that a trusted root issued and that is in its own
-lifetime. The clock is `now_ms` raised to the current root's start, so a member whose clock is
-years behind still connects. A chain it refuses is code 11 (`cert`). Whether the records still
-admit the device, and whether it is the device discovery found, are the caller's to check.
-`testdata/interop/member-chains.json`, written by Go from crypto/tls's chain building, holds the
-cases both give the same answer.
-
 ## The group (records v3)
 
 The calls whose names start with `set_` are the group of 0.6: its records v3 (`cbb_core::records`)
@@ -789,51 +766,14 @@ tests and drills. The kits keep the answer's `seen` and pass it to the next chec
 interop vectors `testdata/interop/go-release.json`, `go-release-envelopes.json` (envelopes as
 they come, in base64) and `go-entries.json` are the cases every reader agrees on.
 
-## Signatures already checked
-
-The core keeps the signatures it has checked in memory, for every call of the process: an
-entry is SHA-256 over `cbb sig cache v1`, the signer's key hash, the body's SHA-256 and the
-signature, and only a signature that verified gets one. Evaluating the same records again
-checks each signature once. It holds at most 8192 entries and starts again when full.
-
-## The saved state
-
-A member keeps a saved state between evaluations, so that a record set rolled back (an older
-copy of the records put back on its disk or sent to it) is noticed, and so that the
-signatures it checked are not checked again after a restart. The member makes a random
-secret of 32 bytes once and keeps it next to its identity (in the keychain or Keystore on a
-phone); it calls `evaluate_saved` with the secret and the saved state of its last call, and
-saves the `saved` of the answer.
-
-The saved state is canonical JSON:
-
-| Field | Meaning |
-|---|---|
-| `v` | 1, the format's version |
-| `group` | the group's tag |
-| `seqs` | `[{key, seq}]`: for each of the group's signers, the highest seq whose prev chain is held whole down to seq 1 |
-| `sigs` | the entries of the signatures already checked, base64 |
-| `mac` | HMAC-SHA256 with the secret over `cbb saved state v1` and a newline, then the canonical JSON of the other fields |
-
-The core refuses the call (`saved`) when the check does not match, when `v` is another
-version or `group` another group, and (`rollback`) when a signer of `seqs` has no whole chain
-up to that seq or above in the set: a record taken from the middle of a chain is a rollback
-too. The group's signers are the group CA, the root of a claim one of the group's admins
-signed, and the admins under those roots; a root that only a stranger's claim names is not
-saved, so its records may come and go. A chain may also end at an anchor of one of the
-group's roots' checkpoints, so that a set the checkpoint pruned is no rollback. Its entries of `sigs` are added to the signatures already
-checked only after the check matched. The member shows the refusal with its details and does
-not use the records; the state of the group is not saved, since it comes from the records
-each time.
-
 ## Entries of 0.6 that a driver calls
 
-The JSON operations above are 0.5's. The core of 0.6 has Rust entries that the programs call
+Beside the JSON operations above, the core has Rust entries that the programs call
 directly. The ones added for the recovery sheet, the YubiKey, pairing and the Welcome are below,
 each with the program that calls it once wave 5 moves the programs to the core. Today `ffi/`
 exposes none of them; the column "ffi" says what the kits will need. `member/` is the Rust
 service and command line, the kits are the phones' Swift and Kotlin kits, and the boards are
-`embassy/` and `esp32/`.
+the ESP32's firmware (`esp32/`), which joins a group in 0.7.
 
 | Entry | What it does | Called at wave 5 by | ffi |
 |---|---|---|---|
@@ -886,13 +826,3 @@ programs to the core:
   `insert_all` of records the set already holds leaves it as it was. One member's end may
   depend on the order it got records in, for a key past its cap; members agree at the end of
   their exchange, which is why the driver sends while the digests differ.
-
-#### Until the switch to the core (wave 5)
-
-`member/` syncs 0.5's records (`cbb_core::group::Records`, version 2). Each hello carries the
-set's digest; a member whose digest differs from the peer's sends all its records once, then
-passes on only records that are new to it (`member/src/node.rs`). Two connected members whose
-sets differ without a new record exchange nothing more until one of them connects again.
-None of the notices above (`change_arriving`, `room_of`, `would_take`, `removal_warning`)
-reaches an app yet: an admin removal is confirmed without this warning, and a record a room turned
-away is not told.

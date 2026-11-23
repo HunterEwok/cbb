@@ -81,7 +81,7 @@ on every platform of the class, on the roadmap).
 
 | Capability | `cbb` on a small Linux device | ESP32 | ZX Spectrum Next | Notes |
 |---|---|---|---|---|
-| Join by the phone's QR code or a computer's code | yes | yes (pairing; on Linux over TAP in CI) | yes, through the Pi | |
+| Join by the phone's QR code or a computer's code | yes | not yet (0.7) | yes, through the Pi | |
 | Sync the clipboard | yes | not yet | yes, through the Pi | the firmware's sync is the next step of roadmap item 15 |
 | Listen for phones and Macs | yes | not yet | through the Pi | |
 | Secrets (`copy -secret`) | yes | not yet | yes (`.cbb text -s`, `.cbb copy -s`) | |
@@ -146,7 +146,7 @@ in three lines; this table has every part.
 | Mac app (menu bar) and the tray app for Linux and Windows | built, CI; the tray app in the Windows and Linux releases | the Mac app on a Mac; the tray app in the Windows 11 virtual machine |
 | Apple Watch and Wear OS apps (devices, events, away switch) | built, CI | the Apple Watch app on an Apple Watch Ultra: its list and remote paste; Wear OS not yet |
 | `cbb` without its helper on a small Linux device | built, CI e2e with other members | joined a group on a Pi Zero W |
-| The Arduino Nano ESP32 | firmware: Wi-Fi, the USB port as a keyboard; CI in QEMU; joins only groups of 0.5, joining a group of 0.6 and syncing in 0.7 | not yet |
+| The Arduino Nano ESP32 | firmware: Wi-Fi, the USB port and Bluetooth LE as a keyboard; CI in QEMU; joining a group and syncing in 0.7 | not yet |
 | Sync away from home between computers (`cbb global`, `cbb invite`) | built | not yet |
 | Sync away from home for the phones and small devices | built | the iPhone on mobile data, through a Mac hub and the `cbb.tools` forwarder |
 | The phone as the hub (the root phone too; on Aurora OS planned for 0.7), several hubs, your own blind relay | built | not yet |

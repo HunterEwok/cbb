@@ -51,18 +51,18 @@ fn json() {
     black_box(serde_json::from_slice::<serde_json::Value>(input()).is_ok());
 }
 
-/// The group's records: a record taken in and the group's state and devices.
+/// The group's records: a record taken in, the set's digest and the group's
+/// state.
 #[cfg(feature = "records")]
 fn records() {
-    use cbb_core::authority::Record;
-    use cbb_core::certs::Cert;
-    use cbb_core::group::Records;
-    if let Ok(ca) = Cert::parse(input()) {
-        let mut r = Records::new(&ca);
-        black_box(r.add(&Record::new(input().to_vec(), input().to_vec(), None)).is_ok());
-        black_box(r.state());
-        black_box(r.devices());
+    use cbb_core::records::{Key, Record, RecordSet, Recovery};
+    let key = || Key::new(black_box(1), input().to_vec());
+    let mut set = RecordSet::new(key(), Recovery { k1: key(), k2: key() });
+    if let Ok(r) = Record::decode(input()) {
+        black_box(set.insert(r).is_ok());
     }
+    black_box(set.digest());
+    black_box(set.state());
 }
 
 /// Opening a message sealed to this device: X-Wing, HKDF, ChaCha20-Poly1305.
@@ -71,24 +71,40 @@ fn seal() {
     black_box(cbb_core::seal::open(input(), input(), input()).is_ok());
 }
 
-/// A copy as it arrives: read, its signer checked on the records, opened.
+/// A copy as it arrives: read and opened with the device's key.
 #[cfg(feature = "copy")]
 fn copy() {
-    use cbb_core::certs::Cert;
     use cbb_core::copy::Sealed;
-    use cbb_core::group::Records;
-    if let (Ok(s), Ok(ca)) = (serde_json::from_slice::<Sealed>(input()), Cert::parse(input())) {
-        black_box(s.check(&Records::new(&ca), 0).is_ok());
+    if let Ok(s) = serde_json::from_slice::<Sealed>(input()) {
         black_box(s.open("0123456789abcdef0123456789abcdef", input()).is_ok());
     }
 }
 
-/// Joining a group: a joiner's key and certificate and the CPace exchange.
+/// Joining a group at home: the invitation from the typed digits and the
+/// joiner's start of the CPace exchange.
 #[cfg(feature = "pair")]
 fn pair() {
-    if let Ok(j) = cbb_core::pair::Joiner::new("board") {
-        black_box(j.start("123456", input(), input(), true).is_ok());
-    }
+    use cbb_core::join::PairExporter;
+    use cbb_core::join::info::Info;
+    use cbb_core::join::invitation::{Invitation, JoinerAttempts};
+    use cbb_core::join::session::JoinerSession;
+    use cbb_core::join::welcome::Joining;
+    let Some(invitation) = Invitation::typed([1; 16], "123456") else {
+        return;
+    };
+    let (mut point, mut exporter) = ([0; 65], [0; 32]);
+    point.iter_mut().zip(input()).for_each(|(p, b)| *p = *b);
+    exporter.iter_mut().zip(input()).for_each(|(p, b)| *p = *b);
+    let started = JoinerSession::start(
+        &mut JoinerAttempts::default(),
+        Info::new("board", black_box(0), black_box(0)),
+        invitation,
+        Joining::Ordinary,
+        point,
+        point,
+        PairExporter::exported_by_platform_tls(exporter),
+    );
+    black_box(started.is_ok());
 }
 
 /// The member TLS: a client and a server session and a handshake's bytes.

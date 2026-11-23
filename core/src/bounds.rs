@@ -576,7 +576,7 @@ pub const BOUNDS: &[Bound] = &[
         Stated,
         "hubs of a group",
         "records/hubs/hubs",
-        &["bodies"],
+        &["bodies_at_their_bounds"],
     ),
     b(
         "records::body::MAX_SERVERS",
@@ -1027,22 +1027,6 @@ pub const BOUNDS: &[Bound] = &[
         "a sealing epoch, the newest for a week and kept a week after",
         "",
         &["the_sealing_key_changes_once_a_week_and_the_old_one_stays_a_week"],
-    ),
-    b(
-        "credential::PERIOD_RENEW_MS",
-        crate::credential::PERIOD_RENEW_MS as u64,
-        Stated,
-        "a period 30 days old, when the root starts the next",
-        "",
-        &["periods_last_as_go_says"],
-    ),
-    b(
-        "credential::PERIOD_LIFETIME_MS",
-        crate::credential::PERIOD_LIFETIME_MS as u64,
-        Stated,
-        "a period lasting 35 days, its renewal and 5 days",
-        "",
-        &["periods_last_as_go_says"],
     ),
     b(
         "store::HEADER",

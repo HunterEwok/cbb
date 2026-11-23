@@ -6,27 +6,6 @@ import Foundation
 import XCTest
 
 final class CoreTests: XCTestCase {
-    /// Evaluates every case of testdata/interop/v2-records.json in the
-    /// linked core, which must give its state byte for byte, as Go's
-    /// internal/authority does.
-    func testVectors() throws {
-        var url = URL(fileURLWithPath: #filePath)
-        for _ in 0..<6 { url.deleteLastPathComponent() }
-        let data = try Data(contentsOf: url.appendingPathComponent("testdata/interop/v2-records.json"))
-        let file = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let cases = try XCTUnwrap(file["cases"] as? [[String: Any]])
-        XCTAssertFalse(cases.isEmpty)
-        for c in cases {
-            let name = try XCTUnwrap(c["name"] as? String)
-            let state = try XCTUnwrap(c["state"] as? String)
-            var request = Data(#"{"abi":1,"op":"evaluate","args":"#.utf8)
-            request += try JSONSerialization.data(withJSONObject: c)
-            request += Data("}".utf8)
-            let answer = try Core.call(request)
-            XCTAssertEqual(String(decoding: answer, as: UTF8.self), #"{"abi":1,"ok":"# + state + "}", name)
-        }
-    }
-
     /// Asks the version, and sees a refusal come back as a Refusal.
     /// A panic in the core's library is an answer, code 5 with what broke
     /// and where, and the core answers again after it.

@@ -2,16 +2,15 @@
 // Copyright (C) 2026 HunterEwok
 
 // Command difffuzz compares how the three implementations (Go, the
-// Rust core and the Kotlin kit) read the bodies that
-// come from the network and the record sets they make of them.
+// Rust core and the Kotlin kit) read the bodies that come from the network.
 //
 //	go run ./tools/difffuzz gen -seed 1 -n 20000 -o corpus.jsonl
-//	go run ./tools/difffuzz compare -corpus corpus.jsonl go=go-group.txt,go-release.txt rust=rust.txt ...
+//	go run ./tools/difffuzz compare -corpus corpus.jsonl go=go-release.txt rust=rust.txt ...
 //
 // gen writes a corpus, one case to a line, made from the bodies of
-// testdata/interop/strict-generated-*.json and strict-files.json and the
-// record sets of the other interop vectors, changed by a pseudo-random
-// generator from the seed: the same seed gives the same corpus. compare
+// testdata/interop/strict-generated-*.json and strict-files.json, changed
+// by a pseudo-random generator from the seed: the same seed gives the same
+// corpus. compare
 // reads the verdict files each implementation's test wrote for that corpus
 // (its verdict test runs when CBB_VERDICTS names a corpus and writes to
 // CBB_VERDICTS_OUT) and fails on any case they read differently, printing
@@ -19,22 +18,15 @@
 // writes the same bodies as the seed corpora of the cargo fuzz targets in
 // core/fuzz.
 //
-// A case is a JSON object. A body case is {"kind": K, "body": base64},
-// with K one of record, command, manifest, credential, keys, release,
-// channel or attest-status. A set case is {"kind": "set", "ca": the group
-// CA's DER, "records": [{"body", "sig", "chain"}], "keys": [key hashes]},
-// all bytes in standard base64.
+// A case is a JSON object, {"kind": K, "body": base64}, with K one of
+// command, manifest, keys, release, channel or attest-status.
 //
 // A verdict is one line per case, in the corpus's order:
 //
 //   - "refused" when the implementation refuses the body;
 //   - "skip" when it does not read bodies of that kind;
-//   - "taken" and, for records, commands and credentials, the fields it
-//     read, each " name=value", in the order of fields below;
-//   - for a set, "set" and " taken=N" (how many records the set took),
-//     " roots=" (SHA-256 of each root's DER), " devices=" (each device as
-//     id:name:role:store:admin:admin key:frozen), " revoked=" and
-//     " frozen=" (a 0 or 1 for each of the case's keys) and " digest=".
+//   - "taken" and, for commands, the fields it read, each " name=value",
+//     in the order of fields below.
 //
 // A value is written as: a string as the hex of its UTF-8 bytes, an absent
 // one as empty; an integer in decimal; a boolean as 0 or 1; bytes in hex; a
@@ -51,14 +43,11 @@ import (
 
 // The fields of a verdict, per kind; every implementation writes these.
 var fields = map[string][]string{
-	"record": {"type", "group", "signer", "seq", "prev", "time_ms", "device", "name", "role", "os", "store", "key", "admin", "powers",
-		"commands", "holds_root", "keys", "root", "records"},
-	"command":    {"type", "group", "by", "to", "id", "time_ms", "expires_ms", "mode", "enter", "kind", "text", "action"},
-	"credential": {"type", "group", "version", "expires_ms", "tag", "key", "hubs", "admins", "members"},
+	"command": {"type", "group", "by", "to", "id", "time_ms", "expires_ms", "mode", "enter", "kind", "text", "action"},
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: difffuzz gen [-seed N] [-n N] [-sets N] [-o file]\n       difffuzz compare -corpus file impl=file[,file] ...\n       difffuzz seeds -o dir")
+	fmt.Fprintln(os.Stderr, "usage: difffuzz gen [-seed N] [-n N] [-o file]\n       difffuzz compare -corpus file impl=file[,file] ...\n       difffuzz seeds -o dir")
 	os.Exit(2)
 }
 
@@ -71,11 +60,10 @@ func main() {
 		fs := flag.NewFlagSet("gen", flag.ExitOnError)
 		seed := fs.Uint64("seed", 1, "the seed of the pseudo-random generator")
 		n := fs.Int("n", 20000, "how many changed bodies")
-		sets := fs.Int("sets", 500, "how many record sets")
 		out := fs.String("o", "", "the corpus to write (default: standard output)")
 		dir := fs.String("vectors", "testdata/interop", "the directory of the interop vectors")
 		_ = fs.Parse(os.Args[2:])
-		cases, err := generate(*dir, *seed, *n, *sets)
+		cases, err := generate(*dir, *seed, *n)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "difffuzz:", err)
 			os.Exit(1)

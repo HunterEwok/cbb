@@ -6257,6 +6257,13 @@ fn bodies_at_their_bounds() {
     for bad in [Server { kind: 0, ..server(1) }, Server { endpoint: String::new(), ..server(1) }] {
         assert!(check(&g, with(vec![bad])).unwrap_err().is("records/settings/servers"));
     }
+    // The hub order names at least one hub and at most MAX_HUBS, each once.
+    let ids: Vec<DeviceId> = (0..=MAX_HUBS).map(|i| k(&alloc::format!("hub{i}")).key.device_id()).collect();
+    let hubs = |ids: &[DeviceId]| Kind::Hubs { hubs: ids.to_vec(), seen: vec![] };
+    assert!(check(&g, hubs(&ids[..MAX_HUBS])).is_ok());
+    assert!(check(&g, hubs(&ids)).unwrap_err().is("records/hubs/hubs"));
+    assert!(check(&g, hubs(&[])).unwrap_err().is("records/hubs/hubs"));
+    assert!(check(&g, hubs(&[ids[0], ids[0]])).unwrap_err().is("records/hubs/hubs"));
     // A removal of 256 keys that saw 200 heads checks, and its body passes
     // MAX_BODY: no reader takes it.
     let seen: Vec<Seen> = keys(200).into_iter().map(|key| Seen { key, seq: 1, id: RecordId([3; 32]) }).collect();

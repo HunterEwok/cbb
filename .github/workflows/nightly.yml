@@ -38,7 +38,7 @@ jobs:
         run: |
           seed=$(date +%s)
           echo "seed $seed: go run ./tools/difffuzz gen -seed $seed -n 200000 -sets 5000 makes the same corpus"
-          sh .github/differential.sh "$seed" 200000 5000 "$RUNNER_TEMP/differential"
+          sh .github/differential.sh "$seed" 200000 "$RUNNER_TEMP/differential"
       - name: the cases read differently
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [record_body, command, credential, release, wire, vless, api, format, welcome_message, sheet, yubikey_object, welcome_parts, welcome_fields]
+        target: [command, release, wire, vless, api, format, welcome_message, sheet, yubikey_object, welcome_parts, welcome_fields]
     defaults:
       run:
         working-directory: core/
@@ -196,14 +196,14 @@ jobs:
           cargo install --locked cargo-mutants@27.1.0
       # In place: the tests read testdata/ beside the crates, which a copy of the
       # workspace would leave behind. Each shard has its own checkout.
-      - name: mutate the rules and the strict form
+      - name: mutate the strict form
         env:
           SHARD: ${{ matrix.shard }}
         run: |
           # 2 is missed mutants and 3 timeouts, which the next step judges.
           status=0
           cargo mutants --in-place --no-shuffle --shard "$SHARD/8" -p cbb-core \
-            -f core/src/authority.rs -f core/src/strict.rs || status=$?
+            -f core/src/strict.rs || status=$?
           {
             echo "### cargo mutants, shard $SHARD/8"
             echo '```'
@@ -233,7 +233,7 @@ jobs:
         shard: [0, 1, 2, 3]
         include:
           - crate: cbb-core
-            files: -f core/src/credential.rs -f core/src/seal.rs
+            files: -f core/src/seal.rs
           - crate: cbb-member
             files: -f member/src/control.rs -f member/src/window.rs
     steps:

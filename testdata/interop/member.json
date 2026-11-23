@@ -121,22 +121,6 @@
 			"cert": "bWVtYmVyIGNlcnRpZmljYXRlIERFUg=="
 		},
 		{
-			"t": "records",
-			"records": [
-				{
-					"body": "eyJ2IjoxLCJ0eXBlIjoicmV2b2tlIn0=",
-					"sig": "c2ln"
-				},
-				{
-					"body": "eyJ2IjoxfQ==",
-					"sig": "c2lnMg==",
-					"chain": [
-						"YWRtaW4gQ0E="
-					]
-				}
-			]
-		},
-		{
 			"t": "hello",
 			"role": "phone",
 			"hello": {

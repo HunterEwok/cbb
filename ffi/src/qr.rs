@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! Reading QR codes from the camera's frames, for an app whose system has
-//! no reader of its own (the Aurora app, which scans a device's join code):
+//! no reader of its own (the Aurora app, which scans a home window's code):
 //! the app hands a frame's luminance, one byte a pixel, and gets the texts
 //! of the codes in it.
 
@@ -62,11 +62,13 @@ mod tests {
 
     #[test]
     fn reads_a_join_code() {
-        let text = cbb_core::pair::join_qr(
-            "246802",
-            &["192.168.1.20:8767".into()],
-            "qFnj7Uv+CE/WNnna2IEmMaLbkA6tHcKf0VijTRzekKA=",
-        );
+        let text = cbb_core::join::invitation::WindowLink {
+            addrs: vec!["192.168.1.20:8767".into()],
+            fp: cbb_core::format::KeyHash([7; 32]),
+            id: [9; 16],
+            digits: "246802".into(),
+        }
+        .text();
         let code = qrcode::QrCode::new(text.as_bytes()).unwrap();
         let w = code.width();
         // Four pixels a module and a quiet zone of four modules.

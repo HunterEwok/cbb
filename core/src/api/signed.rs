@@ -43,7 +43,6 @@ fn read(kind: &str, body: &[u8]) -> Result<Value> {
     }
     match kind {
         "command" => value(crate::command::Command::parse(body)?),
-        "credential" => value(crate::credential::Body::parse(body)?),
         "keys" => value(crate::release::decode_keys(body)?),
         "release" => value(crate::release::decode_release(body)?),
         "channel" => value(crate::release::decode_channel(body)?),
@@ -372,7 +371,6 @@ mod tests {
         };
         let mut files = vec!["strict.json".to_string()];
         files.extend((1..).map(|i| format!("strict-generated-{i}.json")).take_while(exists));
-        files.extend((1..).map(|i| format!("strict-mutants-{i}.json")).take_while(exists));
         for f in &files {
             let v = vectors(f);
             for (section, kind) in [("commands", "command"), ("manifests", "manifest")] {
@@ -382,9 +380,6 @@ mod tests {
             }
         }
         let v = vectors("strict-files.json");
-        for c in v["credentials"].as_array().unwrap() {
-            check("credential", c);
-        }
         for c in v["releases"].as_array().unwrap() {
             check(c["kind"].as_str().unwrap(), c);
         }

@@ -24,7 +24,6 @@ use zeroize::{Zeroize, Zeroizing};
 use crate::certs::{self, Cert, b64, is_id};
 use crate::clip::{Kind, MAX_TEXT, Via, check_text};
 use crate::error::{Error, Result};
-use crate::group::Records;
 use crate::hlc::Timestamp;
 use crate::media::{MAX_ALT_TEXT, MAX_MEDIA, Manifest};
 use crate::seal;
@@ -458,39 +457,6 @@ impl Sealed {
         s
     }
 
-    /// Checks the copy's origin against the group's records at t, Unix
-    /// seconds: its certificate, through its issuer, verifies to a root on
-    /// the path, the records take it, its key is one of the origin's, the
-    /// origin does not only pass copies on, and it signed the copy. A member does this before it passes a copy on.
-    pub fn check(&self, records: &Records, t: i64) -> Result<()> {
-        self.validate()?;
-        let mut chain = alloc::vec![Cert::parse(&self.cert)?];
-        if !self.issuer.is_empty() {
-            chain.push(Cert::parse(&self.issuer)?);
-        }
-        let (dev, used) = certs::member_chain(chain, &records.path_certs(), t, certs::Usage::Client)
-            .map_err(|e| e.context("the copy's origin is not a member of the group"))?;
-        if dev.as_str() != self.origin {
-            return Err(Error::msg("the copy's certificate is not of its origin"));
-        }
-        if let Some(r) = records.refused(&used) {
-            return Err(Error::msg(format!("the copy's origin is refused: {}", r.why())));
-        }
-        let leaf = used.first().ok_or_else(|| Error::msg("the copy's certificate chain is empty"))?;
-        let key = leaf.key_hash();
-        let devices = records.devices();
-        let Some(d) = devices.iter().find(|d| d.id == self.origin && d.keys.contains(&key)) else {
-            return Err(Error::msg("the copy's certificate is not one its origin's records name"));
-        };
-        if d.forward_only {
-            return Err(Error::msg("the copy's origin only passes copies on"));
-        }
-        if !leaf.verifies(&self.to_sign(), &self.sig) {
-            return Err(Error::msg("the copy's signature does not verify"));
-        }
-        Ok(())
-    }
-
     /// Opens the copy with the reader me's secret for sealed messages: its
     /// content, and the copy's key, which opens its blob.
     pub fn open(&self, me: &str, secret: &[u8]) -> Result<(Content, [u8; KEY_SIZE])> {
@@ -523,29 +489,6 @@ impl Sealed {
 /// A random key for a copy.
 pub fn new_key() -> [u8; KEY_SIZE] {
     certs::random_bytes()
-}
-
-/// The devices a copy is sealed to by the records: those with a key that
-/// stands, a key for sealed messages, the role member or phone, not
-/// frozen, and not only passing copies on; with secret, none that the
-/// records keep secrets from. Each as its device ID and seal key, sorted.
-pub fn readers(records: &Records, secret: bool) -> Vec<(String, Vec<u8>)> {
-    let mut out: Vec<(String, Vec<u8>)> = records
-        .devices()
-        .into_iter()
-        .filter(|d| {
-            !d.keys.is_empty()
-                && !d.seal.is_empty()
-                && matches!(d.role.as_str(), "member" | "phone")
-                && !d.frozen
-                && !d.forward_only
-                && !(secret && records.no_secrets_to(&d.id))
-        })
-        .map(|d| (d.id, d.seal))
-        .collect();
-    out.sort();
-    out.truncate(MAX_READERS);
-    out
 }
 
 /// Seals a copy: its content, under the copy's key, to readers (device ID

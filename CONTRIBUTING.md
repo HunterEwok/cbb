@@ -181,15 +181,6 @@ with in every program it publishes, and the `hooks` job checks that the same scr
 line in a hooks build. A new hook that changes whom they trust or their clock goes into the
 list in `.github/release-ignores-hooks.sh`.
 
-The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
-
-```sh
-sudo ip tuntap add name tap0 mode tap user "$USER" && sudo ip addr add 192.168.69.1/24 dev tap0 \
-  && sudo ip link set tap0 up
-cargo build --release -p cbb-embassy --features host && \
-  CBB_ESP32_ON_LINUX=$PWD/target/release/esp32-on-linux go test ./internal/service -run TestEmbassyJoiner
-```
-
 The Android app (`apps/android`, Gradle 9 with JDK 17 or later): the protocol core `kit` has
 no Android dependencies and builds anywhere with Rust, whose core its tests build (see below);
 the app needs the Android SDK with the NDK of `cbb.ndk` in `apps/android/gradle.properties`,
@@ -288,7 +279,7 @@ The differential run of all three implementations (Go, Rust and JDK 17;
 [docs/differential.md](docs/differential.md)):
 
 ```sh
-sh .github/differential.sh 1 20000 500 /tmp/differential
+sh .github/differential.sh 1 20000 /tmp/differential
 ```
 
 Go's tests of the records of 0.5 read the committed `testdata/interop/swift-*.json`, which

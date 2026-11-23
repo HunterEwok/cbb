@@ -86,10 +86,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **15.** **The Arduino Nano ESP32** (an ESP32-S3) as a small device, on the same `core/` as
     the other ESP32 boards, with the member protocol and TLS 1.3 on the board itself. Done:
     the firmware (`esp32/`) builds, keeps its settings in flash, joins the Wi-Fi network
-    set on its USB console, joins a group by the phone, passes its self-test in QEMU, and
-    types as a USB keyboard in the layout set for the host; its network code
-    (`embassy/`) also runs on Linux over a TAP interface, where CI has a Go member admit
-    it by the phone. Next: sync on the board, OTA updates (item 29), and a library for one's
+    set on its USB console, passes its self-test in QEMU, and types as a USB keyboard in
+    the layout set for the host. Next: joining a group of 0.6 by its home window and sync
+    on the board (0.7), OTA updates (item 29), and a library for one's
     own Arduino sketches may follow. It ships as a ready firmware flashed over USB with one
     command.
 - **22.** **A Mac app** that carries the service and a Network Extension (a content filter); the

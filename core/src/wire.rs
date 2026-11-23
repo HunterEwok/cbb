@@ -15,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_json::value::RawValue;
 
-use crate::authority::Record;
 use crate::certs::b64;
 use crate::clip::{Event, Hello};
 use crate::copy::Sealed;
@@ -41,17 +40,12 @@ pub struct Message {
     pub cert: Option<Vec<u8>>,
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
     pub issuer: Option<Vec<u8>>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub records: Vec<Record>,
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
     pub admin_ca: Option<Vec<u8>>,
     /// In a tunnel message, the group's hub's offer (section 11), decoded
     /// on its own with [`TunnelOffer`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tunnel: Option<Value>,
-    /// In a command message, the signed command (section 15).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub command: Option<Record>,
     /// In a result message, the answer to a command.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<CommandResult>,
@@ -234,7 +228,7 @@ pub fn with_features(mut m: Message, features: &[&str]) -> Message {
     m
 }
 
-/// The hello m with what a member can do (crate::authority::CAPS; section
+/// The hello m with what a member can do ([`CAPS`]; section
 /// 4, "Capabilities").
 pub fn with_caps(mut m: Message, caps: &[String]) -> Message {
     if !caps.is_empty()
@@ -267,11 +261,16 @@ pub fn with_group_ca(mut m: Message, der: &[u8]) -> Message {
     m
 }
 
+/// What a member can do (section 4, "Capabilities"): be one of the group's
+/// hubs, hold an admin key, and dial other members. A capability gives no
+/// right: only a record a root or an admin signed does. Every capability,
+/// sorted.
+pub const CAPS: [&str; 3] = ["admin", "dials", "hub"];
+
 /// The capabilities of a hello this member knows, of its first 32 names,
 /// sorted, each once.
 pub fn clean_caps(caps: &[String]) -> Vec<String> {
-    let mut out: Vec<String> =
-        caps.iter().take(32).filter(|c| crate::authority::CAPS.contains(&c.as_str())).cloned().collect();
+    let mut out: Vec<String> = caps.iter().take(32).filter(|c| CAPS.contains(&c.as_str())).cloned().collect();
     out.sort();
     out.dedup();
     out
@@ -655,12 +654,6 @@ pub fn release(set: &RawValue) -> Message {
     Message { kind: "release".into(), release: Some(set.to_owned()), ..Default::default() }
 }
 
-/// A command message: a command an admin signed for its receiver
-/// (section 15), which a member in between passes on unchanged.
-pub fn command(r: &Record) -> Message {
-    Message { kind: "command".into(), command: Some(r.clone()), ..Default::default() }
-}
-
 /// A cert message: a renewed member certificate for the receiver and the
 /// admin CA that issued it, None when a root did.
 pub fn cert(cert: &[u8], issuer: Option<&[u8]>) -> Message {
@@ -944,7 +937,6 @@ mod tests {
         assert!(!Get { offset: -1, ..g.clone() }.valid());
         assert!(!Get { sha256: vec![3; 31], ..g.clone() }.valid());
         assert!(Get { length: 0, ..g.clone() }.valid());
-        let r = crate::authority::Record::new(vec![1], vec![2], None);
         let raw = RawValue::from_string(r#"{"a":1}"#.into()).unwrap();
         let cases: Vec<(Message, &str)> = vec![
             (get(g.clone()), "get"),
@@ -953,7 +945,6 @@ mod tests {
             (event(&crate::copy::Sealed::default()), "event"),
             (entries(&raw), "entries"),
             (release(&raw), "release"),
-            (command(&r), "command"),
             (cert(&[1], Some(&[2])), "cert"),
             (admin(&[1]), "admin"),
             (tunnel(&v), "tunnel"),

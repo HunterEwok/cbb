@@ -4231,16 +4231,12 @@ serial number the last one revoked until its maintainer looks.
 What a forwarder and a relay check in place of the group's records, so that no device ID,
 name, system, root or date leaves the group, and a server cannot follow a group or a device
 from one month to the next ([design.md](design.md), D-67 and D-75). Implemented in Go
-(`internal/forward`), and in Rust for the relay (`member/src/relayd`). The vectors in `testdata/interop/v2-credentials.json`
-(written by Go's records of 0.5) give a group's records, the lists its credentials must hold,
-a period with its server credentials, its hubs' and members' credentials, and sets a server
-refuses. `cbb`'s core reads and checks them as Go does (`core/src/credential.rs`:
-the lists, the signatures and types, and a server's check), and passes the vectors; it
-registers with no server, so it signs none and keeps none. The phones' kits do what Go does
+(`internal/forward`), and in Rust for the relay (`member/src/relayd`); the core reads the
+format's profile, frames and credentials in `core/src/blind`. The phones' kits do what Go does
 (`Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
-`message` events), and pass the same vectors. A phone registers with a relay
+`message` events). A phone registers with a relay
 by them once the members' credential lists its server key (the Live member, member/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
 names back to device IDs by the server credentials. A phone that is the group's hub
@@ -4594,8 +4590,6 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `join::welcome::PARTS_MS` | 1500000 | reader | the widest parts at 0.54 Mbit/s | `welcome/late` |
 | `keystore::AHEAD_MS` | 86400000 | reader | a newest epoch a day ahead |  |
 | `keystore::WEEK_MS` | 604800000 | frozen | a sealing epoch, the newest for a week and kept a week after |  |
-| `credential::PERIOD_RENEW_MS` | 2592000000 | stated | a period 30 days old, when the root starts the next |  |
-| `credential::PERIOD_LIFETIME_MS` | 3024000000 | stated | a period lasting 35 days, its renewal and 5 days |  |
 | `store::HEADER` | 12 | frozen | a store frame's header |  |
 | `msg::member::MAX_ACTIONS` | 64 | frozen | the action names a hello offers | `hello/actions` |
 | `msg::member::MAX_ACTION_NAME` | 32 | frozen | an action's name | `hello/actions` |
@@ -4617,8 +4611,8 @@ The core's clocks follow a few values, each chosen once (D-116):
 | Constant | Value | What follows it |
 |---|---|---|
 | `keystore::WEEK_MS` | a week | how long a sealing epoch is the newest, and how long the previous one is kept |
-| `credential::PERIOD_RENEW_MS` | 30 days | how old a period gets before the root starts the next |
-| `credential::PERIOD_LIFETIME_MS` | 35 days | how long a period lasts: the renewal plus 5 days |
+| `PERIOD_RENEW_MS` (`member/src/faces.rs`) | 30 days | how old a period gets before the root starts the next |
+| `PERIOD_LIFETIME_MS` (`member/src/faces.rs`) | 35 days | how long a period lasts: the renewal plus 5 days |
 | `copies::STATEMENT_MAX_AGE_MS` | 35 days | how long a device may be away and still read and write; `beacon::MAX_AGE_MS` and `records::set::ADMIN_SILENCE_MS` follow it |
 
 **A week for the sealing keys.** MLS leaves the time between key updates to the application
