@@ -129,6 +129,14 @@ func TestRefusedRegistrationLeavesForwarder(t *testing.T) {
 		{"a credential of another period key", certC, keyB.PublicKey().Bytes(), hubAuth{creds: [][]byte{gC.signHubs(t, rogueKey, 6, now.Add(time.Hour))}}, "first"},
 		{"an older credential", certC, keyB.PublicKey().Bytes(), hubAuth{creds: [][]byte{gC.hubs(t, 4)}}, "older"},
 	} {
+		// A registration answers before its setup ends, so the snapshot
+		// waits for every setup before it, or it holds a slot that frees
+		// later and the sources never come back to it.
+		waitUntil(t, tc.name+": the setups before it to end", func() bool {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			return f.setting == 0
+		})
 		before, from := f.state(), f.fromNow()
 		holder := keyB
 		if tc.name == "another group's WireGuard key" {
