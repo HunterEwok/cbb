@@ -99,17 +99,35 @@ final class ReadersUITests: XCTestCase {
     /// its darkest and lightest pixels at least 4.5:1 (WCAG AA), or 3:1 for
     /// large text, which the app marks with the identifier largeText.
     private func contrast(_ app: XCUIApplication, _ screen: String) {
-        // The audit before it can leave the screen moving (on an iPad its
-        // tree shrank during the walk by index below), and the picture and
-        // the elements must be of one still screen.
+        // The screen can still change after it settles (on an iPad a list
+        // lost a row during a walk of the live elements by index, which
+        // then fails on an index that is gone), so the elements are read
+        // once, from one snapshot of the tree, and the picture is taken
+        // straight after it; the frames measured are the snapshot's.
         app.settle(screen)
+        guard let root = try? app.snapshot() else {
+            XCTFail("\(screen): no snapshot of the app")
+            return
+        }
         let shot = XCUIScreen.main.screenshot()
-        let bounds = app.frame
-        let status = app.statusBars.firstMatch.exists ? app.statusBars.firstMatch.frame : .null
-        let elements = app.staticTexts.allElementsBoundByIndex + app.buttons.allElementsBoundByIndex
-        // Only what the user sees: a sheet hides the screen under it from
-        // touch, not from the element tree.
-        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && bounds.contains(e.frame) && !status.intersects(e.frame) && e.isHittable {
+        let bounds = root.frame
+        var status = CGRect.null
+        var found: [XCUIElementSnapshot] = []
+        var stack = [root]
+        while let e = stack.popLast() {
+            if e.elementType == .statusBar { status = status.union(e.frame) }
+            if e.elementType == .staticText || e.elementType == .button { found.append(e) }
+            stack.append(contentsOf: e.children)
+        }
+        for e in found where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && bounds.contains(e.frame) && !status.intersects(e.frame) {
+            // Only what the user sees: a sheet hides the screen under it
+            // from touch, not from the element tree. A snapshot does not
+            // say what is hittable, so the live element with the same type,
+            // label and frame is asked; one that is gone by now is skipped,
+            // as asking a gone element fails the test.
+            let live = app.descendants(matching: e.elementType).matching(NSPredicate(format: "label == %@", e.label))
+                .allElementsBoundByIndex.first { $0.exists && $0.frame == e.frame }
+            guard let live, live.exists, live.isHittable else { continue }
             guard let ratio = Self.contrast(e.frame, in: shot, screen: bounds) else {
                 XCTFail("\(screen): no picture of '\(e.label)' at \(e.frame)")
                 continue
