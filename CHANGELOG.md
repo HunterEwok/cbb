@@ -3126,6 +3126,9 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A member that is given the revocation list of Android attestations it already holds no
+  longer takes it as a new one on the second time: it wrote the list again, said it took it
+  and checked its peers' evidence again for nothing.
 - A hub of sync away from home now answers the devices that were connected to it before it
   served, as soon as it serves: their `tunnel` waited for its next round, 15 s later, so they
   learned of a new hub, or of the hub a move went to, that much later or not before the old

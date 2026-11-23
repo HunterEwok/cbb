@@ -423,6 +423,7 @@ pub(crate) mod tests {
                     Header { error: "the key is gone".into(), detail: "TPM_RC_HANDLE".into(), ..h },
                     Vec::new(),
                 ),
+                "attest-status" => Message::new(h, b"{}".to_vec()),
                 "key-new" | "key-public" | "key-sign" | "seal" | "unseal" => {
                     Message::new(h, key_answer(&m.header.op, &m.payload))
                 }
