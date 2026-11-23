@@ -518,7 +518,7 @@ pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
         eprintln!("{}", tr!("Touch the YubiKey when it blinks."));
     }
     let m = request(g, &Message::new(h, text.into_bytes()))?;
-    // A group of 0.6 changes its root at once (rule 33); 0.5's claim waits.
+    // The group changes its root at once (rule 33).
     if m.header.done {
         println!(
             "{}",

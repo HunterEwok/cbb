@@ -4,9 +4,8 @@
 package tools.cbb
 
 /**
- * The phone at the group's blind relay, as the screens show it. On a group
- * of 0.6 the Live member links to the relay the root set (AwayOn06); a
- * phone of a group of 0.5 syncs at home only (D-123).
+ * The phone at the group's blind relay, as the screens show it: the Live
+ * member links to the relay the root set (AwayOn06).
  */
 object RelayOnPhone {
     /** What the screens show. */

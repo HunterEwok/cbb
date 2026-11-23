@@ -54,9 +54,8 @@ public enum AwayOn06 {
     /// The UDP port of a hub at home only, which its addresses on the home network name.
     public static let homePort: UInt16 = 8764
 
-    /// Has the member serve as a hub with the user's settings, as the
-    /// phone of 0.5 was: through the forwarder the root set when there is
-    /// one (byRoot; the member takes it itself, VLESS there unless the
+    /// Has the member serve as a hub with the user's settings: through the
+    /// forwarder the root set when there is one (byRoot; the member takes it itself, VLESS there unless the
     /// tunnel is plain), or at home only, at homeAddrs.
     @discardableResult
     public static func serve(_ node: CoreMember, _ p: Prefs, homeAddrs: [String], byRoot: CoreMember.RootForwarder?) throws -> CoreMember.AwayState? {

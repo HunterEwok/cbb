@@ -14,9 +14,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Sync away from home as the screens show it. On a group of 0.6 the Live
- * member runs it (AwayOn06); a phone of a group of 0.5 syncs at home only
- * (D-123).
+ * Sync away from home as the screens show it, which the Live member runs
+ * (AwayOn06).
  */
 object AwayFromHome {
     /** What the screens show. */

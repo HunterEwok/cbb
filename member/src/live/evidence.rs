@@ -6,7 +6,7 @@
 //! `evidence` message (t 19) whose `data` is a map of its format's table
 //! (`msg::member::evidence_data`); the checks of Android's Key Attestation
 //! and of the TPM's structures, the TPM itself and the revocation list are
-//! cbb-helper's, as on 0.5 (`crate::evidence`), which takes and gives the
+//! cbb-helper's (`crate::evidence`), which takes and gives the
 //! evidence in its JSON form. The group's root records what an attestation
 //! proves in the device's record (`writers::record_proven`); a computer
 //! whose member key is in a TPM sends its own evidence on each connection

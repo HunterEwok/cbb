@@ -85,8 +85,7 @@ class AwayOn06(private val file: SealedFile, private val log: (String, Throwable
         if (home == null || home in homes) homes else (homes + home).takeLast(HubState.MAX_HOMES)
 
     /**
-     * Makes the member a hub with the user's settings, as the phone of 0.5
-     * was: through the forwarder the root set when there is one (byRoot;
+     * Makes the member a hub with the user's settings: through the forwarder the root set when there is one (byRoot;
      * the member takes it itself, VLESS there unless the tunnel is plain),
      * or at home only. A hub at home only has no address away from home, so
      * the member takes it on its home port's address.

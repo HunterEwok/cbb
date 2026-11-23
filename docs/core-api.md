@@ -135,7 +135,7 @@ signs the new start with the app's new root key and answers `{seq}`, as `cbb rec
 a computer (`writers::recover`); `take_over`, `take_handed_over`, `recover`, `hand_over`,
 `takeover_delay` and `finish_takeover` answer that the root changes only with the recovery key.
 `TestFFIPhoneChangeRoot` changes a computer's group's root from a phone. Everything else answers that it does not work in this build yet, with the cause
-`not on the records of 0.6 yet` in its details, until its part moves over. A copy with
+`not in this version` in its details. A copy with
 images or files comes as a `write` of kind `media` and a `copy` event with its manifest
 (`media`), which the app fetches.
 
@@ -404,7 +404,6 @@ The numbers and names never change meaning; new codes are added at the end of th
 | 10 | `body` | a record body is refused: its size, form or a field |
 | 11 | `cert` | a certificate is refused |
 | 14 | `saved` | the group's saved set file cannot be read, is of another version, or its pin does not hold under the local key |
-| 15 | `command` | a command is refused: its signer, its target, its time or its limits |
 | 16 | `signed` | a signed body that is not a record (a server credential, a release file or a manifest) is refused: its size, form or a field |
 | 17 | `copy` | a copy is refused or cannot be sealed: its origin, its signature or a field, or it does not open with the device's key |
 | 18 | `push` | a push registration cannot be made from its fields, or a push body does not open with any of the phone's push keys |

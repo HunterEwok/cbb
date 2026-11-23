@@ -261,8 +261,8 @@ fn the_tunnel_key_comes_from_the_connection_with_each_hub() {
 }
 
 /// A pairing session of 0.6 takes the exporter labelled
-/// `EXPERIMENTAL-cbb-pair-v3`, both ends the same; it differs from 0.5's
-/// label of the same session, and a member session gives none.
+/// `EXPERIMENTAL-cbb-pair-v3`, both ends the same, and a member session
+/// gives none.
 #[test]
 fn a_pairing_session_takes_the_v3_exporter() {
     let (a, b) = (own(), own());

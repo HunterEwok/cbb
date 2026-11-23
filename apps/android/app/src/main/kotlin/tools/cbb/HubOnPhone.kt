@@ -9,9 +9,8 @@ import java.net.InetAddress
 import java.util.Base64
 
 /**
- * The forwarder and the home networks of the phone as a hub of a group of
- * 0.6, which the Live member runs (AwayOn06); a phone of a group of 0.5 is
- * never a hub (D-123).
+ * The forwarder and the home networks of the phone as a hub of the group,
+ * which the Live member runs (AwayOn06).
  */
 object HubState {
     /** The forwarder: its endpoint, "ip:port", and the pin of its key: SHA-256 of its key in standard base64. */

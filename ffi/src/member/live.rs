@@ -5,9 +5,9 @@
 //! `cbb_member_start` runs when the app's folder holds the group's
 //! `group.cbor`. The member key stays in the app and signs through its
 //! callback; the app finds the members itself and hands them in with
-//! `found`, as on 0.5. The operations that have not moved to the records of
-//! 0.6 yet answer the error of `cbb_member::live::not_yet`, whose cause
-//! debug builds show, never a silent no-op.
+//! `found`. The operations this version does not have answer the error of
+//! `cbb_member::live::not_yet`, whose cause debug builds show, never a
+//! silent no-op.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -271,8 +271,7 @@ fn swap_json(s: cbb_member::button::Swap) -> Value {
     json!({ "sends": s.sends, "copy": s.takes.map(|e| event_json(&e)) })
 }
 
-/// A copy the button's rule gives, as the app reads it, in the shape of
-/// 0.5's.
+/// A copy the button's rule gives, as the app reads it.
 fn event_json(e: &cbb_core::clip::Event) -> Value {
     json!({
         "id": e.id,
@@ -285,7 +284,7 @@ fn event_json(e: &cbb_core::clip::Event) -> Value {
     })
 }
 
-/// The group's current copy as the app reads it, in the shape of 0.5's.
+/// The group's current copy as the app reads it.
 fn current_json(c: &Current, now_ms: i64) -> Value {
     let kind = if c.content.manifest.is_some() {
         Kind::Media
@@ -586,9 +585,8 @@ impl Phone {
                 Ok(self.away_answer())
             }
             // The phone as a hub of the group (the records must make it
-            // one: the root's own device or an admin key), as cbb global hub does on a computer and
-            // with the arguments of the phone of 0.5: reached away from
-            // home through the forwarder (`forwarder`, its key's pin `key`,
+            // one: the root's own device or an admin key), as cbb global
+            // hub does on a computer: reached away from home through the forwarder (`forwarder`, its key's pin `key`,
             // or `default` for the project's) or at `addrs` ("ip:port") on
             // the UDP `port`, hidden as `obfuscate_off` and `vless_off` say.
             // The Live hub serves its clients and the guests of invitations
@@ -625,7 +623,7 @@ impl Phone {
                 Ok(self.away_answer())
             }
             // A Live hub that stops hands its clients to the next hub in
-            // the group's order (D-122), so `anyway` of 0.5 is not needed.
+            // the group's order (D-122).
             "hub_off" => {
                 l.stop_being_hub()?;
                 Ok(self.away_answer())
@@ -818,7 +816,7 @@ impl Phone {
         })
     }
 
-    /// Whether sync is off and whether the phone is muted, as on 0.5.
+    /// Whether sync is off and whether the phone is muted.
     fn state(&self) -> Value {
         serde_json::to_value(cbb_member::sync::standing(&self.live.board)).unwrap_or_default()
     }
@@ -1142,7 +1140,6 @@ impl Phone {
         crate::window::Window::open(self.live.clone(), port, request, sign, ctx)
     }
 
-    /// What the watch asks is not on the records of 0.6 yet.
     /// An action from the watch's wrist: none on 0.6, where the watch
     /// signs nothing and only shows the group (D-124; signing on the watch
     /// comes with 0.7).

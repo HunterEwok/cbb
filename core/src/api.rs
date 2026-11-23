@@ -70,12 +70,8 @@ pub enum Code {
     Cert = 11,
     /// The group's saved set file cannot be read.
     Saved = 14,
-    /// A command is refused: its signer, its target, its time or its
-    /// limits.
-    Command = 15,
-    /// A signed body that is not a record (a command, a server
-    /// credential, a release file or a manifest) is refused: its form or a
-    /// field.
+    /// A signed body that is not a record (a server credential, a release
+    /// file or a manifest) is refused: its form or a field.
     Signed = 16,
     /// A copy is refused or cannot be sealed: its origin, its signature, a
     /// field, or it does not open with this device's key.
@@ -97,7 +93,6 @@ impl Code {
             Code::Body => "body",
             Code::Cert => "cert",
             Code::Saved => "saved",
-            Code::Command => "command",
             Code::Signed => "signed",
             Code::Copy => "copy",
             Code::Push => "push",
@@ -689,11 +684,11 @@ mod tests {
         assert_eq!(code(&read(br#"{"abi":1,"op":"read_invite","args":{}}"#)), Code::Request as u64);
         assert_eq!(code(&read(&alloc::vec![b' '; MAX_REQUEST + 1])), Code::TooLarge as u64);
         let names: Vec<_> =
-            [Code::Request, Code::Abi, Code::Op, Code::TooLarge, Code::Body, Code::Cert, Code::Saved, Code::Command]
+            [Code::Request, Code::Abi, Code::Op, Code::TooLarge, Code::Body, Code::Cert, Code::Saved, Code::Signed]
                 .iter()
                 .map(|c| c.name())
                 .collect();
-        assert_eq!(names, ["request", "abi", "op", "too_large", "body", "cert", "saved", "command"]);
+        assert_eq!(names, ["request", "abi", "op", "too_large", "body", "cert", "saved", "signed"]);
     }
 
     /// version names the ABI and the core's version.

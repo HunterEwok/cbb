@@ -6,8 +6,7 @@
 //! and thawing a device, renaming it, the window for incoming copies, the
 //! group's hubs and its settings. Each writer takes the set and the key
 //! that signs and gives back the records it added, which the member keeps
-//! and passes on (`Mesh::changed`). It stands where the admin of 0.5
-//! (`admin`) stands until the service switches.
+//! and passes on (`Mesh::changed`).
 
 use cbb_core::identity::ExternalKey;
 use cbb_core::records::body::{CAP_HUB, Device, Kind, RIGHT_HUB, ROLE_MEMBER, Removal, Settings};
