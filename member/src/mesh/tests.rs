@@ -28,6 +28,13 @@ impl ExternalKey for K {
     }
 }
 
+impl K {
+    /// The key made from the 32 bytes b.
+    pub(crate) fn of(b: &[u8; 32]) -> K {
+        K(SigningKey::from_slice(b).unwrap())
+    }
+}
+
 pub(crate) fn root() -> K {
     K(SigningKey::from_slice(&[1; 32]).unwrap())
 }

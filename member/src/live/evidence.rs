@@ -661,4 +661,82 @@ mod tests {
         drop(first);
         assert!(Opening::start(&flag).is_some());
     }
+
+    fn open(name: &str) -> (Arc<Live>, std::path::PathBuf) {
+        let (a, b) = crate::mesh::tests::two_dirs(name);
+        let l = Live::open(&a, crate::mesh::tests::own(&a), Arc::new(|_| {})).unwrap();
+        (l, b)
+    }
+
+    /// The evidence of each format, from a peer of a group whose root is
+    /// not this device: a computer that is not the root records nothing
+    /// and asks no helper; a TPM credential that is not the root's, and an
+    /// activated credential this device never sent, are refused; evidence
+    /// that is not a message, or names no key, changes nothing.
+    #[test]
+    fn evidence_where_this_device_is_not_the_root() {
+        let (l, b) = open("evidence-not-root");
+        let peer_own = crate::mesh::tests::own(&b);
+        let peer = peer_own.device();
+        let key = peer_own.hash();
+        // Before the attestations start, evidence is not taken.
+        assert!(l.evidence_from(&peer, b"").is_ok());
+        assert!(l.set_own_evidence(&[]).is_err(), "no attestations yet");
+        assert_eq!(l.attest_pending(), 0);
+        assert!(l.start_attest(false));
+        assert!(!l.start_attest(false), "the attestations start once");
+
+        let b64 = |n: u8, len: usize| STANDARD.encode(vec![n; len]);
+        let android = to_wire(&json!({"format": "android-key", "salt": b64(1, 16), "chain": [b64(2, 300)]})).unwrap();
+        let tpm = to_wire(&json!({"format": "tpm", "salt": b64(1, 16), "chain": [b64(2, 600)],
+            "tpm": {"ek": b64(4, 314), "ak": b64(5, 90), "key": b64(6, 90), "attest": b64(7, 150), "signature": b64(8, 76)}}))
+        .unwrap();
+        let credential =
+            to_wire(&json!({"format": "tpm-credential", "credential": b64(9, 68), "secret": b64(10, 256)})).unwrap();
+        let activated = to_wire(&json!({"format": "tpm-activated", "secret": b64(11, 32)})).unwrap();
+        // The mesh hands on a message without its frame's length.
+        let msg = |(format, data): &(u64, Vec<u8>), key: &KeyHash| message(*format, key, data)[4..].to_vec();
+
+        // Not the root: Android and TPM evidence changes nothing.
+        assert!(l.evidence_from(&peer, &msg(&android, &key)).is_ok());
+        assert!(l.evidence_from(&peer, &msg(&tpm, &key)).is_ok());
+        // A credential from a device that is not the root.
+        let err = l.evidence_from(&peer, &msg(&credential, &l.mesh.own().hash())).unwrap_err();
+        assert!(err.message().contains("not the group's root's"), "{}", err.message());
+        // An activated credential this device never sent.
+        let err = l.evidence_from(&peer, &msg(&activated, &key)).unwrap_err();
+        assert!(err.message().contains("did not send"), "{}", err.message());
+        // A device the records do not name, a message that is not one.
+        assert!(l.evidence_from(&DeviceId([9; 16]), &msg(&android, &key)).is_ok());
+        assert!(l.evidence_from(&peer, b"not a message").is_err());
+
+        // This device's own evidence: kept, and one that does not fit the
+        // format refused.
+        assert!(
+            l.set_own_evidence(&[json!({"format": "android-key", "salt": b64(1, 16), "chain": [b64(2, 3)]})]).is_ok()
+        );
+        assert!(l.set_own_evidence(&[json!({"format": "later"})]).is_err());
+        l.send_own_evidence(Some(&peer));
+        l.close();
+    }
+
+    /// A phone keeps Android evidence only while it is the group's root;
+    /// with none waiting it signs nothing, and only the root's key may
+    /// record what an attestation proves.
+    #[test]
+    fn a_phone_that_is_not_the_root() {
+        let (l, b) = open("evidence-phone");
+        l.with_phone_attestations();
+        let peer_own = crate::mesh::tests::own(&b);
+        let b64 = |n: u8, len: usize| STANDARD.encode(vec![n; len]);
+        let (format, data) =
+            to_wire(&json!({"format": "android-key", "salt": b64(1, 16), "chain": [b64(2, 300)]})).unwrap();
+        assert!(l.evidence_from(&peer_own.device(), &message(format, &peer_own.hash(), &data)[4..]).is_ok());
+        assert_eq!(l.attest_pending(), 0, "a phone that is not the root keeps no evidence");
+        assert_eq!(l.attest_record(&crate::mesh::tests::root()).unwrap(), 0);
+        let other = crate::mesh::tests::K::of(&[3; 32]);
+        let err = l.attest_record(&other).unwrap_err();
+        assert!(err.message().contains("only the group's root"), "{}", err.message());
+        l.close();
+    }
 }
