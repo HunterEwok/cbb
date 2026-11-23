@@ -2,9 +2,9 @@
 // Copyright (C) 2026 HunterEwok
 
 plugins {
-    id("com.android.application") version "9.5.1" apply false
-    id("com.android.library") version "9.5.1" apply false
+    id("com.android.application") version "9.5.2" apply false
+    id("com.android.library") version "9.5.2" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.21" apply false
     // The app's screenshot regressions on Robolectric (app/src/test/screenshots).
-    id("io.github.takahirom.roborazzi") version "1.78.0" apply false
+    id("io.github.takahirom.roborazzi") version "1.79.0" apply false
 }
