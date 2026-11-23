@@ -26,7 +26,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
     // TLS 1.3 with the exporter and ALPN: the app bundles conscrypt-android,
     // the tests use the JVM build, which has the same API.
     compileOnly("org.conscrypt:conscrypt-openjdk-uber:2.9.0")

@@ -618,9 +618,13 @@ impl Live {
         out
     }
 
-    /// Stops the member: every connection ends with a goodbye.
+    /// Stops the member: every connection ends with a goodbye, and the
+    /// known networks are no longer written.
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        if let Some(n) = self.networks() {
+            n.close();
+        }
         self.mesh.close();
         self.kick();
     }

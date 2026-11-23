@@ -60,6 +60,9 @@ struct File {
 struct Inner {
     file: File,
     gw: Option<(HashMap<u32, String>, Instant)>,
+    /// Set by close: the list is no longer written, as the device is
+    /// leaving its group and the file goes with the group's others.
+    closed: bool,
 }
 
 /// The known networks.
@@ -108,7 +111,7 @@ impl Networks {
         let n = Networks {
             path: path.clone(),
             log,
-            inner: Mutex::new(Inner { file: File::default(), gw: None }),
+            inner: Mutex::new(Inner { file: File::default(), gw: None, closed: false }),
             interfaces,
             gateways,
             listed: Arc::new(Mutex::new(Listed::default())),
@@ -277,7 +280,18 @@ impl Networks {
         added
     }
 
+    /// Stops writing the list: after close returns, nothing writes the file
+    /// again, so that a leave that deletes it next does not see it come
+    /// back from a learn or a lookup still running (the writes hold the
+    /// same lock).
+    pub fn close(&self) {
+        self.inner.lock().unwrap().closed = true;
+    }
+
     fn save(&self, inner: &Inner) {
+        if inner.closed {
+            return;
+        }
         let res = serde_json::to_vec(&inner.file)
             .map_err(|e| e.to_string())
             .and_then(|b| crate::files::write_atomic(&self.path, &b, 0o600).map_err(|e| e.message().to_string()));
@@ -519,6 +533,43 @@ mod tests {
         let n = make();
         assert!(!n.knows(at));
         assert!(n.published().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// After close nothing writes the list again: a leave deletes it next,
+    /// and neither a learn nor a network bound to its gateway brings it back.
+    #[test]
+    fn writes_nothing_after_close() {
+        let dir = std::env::temp_dir().join(format!("cbb-networks-closed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let home = Interface { index: 2, name: "eth0".into(), prefixes: vec![p("192.168.0.5/24")] };
+        let other = Interface { index: 3, name: "wlan0".into(), prefixes: vec![p("10.1.0.7/24")] };
+        let ifs = Arc::new(Mutex::new(vec![home, other]));
+        let gws = Arc::new(Mutex::new(HashMap::new()));
+        let make = || {
+            let (i, g) = (ifs.clone(), gws.clone());
+            Networks::load_with(
+                &dir,
+                false,
+                Arc::new(|_: &str| {}),
+                Arc::new(move || i.lock().unwrap().clone()),
+                Box::new(move || g.lock().unwrap().clone()),
+            )
+        };
+        let (at, other_at): (IpAddr, IpAddr) = ("192.168.0.5".parse().unwrap(), "10.1.0.7".parse().unwrap());
+        assert!(make().learn(at));
+        let file = dir.join(FILE);
+        assert!(file.exists());
+        // The gateway's address becomes known: the next look binds the
+        // network to it, which writes the list, unless closed.
+        gws.lock().unwrap().insert(2, "aa:bb:cc:dd:ee:ff".to_string());
+        let n = make();
+        n.close();
+        std::fs::remove_file(&file).unwrap();
+        assert!(n.knows(at), "a closed list still answers");
+        assert!(n.learn(other_at), "a closed list still learns in memory");
+        assert!(!file.exists(), "the list was written after close");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

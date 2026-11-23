@@ -3173,6 +3173,9 @@ with 0.5 is set up again once. The details follow.
   served, as soon as it serves: their `tunnel` waited for its next round, 15 s later, so they
   learned of a new hub, or of the hub a move went to, that much later or not before the old
   hub stopped.
+- A device that leaves its group no longer finds its list of known networks
+  (`networks.json`) written again right after the leave deleted it: the list stops being
+  written once the member stops, before the group's files go.
 - The iPhone app's theme swatches in Settings are laid out all at once, so none is left
   undrawn while its name is on screen (the accessibility audit of `testLanguages`).
 - A restart of the service no longer leaves it unreachable for a few seconds where the
