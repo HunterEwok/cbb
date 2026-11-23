@@ -3190,6 +3190,8 @@ with 0.5 is set up again once. The details follow.
   posted a second time.
 - A home pairing window's five minutes count from the moment it opens, not from after `cbb
   pair` hears of it: a slow machine no longer gives the window a few seconds more.
+- The desktop app no longer hangs when, with error details on, it shows the report of the
+  service's last crash.
 - A device that refuses or fails a command cleans its reason before it answers, so a reason
   with a line break or over 256 bytes reaches the sender instead of being dropped.
 - OpenSSF Scorecard waits for `android-wrapper.yml`'s check of `gradle-wrapper.jar` on the

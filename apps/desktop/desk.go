@@ -748,8 +748,9 @@ func (d *Desk) Bug() *BugOffer {
 	log.Printf("bug: the service broke and started again: %s", details.Details)
 	if d.showDetails() || o.Action != "ask" {
 		if d.showDetails() {
+			msg := d.T("Something in CBB broke. It started again.") + "\n\n" + details.Details
 			d.mu.Lock()
-			d.message = d.T("Something in CBB broke. It started again.") + "\n\n" + details.Details
+			d.message = msg
 			d.mu.Unlock()
 		}
 		d.BugCancel()

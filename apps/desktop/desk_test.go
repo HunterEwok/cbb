@@ -179,3 +179,161 @@ func TestOwnMute(t *testing.T) {
 		t.Fatal("another device on the control socket")
 	}
 }
+
+// TestDeskActions: each button runs cbb as the administrator with its
+// arguments and answer, and the window then says what happened; a run the
+// user cancelled says nothing, one that failed says why.
+func TestDeskActions(t *testing.T) {
+	type run struct {
+		args  []string
+		input string
+	}
+	var runs []run
+	var fail error
+	old := adminRun
+	adminRun = func(args []string, input string, _ bool) error {
+		runs = append(runs, run{append([]string(nil), args...), input})
+		return fail
+	}
+	t.Cleanup(func() { adminRun = old })
+	off := false
+	d := &Desk{tr: map[string]string{}, socket: filepath.Join(t.TempDir(), "none.sock")}
+	d.settings.Details = &off
+	for _, c := range []struct {
+		do    func()
+		args  string
+		input string
+		says  string
+	}{
+		{d.CreateGroup, "new", "", "The group is made: this computer is its main device. Add a device with the + button."},
+		{d.Leave, "leave -yes", "", "Left the group. This computer can join a group again."},
+		{func() { d.Freeze("mac") }, "freeze mac", "", "Frozen."},
+		{func() { d.Unfreeze("mac") }, "unfreeze mac", "", "Unfrozen."},
+		{func() { d.MakeHub("mac", false, true) }, "global hub -on mac -forward-only", "", "It is a hub now that only passes the copies on, and reads none of them."},
+		{func() { d.MakeHub("mac", false, false) }, "global hub -on mac", "", "It is a hub now."},
+		{func() { d.MakeHub("", true, false) }, "global hub -firewall no -away-on", "yes\n", "It is a hub now."},
+		{func() { d.MakeHub("", false, false) }, "global hub -firewall no", "", "It is a hub now."},
+		{func() { d.StopHub("") }, "global hub off -yes", "", "It is no hub any more."},
+		{func() { d.StopHub("srv") }, "global hub off -on srv -yes", "", "It is no hub any more."},
+		{d.Resolve, "resolve", "", "Both histories are void. The device signs its records again by itself."},
+		{func() { d.Recover("  word word word \n") }, "recovery", "word word word\n", "This computer is the group's main device now."},
+		{d.Update, "update", "", "CBB is updated."},
+		{func() { d.Unmute("mac") }, "unmute -on mac", "", "It is no longer muted."},
+	} {
+		runs = nil
+		c.do()
+		if len(runs) != 1 || strings.Join(runs[0].args, " ") != c.args || runs[0].input != c.input {
+			t.Errorf("ran %+v, want cbb %s with %q", runs, c.args, c.input)
+		}
+		if d.message != c.says {
+			t.Errorf("cbb %s: the window says %q", c.args, d.message)
+		}
+	}
+	fail = errCancelled
+	d.Update()
+	if d.message != "" {
+		t.Errorf("after a cancel the window says %q", d.message)
+	}
+	fail = &adminError{msg: "the release does not verify"}
+	d.Update()
+	if d.message == "" || d.message == "CBB is updated." {
+		t.Errorf("after a failure the window says %q", d.message)
+	}
+}
+
+// TestDeskOwnUnmute: this computer is unmuted on the control socket.
+func TestDeskOwnUnmute(t *testing.T) {
+	svc := newFakeService(t)
+	old := adminRun
+	adminRun = func(args []string, _ string, _ bool) error {
+		t.Errorf("cbb %v as the administrator", args)
+		return nil
+	}
+	t.Cleanup(func() { adminRun = old })
+	d := &Desk{tr: map[string]string{}, socket: svc.path, status: &control.Status{Device: "self", Group: "cbb-7f3a"}}
+	d.Unmute("self")
+	if got := svc.requests(); len(got) != 1 || got[0].Op != control.OpUnmute || got[0].Device != "self" {
+		t.Errorf("the service heard %+v", got)
+	}
+	if d.message != "It is no longer muted." {
+		t.Errorf("the window says %q", d.message)
+	}
+}
+
+// TestHeadline: the tray's line for each state, and its glyph.
+func TestHeadline(t *testing.T) {
+	d := &Desk{tr: map[string]string{}}
+	devices := []control.Device{{ID: "a", Self: true}, {ID: "b", Online: true}, {ID: "c"}}
+	for _, c := range []struct {
+		s           State
+		line, glyph string
+	}{
+		{State{Problem: "no answer"}, "The service does not answer", "tray"},
+		{State{}, "This computer is in no group yet", "tray"},
+		{State{Status: &control.Status{}}, "This computer is in no group yet", "tray"},
+		{State{Status: &control.Status{Group: "g"}, Devices: devices}, "2 of 3 online", "tray-online"},
+		{State{Status: &control.Status{Group: "g"}, Devices: devices[:1]}, "1 of 1 online", "tray-group"},
+	} {
+		if got := d.headline(c.s); got != c.line {
+			t.Errorf("%+v: %q, want %q", c.s, got, c.line)
+		}
+		if got := trayState(c.s); got != c.glyph {
+			t.Errorf("%+v: glyph %q, want %q", c.s, got, c.glyph)
+		}
+		if len(trayIcon(c.glyph, "white")) == 0 || len(trayIcon(c.glyph, "black")) == 0 {
+			t.Errorf("no picture for %s", c.glyph)
+		}
+	}
+}
+
+// TestBug: a report the service keeps is asked about in release mode and
+// goes when allowed; in debug mode it shows whole and is dropped; nothing
+// waits, nothing is asked.
+func TestBug(t *testing.T) {
+	svc := newFakeService(t)
+	off, on := false, true
+	d := &Desk{tr: map[string]string{}, socket: svc.path}
+	d.settings.Details = &off
+	if o := d.Bug(); o != nil {
+		t.Fatalf("an offer with no report: %+v", o)
+	}
+	svc.bug = []byte(`{"action":"ask","offer_always":true,"fixed_in":"0.6.1","report":{"details":"index out of range"}}`)
+	o := d.Bug()
+	if o == nil || !o.OfferAlways || o.FixedIn != "0.6.1" || !strings.Contains(o.Report, "\n  \"details\": \"index out of range\"") {
+		t.Fatalf("the offer: %+v", o)
+	}
+	d.BugAllow(true)
+	got := svc.requests()
+	if last := got[len(got)-1]; last.Op != control.OpBugAllow || string(last.Payload) != `{"always":true}` {
+		t.Errorf("allowed: %+v", last)
+	}
+	// Debug mode: the message shows the break, and the report is dropped.
+	d.settings.Details = &on
+	if o := d.Bug(); o != nil {
+		t.Errorf("an offer in debug mode: %+v", o)
+	}
+	if !strings.HasSuffix(d.message, "\n\nindex out of range") {
+		t.Errorf("the window says %q", d.message)
+	}
+	got = svc.requests()
+	if last := got[len(got)-1]; last.Op != control.OpBugCancel {
+		t.Errorf("in debug mode: %+v", last)
+	}
+	// A report the core would not make again stops waiting, unasked.
+	d.settings.Details = &off
+	svc.bug = []byte(`{"action":"drop","report":{}}`)
+	if o := d.Bug(); o != nil {
+		t.Errorf("an offer to drop: %+v", o)
+	}
+	svc.bug = []byte(`not json`)
+	if o := d.Bug(); o != nil {
+		t.Errorf("an offer from a broken answer: %+v", o)
+	}
+	// A service that does not answer: nothing asked, nothing breaks.
+	svc.stop()
+	if o := d.Bug(); o != nil {
+		t.Errorf("an offer with no service: %+v", o)
+	}
+	d.BugAllow(false)
+	d.BugCancel()
+}

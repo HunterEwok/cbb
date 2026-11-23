@@ -844,6 +844,17 @@ type fakeService struct {
 	sync control.Header
 	// arrangement is the user's order of the tiles, as the member keeps it.
 	arrangement Arrangement
+	// asked are the mute, unmute and bug requests, with their payloads.
+	asked []control.Message
+	// bug is the bug report OpBug answers, nil for none.
+	bug []byte
+}
+
+// requests returns the mute, unmute and bug requests so far.
+func (s *fakeService) requests() []control.Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]control.Message(nil), s.asked...)
 }
 
 // arranged is the stand-in's stored arrangement.
@@ -1019,6 +1030,13 @@ func (s *fakeService) serve(c net.Conn) {
 			if m.ForMS > 0 {
 				s.status.SyncUntilMS = time.Now().UnixMilli() + m.ForMS
 			}
+		}
+		s.mu.Unlock()
+	case control.OpMute, control.OpUnmute, control.OpBug, control.OpBugAllow, control.OpBugCancel:
+		s.mu.Lock()
+		s.asked = append(s.asked, *m)
+		if m.Op == control.OpBug {
+			a.Payload = s.bug
 		}
 		s.mu.Unlock()
 	default:
