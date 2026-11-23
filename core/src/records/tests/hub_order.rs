@@ -3,12 +3,12 @@
 
 //! The hub order (docs/protocol.md, section 11, "Several hubs"): the
 //! root's hubs record first, in its order, then the root's own device and
-//! the computers with an admin key, then the phones, the root's own device
-//! first in each part, then by device ID; frozen devices and devices that
-//! may not be hubs left out.
+//! the computers with an admin key, the root's own device first, then by
+//! device ID; frozen devices, phones, watches, leaves and devices that may
+//! not be hubs left out.
 
 use crate::format::{DeviceId, KeyHash};
-use crate::records::body::{ROLE_MEMBER, ROLE_PHONE};
+use crate::records::body::{ROLE_LEAF, ROLE_MEMBER, ROLE_PHONE, ROLE_WATCH};
 use crate::records::eval::{DeviceState, State};
 
 fn device(n: u8, role: u64, admin: bool) -> DeviceState {
@@ -51,42 +51,48 @@ fn the_hub_order() {
         root_device: Some(id(5)),
         ..State::default()
     };
-    // No hubs record: the admin computers, then the admin phones, the
-    // root's device first in its part; devices without an admin key are
-    // no hubs.
-    assert_eq!(st.hub_order(), vec![id(2), id(4), id(7), id(5), id(1)]);
+    // No hubs record: the admin computers; the phones are no hubs, admin
+    // or root, and devices without an admin key are none either.
+    assert_eq!(st.hub_order(), vec![id(2), id(4), id(7)]);
     // The hubs record comes first, in its order, a computer without an
     // admin key among them; a device it names that is not in the group is
     // left out, and nobody comes twice.
     st.hubs = vec![id(6), id(7), id(9)];
-    assert_eq!(st.hub_order(), vec![id(6), id(7), id(2), id(4), id(5), id(1)]);
+    assert_eq!(st.hub_order(), vec![id(6), id(7), id(2), id(4)]);
     assert!(st.may_be_hub(&id(6)) && !st.may_be_hub(&id(3)) && !st.may_be_hub(&id(9)));
+    assert!(!st.may_be_hub(&id(1)) && !st.may_be_hub(&id(5)));
     // A frozen device is no hub, wherever it was.
     st.devices[5].frozen = true;
     st.devices[3].frozen = true;
-    assert_eq!(st.hub_order(), vec![id(7), id(2), id(5), id(1)]);
+    assert_eq!(st.hub_order(), vec![id(7), id(2)]);
     assert!(!st.may_be_hub(&id(6)));
 }
 
-// A phone that made the group is its root and holds no admin key: it may
-// be a hub all the same, first among the phones; another phone without an
-// admin key may not.
+// A hub is a computer, a router or a board: a phone is none, not even the
+// root's phone, nor a watch or a leaf with an admin key, nor one the hubs
+// record names; a computer that is the root is one without an admin key.
 #[test]
-fn a_root_phone_without_an_admin_key_may_be_a_hub() {
+fn only_computers_are_hubs() {
     let id = |n: u8| DeviceId([n; 16]);
-    let st = State {
+    let mut st = State {
         devices: vec![
             device(1, ROLE_PHONE, true),
             device(2, ROLE_MEMBER, true),
-            device(3, ROLE_PHONE, false),
+            device(3, ROLE_WATCH, true),
             device(4, ROLE_PHONE, false),
+            device(5, ROLE_LEAF, true),
+            device(6, ROLE_MEMBER, false),
         ],
         root_device: Some(id(4)),
+        hubs: vec![id(1), id(3)],
         ..State::default()
     };
-    assert!(st.may_be_hub(&id(4)) && !st.may_be_hub(&id(3)));
-    assert_eq!(st.hub_order(), vec![id(2), id(4), id(1)]);
-    let mut frozen = st.clone();
-    frozen.devices[3].frozen = true;
-    assert!(!frozen.may_be_hub(&id(4)));
+    for n in [1, 3, 4, 5] {
+        assert!(!st.may_be_hub(&id(n)), "d{n} is no hub");
+    }
+    assert_eq!(st.hub_order(), vec![id(2)]);
+    st.root_device = Some(id(6));
+    assert_eq!(st.hub_order(), vec![id(6), id(2)]);
+    st.devices[5].frozen = true;
+    assert_eq!(st.hub_order(), vec![id(2)]);
 }
