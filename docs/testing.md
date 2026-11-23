@@ -448,6 +448,8 @@ Under the table are the hard gates, which have no floor and fail the job at once
 
 A test that compares two times of its own run is not timed under `cargo llvm-cov`, which counts every step of the code under test and none of its dependencies (`cfg(coverage)`): the full group's fill against its signatures (`records::tests::insert_cost`) is ignored there and runs in the `cbb (Rust), the checks` job's plain build.
 
+The core's tests too slow for a pull request are `#[ignore]` there and run in the nightly `the core's slow tests` job: the record set's restores step by step (`core/tests/read_records.rs`) and the timing tests of the secrets' comparisons (`core/src/secret.rs`, dudect's method, one thread). A coverage build leaves the timing tests out (`cfg(coverage)`), since they never run there. An `#[ignore]` names where the test runs or why it waits.
+
 The Go packages of the `service tests on the Rust cbb` jobs run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and each part's profile (`cover-go-service-PART.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.

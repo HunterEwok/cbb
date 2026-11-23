@@ -2,7 +2,7 @@
 # fresh seed and more cases than a pull request's run, the native fuzz
 # targets of the readers of network input (docs/differential.md),
 # mutation testing of the records' code (docs/testing.md, "Mutation
-# testing"), the Rust core's branch coverage, a check that cbb and cbb-helper build
+# testing"), the core's slow tests, the Rust core's branch coverage, a check that cbb and cbb-helper build
 # the same bytes twice (.github/reproducible.sh), the group simulation with fresh
 # seeds (docs/testing.md, "The simulation"), and the members' tests run many times
 # over, to find the ones
@@ -100,6 +100,28 @@ jobs:
           first=$(( $(date +%s) * 1000 ))
           echo "seeds $first to $((first + 999))"
           SIM_ALL=1 SIM_FIRST=$first SIM_SEEDS=1000 cargo test --release -p cbb-core --lib sim::
+
+  # The core's tests too slow for a pull request, ignored there: the restores
+  # of the record set step by step (core/tests/read_records.rs) and the
+  # timing tests of the secrets' comparisons (core/src/secret.rs), one
+  # thread so that no neighbour skews the times.
+  slow-tests:
+    name: the core's slow tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: core/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - name: the record set's restores
+        run: cargo test --release -p cbb-core --test read_records -- --ignored
+      - name: the timing of the secrets' comparisons
+        run: cargo test --release -p cbb-core --lib -- --ignored timing --test-threads=1
 
   cargo-fuzz:
     name: cargo fuzz (${{ matrix.target }})
