@@ -6,13 +6,13 @@ page that explains it.
 
 | Term | Meaning |
 |---|---|
-| **group** | The devices that share one clipboard: phones, computers, small devices, watches and TVs. A group has no central server; its members trust each other through certificates signed by the group's keys. See [how it works](../guide/how-it-works.md). |
+| **group** | The devices that share one clipboard: phones, computers, small devices, watches and TVs. A group has no central server; its members trust each other through the group's records, which its keys sign. See [how it works](../guide/how-it-works.md). |
 | **member** | A device in a group. A computer or a small device runs `cbb`, a **phone** runs the app. What a member does is in its **capabilities**: `admin`, `dials` and `hub`. |
 | **cbb-helper** | The Go program beside `cbb` on a computer: keys in the TPM or the Secure Enclave, the desktop's clipboard, the Bluetooth keyboard and the TVs' remotes. A small device installs `cbb` without it (`get.sh --no-helper`). See [small devices](../../member/README.md). |
 | **rootless** | `cbb` on Linux installed without `sudo`, as its user's own service: it syncs, but every program of that user can read its keys, so it is never the root, an admin or a hub. See [installing](../guide/install.md#without-sudo-rootless). |
 | **root** | The device that holds the group's root key: the phone or the computer that made the group. It makes admins and has the last word over them. |
 | **admin** | A device the root has made an admin: it admits new devices, removes them, renames them and signs commands for the others. Phones, computers and watches can be admins. |
-| **admin CA** | The certificate authority under the root that an admin signs with; members accept what an admin signs because the root signed its admin CA. |
+| **admin key** | The key an admin signs with; members accept what it signs because the root's record names it, as far as the records let it. |
 | **device record** | A signed note about one device (its name, system, keys, where it keeps them) that every member keeps and passes on. A **revocation record** removes a device. |
 | **freeze** | What an admin does to another admin computer that may be stolen: from then on nothing that computer signs counts, until the root decides. |
 | **takeover** | How a device becomes the root when the root is lost: on the records of 0.6, only with the group's recovery key (`cbb recovery`, D-117). |

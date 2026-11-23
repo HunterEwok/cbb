@@ -51,12 +51,12 @@ them is in the [protocol](../protocol.md).
 | A device name | 1 to 64 characters |
 | A remote invitation (`cbb invite`) | 1 hour by default, at most 24 hours (`-for`) |
 
-## Certificates and keys
+## Keys and signed files
 
 | What | Lifetime |
 |---|---|
-| The group's CA certificates | 20 years |
-| A member certificate (computers, small devices and phones) | 2 years, renewed 240 days before its end |
+| An admin key whose device is silent | 35 days, then the root takes it back |
+| How long a device may be away and still read and write copies | 35 days |
 | A period of the server credentials | 35 days; the root starts the next after 30, which on a phone asks for Face ID or the fingerprint about once a month |
 | A release's signed files (`keys.json`, `release.json`) | at most 100 days |
 | The signed status of the stable release (`stable.json`) | at most 8 days, so an old one cannot hold back an update |

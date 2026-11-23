@@ -124,9 +124,10 @@ The few ideas the rest follows from:
 - **Equal members, no server** (D-3). Every device holds the whole state and passes it on;
   last writer wins under a hybrid logical clock (D-14, D-85), so the group converges without
   a coordinator.
-- **The group is a certificate authority** (D-9, D-33, D-51). A root key, on a phone's secure
-  hardware or a computer, signs admin CAs and device certificates; every connection is
-  mutual TLS 1.3 under them, and signed records add, rename and remove devices.
+- **The group is its signed records** (D-9, D-105). A root key, on a phone's secure
+  hardware or a computer, and the admin keys it names sign the records that add, rename and
+  remove devices; every connection is mutual TLS 1.3 in which each side proves a member key
+  those records name, and no member has a certificate.
 - **Pairing by a short code or a QR code** with CPace inside TLS (D-9), so a guess costs one
   online attempt and nothing can be ground offline.
 - **One port at home, one tunnel away** (D-5, D-11, D-38). At home the members find each
@@ -229,24 +230,22 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   it, and gives the other watchers its text. The Go `cbb` and agent work against it unchanged
   (`TestAloneClients`).
 - **The group's root and its admins.** `cbb new` makes a group with the Rust service as its
-  root: the root CA's key stays in `identity.json` as `group_ca_key`, as the Go member keeps
-  it, and the member key goes into the hardware through the helper where it can. Its hello
+  root: the root key stays in a file readable only by the service, and the member key goes
+  into the hardware through the helper where it can. Its hello
   carries the capabilities its own device record names (or, before it has one, its `-caps`
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
   dials the members with a higher device ID, without it it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
   `key_level`, `ttl`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair`, a pairing window that a new device dials (`cbb pair`, the core's admission),
-  each a record signed with the root's key or the admin key under its admin CA, by Go's rules
-  and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
-  `cbb` saves it again. The Go command line runs against it, and a Go computer joins, syncs
-  and takes each record (`TestAloneRoot`). `cbb pair` opens a pairing window as Go's does: a
-  six-digit code, `p=1` in its mDNS record, one attempt at a time, closed by three failed
-  ones, after five minutes or once a device joined. Its member port then offers both ALPN
-  protocols, `cbb/4` and `cbb-pair/3`, and takes a joiner's single P-256 certificate; the
-  negotiated protocol decides after the handshake whether the member chain is checked again
-  or the core's admission plays the exchange with the joiner confirming first
-  (`Admission::accept`, `TestAloneRootWindow`). On the records of 0.6 a computer becomes an admin
+  each a record signed with the root's key or an admin key the records name. The Go command
+  line runs against it, and another computer joins, syncs and takes each record
+  (`TestAloneRoot`). `cbb pair` opens the home window: a six-digit code, `p=1` and the
+  window's ID in its mDNS record, one attempt at a time, closed by three failed ones, after
+  five minutes or once a device joined. Its member port then offers both ALPN protocols,
+  `cbb/4` and `cbb-pair/3`, and takes the joiner's key container; the negotiated protocol
+  decides after the handshake whether the member key is checked against the records or the
+  core's admission plays the exchange (`Admission::accept`, `TestAloneRootWindow`). A computer becomes an admin
   only with the admin key it offered, with its proof over the pairing session, when it
   paired with the root: the root keeps that key by device (`offered.json`) and `make_admin`
   writes it into the device's record, so no admin CA travels (D-118). The root changes only
@@ -285,18 +284,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   -forward-only` on the root signs the device's record with `forward_only` first; an
   admin's is refused as not done yet (D-122). Such a member takes the hub command, seals no
   copies and refuses paste and action commands (`TestAloneForwardOnly`).
-- **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
-  `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
-  of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
-  the TPM or the Secure Enclave through cbb-helper where it can put them there). Every peer gets them in a `credentials` message after its hello; new ones a
-  peer sends are kept and passed on. When the records or the credentials change, and twice a
-  day, the service brings them up to date as Go's `refreshCredential`: the root starts a
-  period when the one kept is due or a member that sent its server key left; every member
-  signs its server key for the period; the root signs the hubs' and the members'
-  credentials with the period key when their lists are stale, and an admin that the hubs'
-  credential lists signs the members' credential (`credential::sign` and the `*_body`
-  functions, the key behind a callback).
-  On the records of 0.6 `faces.rs` does the same with the format's credentials
+- **The server credentials.** `faces.rs` keeps the format's credentials
   (`blind::credential`, signed by `Credential::sign`): `server-credentials.cbor` keeps the
   current period's, checked against the set (the period by the current root, a server key
   by a member's key, the lists by the period key or a listed admin); the server key is
@@ -333,11 +321,11 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in
   ones). The run loop keeps the phones' link (`relay.rs`) running in place of the hubs
-  (`away/meet.rs`): it registers with the member certificate and the records, or once the
-  members' credential lists the device's server key with the credentials (Go's
-  `relayCredentials`), and registers again when they change. A connection the relay brings
+  (`away/meet.rs`): it registers once the members' credential lists the device's server key,
+  with the credentials, and registers again when they change. A connection the relay brings
   to dial is dialed through its loopback port; a call comes to a loopback port of its own,
-  where the node serves it only when the certificate names the device the relay said calls.
+  where the node serves it only when the key container holds the key of the device the relay
+  said calls.
   Status shows the link as Go's `relay` (`TestAloneRelay`, `TestAloneRelayRoot`). When the
   project's relay fails, the device fetches the newest `keys.json` and `entries.json` through
   the mirror at the relay's address (at most every ten minutes) and, unless the relay showed
@@ -977,9 +965,9 @@ admin's.
 
 ### Confirming admin actions
 
-What changes the group goes to the admin socket, which only root reaches (D-62), so the apps
-used to run `cbb` as the administrator and the system asked for the password on every
-action. Instead the user at the screen confirms an admin action with the system's own
+What changes the group goes to the admin socket, which only root reaches (D-62). So that the
+apps need not run `cbb` as the administrator, with the system asking for the password on
+every action, the user at the screen confirms an admin action with the system's own
 prompt, and the service checks that confirmation itself, never what the caller says
 (`member/src/confirm.rs`, D-97). Actions come in three tiers:
 
