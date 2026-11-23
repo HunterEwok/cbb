@@ -259,10 +259,11 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
         if (d.takesPaste) {
             IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }
-        // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
+        // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device"):
+        // Unmute for a muted device, Mute for this phone or a connected one, as on the iPhone.
         if (d.muted != null) {
             IconLabel("🔊", stringResource(R.string.unmute)) { scope.launch { model.setMuted(d.id, false) } }
-        } else {
+        } else if (d.isSelf || d.online) {
             IconLabel("🔇", stringResource(R.string.mute)) { muting = true }
         }
         // Members run quick actions.

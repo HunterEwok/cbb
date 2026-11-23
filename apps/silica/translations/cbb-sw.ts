@@ -388,16 +388,8 @@
         <translation>Zaidi</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Nyamazisha kwa saa moja</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>Nyamazisha hadi uondoe</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>Inanyamazisha %1</translation>
+        <source>Mute</source>
+        <translation>Nyamazisha</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -1218,6 +1210,33 @@
     <message>
         <source>There is nothing to send: no file could be read.</source>
         <translation>Hakuna cha kutuma: hakuna faili iliyoweza kusomwa.</translation>
+    </message>
+</context>
+<context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>Kwa dakika 15</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>Kwa saa 8</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>Kwa saa moja</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>Kisha nakala zake hazifiki kwenye kifaa chochote cha kikundi; bado kinapokea zao.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>Nyamazisha</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>Hadi msimamizi akiondolee unyamazishaji</translation>
     </message>
 </context>
 <context>

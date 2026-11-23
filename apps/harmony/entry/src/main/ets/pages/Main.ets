@@ -26,7 +26,7 @@ import { app, Tile } from '../model/AppModel';
 import { Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
 import { BusyLine, ErrorText, NORMAL_BUTTON } from '../components/Common';
-import { DeviceDetail, takesPastes } from '../components/DeviceDetail';
+import { DeviceDetail, isMuted, muteMenu, takesPastes } from '../components/DeviceDetail';
 import { Orbit } from '../components/Orbit';
 import { SettingsBody } from '../components/SettingsBody';
 
@@ -239,8 +239,11 @@ struct Main {
       } });
     }
     if (d !== undefined && d.self !== true && app.isAdmin() && app.member.running) {
-      sheets.push({ title: t('device_mute_hour'), action: () => { app.manage('mute', d.id, '', 60); } });
-      sheets.push({ title: t('device_unmute'), action: () => { app.manage('unmute', d.id); } });
+      if (isMuted(d)) {
+        sheets.push({ title: t('device_unmute'), action: () => { app.manage('unmute', d.id); } });
+      } else if (d.online === true) {
+        sheets.push({ title: t('device_mute'), action: () => { muteMenu(this.getUIContext(), d.id); } });
+      }
     }
     sheets.push({ title: t('arrange_title'), action: () => { this.arrangeTile(item); } });
     this.getUIContext().showActionSheet({ title: item.kind === 'collection' ? item.name : nameOf(d as Device), message: '', sheets: sheets });

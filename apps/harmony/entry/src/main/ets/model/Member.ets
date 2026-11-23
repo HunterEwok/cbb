@@ -56,6 +56,7 @@ export interface Device {
 interface Peer {
   device: string;
   name?: string;
+  muted?: boolean;
 }
 
 interface Peers {
@@ -226,6 +227,8 @@ export class Member {
   @Trace running: boolean = false;
   // The names of the members connected now.
   @Trace peers: string[] = [];
+  // The connected devices an admin muted, as their hellos say.
+  @Trace mutedPeers: string[] = [];
   @Trace devices: Device[] = [];
   @Trace why: Why[] = [];
   // The group's key level (proven, hardware or files), as its records set it.
@@ -377,6 +380,7 @@ export class Member {
     await cbb.memberStop(h);
     this.running = false;
     this.peers = [];
+    this.mutedPeers = [];
     this.devices = [];
     this.why = [];
     this.view = { tiles: [] };
@@ -792,6 +796,10 @@ export class Member {
       const names = (a.ok.peers ?? []).map((p: Peer) => p.name !== undefined && p.name.length > 0 ? p.name : p.device.substring(0, 8));
       if (names.join('\n') !== this.peers.join('\n')) {
         this.peers = names;
+      }
+      const muted = (a.ok.peers ?? []).filter((p: Peer) => p.muted === true).map((p: Peer) => p.device);
+      if (muted.join('\n') !== this.mutedPeers.join('\n')) {
+        this.mutedPeers = muted;
       }
     }
     // A pause or a mute that ran out ends on its own.

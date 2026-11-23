@@ -388,16 +388,8 @@
         <translation>Подробнее</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Заглушить на час</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>Заглушить до отмены</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>Заглушение: %1</translation>
+        <source>Mute</source>
+        <translation>Заглушить</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -1218,6 +1210,33 @@
     <message>
         <source>There is nothing to send: no file could be read.</source>
         <translation>Нечего отправлять: ни один файл не удалось прочитать.</translation>
+    </message>
+</context>
+<context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>На 15 минут</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>На 8 часов</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>На час</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>Тогда его копии не дойдут ни до одного устройства группы; копии остальных оно по-прежнему принимает.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>Заглушить</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>Пока администратор не включит</translation>
     </message>
 </context>
 <context>

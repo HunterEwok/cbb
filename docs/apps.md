@@ -116,7 +116,8 @@ they look, so both apps are built to the same plan.
 
    **Muting** (docs/design.md, "Muting a device"): on an admin phone a device's card
    has "Mute" with the house's times ("Until an admin unmutes it" for the last), a `mute` command
-   signed after Face ID or the fingerprint, and "Unmute"; a muted device says so on its tile,
+   signed after Face ID or the fingerprint, and "Unmute"; on all four phones the page shows
+   "Unmute" for a muted device and "Mute" for one that is connected, never both. A muted device says so on its tile,
    its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
    says so until an admin unmutes it, an admin phone itself on its own page.
 

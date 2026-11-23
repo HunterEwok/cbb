@@ -388,16 +388,8 @@
         <translation>更多</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>静音一小时</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>静音直到取消</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>正在静音 %1</translation>
+        <source>Mute</source>
+        <translation>静音</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -1218,6 +1210,33 @@
     <message>
         <source>There is nothing to send: no file could be read.</source>
         <translation>没有可发送的内容：无法读取任何文件。</translation>
+    </message>
+</context>
+<context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>15 分钟</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>8 小时</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>1 小时</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>之后它的副本不会到达群组中的任何设备；它仍会接收它们的副本。</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>静音</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>直到管理员取消静音</translation>
     </message>
 </context>
 <context>

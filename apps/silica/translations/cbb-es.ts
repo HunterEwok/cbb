@@ -388,16 +388,8 @@
         <translation>Más</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Silenciar una hora</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>Silenciar hasta reactivar</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>Silenciando %1</translation>
+        <source>Mute</source>
+        <translation>Silenciar</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -1218,6 +1210,33 @@
     <message>
         <source>There is nothing to send: no file could be read.</source>
         <translation>No hay nada que enviar: no se pudo leer ningún archivo.</translation>
+    </message>
+</context>
+<context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>Durante 15 minutos</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>Durante 8 horas</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>Durante una hora</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>Entonces sus copias no llegan a ningún dispositivo del grupo; sigue recibiendo las de ellos.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>Silenciar</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>Hasta que un administrador le quite el silencio</translation>
     </message>
 </context>
 <context>

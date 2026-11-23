@@ -388,16 +388,8 @@
         <translation>المزيد</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>كتم لمدة ساعة</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>كتم حتى الإلغاء</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>جارٍ كتم %1</translation>
+        <source>Mute</source>
+        <translation>كتم</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -1218,6 +1210,33 @@
     <message>
         <source>There is nothing to send: no file could be read.</source>
         <translation>لا يوجد ما يُرسل: تعذّرت قراءة أي ملف.</translation>
+    </message>
+</context>
+<context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>لمدة 15 دقيقة</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>لمدة 8 ساعات</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>لمدة ساعة</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>عندها لا تصل نسخه إلى أي جهاز في المجموعة؛ لكنه لا يزال يتلقى نسخها.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>كتم</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>حتى يلغي مشرف كتمه</translation>
     </message>
 </context>
 <context>

@@ -388,16 +388,8 @@
         <translation>עוד</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>השתקה לשעה</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>השתקה עד ביטול</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>משתיק את %1</translation>
+        <source>Mute</source>
+        <translation>השתקה</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -1218,6 +1210,33 @@
     <message>
         <source>There is nothing to send: no file could be read.</source>
         <translation>אין מה לשלוח: לא ניתן היה לקרוא אף קובץ.</translation>
+    </message>
+</context>
+<context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>למשך 15 דקות</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>למשך 8 שעות</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>למשך שעה</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>אז ההעתקות שלו לא מגיעות לאף מכשיר בקבוצה; הוא עדיין מקבל את שלהם.</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>השתקה</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>עד שמנהל יבטל את ההשתקה</translation>
     </message>
 </context>
 <context>

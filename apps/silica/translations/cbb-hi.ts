@@ -388,16 +388,8 @@
         <translation>और</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>एक घंटे के लिए म्यूट करें</translation>
-    </message>
-    <message>
-        <source>Mute until unmuted</source>
-        <translation>म्यूट हटाने तक म्यूट करें</translation>
-    </message>
-    <message>
-        <source>Muting %1</source>
-        <translation>%1 म्यूट किया जा रहा है</translation>
+        <source>Mute</source>
+        <translation>म्यूट करें</translation>
     </message>
     <message>
         <source>Paste on it…</source>
@@ -1218,6 +1210,33 @@
     <message>
         <source>There is nothing to send: no file could be read.</source>
         <translation>भेजने को कुछ नहीं: कोई फ़ाइल पढ़ी नहीं जा सकी।</translation>
+    </message>
+</context>
+<context>
+    <name>MutePage</name>
+    <message>
+        <source>For 15 minutes</source>
+        <translation>15 मिनट के लिए</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>8 घंटे के लिए</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>एक घंटे के लिए</translation>
+    </message>
+    <message>
+        <source>Its copies then reach no device of the group; it still takes theirs.</source>
+        <translation>तब इसकी कॉपी समूह के किसी डिवाइस तक नहीं पहुँचतीं; यह फिर भी उनकी कॉपी लेता है।</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Until an admin unmutes it</source>
+        <translation>जब तक कोई एडमिन अनम्यूट न करे</translation>
     </message>
 </context>
 <context>

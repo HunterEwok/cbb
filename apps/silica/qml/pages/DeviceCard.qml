@@ -108,22 +108,16 @@ Item {
                 onClicked: pageStack.push(Qt.resolvedUrl("PastePage.qml"), { device: page.device })
             }
             MenuItem {
-                // Unmute for a muted device, the two mutes for one that is not.
+                // Unmute for a muted device, Mute for a connected one, as on
+                // the iPhone: how long on the next page.
                 visible: page.acts && page.device.muted === true
                 text: qsTr("Unmute")
                 onClicked: app.manage("unmute", page.device.id)
             }
             MenuItem {
-                visible: page.acts && page.device.muted !== true
-                text: qsTr("Mute until unmuted")
-                onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
-                                           function() { app.manage("mute", page.device.id, "", 0) })
-            }
-            MenuItem {
-                visible: page.acts && page.device.muted !== true
-                text: qsTr("Mute for an hour")
-                onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
-                                           function() { app.manage("mute", page.device.id, "", 60) })
+                visible: page.acts && page.device.muted !== true && page.device.online === true
+                text: qsTr("Mute")
+                onClicked: pageStack.push(Qt.resolvedUrl("MutePage.qml"), { device: page.device })
             }
             MenuItem {
                 visible: app.admin && app.member.running

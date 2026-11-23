@@ -21,6 +21,28 @@ export function takesPastes(d: DeviceInfo): boolean {
   return d.role === 'member';
 }
 
+// Whether an admin muted the device, as its hello says while it is connected.
+export function isMuted(d: DeviceInfo): boolean {
+  return app.member.mutedPeers.indexOf(d.id) >= 0;
+}
+
+// An admin mutes a device for the whole group, for a time or until an admin
+// unmutes it (docs/design.md, "Muting a device"), as on the iPhone: one
+// Mute, then how long.
+export function muteMenu(ui: UIContext, device: string): void {
+  const minutes = [15, 60, 8 * 60, 0];
+  ui.showActionSheet({
+    title: t('device_mute'),
+    message: t('device_mute_note'),
+    sheets: [
+      { title: t('device_mute_15'), action: () => { app.manage('mute', device, '', minutes[0]); } },
+      { title: t('device_mute_hour'), action: () => { app.manage('mute', device, '', minutes[1]); } },
+      { title: t('device_mute_8'), action: () => { app.manage('mute', device, '', minutes[2]); } },
+      { title: t('device_mute_until'), action: () => { app.manage('mute', device, '', minutes[3]); } }
+    ]
+  });
+}
+
 @ComponentV2
 export struct DeviceDetail {
   @Param @Require deviceId: string = '';
@@ -186,15 +208,16 @@ export struct DeviceDetail {
                     });
                   })
                 }
-                this.action(t('device_mute_hour'), false, () => {
-                  app.manage('mute', this.deviceId, '', 60);
-                })
-                this.action(t('device_mute'), false, () => {
-                  app.manage('mute', this.deviceId, '', 0);
-                })
-                this.action(t('device_unmute'), false, () => {
-                  app.manage('unmute', this.deviceId);
-                })
+                // Unmute for a muted device, Mute for a connected one.
+                if (isMuted(this.device() as DeviceInfo)) {
+                  this.action(t('device_unmute'), false, () => {
+                    app.manage('unmute', this.deviceId);
+                  })
+                } else if ((this.device() as DeviceInfo).online === true) {
+                  this.action(t('device_mute'), false, () => {
+                    muteMenu(this.getUIContext(), this.deviceId);
+                  })
+                }
                 if ((this.device() as DeviceInfo).root !== true) {
                   this.action(t('device_remove'), true, () => {
                     const d = this.device() as DeviceInfo;
