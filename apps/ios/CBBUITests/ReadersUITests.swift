@@ -99,6 +99,10 @@ final class ReadersUITests: XCTestCase {
     /// its darkest and lightest pixels at least 4.5:1 (WCAG AA), or 3:1 for
     /// large text, which the app marks with the identifier largeText.
     private func contrast(_ app: XCUIApplication, _ screen: String) {
+        // The audit before it can leave the screen moving (on an iPad its
+        // tree shrank during the walk by index below), and the picture and
+        // the elements must be of one still screen.
+        app.settle(screen)
         let shot = XCUIScreen.main.screenshot()
         let bounds = app.frame
         let status = app.statusBars.firstMatch.exists ? app.statusBars.firstMatch.frame : .null
