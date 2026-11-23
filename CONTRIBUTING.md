@@ -138,11 +138,13 @@ GOARCH=mips GOMIPS=softfloat go test -exec qemu-mips-static ./internal/mdns ./in
 
 ### The other parts
 
-The model of the records' rules for claims (Quint, Node; the `model` job in CI):
+The model of the record rules (Quint, Node; the `model` job in CI runs its scenarios in four
+parts by first letter, all but the two that take minutes each; the header of the model lists
+its promises for longer random runs):
 
 ```sh
-npx @informalsystems/quint@0.33.1 test --backend=typescript docs/model/claims.qnt
-npx @informalsystems/quint@0.33.1 run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
+npx @informalsystems/quint@0.33.1 test --backend=typescript docs/model/records-v3.qnt
+npx @informalsystems/quint@0.33.1 run --backend=typescript --invariant=promises --max-steps=25 --max-samples=500 docs/model/records-v3.qnt
 ```
 
 cbb and the Rust workspace (the `rust` job in CI):

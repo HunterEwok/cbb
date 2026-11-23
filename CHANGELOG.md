@@ -1573,9 +1573,9 @@ with 0.5 is set up again once. The details follow.
 - Nightly mutation testing of the records' rules (`cargo mutants` on the Rust core,
   `gremlins` on Go's `internal/authority`): every change to the code that no test notices is
   listed in the run (docs/testing.md, "Mutation testing").
-- A model of the rules for handing the group over in records v:2, in Quint
-  (`docs/model/claims.qnt`): CI's `model` job checks its scenarios and the promises of
-  docs/records-v2.md over random runs.
+- CI's `model` job runs the scenarios of the Quint model of the record rules of 0.6
+  (`docs/model/records-v3.qnt`) in four parts; its two slowest scenarios and the random runs
+  of its promises run on a server.
 - The Rust core (`cbb_core`) and the phones' bindings (`ffi/`) may not panic outside
   their tests: clippy refuses unwrap, expect, indexing that can fail and arithmetic that can
   overflow there, and the core forbids unsafe code; the few places that cannot fail say why.

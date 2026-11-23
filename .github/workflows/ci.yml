@@ -3659,21 +3659,33 @@ jobs:
           if-no-files-found: ignore
 
   model:
-    name: model of the records' rules (Quint)
+    name: model of the records' rules (Quint, ${{ matrix.part }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # docs/model/records-v3.qnt: the record rules of 0.6, which
+        # core/tests/records_model.rs pins against the core. Its tests by
+        # first letter, in four parts of a few minutes each. Two scenarios
+        # take more than five minutes each in this simulator,
+        # headWithoutFirstTest and honestRefusesKnownKeyTest, and run with
+        # the random runs of the promises on a server (the model's header).
+        part: ["a-e s-z", "f-h", "i-l", "m-r"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: the scenarios, and the promises over random runs
-        # docs/model/claims.qnt: the rules for handing the group over of 0.5, as
-        # docs/protocol.md at v0.5.0 words them. The simulator runs in Node (the typescript backend), so nothing but
+      - name: the model's scenarios
+        # The simulator runs in Node (the typescript backend), so nothing but
         # the Quint package is downloaded.
+        env:
+          PART: ${{ matrix.part }}
         run: |
-          quint="npx --yes @informalsystems/quint@0.33.1"
-          $quint test --backend=typescript docs/model/claims.qnt
-          $quint run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
+          letters=$(printf '%s' "$PART" | sed 's/ //g')
+          npx --yes @informalsystems/quint@0.33.1 test --backend=typescript \
+            --match="^(?!headWithoutFirstTest$|honestRefusesKnownKeyTest$)[$letters][A-Za-z0-9]*Test$" \
+            docs/model/records-v3.qnt
 
   format:
     name: the frozen format (testdata/format)
