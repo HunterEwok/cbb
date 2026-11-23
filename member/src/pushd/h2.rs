@@ -411,3 +411,166 @@ impl<S: Read + Write> Conn<S> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A peer that answers from a script and keeps what this side wrote.
+    struct Script {
+        input: std::io::Cursor<Vec<u8>>,
+        out: Vec<u8>,
+        broken: bool,
+    }
+
+    impl Read for Script {
+        fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+            self.input.read(b)
+        }
+    }
+
+    impl Write for Script {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            if self.broken {
+                return Err(std::io::Error::other("broken"));
+            }
+            self.out.extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn frame(kind: u8, flags: u8, stream: u32, p: &[u8]) -> Vec<u8> {
+        let mut f = header(p.len(), kind, flags, stream).to_vec();
+        f.extend_from_slice(p);
+        f
+    }
+
+    fn conn(frames: &[Vec<u8>]) -> Conn<Script> {
+        let s = Script { input: std::io::Cursor::new(frames.concat()), out: Vec::new(), broken: false };
+        Conn::start(s).unwrap()
+    }
+
+    /// The frames this side wrote after its preface and settings.
+    fn written(c: &Conn<Script>) -> Vec<(u8, u8, u32, Vec<u8>)> {
+        let mut b = &c.io.out[PREFACE.len() + 9 + 12..];
+        let mut out = Vec::new();
+        while b.len() >= 9 {
+            let len = u32::from_be_bytes([0, b[0], b[1], b[2]]) as usize;
+            let stream = u32::from_be_bytes([b[5], b[6], b[7], b[8]]);
+            out.push((b[3], b[4], stream, b[9..9 + len].to_vec()));
+            b = &b[9 + len..];
+        }
+        out
+    }
+
+    /// The peer's settings, a PING and window updates are answered on the
+    /// way; a stream window of 0 holds the body back until the peer opens
+    /// it; padded and continued headers and data make the answer.
+    #[test]
+    fn settings_ping_windows_and_an_answer() {
+        let mut settings = Vec::new();
+        settings.extend_from_slice(&SETTINGS_INITIAL_WINDOW_SIZE.to_be_bytes());
+        settings.extend_from_slice(&0u32.to_be_bytes());
+        settings.extend_from_slice(&SETTINGS_MAX_FRAME_SIZE.to_be_bytes());
+        settings.extend_from_slice(&32_768u32.to_be_bytes());
+        // A header block in two frames, the first padded and with a
+        // priority: :status 404 as a literal of the static table's name.
+        let mut first = vec![2u8]; // pad length
+        first.extend_from_slice(&[0, 0, 0, 0, 0]); // priority
+        first.extend_from_slice(&[0x08, 3, b'4']);
+        first.extend_from_slice(&[0, 0]); // padding
+        let mut body = vec![3u8];
+        body.extend_from_slice(b"{}");
+        body.extend_from_slice(&[0, 0, 0]);
+        let c1 = [
+            frame(SETTINGS, 0, 0, &settings),
+            frame(SETTINGS, ACK, 0, &[]),
+            frame(PING, 0, 0, b"12345678"),
+            frame(WINDOW_UPDATE, 0, 0, &10u32.to_be_bytes()),
+            frame(HEADERS, PADDED | PRIORITY, 1, &first),
+            frame(CONTINUATION, END_HEADERS, 1, b"04"),
+            frame(DATA, PADDED | END_STREAM, 1, &body),
+        ];
+        // The second request waits for its stream's window, which the
+        // settings above made 0.
+        let c2 = [
+            frame(WINDOW_UPDATE, 0, 9, &5u32.to_be_bytes()),
+            frame(WINDOW_UPDATE, 0, 3, &100u32.to_be_bytes()),
+            frame(HEADERS, END_HEADERS | END_STREAM, 3, &[0x80 | 8]),
+        ];
+        let mut c = conn(&[c1.concat(), c2.concat()]);
+        let a = c.post("api.push.apple.com", "/3/device/00", &[], b"{\"aps\":{}}").unwrap();
+        assert_eq!(a, Answer { status: Some(404), body: b"{}".to_vec() });
+        let a = c.post("api.push.apple.com", "/3/device/00", &[], b"{}").unwrap();
+        assert_eq!(a.status, Some(200));
+        let w = written(&c);
+        assert!(w.iter().any(|f| f.0 == SETTINGS && f.1 == ACK), "the settings acknowledged");
+        assert!(w.iter().any(|f| f.0 == PING && f.1 == ACK && f.3 == b"12345678"), "the PING answered");
+        assert!(w.iter().any(|f| f.0 == WINDOW_UPDATE && f.2 == 0), "the connection's window given back");
+        assert_eq!(c.peer_max_frame, 32_768);
+        assert!(!c.gone());
+    }
+
+    /// A reset, a GOAWAY before or after this side's stream, a frame over
+    /// the size agreed and a peer that closes end the request with why.
+    #[test]
+    fn what_ends_a_request() {
+        let post = |frames: &[Vec<u8>]| {
+            let mut c = conn(frames);
+            let r = c.post("h", "/", &[], b"x").map_err(|e| e.message().to_string());
+            (r, c.gone())
+        };
+        let (r, _) = post(&[frame(RST_STREAM, 0, 1, &[0, 0, 0, 8])]);
+        assert!(r.unwrap_err().contains("reset"));
+        let (r, gone) = post(&[frame(GOAWAY, 0, 0, &[0, 0, 0, 0, 0, 0, 0, 0])]);
+        assert!(r.unwrap_err().contains("closing the connection") && gone);
+        // A GOAWAY whose last stream is this one: the answer still comes.
+        let (r, gone) = post(&[
+            frame(GOAWAY, 0, 0, &[0, 0, 0, 1, 0, 0, 0, 0]),
+            frame(HEADERS, END_HEADERS | END_STREAM, 1, &[0x88]),
+        ]);
+        assert_eq!(r.unwrap().status, Some(200));
+        assert!(gone);
+        let mut big = header(MAX_FRAME + 1, DATA, 0, 1).to_vec();
+        big.resize(9 + MAX_FRAME + 1, 0);
+        let (r, gone) = post(&[big]);
+        assert!(r.unwrap_err().contains("over the size") && gone);
+        let (r, gone) = post(&[]);
+        assert!(r.unwrap_err().contains("closed the connection") && gone);
+        let mut c = conn(&[]);
+        c.gone = true;
+        assert!(c.post("h", "/", &[], b"").unwrap_err().message().contains("is closed"));
+        let mut c = conn(&[]);
+        assert!(c.post("h", "/", &[], &vec![0; MAX_FRAME + 1]).unwrap_err().message().contains("too large"));
+        let mut c = conn(&[]);
+        c.io.broken = true;
+        assert!(c.post("h", "/", &[], b"x").unwrap_err().message().contains("cannot write"));
+        assert!(c.gone());
+    }
+
+    /// The status in each form the reader decodes, and none from one it
+    /// does not.
+    #[test]
+    fn status_in_its_forms() {
+        assert_eq!(status_of(&[0x80 | 13]), Some(404));
+        assert_eq!(status_of(&[0x80 | 2, 0x80 | 14]), Some(500), "past another indexed field");
+        assert_eq!(status_of(&[0x20, 0x80 | 9]), Some(204), "past a table size update");
+        assert_eq!(status_of(&[0x48, 3, b'2', b'0', b'0']), Some(200), "a literal with indexing");
+        assert_eq!(status_of(&[0x08, 0x83, 1, 2, 3]), None, "Huffman-coded");
+        assert_eq!(status_of(&[0x00, 1, b'x', 1, b'y', 0x80 | 11]), Some(304), "past a literal of a new name");
+        assert_eq!(status_of(&[0x08, 9, b'2']), None, "cut short");
+        assert_eq!(status_of(&[]), None);
+        // A long integer both ways.
+        let mut b = Vec::new();
+        hpack_int(&mut b, 0, 7, 1000);
+        let mut i = 0;
+        assert_eq!(read_int(&b, &mut i, 7), Some(1000));
+        assert_eq!(read_int(&[0x7f, 0xff, 0xff, 0xff, 0xff, 0xff], &mut 0, 7), None, "too long");
+        let long = "v".repeat(300);
+        let block = header_block("h", "/", &[("apns-topic", &long)]);
+        assert!(block.len() > 300);
+    }
+}
