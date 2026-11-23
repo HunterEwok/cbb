@@ -3609,133 +3609,102 @@ serial number the last one revoked until its maintainer looks.
 
 What a forwarder and a relay check in place of the group's records, so that no device ID,
 name, system, root or date leaves the group, and a server cannot follow a group or a device
-from one month to the next ([design.md](design.md), D-67 and D-75). Implemented in Go
-(`internal/forward`), and in Rust for the relay (`member/src/relayd`); the core reads the
-format's profile, frames and credentials in `core/src/blind`. The phones' kits do what Go does
-(`Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
-`CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
-and pass them on through the phone's member in the Rust core (`send_credentials`, its
-`message` events). A phone registers with a relay
-by them once the members' credential lists its server key (the Live member, member/src/relay.rs,
-with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
-names back to device IDs by the server credentials. A phone that is the group's hub
-registers with its forwarder the same way once the hubs' credential lists its server key
-(the Live member, member/src/forward.rs), and
-with its member certificate and the records until then.
+from one month to the next, nor two servers tell that they serve one group
+([design.md](design.md), "What the servers learn"; D-106). The format of the credentials is
+[format.md](format.md), section 8 (`cbb_core::blind`); the member keeps and brings them up to
+date in `member/src/faces.rs`, the relay checks them in `member/src/relayd/register3.rs`, and
+the forwarder in Go (`internal/forward`, `register.go` and `state.go`). The phones keep them
+in the Rust core's member, as computers do.
 
-The group lives in **periods** of about 30 days. For each, its root signs, inside the group,
-a fresh **tag** for the servers and a fresh **period key**; each device signs with its member
-key a fresh **server key** that it uses with the servers in that period only. The servers see
-only what the period key signs: the period's tag and lists of padded hashes of server keys.
-A device that registers this way presents a certificate of its server key alone, which names
-neither a device nor a group (`cbb server`, self-signed, no SAN, client
-authentication).
+The group lives in **periods** of about 30 days, and each server it uses gets a **face** of
+its own (`blind::alias`): for each period and server, the root signs a fresh **tag** and a
+fresh **period key**; each device derives a **server key** for that face from its own server
+secret and the face's tag (HKDF-SHA256, `blind::alias::server_key`) and uses it with that
+server only. A server sees only what the period key signs: the face's tag and lists of padded
+hashes of server keys. Each face counts its credentials' versions from a random start and
+expires a random part of a day before its period ends, so two servers that compare what they
+saw find nothing in common but timing and addresses. A device that registers presents a
+certificate of its server key alone, which names neither a device nor a group (self-signed,
+no SAN, client authentication).
 
-### The envelope
+### The credentials
 
-A credential is `{"body": bytes, "sig": bytes, "key": bytes}`: the body, JSON, signed as
-these exact bytes; an ECDSA P-256 signature with SHA-256 over them, DER; and the signer's
-public key as a SubjectPublicKeyInfo, DER. Its ID is SHA-256 over `body`. Every body has
-`v` (1), `type`, `group` (16 lower-case hex characters), `version` (a positive integer) and
-`expires_ms` (positive), and nothing that names a device or a time of signing. Bodies are at
-most 16 KiB. A receiver checks a body's size, then the strict form of signed bodies
-(Conventions), then its fields, before it verifies the signature; a signer checks its own
-body the same way. A `period` and a `server` credential have `tag` and `key` and no list; a
-`hubs` credential no `tag`, `key` or `members`; a `key` is a P-256 SubjectPublicKeyInfo with
-an uncompressed point; a `members` credential no `tag`, `key`, `hubs`
-or `admins`; a field a type does not have is left out or empty. Bytes and hashes are base64
-in its one form (Conventions). The vectors in `testdata/interop/strict-files.json` (section
-`credentials`) test each row in all four implementations.
+| `type` | Signed by | Lists |
+|--------|-----------|-------|
+| `period` | the group's current root key | the face's `tag` and its period key (`key`) |
+| `server` | the device's member key | the face's `tag` and the device's server key for it (`key`) |
+| `hubs` | the period key | `hubs`: the server keys of the devices that may be the hub, in the order of section 11, "Several hubs", at most 16; `admins`: those of the admins that are not frozen, the root's own device left out |
+| `members` | the period key, or a server key among the `admins` of the face's hubs' credential | `members`: the server keys of the group's devices that are not frozen |
 
-| `type` | `group` | Other fields | Signed by | Seen by |
-|--------|---------|--------------|-----------|---------|
-| `period` | the group's tag (section 1) | `tag`: the period's tag, 8 random bytes in hex; `key`: the period key, a P-256 SubjectPublicKeyInfo | the group's current root | the members; a relay with a fixed list of groups |
-| `server` | the group's tag | `tag`: the period's; `key`: the device's server key | the device's member key | the members |
-| `hubs` | the period's tag | `hubs`, `admins`: arrays of 32-byte hashes of server keys | the period key | the members, the forwarder and the relay |
-| `members` | the period's tag | `members`: an array of 32-byte hashes of server keys | the period key, or a server key among the `admins` of the period's hubs' credential | the members and the relay |
-
-A key's hash is SHA-256 over its SubjectPublicKeyInfo. Each list is padded with random
-32-byte strings to 4, 8, 16, 32, 64, 128 or 256 entries, the smallest that holds it, so a
-server learns the number of devices only roughly. `hubs` holds at most 16 entries, `admins`
-64, `members` 256. The `server`, `hubs` and `members` credentials expire with their period.
+A key's hash is the key hash of format.md, section 2. Each list is padded with random entries
+to the smallest of its lengths that holds it (format.md, section 8), so a server learns the
+number of devices only roughly. The `server`, `hubs` and `members` credentials go with their
+period.
 
 ### The period
 
-The current root starts a period when it has none of its own, when the one it keeps is 30
-days old (it lasts 35), and when a device that sent a server credential for it is no longer
-in the group: a removed device knows the period's tag. It makes the period key (in the TPM
-where there is one) and a new tag, and signs the period with its root key; `version` is one
-above the period it keeps, or the time in Unix seconds when that is more. After a takeover
-(section 10) the new root starts its own period at once. A phone's root asks for Face ID for
-it about once a month, and with each removal, which asks anyway.
+The current root starts a period for a face when it has none, when the one it keeps has less
+than 5 days left of its 35 (`faces::PERIOD_LIFETIME_MS`, renewed after
+`faces::PERIOD_RENEW_MS`), and when a device that sent a server credential for it is no longer
+in the group: a removed device knows the face's tag. It makes the period key and a new tag and
+signs the period with its root key; the period key stays on the root's device
+(`period-key`, readable by the service alone), which signs the lists without the root key. A
+root phone whose app holds the root key hands it over for this about once a month, and with
+each removal, which asks anyway. After a change of root (section 10) the new root starts its
+own periods at once: a period of another root counts no more.
 
-Every member that sees a period it has no server key for makes one (in the TPM where there is
-one) and signs its `server` credential with its member key. It keeps the keys of the current
-period only, in `server-keys.json` next to its identity, so the keys of a period are gone
-when it ends.
+Every member that sees a period it has no server key for derives one and signs its `server`
+credential with its member key. Its server secret is a file beside the set
+(`server-secret`), so no server key is kept.
 
 ### The lists
 
-The root signs the hubs' and members' credentials with the period key, from the records and
-the server credentials it keeps; an admin that the hubs' credential lists signs the members'
+The root signs the hubs' and members' credentials with the period key, from the state and the
+server credentials it keeps; an admin that the hubs' credential lists signs the members'
 credential with its server key. A device that sent no server credential for the period is
-left out until it does.
-
-- `hubs`: the server keys of the devices that may be the hub, in the order of section 11,
-  "Several hubs", at most 16.
-- `admins`: the server keys of the admins that are neither removed nor frozen, the root's own
-  device left out.
-- `members`: the server keys of the group's devices that are not frozen.
-
-A signer signs a new version when it has none for the period, or when a list does not match:
-its real entries are not first (the hubs, in their order) or not all there (the others), its
-length is not the padded length, or another entry is a server key it keeps. `version` is one
-above the version it keeps of that type, or the time in Unix seconds when that is more. Go
-checks all of this when the group starts, every 12 hours, after every new record and after
-every new credential.
+left out until it does. A signer signs a new version when it has none for the period, or when
+a list does not match: its real entries are not first (the hubs, in their order) or not all
+there, or it names a server key the signer keeps but no longer wants.
 
 ### Keeping and passing them on
 
-A member keeps, in `credentials.json` next to its identity, the newest period that the
-group's current root signed, and for it the newest server credential of each member key of
-the group (a device's key that is neither revoked nor frozen), the newest hubs' credential
-that the period key signed, and the newest members' credential that the period key or an
-admin of that hubs' credential signed. A newer period drops the credentials of the one
-before. After the hello, a member that keeps any sends `{"t":"credentials","credentials":
-[credential, ...]}` with all of them, at most 259; a receiver keeps the new valid ones,
-passes them on to its other peers the same way, and logs and drops the others.
+A member keeps, in `server-credentials.cbor` beside the set, for each face (at most
+`faces::MAX_FACES`, by the server's pin): the newest period the group's current root signed,
+the newest server credential of each device of the group that is not frozen, the newest hubs'
+credential the period key signed, and the newest members' credential the period key or an
+admin of that hubs' credential signed. A newer period with another tag drops the credentials
+of the one before. After the hello, and whenever it takes something new, a member sends its
+peers message `credentials` (t 11, format.md, section 9.2): the server's pin and
+address and the envelopes, the period first, as many messages as they need; a receiver keeps
+the new valid ones, passes them on, and logs and drops the others.
 
 A member that knows a pseudonym at the relay (section 14) finds the device it names through
 the server credential whose key has that hash.
 
 ### What a server checks
 
-A device presents one hubs' credential, and to a relay also the members' credential, and to
-a relay that serves a fixed list of groups also the period credential with the group's root
-key (the relay's challenge sets `root`, section 14). The server MUST check that:
+A hub shows its forwarder (`cbb-forward/3`) its face's hubs' credential alone; a device shows
+a relay (`cbb-relay/3`) the hubs' and the members' credentials, and to a relay that serves a
+fixed list of groups also the period credential and the root key that signed it. The server
+MUST check that:
 
 1. none has expired;
-2. the members' credential is of the same period (`group`) and the hubs' credential's
-   signer, or a key among its `admins`, signed it;
-3. the period credential, if any, has the hubs' credential's tag as `tag` and its signer's
-   key as `key`, and a relay with a fixed list of groups takes it only when the root key shown
-   signed the period and, with the recovery key the list gives, makes the Group ID of a group
-   it serves;
+2. the members' credential is of the same tag (`group`) as the hubs' credential, and the hubs'
+   credential's signer, or a key among its `admins`, signed it;
+3. the period credential, if any, has the hubs' credential's tag and its signer's key, and a
+   relay with a fixed list of groups takes it only when the root key shown signed the period
+   and, with the recovery keys the list gives, makes the Group ID of a group it serves;
 4. the hash of the device's certificate key is among the `hubs` (the forwarder) or the
    `members` (the relay);
-5. the period key is the one it first saw for the period's tag: the forwarder keeps, in
-   `forward-state.json`, HMAC-SHA256 under a secret from its own key of the tag, with the
-   newest hubs' version and the same HMAC of the tag and the period key's hash; the relay
-   keeps the same in memory while any device of the period is on it, with the newest
-   members' version and list. Older versions are refused, and a newer members' credential
-   drops the devices it no longer lists.
+5. the period key is the one it first saw for the tag, and no credential is older than one it
+   saw: the forwarder keeps, in its state file, under an HMAC of the tag, the hash of the
+   period key and the newest hubs' version; the relay keeps the same in memory while any
+   device of the period is on it, with the newest members' version and list, and a newer
+   members' credential drops the devices it no longer lists.
 
 The first period key a server sees for a tag counts: only the group's devices know the tag,
-and a removed device's period ends with its removal.
-
-A forwarder keeps a group that registered with credentials apart from the groups that
-registered with records, which it names by the group CA's tag (section 13). A relay takes
-registrations with credentials alone (section 14).
+and a removed device's period ends with its removal. Both servers name a group by `period`
+and the tag in hex, as the list of refused groups does.
 
 ## 19. Registries
 
