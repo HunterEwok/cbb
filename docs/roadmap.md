@@ -590,6 +590,30 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       promises.
 
     Freezing and removing an admin stay two separate actions.
+- **69.** **Planned for 0.7 (the owner, 2026-11-23).** The apps and the command line as one
+    product: the same meaning and flows everywhere, each platform's own controls.
+    - An inventory of every screen on every platform (iPhone and iPad, Apple Watch, the Mac,
+      Android and Wear OS, the tray, Aurora OS, HarmonyOS and its watch, the command line)
+      with its states, against [parity.md](parity.md).
+    - The person's tasks (ten to fifteen), with how often and how much each matters, which
+      decide what Home shows and what lies deeper.
+    - One model of the product's objects (the group, a device, the main device, an admin, a
+      copy, an invitation, the recovery key) with their properties and actions, named by the
+      termbase, and a few written principles of the product.
+    - The flows' states in the core: adding a device, joining and recovery first, each a
+      state machine the core runs and the apps only draw, with tests of its moves on every
+      platform.
+    - One catalogue of messages: every error, notice and reason with a code, its text and
+      what to do, the same in the apps and in `cbb status`.
+    - One library of patterns (confirming what cannot be undone, progress, an empty state, an
+      error, pairing, a secret, no network) with how each looks on every platform and on the
+      command line, and design tokens named by role.
+    - The command line by the [Command Line Interface Guidelines](https://clig.dev): the same
+      nouns and verbs, `--json`, one form of error, meaningful exit codes.
+    - A gallery in CI: each screen on every platform, in every state and language, side by
+      side with the command line's output, a showcase for each state, pseudo-localization,
+      and a checklist for reviewing a new screen or command; then a heuristic review and a
+      walk through each task, with the taps each takes as a measure.
 
 ## Devices that are hard to type into
 
