@@ -273,6 +273,41 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// The flags take both forms and both dashes; help, an unknown flag
+    /// and a flag without its value are refused with the usage.
+    #[test]
+    fn flags() {
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let f = parse(&args(&["--listen", "127.0.0.1:1", "-refused=none", "-group", "a:b:c", "-open=false"])).unwrap();
+        assert_eq!((f.listen.as_str(), f.refused.as_str(), f.groups.as_str()), ("127.0.0.1:1", "none", "a:b:c"));
+        assert!(!f.open && !f.show_key);
+        let f = parse(&args(&["-open", "-show-key=1"])).unwrap();
+        assert!(f.open && f.show_key && f.listen == ":8764");
+        assert!(parse(&args(&["-h"])).err().unwrap().starts_with("usage:"));
+        assert!(parse(&args(&["-what"])).err().unwrap().contains("not defined: -what"));
+        assert!(parse(&args(&["-key"])).err().unwrap().contains("needs an argument: -key"));
+        assert!(parse(&args(&["-"])).err().unwrap().contains("takes only flags"));
+    }
+
+    /// A relay that cannot listen where it is told, cannot read its list of
+    /// refused groups or cannot take its port does not start.
+    #[test]
+    fn what_stops_the_start() {
+        let dir = std::env::temp_dir().join(format!("cbb-relay-start-{}", cbb_core::certs::random_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let key = dir.join("relay.pem");
+        let key = key.to_str().unwrap();
+        let (code, _, err) = run(&["-key", key, "-listen", "nowhere", "-open"]);
+        assert!(code == 1 && err.contains("not an address"), "{code} {err}");
+        let (code, _, err) = run(&["-key", key, "-listen", "127.0.0.1:0", "-refused", dir.to_str().unwrap(), "-open"]);
+        assert!(code == 1 && !err.is_empty(), "a list that is a directory: {code} {err}");
+        let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let at = taken.local_addr().unwrap().to_string();
+        let (code, _, err) = run(&["-key", key, "-listen", &at, "-refused", "none", "-open"]);
+        assert!(code == 1 && !err.is_empty(), "a port taken: {code} {err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn ports_and_addresses() {
         for (a, p) in [("[::]:8765", "8765"), ("0.0.0.0:443", "443"), ("8764", "8764")] {
