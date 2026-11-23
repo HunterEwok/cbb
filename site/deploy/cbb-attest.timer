@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# attest-status.json lives 8 days; fetched once a day, so a missed run or
+# two still leaves time before the monitor's alarm at 5 days.
+
+[Unit]
+Description=Mirror the revocation list of Android attestation keys daily
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

@@ -373,14 +373,16 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   old one. A lost YubiKey: the other root signs, and the next release ships a new second root.
   A stolen channel key: a new one on cbb.tools, and `release-sign renew -drop cbb.tools
   -channel cbb.tools-2=channel.pem` (`-drop NAME` drops any key by its name in `keys.json`).
-- **The status key** of the revocation mirror, on cbb.tools in a file readable only by the
-  mirror's user (it signs nothing but `attest-status.json`, so a stolen one can at most keep
+- **The status key** of the revocation mirror, on cbb.tools in `/etc/cbb-attest/` like the
+  channel key (it signs nothing but `attest-status.json`, so a stolen one can at most keep
   a revoked phone proven until it is replaced): `openssl ecparam -name prime256v1 -genkey
-  -noout -out status-key.pem`, with its post-quantum half (`release-sign pq-new -key
-  file:status-key.pem -out status-pq.pem -public status.pem`, a new file readable only by
-  the same user). `keys.json` certifies both with `-status mirror=status.pem`. A daily timer runs
-  `attest-status -key status-key.pem,status-pq.pem -out /srv/cbb.tools/attest` and copies
-  `keys.json` beside it from `/srv/cbb.tools/channel`. When it stops on a list that drops a serial number, check Google's
+  -noout -out status-key.pem`, readable only by root, with its post-quantum half as a
+  credential encrypted with systemd-creds (`release-sign pq-new -key file:status-key.pem
+  -out - -public status.pem | systemd-creds encrypt --name=status-pq.pem -
+  status-pq.cred`). `keys.json` certifies both with `-status mirror=status.pem`. A daily
+  timer (`site/deploy/cbb-attest.service` and `.timer`, as the user `cbb-attest`, which gets
+  both halves as credentials for the run) runs `attest-status` into
+  `/srv/cbb.tools/attest` and copies `keys.json` beside it from `/srv/cbb.tools/channel`. When it stops on a list that drops a serial number, check Google's
   list and run it once with `-allow-drop`; a stolen status key is dropped from the next
   `keys.json` like a release key.
 - **The TPM makers' certificates** in `internal/attest/tpmroots/roots.pem`, which decide
@@ -463,19 +465,19 @@ and `-drop` with the pin of either half of a signing key drops both halves.
   encrypted credential, symmetric already. `release-sign pq-new -key file:KEY.pem -out -
   -public KEY-public.pem` writes the half to the standard output only into a pipe, for
   `systemd-creds encrypt --name=channel-pq.pem - /etc/cbb-channel/channel-pq.cred`;
-  `-out FILE` writes it to a new file only its owner reads (the status key's
-  `status-pq.pem`). `release-sign` signs with `file:KEY.pem+slh:PQ.pem`, and `pq-check
-  -key file:KEY.pem+slh:PQ.pem -public KEY-public.pem` proves the pair (for the channel
-  key, `systemd-creds decrypt --name=channel-pq.pem channel-pq.cred - | release-sign
-  pq-check -key file:channel-key.pem+slh:/dev/stdin ...`, so the decrypted half is never
-  written). The channel key's unit, `site/deploy/cbb-channel.service`, is copied to
-  `/etc/systemd/system/` and loaded with `systemctl daemon-reload`; it is a oneshot its
-  timer starts, so nothing is restarted, and `systemctl cat cbb-channel.service | grep
-  LoadCredentialEncrypted` shows the credential. The status key's timer unit
-  (`attest-status.service`, on the server only) gets `-key status-key.pem,status-pq.pem` in
-  its `ExecStart=` (`systemctl edit --full`), with a new `attest-status` built from this
-  tree; after the first release `jq -c '[.sigs[].alg]'` on the served
-  `attest-status.json` prints `[1,4]`.
+  `-out FILE` writes it to a new file only its owner reads. `release-sign` signs with
+  `file:KEY.pem+slh:PQ.pem`, and `pq-check -key file:KEY.pem+slh:PQ.pem -public
+  KEY-public.pem` proves the pair. It opens the half twice, so the half must be a file,
+  not a pipe: for a credential, `systemd-run --pipe --wait -p
+  LoadCredential=channel-key.pem:/etc/cbb-channel/channel-key.pem -p
+  LoadCredentialEncrypted=channel-pq.pem:/etc/cbb-channel/channel-pq.cred /bin/sh -c 'exec
+  release-sign pq-check -key "file:$CREDENTIALS_DIRECTORY/channel-key.pem+slh:$CREDENTIALS_DIRECTORY/channel-pq.pem"
+  -public /etc/cbb-channel/channel.pem'` reads it as the unit does, and the decrypted half
+  lives only as long as the run. The units, `site/deploy/cbb-channel.service` and
+  `site/deploy/cbb-attest.service` with their timers, are copied to `/etc/systemd/system/`
+  and loaded with `systemctl daemon-reload`; each is a oneshot its timer starts, and
+  `systemctl cat cbb-attest.service | grep LoadCredentialEncrypted` shows the credential.
+  `jq -c '[.sigs[].alg]'` on the served `attest-status.json` prints `[1,4]`.
 - **Back up** `~/.config/cbb-release/pq`, the identities and the public files like the
   other release files: an encrypted disk image (`pq-keys.dmg`, AES-256) beside them with a
   copy in iCloud. Without `pq` the hardware's P-256 half signs nothing devices take. A lost
@@ -498,7 +500,7 @@ when:
 - a signed file the devices fetch is close to its expiry: the channel's `keys.json` (21
   days: `release-sign renew -new-keys`) and `stable.json` (5 days: the `cbb-channel` timer
   stopped), the same two at `dl.cbb.tools`, and `attest/attest-status.json` (5 days: the
-  `attest-status` timer stopped);
+  `cbb-attest` timer stopped);
 - the server moved more than 1 TB in the last 24 hours, half of what its plan allows before
   it is slowed, or `status/traffic.json` is more than two hours old (`cbb-traffic.timer`
   stopped): [the servers' budget](../relay-budget.md#money-and-traffic) says what to do.
