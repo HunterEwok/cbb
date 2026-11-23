@@ -11,7 +11,6 @@ use alloc::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use zeroize::Zeroizing;
 
 use super::{Code, Refusal, bad_args, json, refuse};
 use crate::certs::b64;
@@ -67,24 +66,6 @@ fn parse_body(a: ParseArgs) -> core::result::Result<Vec<u8>, Refusal> {
     let mut m = Map::new();
     m.insert("kind".into(), Value::String(String::from(a.kind.as_str())));
     m.insert("value".into(), v);
-    Ok(json(Value::Object(m)))
-}
-
-/// The arguments of `seal_public`.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PublicArgs {
-    #[serde(with = "b64::secret")]
-    secret: Zeroizing<Vec<u8>>,
-}
-
-/// `seal_public`: the public key for sealed messages of `secret` (32
-/// random bytes the caller keeps), as `{"key": ...}`, the `seal` its
-/// hello, pairing and device record carry.
-fn seal_public(a: PublicArgs) -> core::result::Result<Vec<u8>, Refusal> {
-    let key = crate::seal::public_key(&a.secret).map_err(|e| refuse(Code::Request, e))?;
-    let mut m = Map::new();
-    m.insert("key".into(), Value::String(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key)));
     Ok(json(Value::Object(m)))
 }
 
@@ -227,7 +208,6 @@ fn release_named(a: NamedArgs) -> core::result::Result<Vec<u8>, Refusal> {
 pub(super) fn dispatch(op: &str, args: &Value) -> Option<core::result::Result<Vec<u8>, Refusal>> {
     Some(match op {
         "parse_body" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(parse_body),
-        "seal_public" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_public),
         "release_named" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(release_named),
         "release_check" | "release_check_status" | "release_check_entries" => {
             serde_json::from_value(args.clone()).map_err(bad_args).and_then(|a| release_check(op, a))
@@ -262,23 +242,6 @@ mod tests {
 
     fn bytes(v: &Value) -> alloc::vec::Vec<u8> {
         STANDARD.decode(v.as_str().unwrap()).unwrap()
-    }
-
-    /// `seal_public` gives the public key of a secret, the one Go's
-    /// sealing vectors carry, and refuses a secret of the wrong size.
-    #[test]
-    fn seal_public_key() {
-        let v = &vectors("seal-go.json")["cases"][0];
-        let ask_key = |secret: &[u8]| -> Value {
-            let req = format!(r#"{{"abi":1,"op":"seal_public","args":{{"secret":"{}"}}}}"#, STANDARD.encode(secret));
-            serde_json::from_slice(&call(req.as_bytes())).unwrap()
-        };
-        let unhex = |v: &Value| -> alloc::vec::Vec<u8> {
-            let s = v.as_str().unwrap();
-            (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
-        };
-        assert_eq!(bytes(&ask_key(&unhex(&v["secret"]))["ok"]["key"]), unhex(&v["public"]));
-        assert_eq!(ask_key(&[1, 2, 3])["error"]["name"], "request");
     }
 
     /// Each case of the strict vectors of these kinds through the call.

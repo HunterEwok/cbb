@@ -73,9 +73,6 @@ pub enum Code {
     /// A signed body that is not a record (a server credential, a release
     /// file or a manifest) is refused: its form or a field.
     Signed = 16,
-    /// A copy is refused or cannot be sealed: its origin, its signature, a
-    /// field, or it does not open with this device's key.
-    Copy = 17,
     /// A push registration cannot be made, or a push body does not open
     /// with the phone's push keys.
     Push = 18,
@@ -94,7 +91,6 @@ impl Code {
             Code::Cert => "cert",
             Code::Saved => "saved",
             Code::Signed => "signed",
-            Code::Copy => "copy",
             Code::Push => "push",
         }
     }
@@ -187,10 +183,6 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
     match op {
         "version" => Ok(version()),
         "read_invite" => read_invite(serde_json::from_value(args).map_err(bad_args)?),
-        "open_copy" => open_copy(serde_json::from_value(args).map_err(bad_args)?),
-        "seal_segment" => segment(serde_json::from_value(args).map_err(bad_args)?, true),
-        "open_segment" => segment(serde_json::from_value(args).map_err(bad_args)?, false),
-        "copy_verdict" => copy_verdict(serde_json::from_value(args).map_err(bad_args)?),
         "new_device_key" => new_device_key(),
         "sign_digest" => sign_digest(serde_json::from_value(args).map_err(bad_args)?),
         "keyboard" => keyboard(serde_json::from_value(args).map_err(bad_args)?),
@@ -204,15 +196,6 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
             .or_else(|| set::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
     }
-}
-
-/// `copy_verdict`: whether the group's current copy goes into the
-/// member's clipboard, by the one rule of crate::rule, as `{"verdict"}`:
-/// `write`, or why not.
-fn copy_verdict(i: crate::rule::Incoming) -> Result<Vec<u8>, Refusal> {
-    let mut m = serde_json::Map::new();
-    m.insert("verdict".into(), serde_json::to_value(crate::rule::incoming(&i)).unwrap_or_default());
-    Ok(json(Value::Object(m)))
 }
 
 /// The arguments of `why`.
@@ -404,65 +387,6 @@ fn sign_digest(a: SignDigestArgs) -> Result<Vec<u8>, Refusal> {
         key.sign_prehash(&a.digest).map_err(|_| refuse(Code::Request, Error::msg("The key cannot sign.")))?;
     let mut m = serde_json::Map::new();
     m.insert("sig".into(), b64_value(sig.to_der().as_bytes()));
-    Ok(json(Value::Object(m)))
-}
-
-#[derive(Deserialize)]
-struct OpenCopyArgs {
-    event: crate::copy::Sealed,
-    me: String,
-    #[serde(with = "b64::secret")]
-    secret: Zeroizing<Vec<u8>>,
-}
-
-/// `open_copy`: opens a copy with the reader's secret for sealed messages:
-/// its kind, way, text and manifest, and the copy's key, which opens its
-/// blob. It does not check the origin (`group_check_copy` does).
-fn open_copy(a: OpenCopyArgs) -> Result<Vec<u8>, Refusal> {
-    let refused = |e: Error| refuse(Code::Copy, e.context("The copy does not open on this device."));
-    a.event.validate().map_err(refused)?;
-    let (c, key) = a.event.open(&a.me, &a.secret).map_err(refused)?;
-    let mut m = serde_json::Map::new();
-    m.insert("kind".into(), serde_json::to_value(c.kind).unwrap_or_default());
-    m.insert("via".into(), serde_json::to_value(c.via).unwrap_or_default());
-    m.insert("text".into(), Value::from(c.text));
-    if let Some(media) = c.media {
-        m.insert(
-            "media".into(),
-            serde_json::to_value(&media)
-                .map_err(|e| refuse(Code::Request, Error::with("The manifest does not encode.", e)))?,
-        );
-    }
-    m.insert("key".into(), b64_value(&key));
-    Ok(json(Value::Object(m)))
-}
-
-#[derive(Deserialize)]
-struct SegmentArgs {
-    #[serde(with = "b64::secret")]
-    key: Zeroizing<Vec<u8>>,
-    index: u64,
-    last: bool,
-    #[serde(with = "b64")]
-    data: Vec<u8>,
-}
-
-/// `seal_segment` and `open_segment`: one segment of a copy's blob
-/// (docs/format.md, section 10.2, "The blob").
-fn segment(a: SegmentArgs, seal: bool) -> Result<Vec<u8>, Refusal> {
-    let key: [u8; crate::copy::KEY_SIZE] = a
-        .key
-        .as_slice()
-        .try_into()
-        .map_err(|_| refuse(Code::Request, Error::msg("The copy's key is not 32 bytes.")))?;
-    let out = if seal {
-        crate::copy::seal_segment(&key, a.index, a.last, &a.data)
-    } else {
-        crate::copy::open_segment(&key, a.index, a.last, &a.data)
-    }
-    .map_err(|e| refuse(Code::Copy, e))?;
-    let mut m = serde_json::Map::new();
-    m.insert("data".into(), b64_value(&out));
     Ok(json(Value::Object(m)))
 }
 
@@ -697,26 +621,5 @@ mod tests {
         let v = ask("version", Value::Null);
         assert_eq!(v["ok"]["abi"], ABI);
         assert_eq!(v["ok"]["core"], VERSION);
-    }
-
-    /// seal_segment and open_segment round-trip a blob's segment, which
-    /// opens only at its place; open_copy refuses a copy it cannot read.
-    #[test]
-    fn copy_segments() {
-        use base64::engine::general_purpose::STANDARD;
-        let key = STANDARD.encode([5u8; 32]);
-        let data = STANDARD.encode(b"some bytes of a file");
-        let sealed = ask("seal_segment", serde_json::json!({"key": key, "index": 3, "last": true, "data": data}));
-        let seg = sealed["ok"]["data"].clone();
-        assert_eq!(STANDARD.decode(seg.as_str().unwrap()).unwrap().len(), crate::copy::SEALED_SEGMENT);
-        let opened = ask("open_segment", serde_json::json!({"key": key, "index": 3, "last": true, "data": seg}));
-        let got = STANDARD.decode(opened["ok"]["data"].as_str().unwrap()).unwrap();
-        assert!(got.starts_with(b"some bytes of a file"));
-        let moved = ask("open_segment", serde_json::json!({"key": key, "index": 4, "last": true, "data": seg}));
-        assert_eq!(code(&moved), Code::Copy as u64);
-        let short = ask("seal_segment", serde_json::json!({"key": "AAAA", "index": 0, "last": true, "data": data}));
-        assert_eq!(code(&short), Code::Request as u64);
-        let none = ask("open_copy", serde_json::json!({"event": {}, "me": "ab", "secret": "AAAA"}));
-        assert_eq!(code(&none), Code::Copy as u64, "an empty copy");
     }
 }

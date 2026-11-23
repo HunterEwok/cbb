@@ -175,13 +175,6 @@ object Core {
             r.details?.takeIf { it.isNotEmpty() }?.let { "${r.message}: $it" } ?: r.message
         }
 
-    /** The public key for sealed messages of secret, 32 random bytes the device keeps: the `seal` its pairing and device record carry. */
-    fun sealPublic(secret: ByteArray): ByteArray {
-        val ok = run("seal_public", Wire.obj("secret" to Wire.bytes(secret))) as? JsonObject
-            ?: throw Mismatch("the answer to seal_public is not an object")
-        return ok.optBytes("key") ?: throw Mismatch("the answer to seal_public has no key")
-    }
-
     /** A recovery sheet (docs/protocol.md, section 9, "The recovery sheet (0.6)"), as the core made it with the group: the QR code's text and the text in groups of four. */
     class RecoverySheet(val qr: String, val text: String)
 

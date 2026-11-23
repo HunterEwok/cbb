@@ -1796,7 +1796,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Something in the node broke (a `panic` event): what broke and CBB's log lines, oldest first, for the bug report; the node starts again by itself. */
     @Volatile var onPanic: ((details: String, log: List<String>) -> Unit)? = null
 
-    /** This phone's secret for sealed messages (docs/protocol.md, section 15), 32 random bytes under a Keystore key. */
     companion object {
         private const val TAG = "cbb"
 

@@ -2989,6 +2989,9 @@ with 0.5 is set up again once. The details follow.
   `strict-generated-*.json`) and the field list of `tools/difffuzz`'s verdicts.
   `docs/protocol.md`, section 15, describes the commands of 0.6 alone ([format](docs/format.md),
   section 6), and the `command` fuzz target reads them (D-130).
+- The core's calls for the copies of 0.5 that no program called: `open_copy`, `seal_segment`,
+  `open_segment`, `copy_verdict` and `seal_public`, the kit's `sealPublic`, and the error codes
+  `command` (15) and `copy` (17), which stay unused (D-130).
 - Remote paste onto the phones until 0.7: the member of 0.6 hands a phone no paste, so the
   Android, Aurora and HarmonyOS apps no longer offer the switches "Let the group's admins
   paste" and "Let a paste press Enter", the log of pastes or the keyboard's "Type remote
