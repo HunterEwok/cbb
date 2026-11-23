@@ -36,7 +36,7 @@ marks a known difference.
 - [7. The join QR code](#7-the-join-qr-code)
 - [8. Local control socket](#8-local-control-socket)
 - [9. The phone as the root](#9-the-phone-as-the-root)
-- [10. Admin CAs, device records and revocation](#10-admin-cas-device-records-and-revocation)
+- [10. Records](#10-records)
 - [11. Tunnel keys](#11-tunnel-keys)
 - [12. Remote invitations](#12-remote-invitations)
 - [13. The forwarder](#13-the-forwarder)
@@ -232,7 +232,7 @@ so are the texts a person or a server reads (a link, a pin).
 | Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `core/src/certs.rs` |
 | Event ID | same format as a device ID, random per event | `internal/clip/clip.go` |
 | Group tag | the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters | `member::live::tag` |
-| Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
+| Member host name | `cb-<device ID>.local` (the mDNS host name) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves the pairing windows | `member/src/lib.rs`, `member/src/discovery.rs` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
@@ -1210,19 +1210,16 @@ In a group that a phone app creates, the phone is the root of trust ("The phone 
 [design.md](design.md)). Sections 1-8 hold for it too. A group a computer creates (`cbb new`)
 has a root of the same form, which the computer holds in a file (section 10, "Admins").
 
-- **Group CA.** The app creates the group root CA: a P-256 key in the Secure Enclave or
-  StrongBox that cannot be exported, with the certificate profile of section 2 except
-  path length 1 (MaxPathLen 1), CN `cbb group root YYYY-MM-DD`. Below it every admin
-  phone has an admin CA (section 10). Computers get member certificates; a computer holds a
-  CA key only when the root phone makes it an admin (section 10, "Admins").
+- **The root key.** The app makes the group's first root key (section 2): a P-256 key in the
+  Secure Enclave, StrongBox or HUKS that cannot be exported; with the recovery key it gives
+  the group ID. An admin phone holds an admin key the same way (section 10, "Admins").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
   it signs with the root or an admin key. Aurora OS lets no regular app ask the system for it,
   so the Aurora app keeps its root or admin key in a token of its own in the TEE behind a PIN
   the user chooses (at least four digits, apart from the phone's), which the TEE checks
-  before the key signs and which locks the key for good after seven wrong ones (D-94). A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
-  6).
-- **The app is a member.** It holds a member certificate of its own group with role
-  `phone` and speaks the member protocol of section 4. It dials and never listens for
+  before the key signs and which locks the key for good after seven wrong ones (D-94).
+- **The app is a member.** It has a member key of its own, named in the group's records with
+  role `phone`, and speaks the member protocol of section 4. It dials and never listens for
   members (a phone cannot accept connections in the background), so members MUST NOT dial a
   `phone` member; it publishes no mDNS records, except while its pairing window is open
   and while it is the group's hub, when other phones dial it (section 3, `p=1` and
@@ -1230,19 +1227,11 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
 - **Pairing direction.** The joiner always dials: the root phone, or a phone that may admit,
   opens a pairing window and shows its QR code, and the new device dials it (section 6,
   "The window and who dials").
-- **Finding the members.** The app trusts its own CA and finds members through mDNS browsing.
-  It keeps the home network addresses (private IPv4, unique local IPv6) of the QR code of
-  each computer it admitted, the one that answered first, and dials a computer of the
-  group's list at them while browsing does not find it, as one in another subnet that
-  mDNS does not reach. TLS checks the peer as for a found member.
-- **Renewal and revocation.** The admin phones renew certificates with `cert` messages, as
-  an admin computer does (CBBKit's
-  `GroupCertificates.renewal`, from the chain of the phone's member's `peer` event, sent
-  with its `send_cert`; the app also renews its own certificate at start). The Android
-  app's root and admin keys sign only right after the user's authentication, one signature
-  each, so it notes a peer that is due and sends its `cert` message on the peer's connection
-  once the user confirms it, the next time the app is open. Revocation and the devices list are section 10, and a second admin
-  phone is the way back when a phone is lost.
+- **Finding the members.** The app finds members through mDNS browsing (section 3), and TLS
+  checks each peer by its member key in the group's records (section 4).
+- **Removal.** A device leaves the group by a removal record (section 10); a lost root phone
+  is replaced with the recovery key ("The recovery sheet (0.6)", section 10, "The recovery
+  key").
 
 ### The recovery sheet (0.6)
 
@@ -1356,7 +1345,7 @@ point) ‖ the ciphertext (49 bytes), 119 bytes in all.
 
 The vectors are in `testdata/format/sheet.json`, `yubikey`.
 
-## 10. Admin CAs, device records and revocation
+## 10. Records
 
 The wire side of "Admin phones, the devices list and revocation" in [design.md](design.md).
 The group's records are of version 3: one rule evaluates a set of them into the group's state
@@ -3626,19 +3615,13 @@ within version 1, and a new ALPN version would rename them.
 
 | Common name | Certificate | Section |
 |---|---|---|
-| `cbb group root YYYY-MM-DD` | a group root CA | 2, 9 |
-| `cbb group CA YYYY-MM-DD` | the group CA of a group made before 0.4, refused | 2 |
-| `cbb admin <device ID>` | an admin CA | 10 |
-| `<device ID>` | a member certificate, DNS name `cb-<device ID>.local` | 2 |
 | `cbb server` | a server key's certificate | 13, 18 |
 | `cbb forwarder` | a forwarder's or relay's own certificate | 13, 14 |
 
 ### Member protocol messages (`t`)
 
-`hello`, `event`, `ping`, `bye`, `cert` (section 4); `get`, `missing` and binary `chunk`
-frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
-(section 11); `command`, `result` (section 15); `release`, `entries` (section 16); `evidence` (section
-17); `credentials` (section 18).
+Each message's type and number, with the section that describes it, are in section 4's table
+("The member protocol in 0.6").
 
 ### Values
 
