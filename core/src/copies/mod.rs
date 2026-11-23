@@ -25,9 +25,6 @@
 //!
 //! Whether a reader writes what it opened is decided from signed fields
 //! only: see [`fresh`].
-//!
-//! This is the new path beside the old one (`crate::copy`); the service and
-//! the phones switch to it in wave 5.
 
 pub mod blob;
 pub mod fresh;

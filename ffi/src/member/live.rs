@@ -741,7 +741,6 @@ impl Phone {
             kind,
             text: c.content.text.clone().unwrap_or_default(),
             media: c.content.manifest.clone(),
-            ..Default::default()
         })
     }
 

@@ -30,15 +30,9 @@ pub fn release(data: &[u8]) {
     let _ = crate::release::decode_channel(data);
 }
 
-/// A member protocol frame's payload, a manifest, a sealed copy and the
-/// content inside one: a content it takes encodes to the same bytes.
+/// A copy's manifest, as a member reads one that arrived.
 pub fn wire(data: &[u8]) {
     let _ = crate::media::Manifest::parse(data);
-    let _ = crate::wire::decode(data);
-    let _ = serde_json::from_slice::<crate::copy::Sealed>(data).map(|s| s.validate());
-    if let Ok(c) = crate::copy::Content::decode(data) {
-        assert_eq!(c.encode().ok().as_deref(), Some(data), "took a content that does not encode back");
-    }
 }
 
 /// The core's entry point (docs/core-api.md): any bytes get one answer, a
@@ -53,7 +47,7 @@ pub fn api(data: &[u8]) {
         (Some(_), None) => {}
         (None, Some(e)) => {
             let code = e.get("code").and_then(serde_json::Value::as_u64).expect("an error without a code");
-            assert!(matches!(code, 1..=4 | 10..=17), "an error with the unknown code {code}");
+            assert!(matches!(code, 1..=4 | 10 | 11 | 14 | 16 | 18), "an error with the unknown code {code}");
             assert!(
                 e.get("name").and_then(serde_json::Value::as_str).is_some_and(|n| !n.is_empty()),
                 "an error without a name"

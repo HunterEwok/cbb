@@ -51,12 +51,13 @@ watch's state, content hashes, join QR codes and a CPace exchange.
 - The files named `go-*.json` and those without a prefix are written by Go tests with
   `-update` and read by the Swift kit, the Kotlin kit and, for what it implements, the lite
   core (`core/src/vectors.rs`).
-- `swift-member.json` holds member frames the Swift kit wrote; the core's
-  `swift_member_frames` reads it, and no kit writes it again (D-126).
+- `seal-go.json` holds messages Go's `crypto/hpke` sealed with the sealing suite, and
+  `seal-rust.json` what the core seals; the core opens both, and no Go test writes the first
+  again.
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
 - `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
-  from the draft; Go and the Rust core open its messages, and no test writes it.
+  from the draft; the Rust core opens its messages, and no test writes it.
 
 A change to the wire format changes the vectors in the same pull request, together with
 [the protocol](protocol.md) and every implementation.

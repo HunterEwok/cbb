@@ -284,9 +284,6 @@ The differential run of all three implementations (Go, Rust and JDK 17;
 sh .github/differential.sh 1 20000 /tmp/differential
 ```
 
-The core's `swift_member_frames` reads the committed `testdata/interop/swift-member.json`,
-which the Swift kit wrote; no kit writes it again (D-126).
-
 The app (macOS with Xcode):
 
 ```sh

@@ -5,7 +5,7 @@
 //! refuse what they cannot read and never panic. The order independence of
 //! the records' rules is tested in core/src/records.
 
-use cbb_core::{store, strict, wire};
+use cbb_core::{store, strict};
 use proptest::prelude::*;
 
 /// A JSON value with the shapes a signed body may hold.
@@ -73,12 +73,5 @@ proptest! {
         for (t, v) in &m {
             prop_assert_eq!(back.get(*t), Some(&v[..]));
         }
-    }
-
-    // A frame of the member protocol is read or refused, never a panic.
-    #[test]
-    fn wire_never_panics(b in prop::collection::vec(any::<u8>(), 0..256), head in any::<[u8; 4]>()) {
-        let _ = wire::decode(&b);
-        let _ = wire::frame_len(head, 1 << 20);
     }
 }

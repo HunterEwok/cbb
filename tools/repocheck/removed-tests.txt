@@ -1237,3 +1237,101 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/RemotePasteTest.kt limiter D-132:
 apps/android/kit/src/test/kotlin/tools/cbb/kit/RemotePasteTest.kt settingsAndLog D-132: it tested the kit's switches and log of the remote pastes a phone took, which waits for 0.7; the cleaning of a paste on a computer is tested in core/src/remotepaste.rs and its limits per sender in member/src/remotepaste.rs
 core/src/api.rs copy_segments D-130: the calls seal_segment, open_segment and open_copy served the copies of 0.5, which no program calls; 0.6 seals blobs in cbb_core::copies::blob, tested there
 core/src/api/signed.rs seal_public_key D-130: the call seal_public gave the key for the sealed messages of 0.5, which no program calls; cbb_core::seal keeps its own vectors
+core/src/clip.rs a_copy_from_before_the_start_is_not_written D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs a_copy_made_right_after_a_restart_is_written D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs ahead_refused D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs hellos_carry_only_the_mark_of_a_secret D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs live_window D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs media_events D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs modes D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs old_events_are_not_written_outside_the_windows D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs sealed_copies D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs sends_media D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs sync_off_for_a_while D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs takes_media D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip.rs two_members_converge D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs a_mark_hides_an_older_text_and_the_full_secret_replaces_it D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs a_restored_secret_does_not_circulate D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs a_skipped_marked_item_is_remembered D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs convergence D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs copied D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs echo D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs just_booted D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs local_clipboard D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs mute D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs own_mode_keeps_a_secret_a_secret D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs received_ordering D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs received_validation D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs reoffer_of_local_text D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs review_chain D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs same_text_newer_event D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs secret_expires_and_travels_only_as_a_mark D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs secret_expires_by_its_age D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs secret_stays_a_secret_when_offered_again D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs send_from_the_phone D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs skew D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs the_secret_memory_holds_many_by_age D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs time_and_sleep D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs universal_clipboard_relay D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/clip/engine_tests.rs write_policy D-130: the sync engine of 0.5 (cbb_core::clip::Engine), which no member runs; the board of 0.6 (member/src/board.rs) and cbb_core::copies keep the group's copy, tested there
+core/src/copy/tests.rs a_blob_must_fit_its_manifest D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs a_blob_opens_segment_by_segment D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs a_copy_in_the_open_is_refused D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs a_mark_still_verifies D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs content_is_read_strictly D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs every_reader_opens_its_own D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs nothing_in_it_can_change D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs padding_hides_the_size D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs readers_are_checked_and_counted D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/copy/tests.rs the_wire_form_round_trips D-130: the sealed copies of 0.5 (cbb_core::copy), which no member sends; cbb_core::copies seals and opens the copies of 0.6, tested in core/src/copies/tests.rs
+core/src/vectors.rs hello_actions D-130: the JSON member frames of 0.5 (hello, event), which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/src/vectors.rs member_frames D-130: the JSON member frames of 0.5 (hello, event), which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/src/vectors.rs swift_member_frames D-130: the JSON member frames of 0.5 (hello, event), which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/src/wire.rs group_ca_in_a_hello D-130: the JSON member frames of 0.5, which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/src/wire.rs guest_messages D-130: the JSON member frames of 0.5, which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/src/wire.rs hello_parts D-130: the JSON member frames of 0.5, which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/src/wire.rs messages_and_frames D-130: the JSON member frames of 0.5, which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/src/wire.rs signed_sets_keep_their_bytes D-130: the JSON member frames of 0.5, which no member sends; the members of 0.6 speak the frames of docs/format.md, section 9
+core/tests/props.rs wire_never_panics D-130: the JSON member frames of 0.5, which no member reads; the frames of 0.6 have the format fuzz target
+internal/clip/blob_test.go TestBlobRefusals D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/clip_test.go TestJSON D-130: Go's event of 0.5 went with the copies of 0.5; TestKindAndViaJSON keeps the kinds and ways
+internal/clip/clip_test.go TestReceivedValidation D-130: Go's event of 0.5 went with the copies of 0.5; TestKindAndViaJSON keeps the kinds and ways
+internal/clip/edges_test.go TestEdgeEvents D-130: Go's events and sealed copies of 0.5, kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/edges_test.go TestSealBlobStopsOnErrors D-130: Go's events and sealed copies of 0.5, kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/media_test.go TestMediaValidation D-130: Go's event of 0.5 went with the copies of 0.5; TestManifestValidate keeps the manifest's rules
+internal/clip/refuse_test.go TestDecodeContentRefusals D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/refuse_test.go TestSealCopyArguments D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/refuse_test.go TestSealedRefusals D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/rule_test.go TestRuleVectors D-130: Go's copy of the rule of incoming copies served the Go member, which is gone; core/src/rule.rs reads the same testdata/interop/copy-verdicts.json
+internal/clip/sealed_test.go TestABlobOpensSegmentBySegment D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestASealedMarkVerifies D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestBlobRoundTrip D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestContentIsReadStrictly D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestCopyVectors D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestEveryReaderOpensItsOwn D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestNothingInASealedCopyChanges D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestPaddingHidesTheSize D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealed_test.go TestSealedWireForm D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealedrules_test.go TestContentLengthsAreReadStrictly D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/clip/sealedrules_test.go TestSealedCopiesAreCheckedFirst D-130: Go's sealed copies of 0.5 (internal/clip/sealed.go), kept only as a reference for their vectors, went with the copies of 0.5
+internal/hlc/ahead_test.go TestAheadVectors D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) keeps hlc_ahead on the same vector
+internal/hlc/hlc_test.go TestCompare D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestConcurrentNowIsStrictlyIncreasing D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestFloor D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestFloorAfterClockAhead D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestLogicalOverflow D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestMarkAtTheEndOfTime D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestMarkIsSavedAhead D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestMarkSaveFailureIsRetried D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestMaxWall D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestNowGrows D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestObserve D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestObserveNeverRefuses D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/hlc/hlc_test.go TestTextRoundTrip D-130: Go's clock served the events of 0.5, which are gone; the core's (cbb_core::hlc) has its own tests
+internal/seal/seal_test.go TestDraftVector D-130: Go's sealing served the copies of 0.5, which are gone; the core's (cbb_core::seal) opens the committed seal-go.json and the draft's vector
+internal/seal/seal_test.go TestRefusesBadKeys D-130: Go's sealing served the copies of 0.5, which are gone; the core's (cbb_core::seal) opens the committed seal-go.json and the draft's vector
+internal/seal/seal_test.go TestRoundTrip D-130: Go's sealing served the copies of 0.5, which are gone; the core's (cbb_core::seal) opens the committed seal-go.json and the draft's vector
+internal/seal/seal_test.go TestVectors D-130: Go's sealing served the copies of 0.5, which are gone; the core's (cbb_core::seal) opens the committed seal-go.json and the draft's vector
+member/src/nettest/props.rs members_agree_in_any_order D-130: the sync engine of 0.5, which no member runs; the board of 0.6 keeps the group's copy, tested in member/src/board.rs
+member/src/nettest/props.rs the_clock_moves_forward D-130: the sync engine of 0.5, which no member runs; the board of 0.6 keeps the group's copy, tested in member/src/board.rs
+member/src/nettest/races.rs one_engine_from_many_threads D-130: the sync engine of 0.5, which no member runs; the board of 0.6 keeps the group's copy, tested in member/src/board.rs

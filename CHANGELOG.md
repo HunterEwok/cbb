@@ -2992,6 +2992,13 @@ with 0.5 is set up again once. The details follow.
 - The core's calls for the copies of 0.5 that no program called: `open_copy`, `seal_segment`,
   `open_segment`, `copy_verdict` and `seal_public`, the kit's `sealPublic`, and the error codes
   `command` (15) and `copy` (17), which stay unused (D-130).
+- The sync engine of 0.5 and its copies: the core's `cbb_core::clip::Engine`, the sealed
+  copies of `cbb_core::copy` and the JSON member frames of `cbb_core::wire` (hello, event,
+  get, guest), with Go's reference copies of them (`internal/clip`'s sealed copies, events and
+  rule, `internal/hlc` and `internal/seal`) and their vectors (`copies-go.json`,
+  `copies-rust.json`, `member.json`, `swift-member.json`). The board of 0.6 and
+  `cbb_core::copies` keep and seal the group's copies; `seal-go.json` stays as a fixed vector
+  of Go's `crypto/hpke` that the core opens (D-130).
 - Remote paste onto the phones until 0.7: the member of 0.6 hands a phone no paste, so the
   Android, Aurora and HarmonyOS apps no longer offer the switches "Let the group's admins
   paste" and "Let a paste press Enter", the log of pastes or the keyboard's "Type remote

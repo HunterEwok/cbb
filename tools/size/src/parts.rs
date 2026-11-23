@@ -71,13 +71,12 @@ fn seal() {
     black_box(cbb_core::seal::open(input(), input(), input()).is_ok());
 }
 
-/// A copy as it arrives: read and opened with the device's key.
+/// A copy as it arrives: its message read, and a segment of its blob
+/// opened.
 #[cfg(feature = "copy")]
 fn copy() {
-    use cbb_core::copy::Sealed;
-    if let Ok(s) = serde_json::from_slice::<Sealed>(input()) {
-        black_box(s.open("0123456789abcdef0123456789abcdef", input()).is_ok());
-    }
+    black_box(cbb_core::copies::message(input()).is_ok());
+    black_box(cbb_core::copies::blob::open_segment(&[7; 32], 0, true, input()).is_ok());
 }
 
 /// Joining a group at home: the invitation from the typed digits and the

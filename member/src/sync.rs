@@ -12,10 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::board::Board;
 use crate::error::{Context, Error, Result};
 use crate::files;
-use cbb_core::clip::Engine;
 
-/// Sync and the mute on a member's clipboard state: the old member's
-/// engine and the board of 0.6 both keep them.
+/// Sync and the mute on a member's clipboard state, which the board keeps.
 pub trait Switches {
     fn set_sync(&self, on: bool, until_ms: i64);
     fn sync(&self) -> (bool, i64);
@@ -45,7 +43,6 @@ macro_rules! switches {
         }
     };
 }
-switches!(Engine);
 switches!(Board);
 
 impl<T: Switches + ?Sized> Switches for std::sync::Arc<T> {
@@ -183,14 +180,7 @@ mod tests {
     fn lasts_across_a_restart() {
         let dir = std::env::temp_dir().join(format!("cbb-sync-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let new = || {
-            Engine::new(
-                &"a".repeat(32),
-                cbb_core::hlc::Clock::new(Box::new(crate::uptime::wall_ms), Default::default(), None),
-                Box::new(crate::uptime::wall_ms),
-                Box::new(crate::uptime::now),
-            )
-        };
+        let new = || Board::new(Box::new(crate::uptime::wall_ms));
         let e = new();
         set(&dir, &e, false, 3_600_000).unwrap();
         let again = new();

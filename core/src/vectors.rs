@@ -12,9 +12,8 @@ use base64::engine::general_purpose::STANDARD;
 use serde_json::Value;
 
 use crate::certs::{self, Cert};
-use crate::clip::Event;
 use crate::hlc::Timestamp;
-use crate::wire::{self, Message};
+use crate::wire;
 
 fn vectors(name: &str) -> Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop").join(name);
@@ -27,104 +26,6 @@ fn bytes(v: &Value) -> Vec<u8> {
 
 fn cert(v: &Value) -> Cert {
     Cert::parse(&bytes(v)).unwrap()
-}
-
-/// The frames the phone app's CBBKit writes as a member
-/// (swift-member.json, from its tests), decoded as a member does: the
-/// phone's hello, whose current copy is a secret's mark, sealed copies, and
-/// pings or a goodbye.
-#[test]
-fn swift_member_frames() {
-    let frames: Vec<String> = serde_json::from_value(vectors("swift-member.json")).unwrap();
-    assert!(frames.len() >= 3, "{} frames, want a hello, an event and a ping at least", frames.len());
-    for (i, f) in frames.iter().enumerate() {
-        let raw = STANDARD.decode(f).unwrap();
-        let (len, body) = raw.split_at(4);
-        assert_eq!(u32::from_be_bytes(len.try_into().unwrap()) as usize, body.len(), "frame {i}'s length");
-        let m: Message = serde_json::from_slice(body).unwrap();
-        match m.kind.as_str() {
-            "hello" => {
-                assert_eq!((i, m.role.as_str()), (0, "phone"), "frame {i}: a hello other than the phone's first");
-                let (h, body) = wire::decode_hello(m.hello.as_ref()).unwrap();
-                assert_eq!(body.name, "iPhone");
-                // The phone's current copy is a secret, which a hello
-                // carries only as its mark.
-                let s = h.current.and_then(|c| c.sealed).expect("the hello carries the current copy");
-                s.validate().unwrap();
-                assert!(s.is_mark(), "the hello carries a secret's payload");
-            }
-            "event" => {
-                let s: crate::copy::Sealed = serde_json::from_value(m.event.clone().unwrap()).unwrap();
-                s.validate().unwrap();
-                assert!(!s.is_mark(), "frame {i}: an event that is a mark");
-            }
-            "ping" | "bye" => {}
-            t => panic!("frame {i}: unexpected type {t:?}"),
-        }
-    }
-}
-
-/// The member protocol's frames, timestamps, events and their order
-/// (member.json).
-#[test]
-fn member_frames() {
-    let v = vectors("member.json");
-    for f in v["frames"].as_array().unwrap() {
-        let m: Message = serde_json::from_value(f.clone()).unwrap();
-        // Encoding again gives the same JSON.
-        assert_eq!(serde_json::to_value(&m).unwrap(), *f, "frame {f}");
-        match m.kind.as_str() {
-            "hello" => {
-                assert!(wire::known_role(&m.role));
-                let (h, body) = wire::decode_hello(m.hello.as_ref()).unwrap();
-                let want = &f["hello"];
-                assert_eq!(h.wall, want["wall_ms"].as_i64().unwrap_or(0));
-                assert_eq!(body.name, want["name"].as_str().unwrap_or(""));
-                let device = wire::DeviceInfo::of(&body);
-                assert_eq!(device.is_empty(), want.get("device").is_none());
-                if let Some(d) = want.get("device") {
-                    assert_eq!(serde_json::to_value(&device).unwrap(), *d);
-                }
-                // The current copy is sealed: its header, unread here.
-                if let Some(c) = h.current {
-                    assert!(c.unread);
-                    let s = c.sealed.unwrap();
-                    s.validate().unwrap();
-                    assert_eq!(serde_json::to_value(&s).unwrap(), want["current"]);
-                }
-            }
-            "event" => {
-                let s: crate::copy::Sealed = serde_json::from_value(m.event.clone().unwrap()).unwrap();
-                s.validate().unwrap();
-                assert_eq!(serde_json::to_value(&s).unwrap(), f["event"]);
-            }
-            _ => {}
-        }
-    }
-    for t in v["timestamps"].as_array().unwrap() {
-        let text = t["text"].as_str().unwrap();
-        let got = Timestamp::parse(text);
-        assert_eq!(got.is_some(), t["ok"].as_bool().unwrap(), "timestamp {text:?}");
-        // Leading zeros parse; what is written again parses the same.
-        if let Some(ts) = got {
-            assert_eq!(Timestamp::parse(&ts.to_string()), Some(ts));
-        }
-    }
-    for e in v["events"].as_array().unwrap() {
-        let valid = serde_json::from_value::<Event>(e["json"].clone()).ok().is_some_and(|ev| ev.validate().is_ok());
-        assert_eq!(valid, e["valid"].as_bool().unwrap(), "event {}", e["json"]);
-    }
-    for o in v["order"].as_array().unwrap() {
-        let a: Event = serde_json::from_value(o["a"].clone()).unwrap();
-        let b: Event = serde_json::from_value(o["b"].clone()).unwrap();
-        assert_eq!(a.later(&b), o["later"].as_bool().unwrap(), "order {o}");
-    }
-    let bodies = v["bodies"].as_array().unwrap();
-    assert!(bodies.len() >= 14);
-    for b in bodies {
-        let text = b["text"].as_str().unwrap();
-        assert_eq!(wire::decode(text.as_bytes()).is_ok(), b["ok"].as_bool().unwrap(), "body {text}");
-    }
 }
 
 /// Which member certificates a peer accepts at which time
@@ -162,38 +63,6 @@ fn device_cleaned() {
         archive: "cbb-linux-arm64.exe".into(),
     };
     assert!(bad.cleaned().is_empty());
-}
-
-/// A member's hello names the quick actions that are on there, and
-/// leaves the field out when none is.
-#[test]
-fn hello_actions() {
-    let h = crate::clip::Hello { wall: 1, current: None };
-    let hello = |on: &[String], entries| {
-        wire::hello(
-            &h,
-            String::new(),
-            "member",
-            "pi",
-            "linux",
-            &wire::DeviceInfo::default(),
-            None,
-            "own",
-            None,
-            on,
-            "file",
-            None,
-            entries,
-            None,
-        )
-    };
-    let on = ["reboot".to_string(), "restart".to_string()];
-    let (_, body) = wire::decode_hello(hello(&on, (0, 0)).hello.as_ref()).unwrap();
-    assert_eq!(body.actions, on);
-    let v = hello(&[], (0, 0)).hello.unwrap();
-    assert!(v.get("actions").is_none() && v.get("entries_seq").is_none() && v.get("entries_keys_seq").is_none());
-    let (_, body) = wire::decode_hello(hello(&[], (3, 5)).hello.as_ref()).unwrap();
-    assert_eq!((body.entries_keys_seq, body.entries_seq), (3, 5));
 }
 
 /// The signed files of a release (docs/protocol.md, section 16), as Go's

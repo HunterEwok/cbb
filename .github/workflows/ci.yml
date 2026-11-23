@@ -633,7 +633,7 @@ jobs:
       - name: go test the network and the group under qemu-mips
         run: >-
           go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
-          ./internal/hlc ./internal/mdns ./internal/netguard ./internal/openwrt
+          ./internal/mdns ./internal/netguard ./internal/openwrt
           ./internal/tunnel
           ./internal/vless </dev/null
 

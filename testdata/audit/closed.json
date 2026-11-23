@@ -368,11 +368,6 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
@@ -391,11 +386,6 @@
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
-   },
-   {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
    },
    {
     "lang": "rust",
@@ -418,11 +408,6 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
@@ -443,11 +428,6 @@
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
-   },
-   {
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
@@ -466,11 +446,6 @@
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
-   },
-   {
-    "lang": "go",
-    "file": "internal/hlc/ahead_test.go",
-    "name": "TestAheadVectors"
    },
    {
     "lang": "rust",

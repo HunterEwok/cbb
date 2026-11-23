@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The manifest of a media event: images or files (docs/format.md,
-//! section 10.3). The core never fetches the content; it takes
-//! the event, so that the group converges, and its plain-text alternative.
-//! It checks the manifest as Go's package clip does, since it passes the
-//! event on.
+//! The manifest of a media copy: images or files (docs/format.md,
+//! section 10.3). The core never fetches the content; it takes the copy,
+//! so that the group converges, and its plain-text alternative. It checks
+//! the manifest as Go's package clip does, since it passes the copy on.
 
 use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;

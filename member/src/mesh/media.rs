@@ -141,7 +141,7 @@ impl Mesh {
     pub fn copy_media(&self, content: &Content, parts: Vec<(Part, Source)>, send: bool) -> Result<SentMedia> {
         let k = copies::new_key()?;
         let key = blob_key(&k);
-        let (manifest, blob) = self.content.seal(parts, BlobKey::Blob(&key))?;
+        let (manifest, blob) = self.content.seal(parts, BlobKey(&key))?;
         let content = Content { manifest: Some(manifest.clone()), ..content.clone() };
         let blob = match blob {
             Some(b) => Some(SealedBlob {
@@ -301,7 +301,7 @@ impl Mesh {
     /// Opens a copy's blob, held whole, into the new folder `out`: each
     /// part where the manifest puts it, checked against its hash.
     pub fn open_media(&self, blob: Option<&Blob>, manifest: &Manifest, out: &Path) -> Result<Vec<(Part, PathBuf)>> {
-        self.content.open_into(blob.map(|b| (b.sha256.as_slice(), BlobKey::Blob(&b.key))), manifest, out)
+        self.content.open_into(blob.map(|b| (b.sha256.as_slice(), BlobKey(&b.key))), manifest, out)
     }
 
     /// A chunk of a blob from a peer: to the fetch that waits for it.

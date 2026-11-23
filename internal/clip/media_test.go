@@ -11,11 +11,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/HunterEwok/cbb/internal/hlc"
 )
 
 func part(typ, path string, b string) Part {
@@ -111,40 +108,6 @@ func TestNames(t *testing.T) {
 		if err := CheckName(name); err != nil {
 			t.Errorf("CheckName(%q): %v", name, err)
 		}
-	}
-}
-
-func TestMediaValidation(t *testing.T) {
-	good := Event{ID: NewID(), Origin: idB, Time: hlc.Timestamp{Wall: testWall}, Kind: Media, Media: manifest(part(TypeJPEG, "", "j"))}
-	if err := good.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	noManifest := good
-	noManifest.Media = nil
-	textWithManifest := good
-	textWithManifest.Kind = Text
-	textWithManifest.Text = "x"
-	longText := good
-	longText.Text = strings.Repeat("x", MaxAltText+1)
-	badManifest := good
-	badManifest.Media = &Manifest{Size: 2, Parts: good.Media.Parts}
-	for name, ev := range map[string]Event{"no manifest": noManifest, "text with a manifest": textWithManifest, "long text": longText, "bad manifest": badManifest} {
-		if err := ev.Validate(); err == nil {
-			t.Errorf("%s: Validate succeeded", name)
-		}
-	}
-	b, err := json.Marshal(good)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{`"kind":"media"`, `"media":{"size":1,"parts":[{"type":"image/jpeg","size":1,"sha256":"`} {
-		if !strings.Contains(string(b), want) {
-			t.Errorf("JSON %s lacks %s", b, want)
-		}
-	}
-	var back Event
-	if err := json.Unmarshal(b, &back); err != nil || back.Validate() != nil || !reflect.DeepEqual(back.Media, good.Media) {
-		t.Errorf("round trip %+v, %v", back, err)
 	}
 }
 

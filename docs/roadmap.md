@@ -235,7 +235,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     X25519, so a recorded paste stays closed to a later quantum computer; the keys in the
     TPM, the Secure Enclave and the Keystore only sign), published in a statement its member
     key signs; the sender seals the body to it (HPKE, RFC 9180: X-Wing, HKDF-SHA256,
-    ChaCha20-Poly1305; `internal/seal` and `cbb_core::seal`) with the open header (group, sender, receiver, ID, times) as its
+    ChaCha20-Poly1305; `cbb_core::seal`) with the open header (group, sender, receiver, ID, times) as its
     associated data, and signs the sealed command. A device that published no key gets a
     secret paste only directly. The same in Go, `cbb`, both kits, with shared
     vectors and docs/protocol.md section 15.

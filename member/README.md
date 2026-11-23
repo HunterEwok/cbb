@@ -18,7 +18,8 @@ WireGuard tunnel to the hub once `cbb global on` is run on it ("Sync away from h
 it dials no address outside the home network itself.
 
 The protocol core is its own crate, [`core`](../core) (`cbb_core`): certificates, records,
-the hybrid clock, the sync engine, the frames and the joiner's side of the pairing, with
+the hybrid clock, the copies sealed end to end and the rule of incoming copies, the frames
+and the joiner's side of the pairing, with
 CPace in `core/src/third_party/cpace`. It does no I/O and needs no operating system
 (no_std with alloc; RustCrypto for P-256, SHA-2 and HMAC), so the firmware on the ESP32
 can use it as it is. On a microcontroller the firmware supplies the randomness, as
