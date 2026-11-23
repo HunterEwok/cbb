@@ -829,6 +829,52 @@
         }
       }
     },
+    "Admin keys": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مفاتيح المشرفين"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claves de administrador"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מפתחות מנהל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एडमिन कुंजियाँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи администраторов"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funguo za msimamizi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理员密钥"
+          }
+        }
+      }
+    },
     "Admins removed or froze each other without seeing it: %@. The main device removes one of them.": {
       "localizations": {
         "ar": {
@@ -1699,6 +1745,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "应用打开时，管理员的粘贴会进入这台 Mac 当前的键盘焦点处。macOS 会要求你在“系统设置”>“隐私与安全性”>“辅助功能”中允许本应用。用 cbb paste-receive on 打开远程粘贴。"
+          }
+        }
+      }
+    },
+    "An unticked device is removed, and joins again only as a new device.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُزال الجهاز غير المحدد، ولا ينضم مجددًا إلا كجهاز جديد."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dispositivo sin marcar se quita y solo vuelve a unirse como dispositivo nuevo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשיר שלא מסומן מוסר, וחוזר רק כמכשיר חדש."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बिना टिक वाला डिवाइस हटा दिया जाता है, और केवल नए डिवाइस के रूप में फिर जुड़ सकता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство без галочки удаляется и вернётся только как новое."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kisichowekewa alama kinaondolewa, na kinajiunga tena kama kifaa kipya tu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未勾选的设备会被移除，只能作为新设备重新加入。"
           }
         }
       }
@@ -3267,6 +3359,52 @@
         }
       }
     },
+    "Copy lifetime": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مدة بقاء النسخة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duración de una copia"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "משך חיי העתקה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कॉपी की अवधि"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время жизни копии"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muda wa nakala"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "副本保留时长"
+          }
+        }
+      }
+    },
     "Create a group": {
       "localizations": {
         "ar": {
@@ -4739,6 +4877,52 @@
         }
       }
     },
+    "Group": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المجموعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grupo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קבוצה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группа"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kikundi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组"
+          }
+        }
+      }
+    },
     "Hardware": {
       "localizations": {
         "ar": {
@@ -5701,6 +5885,98 @@
           "stringUnit": {
             "state": "translated",
             "value": "在更换到达前，让此设备保持开启并靠近群组的其他设备。"
+          }
+        }
+      }
+    },
+    "Keys in files too": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المفاتيح في الملفات أيضًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claves también en archivos"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מפתחות גם בקבצים"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कुंजियाँ फ़ाइलों में भी"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи и в файлах"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funguo pia kwenye faili"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密钥也可在文件中"
+          }
+        }
+      }
+    },
+    "Keys in hardware": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المفاتيح في العتاد"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claves en hardware"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מפתחות בחומרה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कुंजियाँ हार्डवेयर में"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи в оборудовании"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funguo kwenye maunzi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密钥在硬件中"
           }
         }
       }
@@ -6671,6 +6947,52 @@
         }
       }
     },
+    "Make this Mac the main device": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اجعل جهاز Mac هذا الجهاز الرئيسي"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer de este Mac el dispositivo principal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להפוך את ה-Mac הזה למכשיר הראשי"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस Mac को मुख्य डिवाइस बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать этот Mac главным устройством"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya Mac hii kuwa kifaa kikuu"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把这台 Mac 设为主设备"
+          }
+        }
+      }
+    },
     "Member": {
       "localizations": {
         "ar": {
@@ -6805,52 +7127,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "更多"
-          }
-        }
-      }
-    },
-    "Move": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نقل"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pasar"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "העברה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ले आएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Перенести"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hamisha"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移过来"
           }
         }
       }
@@ -9201,6 +9477,52 @@
         }
       }
     },
+    "Proven hardware only": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العتاد المُثبت فقط"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo hardware probado"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רק חומרה מאומתת"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "केवल प्रमाणित हार्डवेयर"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только проверенное оборудование"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maunzi yaliyothibitishwa pekee"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅限经验证的硬件"
+          }
+        }
+      }
+    },
     "QR code": {
       "localizations": {
         "ar": {
@@ -10075,6 +10397,52 @@
         }
       }
     },
+    "Saved. Every device of the group follows it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم الحفظ. تتبعه كل أجهزة المجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardado. Todos los dispositivos del grupo lo siguen."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשמר. כל מכשירי הקבוצה פועלים לפיו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सहेजा गया। समूह का हर डिवाइस इसका पालन करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено. Все устройства группы следуют этой настройке."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imehifadhiwa. Kila kifaa cha kikundi kinafuata hili."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存。群组的每台设备都会遵循它。"
+          }
+        }
+      }
+    },
     "Search devices": {
       "localizations": {
         "ar": {
@@ -10117,6 +10485,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "搜索设备"
+          }
+        }
+      }
+    },
+    "Secret lifetime": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مدة بقاء السر"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duración de un secreto"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "משך החיים של סוד"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सीक्रेट की अवधि"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время жизни секрета"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muda wa siri"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密的有效期"
           }
         }
       }
@@ -12145,6 +12559,52 @@
         }
       }
     },
+    "The YubiKey's PIN": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرقم السري لـ YubiKey"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El PIN de la YubiKey"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ה-PIN של ה-YubiKey"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey का PIN"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN YubiKey"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN ya YubiKey"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey 的 PIN"
+          }
+        }
+      }
+    },
     "The app could not make the file for cbb.": {
       "localizations": {
         "ar": {
@@ -13705,6 +14165,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "项目的转发器"
+          }
+        }
+      }
+    },
+    "The recovery key's text, as on the sheet": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نص مفتاح الاسترداد كما في الورقة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El texto de la clave de recuperación, como en la hoja"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטקסט של מפתח השחזור, כמו בדף"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रिकवरी कुंजी का पाठ, जैसा शीट पर है"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст ключа восстановления, как на листе"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maandishi ya ufunguo wa urejeshaji, kama yalivyo kwenye karatasi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复密钥的文字，与纸上一致"
           }
         }
       }
@@ -16285,6 +16791,52 @@
         }
       }
     },
+    "Use a YubiKey instead": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استخدام YubiKey بدلًا من ذلك"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar una YubiKey en su lugar"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שימוש ב-YubiKey במקום"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इसकी जगह YubiKey इस्तेमाल करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Использовать YubiKey"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tumia YubiKey badala yake"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改用 YubiKey"
+          }
+        }
+      }
+    },
     "Version": {
       "localizations": {
         "ar": {
@@ -16465,6 +17017,98 @@
           "stringUnit": {
             "state": "translated",
             "value": "手表"
+          }
+        }
+      }
+    },
+    "Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أيّ الأجهزة يمكن أن تكون مشرفي المجموعة ومحاورها. المفاتيح في العتاد لا تغادر الجهاز أبدًا؛ ومن يحصل على مفتاح في ملف يمكنه نسخه. يبقى المشرفون الموجودون في المجموعة حتى تزيلهم."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qué dispositivos pueden ser administradores y hubs del grupo. Las claves en hardware nunca salen del dispositivo; quien consiga una clave en un archivo puede copiarla. Los administradores que ya están en el grupo siguen hasta que los quites."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אילו מכשירים יכולים להיות המנהלים והרכזות של הקבוצה. מפתחות בחומרה לעולם לא יוצאים מהמכשיר; מי שמשיג מפתח בקובץ יכול להעתיק אותו. מנהלים שכבר בקבוצה נשארים עד שתסירו אותם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कौन-से डिवाइस समूह के एडमिन और हब हो सकते हैं। हार्डवेयर में रखी कुंजियाँ डिवाइस से कभी बाहर नहीं जातीं; जिसे फ़ाइल में रखी कुंजी मिले वह उसे कॉपी कर सकता है। समूह में पहले से मौजूद एडमिन तब तक रहते हैं जब तक आप उन्हें न हटाएँ।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Какие устройства могут быть администраторами и хабами группы. Ключи в оборудовании никогда не покидают устройство, а ключ в файле может скопировать любой, кто получит файл. Уже назначенные администраторы остаются, пока вы их не удалите."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vifaa vipi vinaweza kuwa wasimamizi na vitovu vya kikundi. Funguo zilizo kwenye maunzi haziondoki kwenye kifaa kamwe; yeyote anayepata ufunguo ulio kwenye faili anaweza kuunakili. Wasimamizi walio tayari kwenye kikundi wanabaki hadi uwaondoe."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "哪些设备可以成为群组的管理员和中心节点。硬件中的密钥永远不会离开设备；任何获得文件中密钥的人都能复制它。已在群组中的管理员会保留，直到你移除他们。"
+          }
+        }
+      }
+    },
+    "Who stays in the group": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يبقى في المجموعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quién se queda en el grupo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מי נשאר בקבוצה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह में कौन रहेगा"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кто остаётся в группе"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nani anabaki kwenye kikundi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "谁留在群组里"
           }
         }
       }

@@ -48,7 +48,8 @@ on every platform of the class, on the roadmap).
 | Finding a firewall the installer does not know, by a check from home | yes | yes | yes | `cbb status` warns when the members at home could not connect and sync only because this computer dials them back |
 | Act as a Bluetooth keyboard for a TV, tablet or computer | yes (`cbb keyboard`, BLE) | **OS** | **OS** | macOS and Windows keep the HID service to the system |
 | Be the remote of an Android TV, a Google TV, an Apple TV or a Roku | yes (`cbb remote`) | yes | yes | the same Go code everywhere; the phones' apps follow |
-| Group management in the apps (the Mac app, the tray app): the notices, the copies' lifetimes, the admin keys, the recovery key on a YubiKey, joining by an invitation, the list of who stays when the main device changes | **gap** | **gap** | **gap** | the phones have each; on a computer `cbb` does the settings from the command line, and the apps' screens follow (plan, item 12) |
+| The group's settings in the apps (the Mac app, the tray app): the copies' lifetimes, the admin keys, who stays when the main device changes, the recovery key on a YubiKey | yes | yes | yes | through `cbb ttl`, `cbb keys` and `cbb recovery -leave … -yubikey` as the administrator |
+| The group's notices, and joining by an invitation, in the apps (the Mac app, the tray app) | **gap** | **gap** | **gap** | the phones have both; a computer joins by an invitation with `cbb pair -invite`, and the notices need the service to pass on the member's (plan, item 12) |
 | Tested on a real device | yes | yes | not yet | the 0.4 bench |
 
 ## Phones
@@ -129,10 +130,8 @@ One pull request each, in this order; anything under 100 lines rides in the open
     images and files and the group's alerts (after the phones' node moves into the core), the
     cover, notifications and Share, sync away from home with the phones' tunnel, and a group
     of its own with its root on the phone.
-12. **C1**, the computers' apps: the Mac app and the tray app get the phones' group
-    management (the notices, the copies' lifetimes, the admin keys, the recovery key on a
-    YubiKey, joining by an invitation, the list of who stays when the main device changes),
-    with the service's commands they need.
+12. **C1**, the computers' apps: the Mac app and the tray app show the group's notices and
+    join by an invitation, as the phones do, with the service's commands they need.
 
 ## On real devices
 

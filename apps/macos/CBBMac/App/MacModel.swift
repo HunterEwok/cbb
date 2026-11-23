@@ -265,11 +265,29 @@ final class MacModel: ObservableObject {
 
     /// Moves the group to this Mac with its recovery key, typed from the
     /// sheet or its QR code's text, on cbb recovery's standard input; this
-    /// Mac is the group's main device at once.
-    func recover(_ key: String) async {
-        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        await admin(["recovery"], input: key + "\n", done: String(localized: "This Mac is the group's main device now."))
+    /// Mac is the group's main device at once. The devices in leave (their
+    /// IDs) leave the group in the same act; with card, secret is the PIN
+    /// of the YubiKey that holds the key.
+    func recover(_ secret: String, leave: [String] = [], card: Bool = false) async {
+        let secret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !secret.isEmpty else { return }
+        var arguments = ["recovery"]
+        for id in leave { arguments += ["-leave", id] }
+        if card { arguments.append("-yubikey") }
+        await admin(arguments, input: secret + "\n", done: String(localized: "This Mac is the group's main device now."))
+    }
+
+    /// Sets how long a copy and a secret live in the group (cbb ttl,
+    /// D-129), in milliseconds; nil keeps one as it is.
+    func setTTL(copyMS: Int64?, secretMS: Int64?) async {
+        func value(_ ms: Int64?) -> String { ms.map { "\($0 / 1000)s" } ?? "-" }
+        await admin(["ttl", value(copyMS), value(secretMS)], done: String(localized: "Saved. Every device of the group follows it."))
+    }
+
+    /// Sets which keys may be the group's admins and hubs (cbb keys), on the
+    /// main device: proven, hardware or files.
+    func setKeyLevel(_ level: String) async {
+        await admin(["keys", level], done: String(localized: "Saved. Every device of the group follows it."))
     }
 
     func rename(_ id: String, to name: String) async {

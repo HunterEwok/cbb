@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var versionClicks = 0
     @State private var recovering = false
     @State private var why = false
+    @State private var askingFiles = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +44,50 @@ struct SettingsView: View {
         .fixedSize(horizontal: false, vertical: true)
         .sheet(isPresented: $recovering) { RecoverySheet().environmentObject(model).modifier(Themed()) }
         .sheet(isPresented: $why) { WhySheet().environmentObject(model).modifier(Themed()) }
+        .alert(Text("Admin keys"), isPresented: $askingFiles) {
+            Button { Task { await model.setKeyLevel("files") } } label: { Text("Keys in files too") }
+            Button(role: .cancel) {} label: { Text("Cancel") }
+        } message: {
+            Text("Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.")
+        }
+    }
+
+    /// The choices of a lifetime, as on the phones (D-129).
+    static let ttlChoices: [Int64] = [60_000, 300_000, 900_000, 1_800_000, 3_600_000]
+    static let secretTTLChoices: [Int64] = [5_000, 15_000, 30_000, 60_000]
+
+    /// The choices of a picker, with the group's own when it is none of them.
+    static func choices(_ base: [Int64], _ current: Int64) -> [Int64] {
+        base.contains(current) ? base : (base + [current]).sorted()
+    }
+
+    static func lifetime(_ ms: Int64) -> String {
+        Duration.milliseconds(ms).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
+    }
+
+    /// The group's settings, as the phones have them: how long a copy and a
+    /// secret live, for an admin, and which keys may be admins, on the main
+    /// device. Each choice signs a record through cbb.
+    @ViewBuilder private var groupSection: some View {
+        let ttl = model.status?.ttlMS ?? 300_000, secret = model.status?.secretTTLMS ?? 60_000
+        Section {
+            Picker(selection: Binding(get: { ttl }, set: { new in Task { await model.setTTL(copyMS: new, secretMS: nil) } })) {
+                ForEach(Self.choices(Self.ttlChoices, ttl), id: \.self) { ms in Text(verbatim: Self.lifetime(ms)).tag(ms) }
+            } label: { Text("Copy lifetime") }
+            Picker(selection: Binding(get: { secret }, set: { new in Task { await model.setTTL(copyMS: nil, secretMS: new) } })) {
+                ForEach(Self.choices(Self.secretTTLChoices, secret), id: \.self) { ms in Text(verbatim: Self.lifetime(ms)).tag(ms) }
+            } label: { Text("Secret lifetime") }
+            if model.isRoot {
+                Picker(selection: Binding(get: { model.status?.keyLevel ?? "hardware" }, set: { new in
+                    if new == "files" { askingFiles = true } else { Task { await model.setKeyLevel(new) } }
+                })) {
+                    Text("Proven hardware only").tag("proven")
+                    Text("Keys in hardware").tag("hardware")
+                    Text("Keys in files too").tag("files")
+                } label: { Text("Admin keys") }
+            }
+        } header: { Text("Group") }
+        .disabled(model.busy)
     }
 
     private var form: some View {
@@ -119,6 +164,9 @@ struct SettingsView: View {
                         Button { recovering = true } label: { Text("Move the group to this Mac") }
                     }
                 } header: { Text("Advanced") }
+                if model.inGroup, model.isAdmin {
+                    groupSection
+                }
             }
             Section {
                 // The whole row takes the clicks, so that a short version

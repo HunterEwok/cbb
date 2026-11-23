@@ -623,7 +623,11 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   open the window with it): the appearance as icons, the colour and the language in a row
   (the phones' `Theme.swift` and `Tokens.swift`, shared; the language through
   `AppleLanguages`, shown once the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
-  keys for remote paste, the recovery key), and about: the version, where seven clicks show
+  keys for remote paste; "Move the group to this Mac", which lists who stays, each device
+  ticked but the old main device, and takes the key from the sheet or a YubiKey's PIN, as
+  `cbb recovery -leave … -yubikey`; and for an admin the group's "Copy lifetime" and "Secret
+  lifetime", `cbb ttl`, and on the main device "Admin keys", `cbb keys`, which warns before
+  keys in files), and about: the version, where seven clicks show
   error details (on in debug builds, off in release ones, and the `ShowErrorDetails` default
   either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from

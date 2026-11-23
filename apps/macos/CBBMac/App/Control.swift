@@ -144,11 +144,20 @@ enum Control {
         /// The service broke and started again, and its bug report waits
         /// for the user's answer (docs/core-api.md, "Bug reports").
         var bug: Bool?
+        /// The group's settings (D-129): which keys may be admins and hubs
+        /// (proven, hardware or files), and how long a copy and a secret
+        /// live, in milliseconds.
+        var keyLevel: String?
+        var ttlMS: Int64?
+        var secretTTLMS: Int64?
 
         enum CodingKeys: String, CodingKey {
             case device, group, removed, role, os, away, version, mode, stop, conflicts, newer, muted, update, why, bug
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
+            case keyLevel = "key_level"
+            case ttlMS = "ttl_ms"
+            case secretTTLMS = "secret_ttl_ms"
         }
     }
 
