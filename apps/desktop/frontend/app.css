@@ -271,3 +271,6 @@ button.icon[aria-pressed="true"] { background: var(--soft); color: var(--accent)
 #why-list .why { padding: 6px 0; border-bottom: 1px solid var(--line); }
 #why-list .why.main > div:first-child { font-weight: 600; font-size: 1.1em; }
 #why-list .why.stop > div:first-child { color: var(--danger); }
+#alerts .notice-line { display: flex; align-items: baseline; gap: 12px; }
+#alerts .notice-line p { flex: 1; margin: 0; }
+#join-invite-text { width: 100%; resize: vertical; word-break: break-all; }

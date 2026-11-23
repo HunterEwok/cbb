@@ -261,7 +261,9 @@ the group", not a status code), never a dialog that must be dismissed.
 
 The member keeps a short list of things the person should know about the group's records
 (its `notices`), and Home shows each in a sentence of the app's own, above the devices, on the
-iPhone, Android, Aurora and HarmonyOS: a change of the main device on its way, an admin that has been silent so long that its admin
+iPhone, Android, Aurora and HarmonyOS, and under the alerts in the Mac app and the tray app,
+which read them from `cbb status` (`notices`) and hide one with the control socket's
+`dismiss`, without the administrator: a change of the main device on its way, an admin that has been silent so long that its admin
 rights end soon (35 days in all), removals waiting until every admin has seen them and how
 much of the main device's room they take, a removal this phone still has to confirm, a frozen
 admin that holds removals back, a checkpoint waiting for records no device passed on, a device
@@ -603,8 +605,8 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   sync is off); the devices as tiles, a list or orbits around this Mac (the toolbar
   switches), and a device's card in a pane beside them. There is no Send or Fetch: the
   clipboard syncs by itself. An update the group passed around shows as a card on top.
-- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group" and
-  "Recovery key".
+- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group", "Join with
+  an invitation" and "Recovery key".
 - **The device card**: its name, online dot and badges (this Mac, root, admin, hub,
   frozen), one line of its system and CBB version, the house (an admin turns another
   computer's sync off there, `cbb sync -on`), mute, and the rest (type, MAC address, role,
@@ -662,7 +664,12 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   mute is an alert, with "Unmute" on an admin.
 - **Join a group**: on a Mac in no group, the button asks for the six digits of a pairing
   window open on a device of the group and runs `cbb pair -code` as the administrator with
-  them on its standard input. "+" on the root or an admin opens the pairing window: it runs
+  them on its standard input. "Join with an invitation" takes the text of an invitation from
+  afar, says that sync away from home turns on with it, and runs
+  `cbb pair -invite - -app FILE` as the administrator with the text and `yes` on its standard
+  input; the sheet shows this Mac's key fingerprint from the line cbb writes into the file
+  (JSON: `fingerprint`, then `done`), which whoever invited it compares, and Cancel removes
+  the file, and cbb gives up. "+" on the root or an admin opens the pairing window: it runs
   `cbb pair -app FILE` as the administrator and shows the window that cbb writes into the
   file (JSON: `code`, `qr`, `expires`, then `refused` when a device fails and `done` with
   `name` when one joins), with its QR code for a new phone and its six digits for a new
@@ -697,8 +704,8 @@ service and its clipboard agent keep syncing without it.
   by itself. What an action says shows at the bottom for a while.
 - **Alerts**: the Mac app's card above the devices, with the same buttons on the root, and an
   update the group passed around as a card on top.
-- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group" and
-  "Recovery key". It opens by itself when the app starts in no group, as after the install.
+- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group", "Join with
+  an invitation" and "Recovery key". It opens by itself when the app starts in no group, as after the install.
 - **The device card**: its name, online dot and badges (root, admin, hub), one line of its
   system and CBB version, the house (an admin turns another computer's sync off there), mute,
   and the rest (type, MAC address, role, ID) under More; then the hub's line and the menu.
@@ -743,6 +750,8 @@ service and its clipboard agent keep syncing without it.
   `cbb invite -app` as the administrator, as the Mac app does (`invite.go`).
 - **Join a group**: asks for the six digits of a pairing window open on a device of the group
   and runs `cbb pair -code` as the administrator with them on its standard input (`join.go`).
+  "Join with an invitation" works as the Mac app's: `cbb pair -invite - -app FILE`, the
+  fingerprint in the dialog until the join ends, and Cancel removes the file.
 - Languages: English and those of `frontend/l10n/` (keyed by the English text, made from
   `apps/l10n` by `tools/strings`; the Go side reads them for the tray), the system's language unless Settings picks one.
 

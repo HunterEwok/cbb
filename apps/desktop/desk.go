@@ -69,6 +69,11 @@ type Desk struct {
 	inviteSeen   string
 	inviteEndsMs int64
 
+	// joinPath is the file of a join by invitation under way (join.go),
+	// "" when none; joinCancelled whether the window gave it up.
+	joinPath      string
+	joinCancelled bool
+
 	// ask is what the window asks for next, once it reads it (TakeAsk):
 	// the tray's Settings, or the question before sync away from home.
 	ask string

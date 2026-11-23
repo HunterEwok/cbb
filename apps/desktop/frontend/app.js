@@ -275,7 +275,8 @@ function render() {
     const busy = state.busy ? "disabled" : "";
     box.innerHTML = `<div class="notice start"><span class="logo" aria-hidden="true"></span><h2>${esc(t("Copy Beyond Borders"))}</h2>` +
       `<div class="start-buttons"><button class="accent" id="create" ${busy}>${esc(t("Create a group"))}</button>` +
-      `<button class="glass" id="join" ${busy}>${esc(t("Join a group"))}</button></div>` +
+      `<button class="glass" id="join" ${busy}>${esc(t("Join a group"))}</button>` +
+      `<button class="glass" id="join-invite" ${busy}>${esc(t("Join with an invitation"))}</button></div>` +
       `<p><button class="link small" id="recovery">${esc(t("Recovery key"))}</button></p>` +
       // Out of a group the toast is hidden: what failed says why here.
       (state.message ? `<p class="dim" id="join-message">${esc(state.message)}</p>` : "") + `</div>`;
@@ -328,7 +329,8 @@ function renderSwitches(inGroup) {
 function renderAlerts(st) {
   const box = $("alerts");
   const lines = st ? alertLines(st) : [];
-  box.hidden = lines.length === 0 && !st?.update;
+  const notices = (st?.notices ?? []).map((n) => [n, noticeText(n)]).filter(([, text]) => text);
+  box.hidden = lines.length === 0 && notices.length === 0 && !st?.update;
   const root = state.devices.find((x) => x.self)?.root;
   box.innerHTML = "";
   // The newest release the group passed around, when this computer runs
@@ -397,6 +399,41 @@ function renderAlerts(st) {
       row.append(b);
     }
     box.append(row);
+  }
+  // The member's notices about the group: a sentence each, and Hide where
+  // the user may hide it.
+  for (const [n, text] of notices) {
+    const row = document.createElement("div");
+    row.className = "notice-line";
+    const p = document.createElement("p");
+    p.textContent = "ⓘ " + text;
+    row.append(p);
+    if (n.dismissable) {
+      const b = document.createElement("button");
+      b.className = "glass";
+      b.textContent = t("Hide");
+      b.disabled = state.busy;
+      b.onclick = () => act("Dismiss", n.id);
+      row.append(b);
+    }
+    box.append(row);
+  }
+}
+
+// The member's notice n in a sentence (docs/apps.md, "Notices"), with the
+// devices by name; null for a kind this app does not show.
+function noticeText(n) {
+  const a = n.args ?? {};
+  const device = a.device ? (state.devices.find((d) => d.id === a.device)?.name ?? a.device) : "";
+  switch (n.kind) {
+    case "change_arriving": return t("A change of the group's main device is on its way.");
+    case "removals_waiting": return t("Removals wait until every admin has seen them.");
+    case "root_room_waiting": return t("Removals that wait for admins fill %s of the main device's room for records: bring those admins online.", `${a.percent ?? 0}%`);
+    case "ack_owed": return t("This computer has a removal to confirm; it does so with your next admin action.");
+    case "frozen_holding": return t("The frozen admin %s holds removals back: unfreeze it or remove it.", device);
+    case "checkpoint_stuck": return t("The main device's records wait for records no device has passed on.");
+    case "returned_after_removal": return t("%s was removed before the main device changed, and counts again now: remove it again if it should not be in the group.", device);
+    default: return null;
   }
 }
 
@@ -1329,6 +1366,58 @@ async function joinGroup() {
   if (code?.trim()) await act("JoinGroup", code.trim());
 }
 
+// Joining a group far away with an invitation (join.go): its text, which
+// cbb pair -invite takes as the administrator, then this computer's key
+// fingerprint, which whoever invited it compares, until the join ends.
+let joiningByInvite = false;
+async function joinInvite() {
+  if (joiningByInvite) return;
+  const dlg = $("join-invite-dialog");
+  const text = $("join-invite-text");
+  text.value = "";
+  $("join-invite-paste").hidden = false;
+  $("join-invite-wait").hidden = $("join-invite-shown").hidden = true;
+  $("join-invite-ok").hidden = false;
+  const sync = () => { $("join-invite-ok").disabled = !text.value.trim().startsWith("cbb://join#"); };
+  text.oninput = sync;
+  sync();
+  dlg.onclose = null;
+  dlg.returnValue = "";
+  dlg.showModal();
+  await new Promise((done) => dlg.addEventListener("close", done, { once: true }));
+  if (dlg.returnValue !== "ok") return;
+  const invitation = text.value.trim();
+  text.value = "";
+  joiningByInvite = true;
+  $("join-invite-paste").hidden = $("join-invite-ok").hidden = true;
+  $("join-invite-wait").hidden = false;
+  let running = true;
+  const ended = act("JoinInvite", invitation).finally(() => {
+    running = joiningByInvite = false;
+    if (dlg.open) dlg.close("done");
+  });
+  dlg.onclose = () => {
+    if (running) call("CancelJoin").catch((e) => console.error("CancelJoin", e));
+  };
+  dlg.returnValue = "";
+  dlg.showModal();
+  while (running && dlg.open) {
+    let j;
+    try {
+      j = await call("JoinState");
+    } catch (e) {
+      console.error("JoinState", e);
+    }
+    if (j?.fingerprint) {
+      $("join-invite-wait").hidden = true;
+      $("join-invite-shown").hidden = false;
+      $("join-invite-fingerprint").textContent = j.fingerprint;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await ended;
+}
+
 async function refresh() {
   try {
     state = await call("State");
@@ -1439,6 +1528,7 @@ document.addEventListener("click", async (e) => {
     case "invite": return invite();
     case "create": return act("CreateGroup");
     case "join": return joinGroup();
+    case "join-invite": return joinInvite();
     case "recovery": case "advanced-recovery": $("settings-dialog").close(); return recovery();
     case "advanced-why":
       $("settings-dialog").close();

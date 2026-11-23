@@ -102,6 +102,37 @@ final class CBBMacTests: XCTestCase {
         XCTAssertNil(MacModel.ownMute("me", on: false, me: nil))
     }
 
+    /// The member's notices in the status read with their arguments, each
+    /// kind in a sentence with the devices by name, and a kind of a later
+    /// version not at all; hiding one goes on the plain socket.
+    func testNotices() throws {
+        let line = #"{"device":"me","role":"member","version":"dev","notices":[{"id":"r","kind":"root_room_waiting","args":{"percent":60}},{"id":"f","kind":"frozen_holding","args":{"device":"ab12"}},{"id":"CQkJ","kind":"returned_after_removal","args":{"device":"cd34","devices":1},"dismissable":true},{"id":"a","kind":"ack_owed","args":{"removals":1,"days_left":3}},{"id":"x","kind":"later"}]}"#
+        let st = try JSONDecoder().decode(Control.Status.self, from: Data(line.utf8))
+        let notices = try XCTUnwrap(st.notices)
+        XCTAssertEqual(notices.map(\.kind), ["root_room_waiting", "frozen_holding", "returned_after_removal", "ack_owed", "later"])
+        XCTAssertEqual(notices[3].args?.daysLeft, 3)
+        XCTAssertEqual(notices[2].dismissable, true)
+        let names = ["ab12": "Studio"]
+        // In whatever language the Mac speaks: the share and the names in
+        // their sentences.
+        XCTAssertTrue(try XCTUnwrap(GroupNotices.text(notices[0], names: names)).contains("60%"))
+        XCTAssertTrue(try XCTUnwrap(GroupNotices.text(notices[1], names: names)).contains("Studio"))
+        XCTAssertTrue(try XCTUnwrap(GroupNotices.text(notices[2], names: names)).contains("cd34"))
+        XCTAssertNotNil(GroupNotices.text(notices[3], names: names))
+        XCTAssertNil(GroupNotices.text(notices[4], names: names))
+        for kind in ["change_arriving", "removals_waiting", "checkpoint_stuck"] {
+            XCTAssertNotNil(GroupNotices.text(Control.Notice(id: kind, kind: kind), names: [:]), kind)
+        }
+    }
+
+    /// What cbb pair -invite -app writes reads as this Mac's fingerprint.
+    func testJoinState() throws {
+        let j = try JSONDecoder().decode(MacModel.JoinState.self, from: Data(#"{"fingerprint":"AAAA BBBB CCCC"}"#.utf8))
+        XCTAssertEqual(j.fingerprint, "AAAA BBBB CCCC")
+        XCTAssertNil(j.done)
+        XCTAssertEqual(try JSONDecoder().decode(MacModel.JoinState.self, from: Data(#"{"fingerprint":"A","done":true}"#.utf8)).done, true)
+    }
+
     /// What cbb pair -app writes in a group reads as the pairing window,
     /// and its QR code draws.
     func testPairingWindow() throws {
@@ -187,6 +218,7 @@ final class CBBMacTests: XCTestCase {
     func testAdminAsUser() throws {
         XCTAssertTrue(Admin.needsRoot(["update"]))
         XCTAssertTrue(Admin.needsRoot(["pair", "-code"]))
+        XCTAssertTrue(Admin.needsRoot(["pair", "-invite", "-", "-app", "/tmp/x.json"]))
         XCTAssertFalse(Admin.needsRoot(["pair", "-app", "/tmp/x.json"]))
         XCTAssertFalse(Admin.needsRoot(["remove", "ab12"]))
         XCTAssertEqual(try Admin.userResult(0, printed: "Removed.\n", stderr: ""), .done("Removed."))

@@ -31,10 +31,15 @@ with 0.5 is set up again once. The details follow.
   device (`cbb keys`), which warns before keys in files. Moving the group to the computer
   lists who stays, each device ticked but the old main device, and takes the key from the
   sheet or from a YubiKey with its PIN (`cbb recovery -leave … -yubikey`).
+- The Mac app and the tray app show the member's notices about the group under the alerts, as
+  the phones do, with Hide where a notice may be hidden: `cbb status` carries them
+  (`notices`), and the control socket's `dismiss` hides one without the administrator. Their
+  start window has "Join with an invitation", which runs `cbb pair -invite - -app FILE` and
+  shows this computer's key fingerprint while it waits; `cbb pair -invite` writes the
+  fingerprint into the app's file with `-app` ([apps](docs/apps.md), [CLI](docs/reference/cli.md)).
 - The platform parity table has a HarmonyOS column, lists the group's notices and cards where
   it listed the alerts card of 0.5, shows the phones' remote invitations and Aurora's relay,
-  and marks the group management the Mac and tray apps still lack as a gap with its plan
-  ([parity](docs/parity.md)).
+  and lists the group management of the Mac and tray apps ([parity](docs/parity.md)).
 - Small fixes from a review of the apps' screens: the HarmonyOS app shows "Show error details"
   only after seven taps on the version, as the other phones do; the "+" menu's item that opens
   the pairing window is "Add a device" (it said "Scan a code"); the Android TV's start screen

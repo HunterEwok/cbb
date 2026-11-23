@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -82,6 +83,7 @@ func TestWindow(t *testing.T) {
 	t.Run("switches", w.switches)
 	t.Run("add", w.add)
 	t.Run("join", w.joinGroup)
+	t.Run("notices", w.notices)
 	t.Run("dangerous screens", w.dangerous)
 }
 
@@ -209,6 +211,7 @@ var $all = (s) => [...document.querySelectorAll(s)];
 var $h = () => $q("#headline")?.textContent ?? "";
 var $click = (s) => { const e = $q(s); if (!e) throw new Error("no " + s); e.click(); return true; };
 var $clickText = (s, text) => { const all = $all(s), e = all.find((x) => x.textContent.trim() === text); if (!e) throw new Error("no " + s + " " + text + " among " + JSON.stringify(all.map((x) => x.textContent.trim()))); e.click(); return true; };
+var $type = (s, text) => { const e = $q(s); if (!e) throw new Error("no " + s); e.value = text; e.dispatchEvent(new Event("input")); return true; };
 var $answer = (text) => { $q("#confirm-input").value = text; return $click("#confirm-ok"); };
 var $menu = (ref) => { const c = $q('.cell[data-ref="' + ref + '"]'); if (!c) throw new Error("no cell " + ref); c.dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true})); return true; };
 var $order = () => $all("#devices .tiles > .cell").map((c) => c.dataset.ref);
@@ -761,6 +764,132 @@ func (w *window) joinGroup(t *testing.T) {
 	if r := <-ran; !reflect.DeepEqual(r.args, []string{"pair", "-code"}) || r.in != "123 456\n" {
 		t.Errorf("join ran %q with %q", r.args, r.in)
 	}
+
+	// With an invitation: its text and yes to sync away from home go on
+	// standard input, cbb writes the fingerprint into the window's file,
+	// and the window shows it until the join ends.
+	release := make(chan bool)
+	adminRun = func(args []string, in string, _ bool) error {
+		ran <- run{args, in}
+		if len(args) != 5 || args[3] != "-app" {
+			return nil
+		}
+		if err := os.WriteFile(args[4], []byte(`{"fingerprint":"AAAA BBBB CCCC"}`+"\n"), 0o600); err != nil {
+			return err
+		}
+		for {
+			select {
+			case ok := <-release:
+				if ok {
+					return nil
+				}
+				return errors.New("cbb: cancelled")
+			case <-time.After(50 * time.Millisecond):
+				if _, err := os.Stat(args[4]); err != nil {
+					return errors.New("cbb: cancelled")
+				}
+			}
+		}
+	}
+	w.wait(`!$q("#join-invite").disabled`)
+	w.eval(`$click("#join-invite")`, nil)
+	w.wait(`$q("#join-invite-dialog").open && $q("#join-invite-ok").disabled && !$q("#join-invite-paste").hidden`)
+	w.eval(`$type("#join-invite-text", "https://example.com")`, nil)
+	w.wait(`$q("#join-invite-ok").disabled`)
+	w.eval(`$type("#join-invite-text", " cbb://join#abc\n")`, nil)
+	w.wait(`!$q("#join-invite-ok").disabled`)
+	w.eval(`$click("#join-invite-ok")`, nil)
+	if r := <-ran; !reflect.DeepEqual(r.args[:4], []string{"pair", "-invite", "-", "-app"}) || r.in != "cbb://join#abc\nyes\n" {
+		t.Errorf("the join by invitation ran %q with %q", r.args, r.in)
+	}
+	w.wait(`$q("#join-invite-dialog").open && !$q("#join-invite-shown").hidden && $q("#join-invite-fingerprint").textContent === "AAAA BBBB CCCC"`)
+	release <- true
+	w.wait(`!$q("#join-invite-dialog").open && $q("#message").textContent === "Joined the group."`)
+
+	// Given up: Cancel removes the file, cbb hangs up, and nothing is said.
+	w.wait(`!$q("#join-invite").disabled`)
+	w.eval(`$click("#join-invite")`, nil)
+	w.wait(`$q("#join-invite-dialog").open`)
+	w.eval(`$type("#join-invite-text", "cbb://join#abc") && $click("#join-invite-ok")`, nil)
+	<-ran
+	w.wait(`$q("#join-invite-dialog").open && !$q("#join-invite-shown").hidden`)
+	w.eval(`$clickText("#join-invite-dialog menu button", "Cancel")`, nil)
+	w.wait(`!$q("#join-invite-dialog").open && !$q("#join-invite").disabled`)
+	time.Sleep(300 * time.Millisecond)
+	var msg string
+	w.eval(`$q("#message").textContent`, &msg)
+	if msg != "" && msg != "Joined the group." {
+		t.Errorf("a join given up says %q", msg)
+	}
+	// A cancelled paste runs nothing.
+	w.wait(`!$q("#join-invite").disabled`)
+	w.eval(`$click("#join-invite")`, nil)
+	w.wait(`$q("#join-invite-dialog").open`)
+	w.eval(`$clickText("#join-invite-dialog menu button", "Cancel")`, nil)
+	w.wait(`!$q("#join-invite-dialog").open`)
+	select {
+	case r := <-ran:
+		t.Errorf("a cancelled join by invitation ran %q", r.args)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+// notices: the member's notices about the group show among the alerts, a
+// sentence each with the devices by name, and Hide, where the notice may
+// be hidden, asks the service to hide it with no administrator.
+func (w *window) notices(t *testing.T) {
+	w.t = t
+	w.svc.mu.Lock()
+	w.svc.status.Notices = []control.Notice{
+		{ID: "change_arriving", Kind: "change_arriving"},
+		{ID: "removals_waiting", Kind: "removals_waiting"},
+		{ID: "root_room_waiting", Kind: "root_room_waiting", Args: map[string]any{"percent": 60}},
+		{ID: "ack_owed", Kind: "ack_owed", Args: map[string]any{"removals": 1, "days_left": 3}},
+		{ID: "frozen_holding:mac", Kind: "frozen_holding", Args: map[string]any{"device": "mac"}},
+		{ID: "checkpoint_stuck", Kind: "checkpoint_stuck"},
+		{ID: "CQkJ", Kind: "returned_after_removal", Args: map[string]any{"device": "gone", "devices": 1}, Dismissable: true},
+		{ID: "x", Kind: "a kind of a later version"},
+	}
+	w.svc.mu.Unlock()
+	defer func() {
+		w.svc.mu.Lock()
+		w.svc.status.Notices = nil
+		w.svc.mu.Unlock()
+	}()
+	w.open("en")
+	w.wait(`$q("#alerts .notice-line") !== null`)
+	var lines []string
+	w.eval(`[...document.querySelectorAll("#alerts .notice-line p")].map((p) => p.textContent)`, &lines)
+	want := []string{
+		"ⓘ A change of the group's main device is on its way.",
+		"ⓘ Removals wait until every admin has seen them.",
+		"ⓘ Removals that wait for admins fill 60% of the main device's room for records: bring those admins online.",
+		"ⓘ This computer has a removal to confirm; it does so with your next admin action.",
+		"ⓘ The frozen admin MacBook holds removals back: unfreeze it or remove it.",
+		"ⓘ The main device's records wait for records no device has passed on.",
+		"ⓘ gone was removed before the main device changed, and counts again now: remove it again if it should not be in the group.",
+	}
+	if !reflect.DeepEqual(lines, want) {
+		t.Errorf("the notices read %q", lines)
+	}
+	var hides int
+	w.eval(`document.querySelectorAll("#alerts .notice-line button").length`, &hides)
+	if hides != 1 {
+		t.Errorf("%d notices offer Hide, want the one that may be hidden", hides)
+	}
+	w.eval(`$click("#alerts .notice-line button")`, nil)
+	w.wait(`[...document.querySelectorAll("#alerts .notice-line p")].length === 6`)
+	w.svc.mu.Lock()
+	var asked []control.Header
+	for _, m := range w.svc.asked {
+		if m.Op == control.OpDismiss {
+			asked = append(asked, m.Header)
+		}
+	}
+	w.svc.mu.Unlock()
+	if len(asked) != 1 || asked[0].Value != "CQkJ" {
+		t.Errorf("Hide asked %+v", asked)
+	}
 }
 
 // switches: the house turns sync off and on with no administrator, and
@@ -1095,9 +1224,12 @@ func (s *fakeService) serve(c net.Conn) {
 			}
 		}
 		s.mu.Unlock()
-	case control.OpMute, control.OpUnmute, control.OpBug, control.OpBugAllow, control.OpBugCancel:
+	case control.OpMute, control.OpUnmute, control.OpBug, control.OpBugAllow, control.OpBugCancel, control.OpDismiss:
 		s.mu.Lock()
 		s.asked = append(s.asked, *m)
+		if m.Op == control.OpDismiss {
+			s.status.Notices = slices.DeleteFunc(s.status.Notices, func(n control.Notice) bool { return n.ID == m.Value })
+		}
 		if m.Op == control.OpBug {
 			a.Payload = s.bug
 		}

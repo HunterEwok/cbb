@@ -150,15 +150,42 @@ enum Control {
         var keyLevel: String?
         var ttlMS: Int64?
         var secretTTLMS: Int64?
+        /// The member's notices about the group (docs/apps.md, "Notices");
+        /// the op dismiss hides one that is dismissable.
+        var notices: [Notice]?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, conflicts, newer, muted, update, why, bug
+            case device, group, removed, role, os, away, version, mode, stop, conflicts, newer, muted, update, why, bug, notices
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
             case keyLevel = "key_level"
             case ttlMS = "ttl_ms"
             case secretTTLMS = "secret_ttl_ms"
         }
+    }
+
+    /// One of the member's notices about the group: its kind
+    /// (change_arriving, removals_waiting, root_room_waiting, ack_owed,
+    /// frozen_holding, checkpoint_stuck or returned_after_removal), its
+    /// arguments, and whether the user may hide it.
+    struct Notice: Codable, Equatable, Identifiable {
+        struct Args: Codable, Equatable {
+            var device: String?
+            var devices: Int?
+            var percent: Int?
+            var removals: Int?
+            var daysLeft: Int?
+
+            enum CodingKeys: String, CodingKey {
+                case device, devices, percent, removals
+                case daysLeft = "days_left"
+            }
+        }
+
+        var id: String
+        var kind: String
+        var args: Args?
+        var dismissable: Bool?
     }
 
     /// A conflict that stops the group until its root decides: kind is

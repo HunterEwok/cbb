@@ -114,6 +114,7 @@ struct UpdateCard: View {
 struct StartView: View {
     @Binding var recovering: Bool
     @Binding var joining: Bool
+    @Binding var joiningByInvite: Bool
     @EnvironmentObject private var model: MacModel
     @Environment(\.palette) private var palette
 
@@ -128,6 +129,8 @@ struct StartView: View {
                 Button { Task { await model.createGroup() } } label: { Text("Create a group").frame(maxWidth: .infinity) }
                     .buttonStyle(AccentButtonStyle())
                 Button { joining = true } label: { Text("Join a group").frame(maxWidth: .infinity) }
+                    .buttonStyle(GlassButtonStyle())
+                Button { joiningByInvite = true } label: { Text("Join with an invitation").frame(maxWidth: .infinity) }
                     .buttonStyle(GlassButtonStyle())
             }
             .frame(width: 260)
