@@ -215,6 +215,9 @@ dialog p { white-space: pre-wrap; }
 #swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
 .icon-row { display: flex; gap: 12px; align-items: center; }
 .icon-row .field { width: auto; flex: 1; }
+.field-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+.field-row > span { flex: 1; }
+.field-row .field { width: auto; }
 #appearances button { width: 44px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 dialog .switch { display: flex; margin: 8px 0; }
 .field.code { font-size: 28px; text-align: center; letter-spacing: .15em; margin: 8px 0; }

@@ -1021,6 +1021,7 @@ function renderSettings() {
   $("advanced").checked = !!s.advanced;
   $("advanced-box").hidden = !s.advanced;
   $("advanced-recovery").hidden = !state.status?.group;
+  renderGroupSettings();
   $("details").checked = s.details ?? state.show_details;
   // Seven taps on the version show the switch, as on the phones; it stays
   // in sight once it is on.
@@ -1028,6 +1029,41 @@ function renderSettings() {
   $("version").textContent = state.version;
 }
 let versionTaps = 0;
+
+// The group's settings, as the phones have them (docs/apps.md, Settings):
+// how long a copy and a secret live (D-129), on the root and the admins,
+// and which keys may be admins, on the root. Each choice signs a record.
+export const ttlChoices = [60000, 300000, 900000, 1800000, 3600000];
+export const secretTtlChoices = [5000, 15000, 30000, 60000];
+export const keyLevels = [["proven", "Proven hardware only"], ["hardware", "Keys in hardware"], ["files", "Keys in files too"]];
+export function lifetime(ms) {
+  const s = Math.round(ms / 1000);
+  return s >= 60 && s % 60 === 0 ? t("%d min", s / 60) : t("%d s", s);
+}
+// The choices, with the group's own when it is none of them.
+function lifetimeOptions(choices, current) {
+  const all = choices.includes(current) || !current ? choices : [...choices, current].sort((a, b) => a - b);
+  return all.map((ms) => `<option value="${ms}" ${ms === current ? "selected" : ""}>${esc(lifetime(ms))}</option>`).join("");
+}
+function renderGroupSettings() {
+  const me = state.devices?.find((x) => x.self);
+  const s = state.status ?? {};
+  $("group-box").hidden = !s.group || !me?.admin;
+  if ($("group-box").hidden) return;
+  $("ttl").innerHTML = lifetimeOptions(ttlChoices, s.ttl_ms || 300000);
+  $("secret-ttl").innerHTML = lifetimeOptions(secretTtlChoices, s.secret_ttl_ms || 60000);
+  $("key-level-row").hidden = !me.root;
+  const level = s.key_level || "hardware";
+  $("key-level").innerHTML = keyLevels.map(([v, name]) => `<option value="${v}" ${v === level ? "selected" : ""}>${esc(t(name))}</option>`).join("");
+}
+async function setKeyLevel(level) {
+  if (level === "files" && !(await ask(t("Admin keys"), t("Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them."), t("Keys in files too")))) {
+    renderGroupSettings();
+    return;
+  }
+  await act("SetKeyLevel", level);
+  renderGroupSettings();
+}
 
 function openSettings() {
   renderSettings();
@@ -1256,8 +1292,34 @@ async function recovery() {
     await ask(t("Move the group to this computer"), t("With the group's recovery key, this computer becomes the main device, for example when the old one is lost. Join the group first, then move it here in Settings."), t("OK"));
     return;
   }
-  const key = await ask(t("Move the group to this computer?"), t("Type the key from the sheet, or paste its QR code's text. This computer becomes the group's main device at once."), t("Move"), "");
-  if (key?.trim()) await act("Recover", key.trim());
+  // Who stays: the core's list of the group's devices, each ticked but the
+  // old main device; an unticked one leaves the group in the same act. The
+  // key comes from the sheet, or a YubiKey that holds it opens with its PIN.
+  const dlg = $("recover-dialog");
+  const others = (state.devices ?? []).filter((d) => !d.self);
+  $("recover-who").innerHTML = others.map((d) =>
+    `<label class="switch"><input type="checkbox" data-stays="${esc(d.id)}" ${d.root ? "" : "checked"}> <span>${esc(d.name || d.id)}</span></label>`).join("");
+  $("recover-key").placeholder = t("The recovery key's text, as on the sheet");
+  $("recover-pin").placeholder = t("The YubiKey's PIN");
+  $("recover-key").value = $("recover-pin").value = "";
+  $("recover-card").checked = false;
+  const sync = () => {
+    const card = $("recover-card").checked;
+    $("recover-key").hidden = card;
+    $("recover-pin").hidden = !card;
+    $("recover-ok").disabled = !(card ? $("recover-pin").value : $("recover-key").value.trim());
+  };
+  $("recover-card").onchange = $("recover-key").oninput = $("recover-pin").oninput = sync;
+  sync();
+  dlg.returnValue = "";
+  dlg.showModal();
+  await new Promise((done) => dlg.addEventListener("close", done, { once: true }));
+  if (dlg.returnValue !== "ok") return;
+  const leave = [...dlg.querySelectorAll("[data-stays]")].filter((c) => !c.checked).map((c) => c.dataset.stays);
+  const card = $("recover-card").checked;
+  const secret = card ? $("recover-pin").value : $("recover-key").value.trim();
+  $("recover-key").value = $("recover-pin").value = "";
+  if (secret) await act("Recover", secret, leave, card);
 }
 
 // Joining a group: the six digits of a pairing window open on a device
@@ -1423,6 +1485,9 @@ $("at-login").addEventListener("change", async (e) => {
   renderSettings();
 });
 $("advanced").addEventListener("change", (e) => saveSettings({ advanced: e.target.checked }));
+$("ttl").addEventListener("change", (e) => act("SetTTL", Number(e.target.value), 0).then(renderGroupSettings));
+$("secret-ttl").addEventListener("change", (e) => act("SetTTL", 0, Number(e.target.value)).then(renderGroupSettings));
+$("key-level").addEventListener("change", (e) => setKeyLevel(e.target.value));
 $("admit-admin").addEventListener("change", (e) => openWindow(e.target.checked));
 
 // The house: a tap turns sync off until turned on again, or on; holding it

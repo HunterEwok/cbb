@@ -26,6 +26,11 @@ with 0.5 is set up again once. The details follow.
   main device changed, with "This wasn't me", and Aurora's "OK" on that card is kept by the
   member (`root_change_seen`), so it does not come back when the app starts again
   ([apps](docs/apps.md), "Notices").
+- The tray app's Settings, under the advanced ones, have the group's settings the phones have:
+  "Copy lifetime" and "Secret lifetime" for an admin (`cbb ttl`) and "Admin keys" on the main
+  device (`cbb keys`), which warns before keys in files. "Move the group to this computer"
+  lists who stays, each device ticked but the old main device, and takes the key from the
+  sheet or from a YubiKey with its PIN (`cbb recovery -leave … -yubikey`).
 - The platform parity table has a HarmonyOS column, lists the group's notices and cards where
   it listed the alerts card of 0.5, shows the phones' remote invitations and Aurora's relay,
   and marks the group management the Mac and tray apps still lack as a gap with its plan

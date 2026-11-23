@@ -208,9 +208,12 @@ var dangerousScreens = []dangerousScreen{
 			w.eval(`$click("#settings")`, nil)
 			w.wait(`$q("#settings-dialog").open && $q("#advanced-recovery")`)
 			w.eval(`$click("#advanced-recovery")`, nil)
-			w.wait(`$q("#confirm").open && !$q("#confirm-input").hidden`)
+			w.wait(`$q("#recover-dialog").open && $all("#recover-who input").length > 0`)
 		},
-		tearDown: closeConfirm,
+		tearDown: func(w *window) {
+			w.eval(`$q("#recover-dialog").close(); true`, nil)
+			w.wait(`!$q("#recover-dialog").open`)
+		},
 	},
 }
 

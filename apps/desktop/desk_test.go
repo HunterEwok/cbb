@@ -216,7 +216,11 @@ func TestDeskActions(t *testing.T) {
 		{func() { d.StopHub("") }, "global hub off -yes", "", "It is no hub any more."},
 		{func() { d.StopHub("srv") }, "global hub off -on srv -yes", "", "It is no hub any more."},
 		{d.Resolve, "resolve", "", "Both histories are void. The device signs its records again by itself."},
-		{func() { d.Recover("  word word word \n") }, "recovery", "word word word\n", "This computer is the group's main device now."},
+		{func() { d.Recover("  word word word \n", nil, false) }, "recovery", "word word word\n", "This computer is the group's main device now."},
+		{func() { d.Recover("123456", []string{"a1b2c3d4"}, true) }, "recovery -leave a1b2c3d4 -yubikey", "123456\n", "This computer is the group's main device now."},
+		{func() { d.SetTTL(900000, 0) }, "ttl 900s -", "", "Saved. Every device of the group follows it."},
+		{func() { d.SetTTL(0, 15000) }, "ttl - 15s", "", "Saved. Every device of the group follows it."},
+		{func() { d.SetKeyLevel("files") }, "keys files", "", "Saved. Every device of the group follows it."},
 		{d.Update, "update", "", "CBB is updated."},
 		{func() { d.Unmute("mac") }, "unmute -on mac", "", "It is no longer muted."},
 	} {

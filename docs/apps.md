@@ -712,7 +712,11 @@ service and its clipboard agent keep syncing without it.
   tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
   user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
   Manager writes it), and "Advanced settings", which shows the hub and its tunnel (this
-  computer's card) and the claim with the recovery key (`cbb recovery`). Seven taps on the
+  computer's card), the claim with the recovery key (`cbb recovery`: who stays, each device
+  ticked but the old main device, an unticked one leaving with `-leave`, and the key from the
+  sheet or a YubiKey's PIN with `-yubikey`) and, for an admin, the group's settings: "Copy
+  lifetime" and "Secret lifetime" (`cbb ttl`) and, on the main device, "Admin keys" (`cbb
+  keys`), which warns before keys in files. Seven taps on the
   version show "Show error details" (as cbb: on in a build without a release version,
   `CBB_DEBUG=1` or `0`, or the switch). They are kept in the user's configuration folder
   (`cbb/desktop.json`).

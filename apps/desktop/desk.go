@@ -266,6 +266,24 @@ func (d *Desk) Leave() {
 	d.admin([]string{"leave", "-yes"}, false, "Left the group. This computer can join a group again.")
 }
 
+// SetTTL sets how long a copy and a secret live in the group (cbb ttl,
+// D-129), in milliseconds; 0 keeps one as it is.
+func (d *Desk) SetTTL(copyMS, secretMS int64) {
+	value := func(ms int64) string {
+		if ms <= 0 {
+			return "-"
+		}
+		return fmt.Sprintf("%ds", ms/1000)
+	}
+	d.admin([]string{"ttl", value(copyMS), value(secretMS)}, false, "Saved. Every device of the group follows it.")
+}
+
+// SetKeyLevel sets which keys may be the group's admins and hubs (cbb
+// keys), on the root: proven, hardware or files.
+func (d *Desk) SetKeyLevel(level string) {
+	d.admin([]string{"keys", level}, false, "Saved. Every device of the group follows it.")
+}
+
 func (d *Desk) Freeze(id string)   { d.admin([]string{"freeze", id}, false, "Frozen.") }
 func (d *Desk) Unfreeze(id string) { d.admin([]string{"unfreeze", id}, false, "Unfrozen.") }
 
@@ -336,9 +354,18 @@ func (d *Desk) Resolve() {
 
 // Recover claims the group with its recovery key, typed from the sheet or
 // its QR code's text, as cbb recovery does as the administrator with the
-// key on its standard input; this computer is the group's main device at once.
-func (d *Desk) Recover(key string) {
-	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "This computer is the group's main device now.")
+// key on its standard input; this computer is the group's main device at
+// once. The devices in leave (their IDs) leave the group in the same act;
+// with card, secret is the PIN of the YubiKey that holds the key.
+func (d *Desk) Recover(secret string, leave []string, card bool) {
+	args := []string{"recovery"}
+	for _, id := range leave {
+		args = append(args, "-leave", id)
+	}
+	if card {
+		args = append(args, "-yubikey")
+	}
+	d.adminWith(args, strings.TrimSpace(secret)+"\n", "This computer is the group's main device now.")
 }
 
 // Update installs the newest signed release the group passed around, as

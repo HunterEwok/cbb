@@ -49,6 +49,23 @@
     </form>
   </dialog>
 
+  <dialog id="recover-dialog">
+    <form method="dialog">
+      <h2 data-t>Move the group to this computer</h2>
+      <p class="dim" data-t>With the group's recovery key, this computer becomes the main device, for example when the old one is lost.</p>
+      <h3 data-t>Who stays in the group</h3>
+      <div id="recover-who"></div>
+      <p class="dim small" data-t>An unticked device is removed, and joins again only as a new device.</p>
+      <label class="switch"><input type="checkbox" id="recover-card"> <span data-t>Use a YubiKey instead</span></label>
+      <input id="recover-key" class="field mono" autocomplete="off" spellcheck="false">
+      <input id="recover-pin" class="field" type="password" autocomplete="off" hidden>
+      <menu>
+        <button value="cancel" class="glass" data-t>Cancel</button>
+        <button value="ok" class="accent" id="recover-ok" data-t>Make this computer the main device</button>
+      </menu>
+    </form>
+  </dialog>
+
   <dialog id="why-dialog">
     <form method="dialog">
       <h2 data-t>Why it does not sync</h2>
@@ -160,6 +177,12 @@
           <button type="button" class="glass" id="advanced-why" data-t>Why it does not sync</button>
           <button type="button" class="glass" id="advanced-away" data-t>Away from home: hub and tunnel</button>
           <button type="button" class="glass" id="advanced-recovery" data-t>Move the group to this computer</button>
+        </div>
+        <div id="group-box" hidden>
+          <h3 data-t>Group</h3>
+          <label class="field-row"><span data-t>Copy lifetime</span> <select id="ttl" class="field"></select></label>
+          <label class="field-row"><span data-t>Secret lifetime</span> <select id="secret-ttl" class="field"></select></label>
+          <label class="field-row" id="key-level-row"><span data-t>Admin keys</span> <select id="key-level" class="field"></select></label>
         </div>
       </div>
       <h3 data-t>About</h3>

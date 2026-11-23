@@ -643,6 +643,69 @@ func (w *window) admin(t *testing.T) {
 		t.Errorf("this is my home network ran %q", r)
 	}
 	w.eval(`$q("#why-dialog").close(); true`, nil)
+
+	// The group's settings, on the root: the lifetimes, each signed by cbb
+	// ttl, and the admin keys, whose level files warns first.
+	waitRan := func(what string, want [][]string) {
+		t.Helper()
+		var r [][]string
+		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+			if r = append(r, ran()...); len(r) >= len(want) {
+				break
+			}
+		}
+		if !reflect.DeepEqual(r, want) {
+			t.Errorf("%s ran %q", what, r)
+		}
+	}
+	pick := func(id, value string) string {
+		return fmt.Sprintf(`(() => { const s = $q("#%s"); s.value = %q; s.dispatchEvent(new Event("change")); return true; })()`, id, value)
+	}
+	w.eval(`$click("#settings"); true`, nil)
+	w.wait(`$q("#settings-dialog").open && !$q("#group-box").hidden && !$q("#key-level-row").hidden && $q("#ttl").value === "300000" && $q("#key-level").value === "hardware"`)
+	var labels string
+	w.eval(`[...$q("#ttl").options].map((o) => o.textContent).join(",") + "|" + [...$q("#secret-ttl").options].map((o) => o.textContent).join(",")`, &labels)
+	if labels != "1 min,5 min,15 min,30 min,60 min|5 s,15 s,30 s,1 min" {
+		t.Errorf("the lifetimes offered: %s", labels)
+	}
+	w.eval(pick("ttl", "900000"), nil)
+	waitRan("a copy lifetime of 15 minutes", [][]string{{"ttl", "900s", "-"}})
+	w.wait(`!$q("#settings-dialog").hidden && $q("#secret-ttl")`)
+	w.eval(pick("secret-ttl", "15000"), nil)
+	waitRan("a secret lifetime of 15 seconds", [][]string{{"ttl", "-", "15s"}})
+	w.eval(pick("key-level", "files"), nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("file")`)
+	w.eval(`$clickText("#confirm menu button", "Cancel")`, nil)
+	w.wait(`!$q("#confirm").open && $q("#key-level").value === "hardware"`)
+	w.eval(pick("key-level", "files"), nil)
+	w.wait(`$q("#confirm").open`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	waitRan("admin keys in files too", [][]string{{"keys", "files"}})
+	w.eval(pick("key-level", "proven"), nil)
+	waitRan("admin keys proven only", [][]string{{"keys", "proven"}})
+
+	// Moving the group here: who stays, every other device ticked but the
+	// old main device; the key from a YubiKey with its PIN.
+	w.wait(`!$q("#advanced-box").hidden`)
+	w.eval(`$click("#advanced-recovery")`, nil)
+	w.wait(`$q("#recover-dialog").open && $all("#recover-who input").length === 13 && $q("#recover-ok").disabled`)
+	w.eval(`$q('[data-stays="tv"]').click(); $q("#recover-card").click(); true`, nil)
+	w.wait(`!$q("#recover-pin").hidden && $q("#recover-key").hidden && $q("#recover-ok").disabled`)
+	w.eval(`(() => { const p = $q("#recover-pin"); p.value = "123456"; p.dispatchEvent(new Event("input")); return true; })()`, nil)
+	w.wait(`!$q("#recover-ok").disabled`)
+	w.eval(`$click("#recover-ok")`, nil)
+	waitRan("moving the group here", [][]string{{"recovery", "-leave", "tv", "-yubikey"}})
+	w.wait(`!$q("#recover-dialog").open`)
+	w.eval(`$click("#settings"); true`, nil)
+	w.wait(`$q("#settings-dialog").open`)
+	w.eval(`$click("#advanced-recovery")`, nil)
+	w.wait(`$q("#recover-dialog").open && !$q("#recover-key").hidden && $q("#recover-key").value === ""`)
+	w.eval(`$clickText("#recover-dialog menu button", "Cancel")`, nil)
+	w.wait(`!$q("#recover-dialog").open`)
+	time.Sleep(300 * time.Millisecond)
+	if r := ran(); len(r) != 0 {
+		t.Errorf("a cancelled move ran %q", r)
+	}
 }
 
 // joinGroup joins a group from a computer in none, from the start window:
