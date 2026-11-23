@@ -33,7 +33,6 @@ mod console;
 #[cfg(feature = "board")]
 mod net;
 mod out;
-#[cfg(feature = "board")]
 mod selftest;
 mod store;
 #[cfg(feature = "board")]

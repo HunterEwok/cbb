@@ -3148,6 +3148,10 @@ with 0.5 is set up again once. The details follow.
   of 0.5 and said the text was no invitation. The screen no longer shows a group, a hub or an
   expiry, which the invitation of 0.6 does not carry, and refuses an invitation made for
   another kind of device.
+- A computer joining from afar with `cbb join` no longer waits five minutes and gives up when
+  the admin answers at once: it forgot an answer that came before it had written down that it
+  was joining.
+- The ESP32 firmware builds again without the `board` feature.
 - The computer and Mac apps say that a recovery by the group's recovery key makes the computer
   the group's root at once, as it does on 0.6, and no longer that the claim waits for the
   group's takeover delay.

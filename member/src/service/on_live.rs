@@ -1161,13 +1161,14 @@ impl Service {
                     os: cbb_core::format::print::os_name(a.info.os).to_string(),
                     fingerprint: a.fingerprint.clone(),
                 };
+                // Drops an answer left from before, before the question goes
+                // out: an answer to this one may come at once.
+                while asked.try_recv().is_ok() {}
                 if control::write(out, &control::partial(Header { joining: Some(joining), ..Default::default() }))
                     .is_err()
                 {
                     return false;
                 }
-                // Drops an answer left from before.
-                while asked.try_recv().is_ok() {}
                 let until = Instant::now() + crate::pair::CONFIRM_WAIT;
                 while !hung.load(Ordering::SeqCst) && Instant::now() < until {
                     match asked.recv_timeout(Duration::from_millis(200)) {

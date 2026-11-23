@@ -246,7 +246,9 @@ mod tests {
     use super::{Attestations, Kept, STATUS_FILE, kept_revocations};
     use cbb_core::release::testing::TestKey;
     use cbb_core::release::{File, Seen};
-    use std::sync::{Arc, Mutex};
+    #[cfg(unix)]
+    use std::sync::Arc;
+    use std::sync::Mutex;
 
     const AT: i64 = 1_800_000_000_000;
     const DAY: i64 = 86_400_000;
@@ -327,9 +329,13 @@ mod tests {
         let a = Attestations::new(&dir);
         let none = a.fetch_status_by(None, &|_| {}).err().unwrap();
         assert!(none.message().contains("need cbb-helper"), "{}", none.message());
-        let helper = Arc::new(crate::helper::tests::fake(Arc::new(Mutex::new(Vec::new()))));
-        let bad = a.fetch_status_by(Some(helper), &|_| {}).err().unwrap();
-        assert!(bad.message().contains("do not decode"), "{}", bad.message());
+        // The fake helper runs this test program, which only Unix can.
+        #[cfg(unix)]
+        {
+            let helper = Arc::new(crate::helper::tests::fake(Arc::new(Mutex::new(Vec::new()))));
+            let bad = a.fetch_status_by(Some(helper), &|_| {}).err().unwrap();
+            assert!(bad.message().contains("do not decode"), "{}", bad.message());
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
