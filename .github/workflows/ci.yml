@@ -2070,13 +2070,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the protocol core's tests
         working-directory: apps/android
@@ -2115,13 +2117,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
@@ -2195,13 +2199,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
@@ -2355,13 +2361,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('one/apps/android/**/*.gradle.kts', 'one/apps/android/gradle.properties', 'one/apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('one/apps/android/**/*.gradle.kts', 'one/apps/android/gradle.properties', 'one/apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: build twice and compare
         run: sh one/packaging/fdroid/reproduce.sh "$PWD/one" "$RUNNER_TEMP/elsewhere/cbb"
@@ -3477,13 +3485,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the versions Gradle resolves
         working-directory: apps/android
@@ -3642,13 +3652,15 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: Gradle's dependencies from the cache
         # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here.
+        # 429); what a build of this job fetched before comes from here,
+        # Robolectric's Android jars too, which it fetches into ~/.m2.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2/files-2.1
             ~/.gradle/caches/modules-2/metadata-*
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+            ~/.m2/repository/org/robolectric
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: a corpus of the fixed seed, read by all three
         run: sh .github/differential.sh 1 20000 "$RUNNER_TEMP/differential"
