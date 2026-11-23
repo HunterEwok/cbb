@@ -2314,4 +2314,32 @@ mod tests {
         assert!(super::cmd_status(&g, &[]).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// cbb watch prints each new text once, in order, and ends when the
+    /// service stops.
+    #[cfg(unix)]
+    #[test]
+    fn watch_prints_each_text_once() {
+        let g = fake_service("watch", |m| {
+            let h = control::Header::default;
+            let write = |seq, text: &[u8]| {
+                control::Message::new(control::Header { op: "write".into(), seq, ..h() }, text.to_vec())
+            };
+            match m.header.op.as_str() {
+                "watch" => vec![
+                    control::reply(h(), Vec::new()),
+                    write(1, b"one"),
+                    write(1, b"one again"),
+                    control::Message::new(control::Header { op: "status".into(), seq: 5, ..h() }, Vec::new()),
+                    write(2, b"two"),
+                ],
+                _ => vec![control::failure(&super::Error::msg("unknown"))],
+            }
+        });
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let e = super::cmd_watch(&g, &[]).unwrap_err();
+        assert!(e.to_string().contains("stopped"), "{e}");
+        assert!(super::cmd_watch(&g, &a(&["-x"])).is_err());
+        std::fs::remove_dir_all(&g.state).unwrap();
+    }
 }
