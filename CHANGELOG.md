@@ -3351,6 +3351,9 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On an iPhone at the accessibility text sizes the count of devices online stands above the
+  sync switches, set by the text size rather than by what fits, so the layout does not
+  change while the text grows.
 - A device installed without root can no longer be made a hub that only passes copies on:
   `cbb` refused it as a trusted hub only, while every program of its user can take its keys
   (D-79).
