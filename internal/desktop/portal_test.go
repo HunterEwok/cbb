@@ -33,24 +33,26 @@ type fakePortal struct {
 
 	mu       sync.Mutex
 	decline  bool          // the user says no in the dialog
-	answer   time.Duration // how long the user takes in the dialog
+	answer   chan struct{} // if set, the user answers in the dialog once it is closed
 	restored []string      // the restore tokens the client brought
 	servers  []*eitest.Server
 }
 
-func (f *fakePortal) respond(sender dbus.Sender, opts map[string]dbus.Variant, code uint32, results map[string]dbus.Variant, after time.Duration) dbus.ObjectPath {
+func (f *fakePortal) respond(sender dbus.Sender, opts map[string]dbus.Variant, code uint32, results map[string]dbus.Variant, after <-chan struct{}) dbus.ObjectPath {
 	tok, _ := opts["handle_token"].Value().(string)
 	name := strings.ReplaceAll(strings.TrimPrefix(string(sender), ":"), ".", "_")
 	path := dbus.ObjectPath(fmt.Sprintf("/org/freedesktop/portal/desktop/request/%s/%s", name, tok))
 	go func() {
-		time.Sleep(after)
+		if after != nil {
+			<-after
+		}
 		f.conn.Emit(path, portalRequest+".Response", code, results)
 	}()
 	return path
 }
 
 func (f *fakePortal) CreateSession(sender dbus.Sender, opts map[string]dbus.Variant) (dbus.ObjectPath, *dbus.Error) {
-	return f.respond(sender, opts, 0, map[string]dbus.Variant{"session_handle": dbus.MakeVariant("/org/freedesktop/portal/desktop/session/1")}, 0), nil
+	return f.respond(sender, opts, 0, map[string]dbus.Variant{"session_handle": dbus.MakeVariant("/org/freedesktop/portal/desktop/session/1")}, nil), nil
 }
 
 func (f *fakePortal) SelectDevices(sender dbus.Sender, session dbus.ObjectPath, opts map[string]dbus.Variant) (dbus.ObjectPath, *dbus.Error) {
@@ -62,7 +64,7 @@ func (f *fakePortal) SelectDevices(sender dbus.Sender, session dbus.ObjectPath, 
 		f.restored = append(f.restored, t)
 	}
 	f.mu.Unlock()
-	return f.respond(sender, opts, 0, map[string]dbus.Variant{}, 0), nil
+	return f.respond(sender, opts, 0, map[string]dbus.Variant{}, nil), nil
 }
 
 func (f *fakePortal) Start(sender dbus.Sender, session dbus.ObjectPath, parent string, opts map[string]dbus.Variant) (dbus.ObjectPath, *dbus.Error) {
@@ -166,13 +168,8 @@ func openPortal(t *testing.T, addr string) *portal {
 func wantKeys(t *testing.T, s *eitest.Server, want []eitest.Key) {
 	t.Helper()
 	for _, w := range want {
-		select {
-		case k := <-s.Keys:
-			if k != w {
-				t.Fatalf("the EIS server got %+v, want %+v", k, w)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatalf("the EIS server got no key, want %+v", w)
+		if k := <-s.Keys; k != w {
+			t.Fatalf("the EIS server got %+v, want %+v", k, w)
 		}
 	}
 }
@@ -201,15 +198,12 @@ func TestPortal(t *testing.T) {
 
 	// The compositor ends the session: the next paste starts a new one,
 	// with the token, so the user is not asked again.
+	p.mu.Lock()
+	kbd := p.kbd
+	p.mu.Unlock()
 	f.server().Close()
-	var err error
-	for range 50 {
-		if err = p.press([]ei.Key{{Code: ei.KeyEnter, Press: true}, {Code: ei.KeyEnter}}); err != nil {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if err == nil {
+	kbd.Wait()
+	if err := p.press([]ei.Key{{Code: ei.KeyEnter, Press: true}, {Code: ei.KeyEnter}}); err == nil {
 		t.Fatal("keys went to a session that ended")
 	}
 	if err := p.ready(); err != nil {
@@ -234,22 +228,33 @@ func TestPortalDialog(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	f, addr := startPortal(t, 2)
 	f.mu.Lock()
-	f.decline, f.answer = true, 3*portalAnswer
+	answer := make(chan struct{})
+	f.decline, f.answer = true, answer
 	f.mu.Unlock()
 	p := openPortal(t, addr)
+	// The paste's wait for the dialog ends when the test says.
+	p.wait = func(d time.Duration) <-chan time.Time {
+		if d != portalAnswer {
+			t.Errorf("a paste waits %v for the dialog, want %v", d, portalAnswer)
+		}
+		c := make(chan time.Time, 1)
+		c <- time.Time{}
+		return c
+	}
 	var r *connector.Refusal
-	start := time.Now()
 	if err := p.ready(); !errors.As(err, &r) || !strings.Contains(r.Reason, "paste again") {
 		t.Fatalf("a paste while the dialog is open: %v", err)
-	}
-	if d := time.Since(start); d > portalAnswer+time.Second {
-		t.Errorf("the paste waited %v for the dialog", d)
 	}
 	// A paste meanwhile waits for the same dialog, it opens no second one.
 	if err := p.ready(); !errors.As(err, &r) || !strings.Contains(r.Reason, "paste again") {
 		t.Fatalf("a second paste while the dialog is open: %v", err)
 	}
-	time.Sleep(2 * portalAnswer)
+	// The user declines; the start ends.
+	p.mu.Lock()
+	starting := p.starting
+	p.mu.Unlock()
+	close(answer)
+	<-starting
 	if err := p.ready(); !errors.As(err, &r) || !strings.Contains(r.Reason, "declined") {
 		t.Fatalf("a paste after the user declined: %v", err)
 	}

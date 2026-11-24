@@ -65,11 +65,7 @@ func TestX11(t *testing.T) {
 	if targets := xclipOut("-t", "TARGETS"); !strings.Contains(targets, "UTF8_STRING") || strings.Contains(targets, secretType) {
 		t.Errorf("targets:\n%s", targets)
 	}
-	select {
-	case it := <-b.changes:
-		t.Errorf("our own write came back as a change: %+v", it)
-	case <-time.After(500 * time.Millisecond):
-	}
+	noOwnChange(t, b)
 
 	// A large text goes out in INCR pieces and comes in the same way.
 	big := strings.Repeat("0123456789abcdef", 600_000/16)
@@ -107,12 +103,24 @@ func TestX11(t *testing.T) {
 		t.Fatal(err)
 	}
 	// xclip offers only the hint type here, so there is no text to read.
-	select {
-	case it := <-b.changes:
-		if !it.Secret {
-			t.Errorf("a marked copy was reported as %+v", it)
-		}
-	case <-time.After(time.Second):
+	if it := <-b.changes; !it.Secret {
+		t.Errorf("a marked copy was reported as %+v", it)
+	}
+}
+
+// noOwnChange checks that no change came before a copy another program
+// makes now: the X server sends the owner changes in order, so one of ours
+// would come first.
+func noOwnChange(t *testing.T, b *X11) {
+	t.Helper()
+	const mark = "a copy after ours"
+	cmd := exec.Command("xclip", "-selection", "clipboard", "-i")
+	cmd.Stdin = strings.NewReader(mark)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("xclip -i: %v", err)
+	}
+	if it := <-b.changes; it.Text != mark {
+		t.Errorf("a change came before the other program's copy: %+v", it)
 	}
 }
 
@@ -134,11 +142,7 @@ func TestX11Writes(t *testing.T) {
 	if it, ok, _ := b.Current(); !ok || it.Text != "there before" {
 		t.Errorf("Current = %+v, %v", it, ok)
 	}
-	select {
-	case it := <-b.changes:
-		t.Errorf("the clipboard at open came as a change: %+v", it)
-	case <-time.After(300 * time.Millisecond):
-	}
+	noOwnChange(t, b)
 	for i := range 50 {
 		if err := b.Write(strings.Repeat("x", i)+"end", false); err != nil {
 			t.Fatal(err)
@@ -148,11 +152,7 @@ func TestX11Writes(t *testing.T) {
 	if err != nil || string(out) != strings.Repeat("x", 49)+"end" {
 		t.Errorf("xclip -o = %q, %v", out, err)
 	}
-	select {
-	case it := <-b.changes:
-		t.Errorf("our own write came back as a change: %+v", it)
-	case <-time.After(300 * time.Millisecond):
-	}
+	noOwnChange(t, b)
 	// An expired secret given up while a large transfer runs leaves no copy
 	// of it behind.
 	if err := b.Write(strings.Repeat("s", 300_000), true); err != nil {
@@ -161,7 +161,6 @@ func TestX11Writes(t *testing.T) {
 	if err := b.ClearIfUnchanged(); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond)
 	if out, _ := exec.Command("xclip", "-selection", "clipboard", "-o").Output(); len(out) > 0 {
 		t.Errorf("the clipboard still holds %d bytes", len(out))
 	}

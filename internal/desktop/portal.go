@@ -51,6 +51,8 @@ type portal struct {
 	declined bool          // the user said no in the dialog
 	err      error         // why the last start failed
 	conn     *dbus.Conn
+	// wait is how ready waits for the dialog: time.After; tests replace it.
+	wait func(time.Duration) <-chan time.Time
 }
 
 // newPortal returns the portal's keyboard, or nil when the session has no
@@ -111,9 +113,13 @@ func (p *portal) ready() error {
 	case kbd != nil:
 		return nil
 	}
+	wait := p.wait
+	if wait == nil {
+		wait = time.After
+	}
 	select {
 	case <-starting:
-	case <-time.After(portalAnswer):
+	case <-wait(portalAnswer):
 		return &connector.Refusal{Reason: "this desktop asks its user once to allow remote paste, in a dialog on the device; paste again after they allow it"}
 	}
 	p.mu.Lock()

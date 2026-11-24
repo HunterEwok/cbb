@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -40,17 +41,18 @@ func TestWaylandPaste(t *testing.T) {
 		t.Fatalf("Target = %q: the compositor has no virtual keyboards", w.Target())
 	}
 	out := filepath.Join(t.TempDir(), "out")
+	// A pipe: the read of it waits for the shell in foot to start.
+	if err := syscall.Mkfifo(out+".ready", 0o600); err != nil {
+		t.Fatal(err)
+	}
 	foot := exec.Command("foot", "sh", "-c", `stty -echo; echo ready >"$1.ready"; exec cat >"$1"`, "sh", out)
 	foot.Env = append(os.Environ(), "LC_ALL=C.UTF-8")
 	if err := foot.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { foot.Process.Kill(); foot.Wait() }()
-	for range 100 {
-		if _, err := os.Stat(out + ".ready"); err == nil {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	if _, err := os.ReadFile(out + ".ready"); err != nil {
+		t.Fatal(err)
 	}
 	// The test's session is none that logind knows: the paste goes in as
 	// on a device whose user allowed that.

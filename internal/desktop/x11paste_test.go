@@ -8,14 +8,16 @@ package desktop
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
-	"time"
 
+	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 
 	"github.com/HunterEwok/cbb/internal/connector"
@@ -35,24 +37,28 @@ func TestX11Paste(t *testing.T) {
 	}
 	t.Setenv("WAYLAND_DISPLAY", "")
 	dir := t.TempDir()
+	// Both are pipes: a read waits for what xterm writes.
 	out, idFile := filepath.Join(dir, "out"), filepath.Join(dir, "id")
+	for _, f := range []string{out, idFile} {
+		if err := syscall.Mkfifo(f, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	xterm := exec.Command("xterm", "-u8", "-e", "sh", "-c", `echo "$WINDOWID" >"$1"; stty -echo; exec cat >"$2"`, "sh", idFile, out)
 	xterm.Env = append(os.Environ(), "LC_ALL=C.UTF-8")
 	if err := xterm.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { xterm.Process.Kill(); xterm.Wait() }()
-	var win uint64
-	for range 100 {
-		if b, err := os.ReadFile(idFile); err == nil && len(b) > 0 {
-			win, _ = strconv.ParseUint(strings.TrimSpace(string(b)), 10, 32)
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	id, err := os.ReadFile(idFile)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if win == 0 {
-		t.Fatal("xterm did not start")
+	win, err := strconv.ParseUint(strings.TrimSpace(string(id)), 10, 32)
+	if err != nil {
+		t.Fatalf("xterm's window %q: %v", id, err)
 	}
+	mapped(t, xproto.Window(win))
 
 	b, err := OpenX11(t.Logf)
 	if err != nil {
@@ -62,7 +68,6 @@ func TestX11Paste(t *testing.T) {
 	if b.Target() != "desktop" {
 		t.Fatalf("Target = %q", b.Target())
 	}
-	time.Sleep(300 * time.Millisecond) // xterm maps its window
 	if err := xproto.SetInputFocusChecked(b.x, xproto.InputFocusPointerRoot, xproto.Window(win), xproto.TimeCurrentTime).Check(); err != nil {
 		t.Fatal(err)
 	}
@@ -93,13 +98,13 @@ func TestX11Paste(t *testing.T) {
 		t.Error("pasted media it could not write")
 	}
 	want := "pasted \u00e9 \u03b1\u03b2\u03b3\u20ac\ntyped Text: \u00e9 \u03b1\u03b2\u03b3\u20ac & ~|\na secret\nas media\n"
-	var got []byte
-	for range 50 {
-		if got, _ = os.ReadFile(out); string(got) == want {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	f, err := os.Open(out)
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer f.Close()
+	got := make([]byte, len(want))
+	io.ReadFull(f, got)
 	if string(got) != want {
 		t.Errorf("xterm got %q, want %q", got, want)
 	}
@@ -128,5 +133,32 @@ func TestX11Paste(t *testing.T) {
 	}
 	if code := keys.mapped(runeKeysym('\u03b1')); code != 0 {
 		t.Errorf("keycode %d still types a character of the text", code)
+	}
+}
+
+// mapped waits until the window is mapped: it asks for the window's
+// structure events before it looks, so the map is seen either way.
+func mapped(t *testing.T, win xproto.Window) {
+	t.Helper()
+	x, err := xgb.NewConn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer x.Close()
+	if err := xproto.ChangeWindowAttributesChecked(x, win, xproto.CwEventMask, []uint32{xproto.EventMaskStructureNotify}).Check(); err != nil {
+		t.Fatal(err)
+	}
+	a, err := xproto.GetWindowAttributes(x, win).Reply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for a.MapState != xproto.MapStateViewable {
+		ev, err := x.WaitForEvent()
+		if ev == nil && err == nil {
+			t.Fatal("the X connection ended")
+		}
+		if _, ok := ev.(xproto.MapNotifyEvent); ok {
+			return
+		}
 	}
 }

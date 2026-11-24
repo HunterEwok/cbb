@@ -75,11 +75,7 @@ func TestWayland(t *testing.T) {
 	if !strings.Contains(types, "text/plain;charset=utf-8") || !strings.Contains(types, "UTF8_STRING") {
 		t.Errorf("offered types:\n%s", types)
 	}
-	select {
-	case it := <-w.changes:
-		t.Errorf("our own write came back as a change: %+v", it)
-	case <-time.After(500 * time.Millisecond):
-	}
+	noOwnWaylandChange(t, w)
 
 	// A secret carries the hint, so clipboard managers skip it.
 	if err := w.Write("hunter2", true); err != nil {
@@ -92,7 +88,7 @@ func TestWayland(t *testing.T) {
 	if err := w.ClearIfUnchanged(); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond)
+	synced(t, w)
 	if out, err := exec.Command("wl-paste", "--no-newline").Output(); err == nil && string(out) == "hunter2" {
 		t.Error("the secret is still in the clipboard")
 	}
@@ -154,13 +150,33 @@ func TestWaylandStuckSource(t *testing.T) {
 	stuck.d.Send(stuck.mgr, mgrCreateSource, (&wl.Request{}).Uint(src))
 	stuck.d.Send(src, srcOffer, (&wl.Request{}).String("text/plain;charset=utf-8"))
 	stuck.d.Send(stuck.device, devSetSelection, (&wl.Request{}).Uint(src))
-	select {
-	case msg := <-logged:
-		if !strings.Contains(msg, "reading the clipboard") {
-			t.Errorf("logged %q", msg)
-		}
-	case <-time.After(readTimeout + 3*time.Second):
-		t.Fatal("the read of a stuck source never ended")
+	if msg := <-logged; !strings.Contains(msg, "reading the clipboard") {
+		t.Errorf("logged %q", msg)
+	}
+}
+
+// synced waits until the compositor has handled every request of the
+// connector's before now, and the connector every event before.
+func synced(t *testing.T, w *Wayland) {
+	t.Helper()
+	done, err := w.d.Synced()
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-done
+}
+
+// noOwnWaylandChange checks that no change came before a copy another
+// program makes now: the compositor sends the selections in order, so one
+// of ours would come first.
+func noOwnWaylandChange(t *testing.T, w *Wayland) {
+	t.Helper()
+	const mark = "a copy after ours"
+	if err := exec.Command("wl-copy", mark).Run(); err != nil {
+		t.Fatalf("wl-copy: %v", err)
+	}
+	if it := <-w.changes; it.Text != mark {
+		t.Errorf("a change came before the other program's copy: %+v", it)
 	}
 }
 
@@ -180,11 +196,7 @@ func TestWaylandWrites(t *testing.T) {
 	if it, ok, _ := w.Current(); !ok || it.Text != "there before" {
 		t.Errorf("Current = %+v, %v", it, ok)
 	}
-	select {
-	case it := <-w.changes:
-		t.Errorf("the clipboard at open came as a change: %+v", it)
-	case <-time.After(300 * time.Millisecond):
-	}
+	noOwnWaylandChange(t, w)
 	paste := func(args ...string) string {
 		out, _ := exec.Command("wl-paste", append([]string{"--no-newline"}, args...)...).Output()
 		return string(out)
@@ -199,13 +211,14 @@ func TestWaylandWrites(t *testing.T) {
 	if got := paste(); got != "write 49" {
 		t.Errorf("wl-paste = %q", got)
 	}
+	// A protocol error ends the connection before the sync is done.
+	synced(t, w)
 	select {
 	case err := <-w.errc:
 		t.Fatalf("the connection failed: %v", err)
-	case it := <-w.changes:
-		t.Fatalf("our own write came back as a change: %+v", it)
-	case <-time.After(300 * time.Millisecond):
+	default:
 	}
+	noOwnWaylandChange(t, w)
 	// An expired secret is given up only where it still is: a newer
 	// selection made with the mouse stays.
 	if err := w.Write("hunter2", true); err != nil {
@@ -214,11 +227,13 @@ func TestWaylandWrites(t *testing.T) {
 	if err := exec.Command("wl-copy", "--primary", "selected by the user").Run(); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond)
+	// The connector has seen the new primary selection; then the
+	// compositor has taken the give-up.
+	synced(t, w)
 	if err := w.ClearIfUnchanged(); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond)
+	synced(t, w)
 	if got := paste("--primary"); got != "selected by the user" {
 		t.Errorf("the primary selection is %q after giving up the secret", got)
 	}

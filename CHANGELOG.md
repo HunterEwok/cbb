@@ -2264,6 +2264,11 @@ with 0.5 is set up again once. The details follow.
 - The VLESS tests open each stream once and wait for it to end rather than trying again after a
   pause: the tries had hidden that a group's fifth stream to the mirror is refused while its four
   before are still ending, and the tests now wait for those to end.
+- The desktop connector's tests wait for events: a copy another program makes after ours shows
+  that ours did not come back as a change (the X server and the compositor keep the order), a
+  sync with the compositor that it took the connector's requests, a pipe that xterm or foot
+  writes to, the window's map and the end of the portal's keyboard connection; the portal's
+  dialog takes its wait from a hook the test fires.
 - `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
   that line ended it without its clean stop.
 - The Bluetooth keyboard stops being visible at the end of its time, not just after.
