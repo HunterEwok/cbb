@@ -3250,6 +3250,10 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPad's UI tests in CI fail less by chance: the sidebar test finds the next tile before
+  the arrow key rather than after it, when the search could outlast its wait on CI's small
+  machine, and a test whose app XCTest never saw start is run again like the other launch
+  failures.
 - The iPhone app no longer asks the system for its Live Activities on the main thread at every
   refresh: it reads them once, off the main thread, and keeps the list itself.
 - The preview of who stays after a change of root with the recovery key works in the iPhone,

@@ -55,13 +55,19 @@ final class PadUITests: XCTestCase {
         XCTAssertTrue(mac.becomesSelected(), "the chosen tile is marked")
         picture("pad-home-card")
 
+        // The next tile is found by its own label before the key: found for
+        // the first time after it, the query searched the whole tree again
+        // on each check, 4 to 12 seconds each on CI's small machine, and ran
+        // out of time while the tile already stood chosen (CI's video,
+        // 2026-11-23).
+        let thinkpad = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'thinkpad,'")).firstMatch
+        XCTAssertTrue(thinkpad.waitForExistence(timeout: 10))
+        XCTAssertFalse(thinkpad.isSelected, "only the tapped tile is chosen")
         // A key pressed while the card still slides in can land before the
         // devices have the keyboard's focus back: each key waits for the
         // screen to stand still, as a person sees it before pressing.
         app.settle("the card")
         app.typeKey(.rightArrow, modifierFlags: [])
-        let thinkpad = app.buttons.containing(NSPredicate(format: "label CONTAINS 'thinkpad'")).firstMatch
-        XCTAssertTrue(thinkpad.waitForExistence(timeout: 5))
         XCTAssertTrue(thinkpad.becomesSelected(), "the right arrow chooses the next device")
 
         app.settle("the next device's card")
