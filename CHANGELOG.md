@@ -3353,6 +3353,8 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The privacy page says the apps send no bug reports in this version: the key that seals
+  them is not in the build yet.
 - The release builds the iPhone app for TestFlight with Xcode 27.2 and the iOS 27 SDK, as
   App Store Connect asks of every upload from April 2027; it was built with the iOS 26.5 SDK.
 - No text still points to what 0.6 removed: `cbb` suggests the recovery key, not a takeover,
