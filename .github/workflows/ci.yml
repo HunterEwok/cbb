@@ -1157,8 +1157,13 @@ jobs:
           done
       - name: release notes
         run: |
-          sh packaging/release-notes.sh v0.1.1 >/dev/null
-          sh packaging/release-notes.sh v9.9.9-rc.1 >/dev/null # a pre-release takes Unreleased
+          # GitHub refuses notes over 125,000 characters, its own list of
+          # pull requests included: ours stay under 90,000.
+          for tag in v0.1.1 v9.9.9-rc.1; do # a pre-release takes Unreleased
+            n=$(sh packaging/release-notes.sh "$tag" | wc -m)
+            echo "$tag: $n characters"
+            test "$n" -le 90000
+          done
       - name: the Homebrew formula takes its checksums from SHA256SUMS, and all four
         run: |
           sums="$RUNNER_TEMP/SHA256SUMS"

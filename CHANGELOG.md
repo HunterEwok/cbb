@@ -3308,6 +3308,10 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A release's draft is made again when its CHANGELOG section is long: GitHub refuses notes
+  over 125,000 characters, so `packaging/release-notes.sh` gives a section over 60,000
+  only its opening summary and a link to CHANGELOG.md, and CI checks the notes stay under
+  90,000.
 - The test that one paste helper runs for each tmux server no longer fails when another test
   starts a process just as it frees the lock (that process holds the lock until its exec): it
   waits for the lock to come free with a blocking flock.
