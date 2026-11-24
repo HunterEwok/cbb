@@ -124,19 +124,14 @@ jobs:
       - name: tag the signed image
         env:
           GH_TOKEN: ${{ github.token }}
+          # No channel names a pre-release: it is checked by name.
+          PINNED: ${{ github.event.release.prerelease && '-pinned' || '' }}
         run: |
           set -o pipefail
           rel="$RUNNER_TEMP/release"
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
-          for _ in $(seq 30); do
-            for f in keys.json stable.json; do
-              gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/$f?ref=channel" >"$rel/$f" || true
-            done
-            named=$(jq -r .body "$rel/stable.json" 2>/dev/null | base64 -d 2>/dev/null | jq -r .release 2>/dev/null || true)
-            [ "v$named" = "$GITHUB_REF_NAME" ] && break
-            sleep 20
-          done
-          go run ./tools/release-sign verify "$rel" | tee "$RUNNER_TEMP/verify.txt"
+          sh .github/channel-files.sh "$rel"
+          go run ./tools/release-sign verify $PINNED "$rel" | tee "$RUNNER_TEMP/verify.txt"
           version=${GITHUB_REF_NAME#v}
           # The signed manifest is of this tag's version, not another release's.
           signed=$(head -n 1 "$RUNNER_TEMP/verify.txt" | cut -d ' ' -f 1)
@@ -211,20 +206,14 @@ jobs:
       - name: the files, their sums, attestations and the image's digest
         env:
           GH_TOKEN: ${{ github.token }}
+          # No channel names a pre-release: it is checked by name.
+          PINNED: ${{ github.event.release.prerelease && '-pinned' || '' }}
         run: |
           set -o pipefail
           rel="$RUNNER_TEMP/release"
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
-          # Releases, pre-releases too, go to the one channel, stable.
-          for _ in $(seq 30); do
-            for f in keys.json stable.json; do
-              gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/$f?ref=channel" >"$rel/$f" || true
-            done
-            named=$(jq -r .body "$rel/stable.json" 2>/dev/null | base64 -d 2>/dev/null | jq -r .release 2>/dev/null || true)
-            [ "v$named" = "$GITHUB_REF_NAME" ] && break
-            sleep 20
-          done
-          go run ./tools/release-sign verify "$rel" | tee "$RUNNER_TEMP/verify.txt"
+          sh .github/channel-files.sh "$rel"
+          go run ./tools/release-sign verify $PINNED "$rel" | tee "$RUNNER_TEMP/verify.txt"
           while read -r _ name; do
             gh attestation verify "$rel/${name#\*}" --repo "$GITHUB_REPOSITORY" >/dev/null
             echo "attested: ${name#\*}"

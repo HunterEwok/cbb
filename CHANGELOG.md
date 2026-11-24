@@ -3335,6 +3335,10 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A published pre-release gets its Docker image's version tag and its release check:
+  `published.yml` waited for a `stable.json` that names it, which no pre-release has, and
+  checked the error GitHub answered in its place. It now checks a pre-release by name
+  (`release-sign verify -pinned`) with the branch `channel`'s `keys.json`.
 - The FreeBSD job runs its Go tests without asynchronous preemption: in its machine on
   the runners' Intel processors Go's preemption signal slowed SHA-256's SHA-NI instructions
   100 times for the rest of each process, and the release tests took minutes instead of

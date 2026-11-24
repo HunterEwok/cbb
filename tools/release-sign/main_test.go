@@ -125,6 +125,21 @@ func TestFlow(t *testing.T) {
 		t.Errorf("verify printed %q", out)
 	}
 
+	// A pre-release, which no channel names, checks out by name with
+	// -pinned; without it, the missing channel file fails.
+	stable := must(os.ReadFile(filepath.Join(dist, "stable.json")))
+	if err := os.Remove(filepath.Join(dist, "stable.json")); err != nil {
+		t.Fatal(err)
+	}
+	if verify([]string{"-roots", root1Pub, dist}) == nil {
+		t.Error("verify took a release without its channel file")
+	}
+	out = call(t, verify, "-roots", root1Pub, "-pinned", dist)
+	if !strings.HasPrefix(string(out), "0.6.0 ") || !strings.Contains(string(out), "keys.json, release.json and 4 files check out") {
+		t.Errorf("verify -pinned printed %q", out)
+	}
+	write(t, filepath.Join(dist, "stable.json"), stable)
+
 	// A file changed after signing, or keys.json signed by the release key,
 	// fails.
 	write(t, filepath.Join(dist, "SHA256SUMS"), []byte("other\n"))

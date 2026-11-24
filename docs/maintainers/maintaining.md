@@ -339,7 +339,8 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   publishes it and commits `keys.json` and `stable.json` to the branch. `-no-publish` stops
   before publishing, `-docker none` signs a release without the image; a pre-release
   changes no `stable.json`. `published.yml` then checks what GitHub serves, tags the signed
-  image and updates the Homebrew tap. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
+  image and updates the Homebrew tap; a pre-release, which no channel names, it checks by
+  name with `release-sign verify -pinned`. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
   `verify` (the comment in `tools/release-sign/main.go`).
 - **The entry points** (docs/protocol.md, section 16, "Entry points"): the ways in to the
   project's servers that are not built in. On the Mac, in a checkout of the branch `channel`,
@@ -622,7 +623,8 @@ site's `openwrt/` directory on cbb.tools (routers read
 `https://cbb.tools/openwrt/<arch>/packages.adb`). The feed's key is in CI, so a feed counts
 only as a file of a release the offline release key signed: take it from the published
 release, check that release with `release-sign verify` (under the pinned roots, with the
-branch `channel`'s `keys.json` and `stable.json`, as `published.yml` does), and unpack only
+branch `channel`'s `keys.json` and `stable.json`, or for a pre-release `keys.json` and
+`-pinned`, as `published.yml` does), and unpack only
 the `openwrt-feed.tar.gz` it checked; never one from a draft. Without the secret the release
 still succeeds and warns that there is no feed.
 
