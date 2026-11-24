@@ -3369,6 +3369,9 @@ with 0.5 is set up again once. The details follow.
 - No text still points to what 0.6 removed: `cbb` suggests the recovery key, not a takeover,
   when the root is the only admin; the Aurora app asks to save the recovery key when a group
   is made; the Android and HarmonyOS apps no longer mention remote paste onto the phone.
+- The iPad's UI test of the sidebar waits up to 20 seconds for the chosen tile to show as
+  chosen: one read of the screen's accessibility tree takes 4 to 12 seconds on CI's small
+  machine, so 5 seconds ran out while the next tile already stood chosen.
 - On an iPhone at the accessibility text sizes the count of devices online stands above the
   sync switches, set by the text size rather than by what fits, so the layout does not
   change while the text grows.
