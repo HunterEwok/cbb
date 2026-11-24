@@ -1,6 +1,6 @@
 # Connect Beyond Borders
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/HunterEwok/cbb/badge)](https://securityscorecards.dev/viewer/?uri=github.com/HunterEwok/cbb)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/HunterEwok/cbb/badge)](https://scorecard.dev/viewer/?uri=github.com/HunterEwok/cbb)
 [![REUSE status](https://api.reuse.software/badge/github.com/HunterEwok/cbb)](https://api.reuse.software/info/github.com/HunterEwok/cbb)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/17052/badge)](https://www.bestpractices.dev/projects/17052)
 

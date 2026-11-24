@@ -2261,9 +2261,33 @@ with 0.5 is set up again once. The details follow.
   the forwarder wait for the event they check rather than for a time: a fake clock, timers the
   tests fire and a signal when the forwarder's state changes take the place of sleeps and
   polling, and the mDNS tests take a fraction of a second instead of 48 s.
+- The VLESS tests open each stream once and wait for it to end rather than trying again after a
+  pause: the tries had hidden that a group's fifth stream to the mirror is refused while its four
+  before are still ending, and the tests now wait for those to end.
+- The desktop connector's tests wait for events: a copy another program makes after ours shows
+  that ours did not come back as a change (the X server and the compositor keep the order), a
+  sync with the compositor that it took the connector's requests, a pipe that xterm or foot
+  writes to, the window's map and the end of the portal's keyboard connection; the portal's
+  dialog takes its wait from a hook the test fires.
+- The desktop window's tests wait for the page to change or for its calls to the app to end, not
+  for a time or by asking again: a check that something did not happen looks once no call is
+  under way, and the invitation's tests wait for the stand-in for cbb to write the device.
+- The release signs the iPhone app's notification extension for TestFlight with its own App Store
+  profile (App ID `tools.cbb.push`, App Group `group.tools.cbb.push`); without it the archive
+  stopped.
+- The tunnel's test of clients reaching the hub no longer expects nothing from the hub before
+  the first connection: a client sends its first keepalive as it starts, and the hub's answer to
+  that handshake may come first (seen on macOS).
+- The desktop window's dialogs for joining with an invitation, inviting a device and moving the
+  group here no longer take the close event left over from their last use for the user's answer:
+  opened again at once after a join ended, the join dialog ignored its OK, and a new invitation
+  could be cancelled by the close of the one before.
 - `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
   that line ended it without its clean stop.
 - The Bluetooth keyboard stops being visible at the end of its time, not just after.
+- The FreeBSD job measures SHA-256 on the runner and in the machine every 30 s, to tell a
+  runner held back from a slow virtual machine, and a failed test run no longer keeps the
+  machine's session open until the job's limit.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
@@ -2275,6 +2299,12 @@ with 0.5 is set up again once. The details follow.
   iPhone app's tests builds without link-time optimization.
 - On a pull request the iPhone app's CodeQL analysis starts with the other CI jobs and takes
   the first free macOS runner, instead of waiting for the iPhone app's jobs to finish.
+- On a pull request CodeQL analyzes the Go files for macOS alone in CI's macOS job, which builds
+  Go on macOS anyway, instead of on a macOS runner of its own: a pull request takes four macOS
+  runners at most, not five. `codeql.yml` still analyzes them on main and weekly.
+- CI builds the Linux, FreeBSD and Windows targets in one job (`build (Linux, FreeBSD,
+  Windows)`) instead of two: the halves of 10 and 14 minutes finished long before the longest
+  jobs, so the split took a second runner for no time saved.
 - The project's full name is Connect Beyond Borders, everywhere it is written: the apps, the
   stores, the website and the documentation. The short name CBB and the command `cbb` stay.
 - CI's Rust tests run their two longest tests, the power cut at every byte of every save and
@@ -3278,6 +3308,12 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The FreeBSD job no longer fails after its tests pass: its exit trap's `kill` of the
+  measuring loops, already stopped, ended the script with status 1 under `set -e`.
+- A release's draft is made again when its CHANGELOG section is long: GitHub refuses notes
+  over 125,000 characters, so `packaging/release-notes.sh` gives a section over 60,000
+  only its opening summary and a link to CHANGELOG.md, and CI checks the notes stay under
+  90,000.
 - The test that one paste helper runs for each tmux server no longer fails when another test
   starts a process just as it frees the lock (that process holds the lock until its exec): it
   waits for the lock to come free with a blocking flock.

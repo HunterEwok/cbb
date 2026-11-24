@@ -135,25 +135,33 @@ func packetBack(t *testing.T, to netip.AddrPort) string {
 }
 
 // lineBack sends a line over TCP to the local port and returns what came
-// back, or "".
+// back before the stream ended, "" when it ended with nothing: a stream
+// refused on the way is closed.
 func lineBack(t *testing.T, to netip.AddrPort) string {
 	t.Helper()
-	for range 3 {
-		c, err := net.DialTimeout("tcp", to.String(), time.Second)
-		if err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		c.SetDeadline(time.Now().Add(3 * time.Second))
-		c.Write([]byte("a line\n"))
-		b := make([]byte, 13)
-		n, _ := io.ReadAtLeast(c, b, 7)
-		c.Close()
-		if n > 0 {
-			return string(b[:n])
-		}
+	c, err := net.Dial("tcp", to.String())
+	if err != nil {
+		t.Fatal(err)
 	}
-	return ""
+	defer c.Close()
+	c.Write([]byte("a line\n"))
+	b := make([]byte, 13)
+	n, _ := io.ReadAtLeast(c, b, 7)
+	return string(b[:n])
+}
+
+// streamsEnd waits until every stream to s's mirror has ended, so that the
+// next takes a free one of the group's streams.
+func streamsEnd(s *Server) {
+	o := s.out
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.ended == nil {
+		o.ended = sync.NewCond(&o.mu)
+	}
+	for len(o.streams) > 0 {
+		o.ended.Wait()
+	}
 }
 
 // targets are what a hostile client asks for: the outside's ports, a
@@ -185,14 +193,17 @@ func onlyCBB(t *testing.T, s *Server, l tunnel.VLESS, o *outside) {
 	if got := packetBack(t, hostile(t, l, xnet.Network_UDP, "example.com", 53)); got != "a packet" {
 		t.Errorf("a packet to a name: the answer %q did not come from the forwarder's port", got)
 	}
+	// One stream at a time: a group has mirrorStreams of them.
 	for _, to := range targets(o, xnet.Network_TCP) {
 		if got := lineBack(t, hostile(t, l, xnet.Network_TCP, to.Addr().String(), to.Port())); got != "a line\n" {
 			t.Errorf("a stream to %v: the answer %q did not come from the mirror", to, got)
 		}
+		streamsEnd(s)
 	}
 	if got := lineBack(t, hostile(t, l, xnet.Network_TCP, "example.com", 80)); got != "a line\n" {
 		t.Errorf("a stream to a name: the answer %q did not come from the mirror", got)
 	}
+	streamsEnd(s)
 	// RegistrationPort without registrations is any other port: the
 	// mirror.
 	if got := lineBack(t, hostile(t, l, xnet.Network_TCP, "127.0.0.1", RegistrationPort)); got != "a line\n" {

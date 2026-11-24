@@ -85,6 +85,7 @@ type Keyboard struct {
 
 	mu       sync.Mutex
 	cond     *sync.Cond
+	ended    bool  // the connection ended
 	err      error // the connection ended
 	serial   uint32
 	seats    map[uint64]uint64 // seat ID to its keyboard capability mask
@@ -246,8 +247,18 @@ func (k *Keyboard) read(name string) {
 		k.err = err
 	}
 	k.keyboard = nil
+	k.ended = true
 	k.cond.Broadcast()
 	k.mu.Unlock()
+}
+
+// Wait returns once the connection has ended, by the server or a failure.
+func (k *Keyboard) Wait() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	for !k.ended {
+		k.cond.Wait()
+	}
 }
 
 func (k *Keyboard) loop(name string) error {

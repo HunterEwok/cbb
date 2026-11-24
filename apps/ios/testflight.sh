@@ -11,9 +11,9 @@
 # Run from the repository root, after xcodegen generate in apps/ios and the
 # library the app links (ffi/bind.sh ios),
 # as the release workflow does. KEYCHAIN holds the Apple Distribution identity
-# (packaging/macos/keychain.sh); PROFILES is a base64 tar.gz of the four App
+# (packaging/macos/keychain.sh); PROFILES is a base64 tar.gz of the five App
 # Store profiles, one for each App ID (tools.cbb, .share, .widgets,
-# .watchkitapp), which it installs and gives each target by its App ID.
+# .watchkitapp, .push), which it installs and gives each target by its App ID.
 # VERSION is the release's (0.6.0, 0.6.0-rc.1; the App Store takes only its
 # numbers), BUILD the build number, higher with each upload. It writes the
 # archive and the .ipa to OUTDIR. upload sends the build to App Store
@@ -76,6 +76,7 @@ for f in "$tmp"/profiles/*.mobileprovision; do
 	"$team.tools.cbb.share") target=ShareExtension ;;
 	"$team.tools.cbb.widgets") target=Widgets ;;
 	"$team.tools.cbb.watchkitapp") target=Watch ;;
+	"$team.tools.cbb.push") target=NotificationService ;;
 	*)
 		echo "testflight.sh: $(basename "$f") is for $id; skipped" >&2
 		continue
@@ -89,7 +90,7 @@ for f in "$tmp"/profiles/*.mobileprovision; do
 	echo "testflight.sh: $target signs with the profile \"$(get Name)\" ($uuid), until $(get ExpirationDate)"
 	found="$found $target"
 done
-for target in CBB ShareExtension Widgets Watch; do
+for target in CBB ShareExtension Widgets Watch NotificationService; do
 	case " $found " in *" $target "*) ;; *)
 		echo "testflight.sh: no App Store profile for $target in PROFILES" >&2
 		exit 1

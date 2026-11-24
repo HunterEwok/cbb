@@ -134,10 +134,10 @@ func TestClientsReachTheHub(t *testing.T) {
 	a, b := newDevice(t), newDevice(t)
 	h := startHub(t, a.peer(), b.peer())
 	for _, d := range []testDevice{a, b} {
+		// The client sends its first keepalive as it starts, so the hub's
+		// answer to that handshake may already have come: Received is not
+		// zero before a connection, only after one.
 		c := startClient(t, h, d)
-		if n := c.Received(); n != 0 {
-			t.Fatalf("%d bytes from the hub before anything was sent", n)
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		got, err := roundTrip(ctx, c)
 		cancel()

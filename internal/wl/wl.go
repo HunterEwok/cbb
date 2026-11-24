@@ -335,6 +335,25 @@ func (d *Display) Roundtrip() error {
 	return nil
 }
 
+// Synced sends a sync request and returns a channel closed when it is
+// done, while another goroutine dispatches the events: by then the
+// compositor has handled every request before it, and the handlers have
+// run for every event it sent before.
+func (d *Display) Synced() (<-chan struct{}, error) {
+	done := make(chan struct{})
+	var id uint32
+	id = d.NewID(func(op uint16, a *Args) error {
+		d.Forget(id)
+		close(done)
+		return a.Err
+	})
+	if err := d.Send(displayID, 0, (&Request{}).Uint(id)); err != nil {
+		d.Forget(id)
+		return nil, err
+	}
+	return done, nil
+}
+
 // Global is an object the compositor announces in the registry.
 type Global struct {
 	Name      uint32

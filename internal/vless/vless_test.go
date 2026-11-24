@@ -348,22 +348,16 @@ func throughMirror(t *testing.T, l tunnel.VLESS) bool {
 		t.Fatal(err)
 	}
 	defer m.Close()
-	for range 10 {
-		c, err := net.DialTimeout("tcp", m.Addr().String(), time.Second)
-		if err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		c.SetDeadline(time.Now().Add(3 * time.Second))
-		c.Write([]byte("a line\n"))
-		b := make([]byte, 7)
-		_, err = io.ReadFull(c, b)
-		c.Close()
-		if err == nil {
-			return string(b) == "a line\n"
-		}
+	// A stream the forwarder's side refuses is closed: the read ends.
+	c, err := net.Dial("tcp", m.Addr().String())
+	if err != nil {
+		t.Fatal(err)
 	}
-	return false
+	defer c.Close()
+	c.Write([]byte("a line\n"))
+	b := make([]byte, 7)
+	_, err = io.ReadFull(c, b)
+	return err == nil && string(b) == "a line\n"
 }
 
 // A registered group's client reaches the mirror over VLESS, and only
@@ -425,22 +419,15 @@ func TestRegistrationStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer way.Close()
-	got := ""
-	for range 10 {
-		c, err := net.DialTimeout("tcp", way.Addr().String(), time.Second)
-		if err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		c.SetDeadline(time.Now().Add(3 * time.Second))
-		c.Write([]byte("hello"))
-		b := make([]byte, 5)
-		io.ReadFull(c, b)
-		c.Close()
-		if got = string(b); got == "hub!!" {
-			break
-		}
+	c, err := net.Dial("tcp", way.Addr().String())
+	if err != nil {
+		t.Fatal(err)
 	}
+	c.Write([]byte("hello"))
+	b := make([]byte, 5)
+	io.ReadFull(c, b)
+	c.Close()
+	got := string(b)
 	if got != "hub!!" {
 		t.Fatalf("the registrations answered %q", got)
 	}

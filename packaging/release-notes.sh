@@ -41,6 +41,16 @@ if [ -z "$(printf '%s' "$changes" | tr -d '[:space:]')" ]; then
 	echo "release-notes.sh: CHANGELOG.md has no section for $version" >&2
 	exit 1
 fi
+# GitHub takes at most 125,000 characters for a release's notes, and its
+# list of merged pull requests comes on top of these. A section longer than
+# 60,000 gives only its opening summary, the text before its first "###",
+# and points at the whole section in CHANGELOG.md; the notes then stay under
+# 90,000 (ci.yml checks it), leaving the rest for GitHub's list.
+if [ "$(printf '%s' "$changes" | wc -m)" -gt 60000 ]; then
+	changes="$(printf '%s\n' "$changes" | awk '/^### /{exit} {print}')
+
+The changes are too many for this page: all of them are in [CHANGELOG.md]($repo/blob/$tag/CHANGELOG.md), under ${section}."
+fi
 
 cat <<NOTES
 Connect Beyond Borders is one clipboard for your Apple devices and every Linux machine on your home

@@ -44,12 +44,11 @@ func TestConnKeepsItsAddresses(t *testing.T) {
 	}
 	from, to := got.RemoteAddr().String(), out.RemoteAddr().String()
 	out.Close()
-	got.SetReadDeadline(time.Now().Add(5 * time.Second))
+	// The hub reads to the client's close, then closes its own end.
 	if _, err := io.ReadAll(got); err != nil {
 		t.Fatal(err)
 	}
 	got.Close()
-	time.Sleep(100 * time.Millisecond)
 	for _, k := range []struct {
 		name string
 		conn net.Conn

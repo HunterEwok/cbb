@@ -746,9 +746,9 @@ the release has no `.pkg`. CI's `test and build (macOS), homebrew, Mac app` job 
 
 The iPhone app goes to TestFlight from the same environment (the job "the iPhone app, to
 TestFlight", `apps/ios/testflight.sh`): an archive of the app with its share extension,
-widgets and watch app, each target signed by hand with the **Apple Distribution**
+widgets, watch app and notification extension, each target signed by hand with the **Apple Distribution**
 certificate and its own App Store profile from `CBB_APPLE_PROFILES` (a base64 `tar.gz` of
-the four `.mobileprovision` files, found by their App IDs), exported for App Store Connect
+the five `.mobileprovision` files, found by their App IDs), exported for App Store Connect
 and uploaded with the API key. Its version is the tag's numbers (`0.6.0` for `v0.6.0-rc.1`),
 its build number the run's. A run by hand from `main` builds and signs it as `0.0.0` and
 uploads nothing. Apple asks about the app's encryption (export compliance) in App Store
@@ -763,10 +763,12 @@ with the files and a backup beside the other release keys:
   Developer ID Installer (the `.pkg`), Apple Distribution (TestFlight and the App Store),
   Apple Development (builds on the maintainer's own devices). Each `.p12` has a password of
   its own.
-- Identifiers: the App Group `group.tools.cbb`; the App IDs `tools.cbb` (App Groups, NFC Tag
-  Reading, Push Notifications), `tools.cbb.share` (App Groups), `tools.cbb.widgets`,
-  `tools.cbb.watchkitapp` and `tools.cbb.mac`.
-- App Store profiles for the four iPhone IDs, which renew every year.
+- Identifiers: the App Groups `group.tools.cbb` and `group.tools.cbb.push`; the App IDs
+  `tools.cbb` (App Groups: both, NFC Tag Reading, Push Notifications), `tools.cbb.share`
+  (App Groups), `tools.cbb.widgets`, `tools.cbb.watchkitapp`, `tools.cbb.push` (the
+  notification extension; App Groups: `group.tools.cbb.push`) and `tools.cbb.mac`.
+- App Store profiles for the five iPhone IDs, which renew every year. A profile goes
+  invalid when its App ID's capabilities change: edit and save it again, then download it.
 - Keys: the App Store Connect API key (App Manager) for CI, and two APNs keys, one for
   Sandbox (builds signed for development) and one for Production, for a push server.
 

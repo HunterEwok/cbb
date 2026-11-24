@@ -51,6 +51,9 @@ type toForwarder struct {
 	mu      sync.Mutex
 	users   map[netip.AddrPort]string // by the address each flow is sent from
 	streams map[string]int            // the streams to the mirror, by VLESS user
+	// ended, if set, is woken as a stream to the mirror ends: tests wait
+	// on it, with mu, for the streams to end.
+	ended *sync.Cond
 }
 
 func (o *toForwarder) Tag() string                          { return "to-forwarder" }
@@ -188,6 +191,9 @@ func (o *toForwarder) toMirror(ctx context.Context, link *transport.Link, user s
 		o.mu.Lock()
 		if o.streams[user]--; o.streams[user] <= 0 {
 			delete(o.streams, user)
+		}
+		if o.ended != nil {
+			o.ended.Broadcast()
 		}
 		o.mu.Unlock()
 	}()

@@ -69,7 +69,7 @@ jobs:
           persist-credentials: false
           # The base of the pull request, for the tests it must keep.
           fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -143,7 +143,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
@@ -201,7 +201,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -291,7 +291,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -322,24 +322,23 @@ jobs:
             -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
-    name: build (${{ matrix.systems }})
+    # One job for every target CI builds on Linux: the two halves it was split
+    # into took 10 and 14 minutes, both far shorter than the longest jobs, so
+    # the split saved no time and took a second runner (docs/testing.md,
+    # "Running tests in parallel"). FreeBSD and Windows first, so the Windows
+    # archive reaches the installer's job as soon as before.
+    name: build (Linux, FreeBSD, Windows)
     needs: changes
     if: needs.changes.outputs.core == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - systems: Linux
-            targets: linux/amd64 linux/arm64 linux/arm/7 linux/arm/6
-          - systems: FreeBSD, Windows
-            targets: freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
+    env:
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
@@ -348,26 +347,27 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/zig"
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
-      - name: cbb and the Go programs beside it, and the release archive of each target, as at a release
-        # Two jobs, each building cbb (Rust, packaging/build.sh) and the
-        # Go programs for its targets: Rust builds each target from the start.
-        # go vet runs once per operating system: the code differs by system,
-        # not by architecture, and the check job vets Linux. ARMv6 is for the
-        # Raspberry Pi Zero W; the routers' MIPS builds are the rustmips job's.
-        env:
-          CGO_ENABLED: "0"
-          TARGETS: ${{ matrix.targets }}
-        run: |
-          # shellcheck disable=SC2086 # the targets are words
-          sh .github/build-targets.sh "$RUNNER_TEMP" $TARGETS
+      # Each step builds cbb (Rust, packaging/build.sh) and the Go programs for
+      # its targets, and the release archive of each, as at a release: Rust
+      # builds each target from the start. go vet runs once per operating
+      # system: the code differs by system, not by architecture, and the check
+      # job vets Linux. ARMv6 is for the Raspberry Pi Zero W; the routers' MIPS
+      # builds are the rustmips job's.
+      - name: cbb and the Go programs beside it for FreeBSD and Windows, and their release archives
+        run: sh .github/build-targets.sh "$RUNNER_TEMP" freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
       - name: keep the Windows archive for the installer test
-        if: contains(matrix.targets, 'windows/amd64')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-windows-amd64.zip
           path: ${{ runner.temp }}/dist/cbb-windows-amd64.zip
           if-no-files-found: error
           retention-days: 1
+      - name: room for the Linux builds
+        # The other targets' Rust builds (target/<triple>) are not used again;
+        # the host's build scripts and macros (target/release) are.
+        run: find target -mindepth 1 -maxdepth 1 -type d -name '*-*-*' -exec rm -rf {} +
+      - name: cbb and the Go programs beside it for Linux, and their release archives
+        run: sh .github/build-targets.sh "$RUNNER_TEMP" linux/amd64 linux/arm64 linux/arm/7 linux/arm/6
   buildmac:
     name: test and build (macOS), homebrew, Mac app
     needs: changes
@@ -383,6 +383,11 @@ jobs:
     # be gone, before the next one installs.
     runs-on: macos-latest
     timeout-minutes: 90
+    # security-events for the CodeQL analysis of the Go files for macOS below.
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     env:
       GO: ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' }}
       CORE: ${{ needs.changes.outputs.core }}
@@ -396,7 +401,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
@@ -428,6 +433,30 @@ jobs:
           name: coverage-swift-kit
           path: coverage-swift-kit.json
           retention-days: 7
+      # CodeQL's analysis of the Go files for macOS alone (remote paste, the
+      # control socket's access list, the keychain), which codeql.yml runs on
+      # main and weekly: here on pull requests, on this machine that builds Go
+      # on macOS anyway, rather than on a macOS runner of its own. The same
+      # build mode and category as codeql.yml's, so Code scanning compares the
+      # two. Before go test, which CodeQL's tracer would slow; like codeql.yml,
+      # not a gate: a failed analysis shows as a warning, not a failed job.
+      - name: CodeQL for the Go files for macOS
+        if: env.GO == 'true'
+        continue-on-error: true
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: go
+          build-mode: autobuild
+      - name: CodeQL's build of the Go programs
+        if: env.GO == 'true'
+        continue-on-error: true
+        uses: github/codeql-action/autobuild@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      - name: CodeQL's analysis of the Go files for macOS
+        if: env.GO == 'true'
+        continue-on-error: true
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:go/macos
       - name: go test
         if: env.GO == 'true'
         # The service's tests take close to go test's default 10 minutes
@@ -681,7 +710,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
@@ -707,7 +736,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -727,6 +756,9 @@ jobs:
         # The machine's processor can stand still under the runner's KVM
         # (steal, or the host's exits), which the guest counts as user time;
         # the runner sees it: its steal time and KVM's exits, every 30 s.
+        # And what SHA-256 runs at on the runner itself over two seconds,
+        # beside the machine's own measure at the same times: when both
+        # fall, the runner is held back; when only the machine's does, KVM.
         run: |
           (
             sudo dmesg | grep -i 'split.lock' || echo "no split lock in dmesg"
@@ -734,6 +766,7 @@ jobs:
               date -u +%T
               grep -E '^cpu ' /proc/stat
               sudo cat /sys/kernel/debug/kvm/exits 2>/dev/null || true
+              openssl speed -seconds 2 -bytes 8192 sha256 2>/dev/null | tail -n 1
             done
           ) >"$RUNNER_TEMP/runner-load.log" 2>&1 &
       - name: go test in a FreeBSD 15.1 virtual machine
@@ -768,15 +801,25 @@ jobs:
             # still now and then. The same hashes over 10 s each, and where
             # the release test spends its time.
             go test -run '^$' -bench 'Hash8K$|Hash1K$' -benchtime 10s crypto/sha256 || true
+            # The test reads testdata beside its package: it runs there.
             go test -c -o /tmp/release.test ./internal/release
-            /usr/bin/time /tmp/release.test -test.run 'TestCheckErrors$' -test.timeout 4m -test.cpuprofile /tmp/cpu.out </dev/null || true
+            (cd internal/release && /usr/bin/time /tmp/release.test -test.run 'TestCheckErrors$' -test.timeout 4m -test.cpuprofile /tmp/cpu.out </dev/null) || true
             go tool pprof -top -nodecount 25 /tmp/release.test /tmp/cpu.out || true
             # What uses the processors while the suite runs, every five
-            # minutes, so a slow run shows what it waited behind.
+            # minutes, so a slow run shows what it waited behind; and SHA-256
+            # over two seconds every 30 s, as the runner measures its own.
+            # Both end with the script, however it ends, or they hold the
+            # machine's session open until the job's limit. Under set -e a
+            # failing command in the trap ends it there, with status 1: the
+            # kill of the loops already stopped below fails, so it is
+            # allowed to, and the script's own status is kept.
             (while sleep 300; do date; top -b -d1 -o cpu 12 | tail -n 16; done) &
             top_pid=$!
+            (while sleep 30; do date -u +%T; openssl speed -seconds 2 -bytes 8192 sha256 2>/dev/null | tail -n 1; done) >/tmp/guest-sha.log 2>&1 &
+            sha_pid=$!
+            trap 'st=$?; kill "$top_pid" "$sha_pid" 2>/dev/null || true; cat /tmp/guest-sha.log || true; exit "$st"' EXIT
             go test -timeout 25m ./... </dev/null
-            kill "$top_pid" 2>/dev/null || true
+            kill "$top_pid" "$sha_pid" 2>/dev/null || true
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
             Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
@@ -884,7 +927,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -924,7 +967,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -968,7 +1011,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -998,7 +1041,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -1023,7 +1066,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -1063,7 +1106,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -1117,8 +1160,13 @@ jobs:
           done
       - name: release notes
         run: |
-          sh packaging/release-notes.sh v0.1.1 >/dev/null
-          sh packaging/release-notes.sh v9.9.9-rc.1 >/dev/null # a pre-release takes Unreleased
+          # GitHub refuses notes over 125,000 characters, its own list of
+          # pull requests included: ours stay under 90,000.
+          for tag in v0.1.1 v9.9.9-rc.1; do # a pre-release takes Unreleased
+            n=$(sh packaging/release-notes.sh "$tag" | wc -m)
+            echo "$tag: $n characters"
+            test "$n" -le 90000
+          done
       - name: the Homebrew formula takes its checksums from SHA256SUMS, and all four
         run: |
           sums="$RUNNER_TEMP/SHA256SUMS"
@@ -1496,7 +1544,7 @@ jobs:
           Add-Content $zip 'tampered'
           Get-Content packaging/windows/get.ps1 -Raw | Invoke-Expression
           if ((Get-Item $cbb).LastWriteTimeUtc -ne $before) { throw 'get.ps1 installed an archive that does not match SHA256SUMS' }
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -2025,7 +2073,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -2235,7 +2283,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -2505,7 +2553,7 @@ jobs:
         run: |
           sh packaging/mips.sh mips testhooks
           sh packaging/mips.sh mipsel testhooks
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -2550,7 +2598,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -2589,7 +2637,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -2695,7 +2743,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -3098,7 +3146,7 @@ jobs:
       - name: cargo build
         run: |
           cargo build --locked --release
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -3582,7 +3630,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -3657,7 +3705,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -3699,7 +3747,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
@@ -3747,7 +3795,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -3819,7 +3867,7 @@ jobs:
           persist-credentials: false
           # Every commit after the base, each checked against its parent.
           fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
