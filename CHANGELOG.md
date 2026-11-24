@@ -2249,6 +2249,10 @@ with 0.5 is set up again once. The details follow.
 ### Changed
 - The user guide's pages are rewritten to one standard: each is a tutorial, a how-to or an
   explanation, says what the program does today, and its facts were checked against the code.
+  So are the reference (commands, settings, errors, limits, devices, glossary), the
+  administrators' pages, the README, the docs' map, the apps' page and the shorter engineering
+  pages; the administrators' pages set a blind relay once, on the main device, and say that
+  every device of a group runs the same release.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
 - "How it works" explains first what happens to a copy, then the group, its keys and the

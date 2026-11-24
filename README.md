@@ -6,225 +6,218 @@
 
 **One encrypted clipboard for all your devices, with no cloud.**
 
-Copy on your phone, paste on your laptop: Connect Beyond Borders takes the borders between your
-devices away. Android, iPhone, Linux, Windows and Mac share one clipboard, encrypted end to
-end, with no accounts and nothing kept in a cloud. Its short name is CBB and its command is
-`cbb`.
+Connect Beyond Borders shares one end-to-end encrypted clipboard across your own phones, computers,
+and small devices with no account, no cloud service, and no central server. Copy on your phone and
+paste on your laptop across Android, iPhone, Aurora OS, HarmonyOS, Linux, macOS, Windows, FreeBSD,
+and OpenWrt. Its short name is CBB and its command-line tool is `cbb`.
 
-> **Status: early development.** Tried on real devices so far: Linux computers, a Mac, an
-> iPhone and an Apple Watch; Windows only in a virtual machine, Android only in CI's emulator.
-> [Status](#status) has more.
+> **Early development.** Tested on real hardware: Linux computers, macOS, iPhone, Apple Watch,
+> Aurora OS, and a Raspberry Pi Zero W. Windows is tested in a virtual machine, and Android,
+> HarmonyOS, FreeBSD, and OpenWrt are tested in CI. See [Status](#status).
 
 ![Each computer joins the phone's group by the six digits the phone shows; then the devices share one clipboard](docs/images/group.svg)
 
 ## Get started
 
-1. Install the app on your phone (Android: the APK in the
-   [latest release](https://github.com/HunterEwok/cbb/releases/latest); iPhone:
-   TestFlight, coming).
-2. Install Connect Beyond Borders on a computer:
+1. **Install the phone app.** Download the Android APK from the
+   [latest release](https://github.com/HunterEwok/cbb/releases/latest), or see
+   [The apps](docs/guide/apps.md) for iPhone, Aurora OS, Sailfish OS, and HarmonyOS.
+2. **Install Connect Beyond Borders on a computer:**
 
    ```sh
-   # Linux and Mac
+   # Linux, macOS, FreeBSD, and OpenWrt
    curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
    ```
 
    ```powershell
-   # Windows 10 or 11, in an administrator PowerShell
+   # Windows 10 (1809+) or 11, in an administrator PowerShell
    irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
    ```
 
-3. Tap **+** (Add a device) in the app, run `sudo cbb pair -code` on the computer and type
-   the six digits the app shows. Its copies then go to the group and the group's come to it;
-   `cbb sync off` keeps its clipboard its own.
+   To verify the installer checksum before running it:
 
-To check the installer before running it, download it with the release's `SHA256SUMS`:
+   ```sh
+   v=https://github.com/HunterEwok/cbb/releases/latest/download
+   curl -fsSLO "$v/get.sh" && curl -fsSLO "$v/SHA256SUMS"
+   grep ' get.sh$' SHA256SUMS | sha256sum -c - && sudo sh get.sh
+   ```
 
-```sh
-v=https://github.com/HunterEwok/cbb/releases/latest/download
-curl -fsSLO "$v/get.sh" && curl -fsSLO "$v/SHA256SUMS"
-grep ' get.sh$' SHA256SUMS | sha256sum -c - && sudo sh get.sh
-```
+   On macOS, replace `sha256sum -c -` with `shasum -a 256 -c -`. The installer verifies every file
+   it downloads against `SHA256SUMS` and the release signatures
+   ([Checking a download](docs/guide/install.md#checking-a-download)).
 
-On a Mac, `shasum -a 256 -c -` takes the place of `sha256sum -c -`. The installer then checks
-everything it downloads against the same file ([checking a download](docs/guide/install.md#checking-a-download)).
+3. **Pair your computer with your group.** Tap **+** (**Add a device**) in the phone app, run
+   `sudo cbb pair -code` on the computer, and enter the six-digit code the app displays. Copies
+   then sync both ways; run `cbb sync off` to keep that computer's clipboard private.
 
-No computer? A group of phones only works too: its devices meet at a blind relay.
-We recommend a computer that is often on, though, since it keeps sync away from home going at
-any time ([two kinds of group](docs/guide/how-it-works.md#two-kinds-of-group)).
+You can also create a group of phones alone (meeting through a blind relay) or run a group held by
+a computer without a phone app. Adding a computer that stays on gives you direct local syncing and
+away-from-home syncing at any time ([Two kinds of group](docs/guide/how-it-works.md#two-kinds-of-group)).
 
-The [quick start](docs/guide/quickstart.md) walks through it step by step;
-[Installing](docs/guide/install.md) has Homebrew, Docker, the firewall, the
-[ports](docs/reference/devices.md#ports) and [removing it](docs/guide/install.md#removing-it).
+For a step-by-step walkthrough, read [Quick start](docs/guide/quickstart.md). For Homebrew, winget,
+Docker, firewall rules, ports, and uninstalling, see [Installing](docs/guide/install.md) and
+[Devices, ports and files](docs/reference/devices.md#ports).
 
 ## What it does
 
-| From → to | What you do |
+| Direction | How it works |
 |---|---|
-| Computer → computer | Copy on one, paste on another. Automatic. |
-| Computer → Android | Copy on the computer, paste on the phone. Automatic. |
-| Android → computer | Copy on the phone; sent by itself with the accessibility service, or with one tap. |
-| Computer ↔ iPhone | One press of the Action button or a double tap on the back, then paste. |
+| Computer ↔ computer | Copy on one computer, paste on another automatically. |
+| Computer → Android | Copy on the computer, paste on the phone automatically. |
+| Android → computer | Copy on the phone; sends automatically with the accessibility service, or with one tap. |
+| Computer ↔ iPhone | Press the Action button or double-tap the back (or open the app), then paste. |
+| Computer ↔ Aurora OS / HarmonyOS | Open the app to sync, or use **Share → Connect Beyond Borders**. |
 
-iOS does not let apps read the clipboard in the background, so the iPhone needs one
-gesture. Apple devices on one Apple Account already share a clipboard; Connect Beyond Borders
-connects them to everything else. On Linux it works with X11 and Wayland desktops, and without one
-through tmux and `cbb copy` and `cbb paste`.
+iOS restricts background clipboard access, so an iPhone requires one gesture or opening the app to
+sync. On Linux, `cbb` supports X11 and Wayland desktops as well as headless machines through `tmux`,
+`cbb copy`, and `cbb paste`.
 
-It also does:
+Additional capabilities:
 
-- **Away from home**: your devices keep one clipboard through a computer of yours at home,
-  still encrypted end to end ([away from home](docs/guide/away-from-home.md)).
-- **Images, files and formatted text**, not only plain text
-  ([images and files](docs/guide/images-and-files.md)).
-- **Remote paste** from the phone or the watch into the window in front on a computer, and
-  **quick actions** such as locking its screen ([remote paste](docs/guide/remote-paste.md),
-  [quick actions](docs/guide/quick-actions.md)).
-- **Watches**: the Apple Watch and Wear OS show the group and send a remote paste.
-
-The [lab](docs/guide/lab.md) has the experiments: keyboards and TV remotes that type a text
-for you, the Arduino Nano ESP32 and the ZX Spectrum Next.
+- **Away from home**: Keep syncing outside your home network through a computer or small board at
+  home acting as a **hub**, or through a **blind relay** ([Away from home](docs/guide/away-from-home.md)).
+- **Images, files, and formatted text**: Sync images, files, folders, and HTML up to per-device
+  size limits ([Images, files and formatted text](docs/guide/images-and-files.md)).
+- **Remote paste and quick actions**: Paste from an admin device into the focused window on a
+  computer, or run user-approved actions such as locking the screen
+  ([Remote paste](docs/guide/remote-paste.md), [Quick actions](docs/guide/quick-actions.md)).
+- **Watches**: Apple Watch, Wear OS, and HarmonyOS watch apps display online devices, recent group
+  events, and **Sync** / **Everywhere** controls through the paired phone ([The apps](docs/guide/apps.md)).
+- **The lab**: Experimental features including Bluetooth and USB keyboards, network TV remotes,
+  Arduino Nano ESP32 firmware, and ZX Spectrum Next support ([The lab](docs/guide/lab.md)).
 
 ## Principles
 
-- **Your devices only.** At home the devices talk to each other directly. Away from home
-  they reach a computer of yours at home ([how it works](docs/guide/how-it-works.md)). No
-  cloud, no accounts, no telemetry.
-- **Encrypted end to end.** Every copy, its text, images and files, is sealed on the device
-  that makes it, for the devices of your group that read copies, and signed by it. Whatever
-  carries it on the way, a hub, a forwarder or a relay, can neither read it, change it nor
-  forge one ([who can read what](#who-can-read-what)).
-- **Encrypted and paired.** The devices talk to each other only over TLS 1.3 with the
-  group's own certificates; what is not encrypted (mDNS on the home network, a Roku's text) is
-  in [privacy](docs/guide/privacy.md). A device joins your group once, by a QR code or a
-  six-digit code, and talks only to the devices of the group.
-- **The key stays on the phone.** In a group made on a phone, the phone holds the group's
-  root key in its security chip and admits every device; each signature with it asks for your
-  face, fingerprint or passcode.
-- **Small.** One file per platform, no dependencies; runs on a Raspberry Pi Zero W.
-- **Passwords stay put.** Items that password managers mark as secret are not synced
-  automatically.
+- **Your devices only.** At home, devices discover each other on your local network and connect
+  directly. Away from home, they connect through your own hub
+  ([How it works](docs/guide/how-it-works.md)). No cloud, no accounts, and no telemetry.
+- **End-to-end encrypted.** Every copy—text, images, and files—is sealed on the copying device for
+  only the reading devices in your group and signed with the sender's key. Hubs that only pass
+  copies on, forwarders, and blind relays cannot read, modify, or forge copies
+  ([Who can read what](#who-can-read-what)).
+- **Verified peer connections.** Devices communicate over mutual TLS 1.3 and verify each peer's key
+  against the group's signed device records. A device joins once using a QR code or six-digit code.
+- **Hardware-backed main key.** In a group created on a phone, the phone stores the group's main
+  key in security hardware and requires your face, fingerprint, passcode, or (on Aurora OS) app PIN
+  before signing admin changes.
+- **Small footprint.** Self-contained binaries with no runtime dependencies; runs on a Raspberry Pi
+  Zero W or OpenWrt router.
+- **Password protection.** Items marked as secret by password managers are skipped automatically.
 
 ## Who can read what
 
-| | Holds | Can read your copies | Can admit or remove devices |
+| Role or server | Keys held | Can read copies | Can admit or remove devices |
 |---|---|---|---|
-| The **root** (the phone or computer that made the group) | the group's root key, in its security chip where it has one | yes | yes, and makes admins |
-| An **admin** (a phone or computer the root chose) | an admin key under the root | yes | yes |
-| Every other device of the group, a **hub that reads the copies** included | its own member key and certificate | yes | no |
-| A **hub that only passes copies on** (any computer of yours, a Raspberry Pi say) | its own member key and certificate | no: no copy is sealed to it | no |
-| A **forwarder** (yours, or the project's at `cbb.tools`) | no group key | no: it sees the addresses, timing and sizes of encrypted packets | no |
-| A **blind relay** | no group key | no: it sees which devices of a group are online and talk, when and how much | no |
+| **Main device** (*root*) | Group root key (in security hardware where available) | Yes | Yes, and chooses admins |
+| **Admin** | Admin key authorized by the main device | Yes | Yes |
+| **Member** (including a **hub that reads copies**) | Own member key | Yes | No |
+| **Hub that only passes copies on** | Own member key | No (no copy is sealed to it) | No |
+| **Forwarder** (yours, or the project's at `cbb.tools`) | No group key | No (sees encrypted packet addresses, timing, and sizes) | No |
+| **Blind relay** | No group key | No (sees temporary pseudonyms online together, addresses, timing, and volume) | No |
 
-The clipboard is encrypted end to end. The device that copies seals each copy with a key of
-its own, wraps that key for every device of the group that reads copies (X-Wing, a
-post-quantum hybrid) and signs the whole with its member key. Everything in between passes the
-sealed copy on as it is: a hub that only passes copies on, a forwarder and a blind relay never
-hold a key that opens it, and no device can alter a copy or make one in another's name.
-What passing a copy on needs stays visible to the devices it crosses: which device sent it,
-when, to which devices, and its size in steps; never its kind, its text, its files' names or
-their number ([privacy](docs/guide/privacy.md#what-the-devices-in-between-see)). Commands (a
-remote paste, a quick action) are sealed to the one device they are for. The six-digit
-pairing code, or the QR code that carries it, is the only secret a person handles: show it
-only to the device that should join, as anyone who has it during the pairing can join. The
-details: [privacy](docs/guide/privacy.md), [keys and attestation](docs/guide/keys.md) and
-the [threat model](docs/threat-model.md).
+Each copy is encrypted with a fresh random key wrapped for each reading device using X-Wing
+(a post-quantum hybrid KEM) and signed with the sender's member key. Intermediaries forward the
+sealed bytes unchanged: they see only which device sent a copy, when, to which devices, and its
+rounded size—never its type, text, or file names
+([Privacy: who sees what](docs/guide/privacy.md#what-the-devices-in-between-see)). Admin commands
+(remote paste and quick actions) are sealed to their target device. Keep the six-digit pairing code
+and QR code private, as anyone who sees them during the pairing window can join. For details, see
+[Privacy: who sees what](docs/guide/privacy.md), [Keys and attestation](docs/guide/keys.md), and
+[Threat model](docs/threat-model.md).
 
 ## Compared with similar tools
 
-- [KDE Connect](https://apps.kde.org/kdeconnect) shares the clipboard among Linux, Android,
-  iOS, macOS and Windows, with much more besides (notifications, files, media control). It
-  pairs devices two by two; Connect Beyond Borders keeps one group with a root key in the
-  phone's security chip, syncs away from home through a computer of yours, and does only
-  the clipboard and what goes with it.
-- [ClipCascade](https://github.com/Sathvik-Rao/ClipCascade) syncs the clipboard of Windows,
-  macOS, Linux and Android, encrypted end to end, through a server you run or a community
-  server with an account, or peer to peer. Connect Beyond Borders needs no server and no
-  account at home, and has an iPhone app.
-- Apple's Universal Clipboard works between Apple devices on one Apple Account only.
+- [KDE Connect](https://apps.kde.org/kdeconnect) shares clipboards across Linux, Android, iOS,
+  macOS, and Windows along with notifications and media controls, pairing devices two by two.
+  Connect Beyond Borders focuses on clipboard sharing across one signed device group, keeps the
+  main key in phone security hardware, and syncs away from home through your own hub.
+- [ClipCascade](https://github.com/Sathvik-Rao/ClipCascade) syncs clipboards across Windows, macOS,
+  Linux, and Android with end-to-end encryption through a server or peer to peer. Connect Beyond
+  Borders needs no server or account at home and includes native iPhone, Aurora OS, and HarmonyOS
+  apps.
+- Apple Universal Clipboard works only between Apple devices signed in to the same Apple Account.
 
-Where Connect Beyond Borders is weaker: the iPhone needs one gesture for each copy, since iOS
-lets no app read the clipboard in the background; a device that joins the group reads
-copies from the next one on, not the copies made before it; it is early software, with
-Android and Windows not yet tried on real devices.
+**Current trade-offs:** iPhone syncing requires one gesture or opening the app because iOS blocks
+background clipboard access; newly joined devices read only copies made after they join; and
+Connect Beyond Borders is early software not yet tested on every hardware platform.
 
 ## Platforms
 
-| Platform | Component |
+| Platform | Components |
 |---|---|
-| Linux: Ubuntu, Raspberry Pi OS and other distributions; x86-64, ARM64, ARMv7, ARMv6 | service, desktop connector, console helper, tray app |
-| macOS | service, pasteboard agent, Mac app |
-| Windows 10 (1809 or later) and 11; x86-64, ARM64 | service, clipboard agent, tray app |
-| FreeBSD 15; x86-64, ARM64 | service |
-| OpenWrt 25.12 and later; ARM64, ARMv7, MIPS, x86-64 | service, as an always-on member and the hub |
-| Android | the app (an APK in every release) |
-| iOS and iPadOS | the app |
-| Apple Watch, Wear OS | a watch app, through the phone |
-| Small Linux devices (routers, boards) | the same `cbb`, without its helper ([member/README.md](member/README.md)) |
+| Linux (x86-64, ARM64, ARMv7, ARMv6) | Service (`cbb`), helper (`cbb-helper`), desktop agent, console helper, tray app |
+| macOS (14 or later) | Service, pasteboard agent, Mac menu bar app |
+| Windows 10 (1809+) and 11 (x86-64, ARM64) | Service, clipboard agent, tray app |
+| FreeBSD 15 and OPNsense (x86-64, ARM64) | Service |
+| OpenWrt 25.12+ (ARM64, ARMv7, MIPS, x86-64) | Service (always-on member; hub on non-MIPS builds) |
+| Android (10+) and Android TV | Native app (full APK and reproducible F-Droid APK) |
+| iOS and iPadOS (17+) | Native app |
+| Aurora OS (4, 5.1.5) and Sailfish OS (4.6) | Native Silica app (`apps/silica`) |
+| HarmonyOS (5+) | Native ArkUI app (`apps/harmony`) |
+| Apple Watch, Wear OS, HarmonyOS watch | Companion watch app (through the paired phone) |
+| Small Linux devices (routers, boards) | `cbb` without `cbb-helper` ([Small devices](member/README.md)) |
 
 ## Status
 
-- **Tried on real devices**: the service on Linux and macOS, the iPhone app with the phone
-  as the root, the Mac app and the Apple Watch app, sync away from home through a Mac hub.
-- **Built and tested in CI**, not yet on real devices: Windows (in a virtual machine),
-  Android, FreeBSD, OpenWrt, the tray app on Linux.
-- **Coming with the next release** (the project's keys and the Apple developer account are
-  there): signed releases and `cbb update`, TestFlight and the signed macOS package; app
-  stores are planned.
+- **Tested on real devices:** Linux computers (including Raspberry Pi and Steam Deck), macOS
+  service and Mac app, iPhone app as main device (Secure Enclave and Face ID), Apple Watch app,
+  Aurora OS 5.1.5 app (on an F+ R570E), Raspberry Pi Zero W without helper, away-from-home phone
+  sync through a Mac hub and the `cbb.tools` forwarder, remote paste from iPhone to Mac, and
+  typing on an Apple TV 4K.
+- **Built and tested in CI (not yet on physical hardware):** Windows (tested in an Arm Windows 11
+  virtual machine), Android (CI emulator), HarmonyOS, FreeBSD, OpenWrt, Sailfish OS, Linux tray
+  app, Wear OS, and ESP32 firmware.
 
-Every part, and where it has run: [on real devices](docs/parity.md#on-real-devices).
-The order of what comes next is the [roadmap](docs/roadmap.md).
+For the full component-by-component breakdown, see [On real devices](docs/parity.md#on-real-devices).
+For planned features and upcoming release work, see [Roadmap](docs/roadmap.md).
 
 ## Documentation
 
-- **Using it**: the [quick start](docs/guide/quickstart.md), [how it works](docs/guide/how-it-works.md)
-  (with pictures), [installing](docs/guide/install.md), [away from home](docs/guide/away-from-home.md),
-  [networks that block VPNs](docs/guide/blocked-networks.md), [keys and attestation](docs/guide/keys.md),
-  [images and files](docs/guide/images-and-files.md), [remote paste](docs/guide/remote-paste.md),
-  [quick actions](docs/guide/quick-actions.md), [the apps](docs/guide/apps.md),
-  [the lab](docs/guide/lab.md),
-  [without the app](docs/guide/without-app.md), [a lost device](docs/guide/lost-device.md) and
-  [troubleshooting](docs/guide/troubleshooting.md).
-- **Running servers**: [your own forwarder or relay](docs/admin/self-hosting.md), the
-  [Docker image](packaging/docker/README.md), [`cbb` on small devices](member/README.md).
-- **Reference**: [commands](docs/reference/cli.md), [settings and environment variables](docs/reference/config.md),
-  [devices, ports and files](docs/reference/devices.md), the [glossary](docs/reference/glossary.md).
-- **For developers**: the [design](docs/design.md), the [protocol](docs/protocol.md) and the
-  rest in the [documentation index](docs/README.md).
-
-## License
-
-Connect Beyond Borders is free software, licensed under the
-[GNU Affero General Public License v3.0 only](LICENSE).
-
-One author holds all the rights, so a commercial license without the AGPL's obligations is
-also available, for example to build `cbb` (`member/`) into routers and other
-devices. To ask for one, open an issue with the **Commercial license** form on
-[GitHub](https://github.com/HunterEwok/cbb/issues/new/choose).
-
-Which builds are official, what others may do with the icon and the name, and the other
-projects with similar names: [BRAND.md](BRAND.md). The text of the protocol,
-[docs/protocol.md](docs/protocol.md), is under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), so anyone may write a compatible
-implementation.
+- **User guides:** [Quick start](docs/guide/quickstart.md), [How it works](docs/guide/how-it-works.md),
+  [Installing](docs/guide/install.md), [The apps](docs/guide/apps.md),
+  [Away from home](docs/guide/away-from-home.md),
+  [Networks that block VPNs](docs/guide/blocked-networks.md),
+  [Images, files and formatted text](docs/guide/images-and-files.md),
+  [Remote paste](docs/guide/remote-paste.md), [Quick actions](docs/guide/quick-actions.md),
+  [Keys and attestation](docs/guide/keys.md),
+  [If a device is lost or stolen](docs/guide/lost-device.md),
+  [Without the app](docs/guide/without-app.md), [The lab](docs/guide/lab.md), and
+  [Troubleshooting](docs/guide/troubleshooting.md).
+- **Administrators:** [Running your own servers](docs/admin/self-hosting.md),
+  [Upgrades and backups](docs/admin/upgrade-and-backup.md),
+  [Routers and FreeBSD](docs/admin/routers.md), [Hardening](docs/admin/hardening.md),
+  [Docker image](packaging/docker/README.md), and [Small devices](member/README.md).
+- **Reference:** [Command reference](docs/reference/cli.md),
+  [Settings and environment variables](docs/reference/config.md),
+  [Devices, ports and files](docs/reference/devices.md),
+  [Limits and lifetimes](docs/reference/limits.md), and [Glossary](docs/reference/glossary.md).
+- **Engineers:** [Design](docs/design.md), [Protocol](docs/protocol.md), and the full
+  [Documentation index](docs/README.md).
 
 ## Security
 
-- What each device and server can see: [Who can read what](#who-can-read-what) above and
-  [privacy](docs/guide/privacy.md).
-- The attacks it defends against and those it does not: the [threat model](docs/threat-model.md);
-  the cryptography in one place: [cryptography](docs/cryptography.md).
-- The plan of the security audits: [security audit](docs/maintainers/security-audit.md).
+- **Privacy and exposure:** [Who can read what](#who-can-read-what) and
+  [Privacy: who sees what](docs/guide/privacy.md).
+- **Security analysis:** [Threat model](docs/threat-model.md),
+  [Cryptography](docs/cryptography.md), and [Security audit](docs/maintainers/security-audit.md).
+- **Reporting vulnerabilities:** Follow [SECURITY.md](SECURITY.md). Do not open a public issue.
 
-To report a vulnerability, follow [SECURITY.md](SECURITY.md). Please do not open a public issue.
+## License
 
-## How it is built
+Connect Beyond Borders is free software licensed under the
+[GNU Affero General Public License v3.0 only](LICENSE).
 
-The author directs the work, makes the decisions, runs the security audits and tests on real
-devices; most of the code and documentation is written with AI coding tools (Claude Code),
-under that direction and the project's tests in CI.
+Because one author holds all rights, a commercial license without AGPL obligations is also
+available (for example, to embed `cbb` into routers or appliances). To request one, open an issue
+using the **Commercial license** form on
+[GitHub](https://github.com/HunterEwok/cbb/issues/new/choose).
+
+For official builds, trademark rules, and icon usage, see [BRAND.md](BRAND.md). The protocol
+specification ([docs/protocol.md](docs/protocol.md)) is licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) so anyone can write a compatible
+implementation.
 
 ## Contributing
 
-Bug reports and ideas are welcome as issues. Code contributions are not accepted at this time;
-see [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and feature ideas are welcome through GitHub issues. Pull requests are not accepted at
+this time; see [CONTRIBUTING.md](CONTRIBUTING.md).

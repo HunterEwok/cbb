@@ -2,103 +2,116 @@
 # Cryptography
 
 For engineers and security reviewers: every cryptographic primitive Connect Beyond Borders uses,
-with the library that provides it in each implementation, the key sizes, the lifetimes and
-where each key is kept. The wire format is normative in the [protocol](protocol.md); this
-page only lists. Why each choice was made is in the [design](design.md) and the
-[decisions](decisions.md); what each defence protects against is in the
-[threat model](threat-model.md).
+the libraries that provide it in each implementation, and every key type with its size, lifetime,
+and storage location. The wire format is normative in [Protocol](protocol.md) and
+[Wire format](format.md). Rationale and architecture decisions are in [Design](design.md) and
+[Architecture decisions](decisions.md); security properties and threat mapping are in
+[Threat model](threat-model.md).
 
 ## Rules
 
-- Only standard, published constructions; nothing of our own. The one construction from an
-  Internet-Draft, CPace, is the CFRG's balanced PAKE and is translated line by line
-  from the Go original (`core/src/third_party/cpace`).
-- One curve for signatures: NIST P-256 with ECDSA and SHA-256, everywhere, since the
-  phones' secure hardware (the Secure Enclave, Android's Keystore and StrongBox) and TPM 2.0
-  all offer it.
-- Curve25519 only where the protocol requires it: CPace's suite, WireGuard and X-Wing (with
-  ML-KEM-768) for sealed messages.
-- TLS 1.3 only (RFC 8446), never an earlier version, on every TCP connection.
-- Randomness from the operating system's generator only (`crypto/rand`, `getrandom`,
-  `SecRandomCopyBytes`, `SecureRandom`).
-- Keys never leave the device that made them, with one exception the protocol names:
-  the one-time WireGuard key a hub makes for a guest and puts in its invitation (section 12). A device's key in
-  hardware cannot leave it.
+- **Standard constructions only**: Connect Beyond Borders uses published, standard algorithms and
+  constructions. The sole Internet-Draft construction, CPace (CFRG balanced PAKE), is translated
+  line by line from the Go reference (`core/src/third_party/cpace`).
+- **One classical signature curve**: NIST P-256 with ECDSA and SHA-256 everywhere, matching what
+  phone security hardware (Secure Enclave, Android Keystore and StrongBox, OP-TEE, HUKS) and
+  TPM 2.0 provide.
+- **Post-quantum protection**: X-Wing (ML-KEM-768 + X25519) for end-to-end sealed messages,
+  `X25519MLKEM768` for TLS key exchange and tunnel PSK derivation, and SLH-DSA-SHA2-128s alongside
+  ECDSA P-256 for recovery keys and signed releases.
+- **Curve25519 where required by the protocol**: CPace, WireGuard, TLS key exchange, and X-Wing.
+- **TLS 1.3 only** (RFC 8446): No earlier TLS version is accepted on any TCP connection.
+- **Operating system randomness only**: `crypto/rand` (Go), `getrandom` (Rust),
+  `SecRandomCopyBytes` (Apple), and `SecureRandom` (Android/JVM).
+- **Keys stay on their device**: Private keys never leave the device that generated them, with one
+  protocol-defined exception: the single-use WireGuard guest key a hub generates and places in a
+  remote invitation ([protocol.md](protocol.md), section 12). Hardware-backed keys cannot be
+  exported.
 
 ## Primitives
 
-| Use | Primitive | Standard | Section of the protocol |
+| Use | Primitive | Standard | Protocol section |
 |---|---|---|---|
-| Every TCP connection | TLS 1.3, mutual between members | RFC 8446 | 4, 6, 13, 14 |
-| Key exchange in TLS | X25519 in `cbb` and the phones' member (the Rust core's TLS); X25519MLKEM768 first in Go's TLS (Go 1.27's default), then X25519, in `cbb-helper` and the forwarder; what the system offers in the phones' pairing | RFC 8446, draft-ietf-tls-ecdhe-mlkem | 4 |
-| TLS cipher suites | Go: the three of TLS 1.3; the Rust core: TLS_CHACHA20_POLY1305_SHA256 and TLS_AES_128_GCM_SHA256 | RFC 8446 | 4 |
-| The member key in TLS | a fixed X.509 v3 template that holds the key alone, read byte for byte and never as a certificate (D-105) | RFC 5280 | 2 |
-| Device records, revocations, commands, server credentials, release files, evidence | ECDSA P-256 over SHA-256 of the exact signed bytes, ASN.1 DER signatures | FIPS 186-5 | 10, 15, 16, 17, 18 |
-| Pairing | CPace, suite CPACE-X25519-SHA512, bound to the TLS exporter | draft-irtf-cfrg-cpace-21, RFC 5705 | 6 |
-| Channel binding | TLS exporter (32 bytes) with the labels of section 19 | RFC 8446, section 7.5 | 6, 13, 14 |
-| Content addresses, key hashes, group tag, fingerprints | SHA-256 | FIPS 180-4 | 1, 4, 10 |
+| Member and server TCP connections | TLS 1.3, mutual authentication between members | RFC 8446 | 4, 6, 13, 14 |
+| TLS key exchange | `X25519MLKEM768` first, `X25519` fallback in both the Rust core (`cbb` and phone members) and Go (`cbb-helper`, forwarder); platform defaults during phone pairing | RFC 8446, draft-ietf-tls-ecdhe-mlkem | 4 |
+| TLS cipher suites | Go: all three TLS 1.3 cipher suites; Rust core: `TLS_CHACHA20_POLY1305_SHA256` (preferred) and `TLS_AES_128_GCM_SHA256` | RFC 8446 | 4 |
+| Member key transport in TLS | Fixed X.509 v3 template holding only the member public key, matched byte for byte rather than verified as a CA certificate (D-105) | RFC 5280 | 2 |
+| Group records, revocations, commands, grants, keys statements, beacons, server credentials, copies, push sends | ECDSA P-256 over SHA-256 of `label \|\| 0x00 \|\| data`, canonical 64-byte `r \|\| s` with low `s` (RFC 6979) | FIPS 186-5, RFC 6979 | 4, 10, 15, 18 |
+| Recovery records (second signature) | SLH-DSA-SHA2-128s (pure, 32-byte public key, 7,856-byte signature) with domain context, paired with ECDSA P-256 | FIPS 205 | 10 |
+| Release files (`keys.json`, `release.json`, `stable.json`, `zxnext.json`) | Dual signatures required from both halves of one key: ECDSA P-256 (ASN.1 DER) and SLH-DSA-SHA2-128s (pure, context `cbb release v1`) | FIPS 186-5, FIPS 205, RFC 9909 | 16 |
+| Pairing | CPace (`CPACE-X25519-SHA512`), bound to the TLS exporter | draft-irtf-cfrg-cpace-21, RFC 5705 | 6 |
+| Channel binding | TLS exporter (32 bytes) with registry labels | RFC 8446, section 7.5 | 6, 13, 14, 19 |
+| Content addresses, key hashes, group tags, fingerprints | SHA-256 (SHA-512 for SLH-DSA recovery seed derivation) | FIPS 180-4 | 1, 4, 10 |
 | Forwarder hellos and state | HMAC-SHA-256 | RFC 2104 | 13 |
-| Masking of the forwarder's hellos | ChaCha20 key stream (no authentication; the MAC inside does that) | RFC 8439 | 13 |
-| Sync away from home | WireGuard: Noise IK, Curve25519, ChaCha20-Poly1305, BLAKE2s, plus a preshared key per client | WireGuard paper, Noise | 11 |
-| AmneziaWG's header protection | ChaCha20 over the message header, nonce from the padding | AmneziaWG | 11 |
-| VLESS over XHTTP | TLS 1.3 to the web server in front of the forwarder, its certificate from a public CA | Xray-core, rustls | 11, 13 |
-| Hardware key proofs | Android Key Attestation, TPM 2.0 quotes and credential activation | Android, TCG | 17 |
-| Sealed messages: each copy's key to each reader, commands to their device, bug reports to the robot | HPKE in base mode with X-Wing (ML-KEM-768 and X25519, KEM 0x647a), HKDF-SHA256 and ChaCha20-Poly1305, info `cbb seal v1`, associated data of each use | RFC 9180, draft-connolly-cfrg-xwing-kem, FIPS 203 | 4, 15 |
-| Copies end to end | a random 32-byte key per copy; HKDF-SHA256 derives the payload key (`cbb copy payload v1`) and the blob key (`cbb copy blob v1`); ChaCha20-Poly1305 seals the content under the header hash, and the blob in 64 KiB segments | RFC 5869, RFC 8439 | 4 |
+| Forwarder hello masking | ChaCha20 keystream (unauthenticated; inner HMAC authenticates) | RFC 8439 | 13 |
+| Sync away from home (tunnel) | WireGuard (Noise IK, Curve25519, ChaCha20-Poly1305, BLAKE2s) plus a per-client 32-byte preshared key derived via HKDF-SHA256 (`cbb tunnel psk v1`) from an `X25519MLKEM768` TLS exporter | WireGuard, Noise, RFC 5869 | 11 |
+| AmneziaWG header obfuscation | ChaCha20 over message headers with padding bytes as nonce | AmneziaWG | 11 |
+| VLESS over XHTTP | TLS 1.3 to the front-end web server (public CA certificate; RSA, P-256, and P-384 verification in Rust core's `web` feature) | Xray-core, rustls | 11, 13 |
+| Hardware key attestation | Android Key Attestation, TPM 2.0 quotes and credential activation, YubiKey PIV attestation | Android, TCG, Yubico | 17 |
+| Sealed messages (copy key wraps, commands, bug reports) | HPKE base mode with X-Wing (ML-KEM-768 + X25519, KEM `0x647a`, 32-byte secret, 1,216-byte public key, 1,120-byte encapsulated key), HKDF-SHA256, ChaCha20-Poly1305, info `cbb seal v1`, plus use-specific associated data | RFC 9180, draft-connolly-cfrg-xwing-kem, FIPS 203 | 4, 15 |
+| Copies end to end | Random 32-byte copy key; HKDF-SHA256 derives the payload key (`cbb copy payload v2`), blob key (`cbb copy blob v2`), and key commitment (`cbb copy commit v2`); ChaCha20-Poly1305 seals content under the header hash and blobs in 64 KiB padded segments | RFC 5869, RFC 8439 | 4 |
+| Sealed push notifications | ChaCha20-Poly1305 under HKDF-SHA256-derived body key (`cbb push body v1`) with deterministic 12-byte nonce from HMAC-SHA256 (`cbb push nonce v1`); ES256 JWT for APNs, RS256 OAuth assertion for FCM, and RFC 8291 P-256 ECDH for UnifiedPush | RFC 8439, RFC 5869, RFC 8291 | 4 |
+| Local secret sealing and YubiKey PIV | Mac Secure Enclave: P-256 ECDH + HKDF-SHA256 + AES-256-GCM; YubiKey PIV management auth: AES-128/192/256 (firmware 5.7+) or Triple DES (up to 5.6) plus PIV ECDH | NIST SP 800-56A, SP 800-38D, SP 800-73 | 17 |
 
 ## Libraries
 
 | Implementation | Libraries |
 |---|---|
-| `cbb-helper` and the forwarder | the Go standard library (`crypto/tls`, `crypto/ecdsa`, `crypto/ecdh`, `crypto/hkdf`, `crypto/sha256`, `crypto/hpke` for sealed messages), `golang.org/x/crypto` (ChaCha20, BLAKE2s), amneziawg-go (copied under `internal/third_party`), gVisor's netstack (a module) with wireguard-go's adapter for it (`internal/third_party/netstack`), go-tpm for the TPM, go-libpcsclite (PC/SC through pcscd) and the platforms' PC/SC for the recovery key on a YubiKey, Xray-core for VLESS |
-| `cbb`, the relay and the phones' member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), the `hpke` crate with its X-Wing KEM for sealed messages (`core/src/seal.rs`), rustls without its default provider, GotaTun for WireGuard with `ring-shim/` over RustCrypto |
-| The iPhone kit | swift-crypto (CryptoKit's API, BoringSSL on Linux), the Security framework for the keychain and the Secure Enclave, Network.framework for TLS |
-| The Android kit | `java.security` and `javax.crypto` and the Android Keystore; pairing, sealing and the records run in the Rust core through `ffi/` |
-| The phones' sealed messages | the Rust core's (`core/src/seal.rs`) through `ffi/`, for copies and commands alike |
-| The phones' tunnel | `cbb`'s, in the Live member (`ffi/src/member.rs`): GotaTun for WireGuard with `ring-shim/` over RustCrypto, rustls for VLESS with XHTTP |
+| `cbb-helper`, forwarder, and release tools (Go) | Go standard library (`crypto/tls`, `crypto/ecdsa`, `crypto/ecdh`, `crypto/hkdf`, `crypto/sha256`, `crypto/hpke`), `github.com/cloudflare/circl` (`sign/slhdsa` for SLH-DSA-SHA2-128s), `golang.org/x/crypto` (ChaCha20, BLAKE2s), `amneziawg-go` (`internal/third_party/amneziawg-go`), gVisor netstack with wireguard-go adapter (`internal/third_party/netstack`), `go-tpm` for TPM 2.0, and `Xray-core` for VLESS |
+| `cbb`, `cbb-relay`, `cbb-push`, `cbb-bug`, and the phones' core/member (Rust) | RustCrypto (`p256`, `p384`, `sha2`, `hmac`, `hkdf`, `x25519-dalek`, `chacha20`, `chacha20poly1305`, `aes`, `aes-gcm`, `blake2`, `des`, `rsa`, `crypto-bigint`, `ml-kem`, `slh-dsa`, `x509-cert`, `subtle`, `zeroize`), `hpke` (X-Wing KEM in `core/src/seal.rs`), `rustls` with custom RustCrypto provider (`core/src/tls/provider.rs`), `gotatun` for WireGuard with `ring-shim/` over RustCrypto, and `member/src/third_party/pcsclite` (plus system PC/SC on macOS and Windows) for YubiKey PIV |
+| iPhone kit (`apps/ios/CBBKit`) | `swift-crypto` (CryptoKit on Apple platforms, BoringSSL on Linux), Security framework (Keychain and Secure Enclave), Network.framework, and the Rust core/member/tunnel through `ffi/` |
+| Android kit (`apps/android/kit`) | `java.security`, `javax.crypto`, Android Keystore (StrongBox/TEE), Conscrypt (`conscrypt-android` / `conscrypt-openjdk-uber`) for TLS 1.3, and the Rust core/member/tunnel through `ffi/` (JNA) |
+| Aurora OS and Sailfish OS app (`apps/silica`) | OP-TEE via PKCS#11 (`libckteec`) and QCA (`qca-aurora-pkcs11`) on Aurora OS 5, file keys on Aurora OS 4 and Sailfish OS, and the Rust core/member/tunnel through `ffi/` |
+| HarmonyOS app (`apps/harmony`) | HUKS (Hardware Universal KeyStore) via Node-API (`entry/src/main/cpp/keys.cpp`) and the Rust core/member/tunnel through `ffi/` |
 
-The interop vectors in `testdata/interop` pin the bytes of each signed object, of a
-CPace exchange and of sealed messages (`seal-go.json`, `seal-rust.json`), so the four implementations cannot drift apart ([testing](testing.md)).
-Two come from outside the project, so that the implementations cannot agree on a mistake:
-CPace is checked against the vectors of draft-irtf-cfrg-cpace-21, and sealing (HPKE with
-X-Wing, KEM `0x647a`) against the vector of draft-ietf-hpke-pq-05 for the same suite
-(`xwing-hpke-pq.json`, in Go and Rust).
+Interoperability vectors in `testdata/interop` pin the exact bytes of signed objects, CPace
+exchanges, and sealed messages (`seal-go.json`, `seal-rust.json`) across implementations
+([Testing](testing.md)). External reference vectors ensure implementations cannot agree on a
+shared mistake:
+
+- CPace against `draft-irtf-cfrg-cpace-21` vectors
+- X-Wing HPKE (KEM `0x647a`) against `draft-ietf-hpke-pq-05` (`testdata/interop/xwing-hpke-pq.json`)
+- SLH-DSA-SHA2-128s against NIST vectors (`testdata/interop/nist-slh-dsa-sha2-128s.json`)
 
 ## Keys
 
-| Key | Type | Made by | Kept | Lifetime |
+| Key | Algorithm and size | Generated by | Storage | Lifetime |
 |---|---|---|---|---|
-| Root key | ECDSA P-256 | the root phone, or `cbb new` on a computer | the phone's Secure Enclave, StrongBox or HUKS, signs only after Face ID, the fingerprint or the passcode; on a computer a file readable only by the service | until the root changes (protocol, section 9) |
-| Admin key | ECDSA P-256 | each admin | a phone's Secure Enclave, StrongBox or HUKS, behind the user's face, fingerprint or passcode; on a computer the TPM on Linux when there is one, else a file | until a removal or a root change takes it back, or its device is silent for 35 days |
-| Recovery key | ECDSA P-256 and SLH-DSA-SHA2-128s, both from one 32-byte secret | the root, when the group is made | on the recovery sheet, or sealed on a YubiKey; nowhere on a device | until the person replaces it |
-| Member key | ECDSA P-256 | each device | the TPM on Linux when there is one, the Secure Enclave, StrongBox or HUKS on phones, else a file readable only by the service | until the device leaves the group |
-| Tunnel key | X25519 | each device that syncs away from home | sealed in the TPM on Linux when there is one, else a file of the service; the phone's keychain or app storage | until the device leaves the group |
-| Preshared key | 32 random bytes | each tunnel client | as the tunnel key | as the tunnel key |
-| Server key | ECDSA P-256 | each hub | the TPM on Linux when there is one, else a file of the service | until the hub leaves; each credential it gets lasts a period of 35 days |
-| Forwarder key | ECDSA P-256 | the forwarder | its state directory | until its operator changes it |
-| Release root keys | ECDSA P-256 | the maintainer | offline hardware keys | until replaced in a release |
-| Release and status keys | ECDSA P-256 | the maintainer | the maintainer's Secure Enclave, never CI | named in `keys.json`, at most 100 days per signature |
-| Pairing secrets | the six-digit code, CPace's scalars | for one attempt | memory only | the window, 5 minutes |
-| Invitation secret | 32 random bytes | the hub, for `cbb invite` or an admin phone | the invitation (`cbb://join#...`: a QR code, or the file `cbb.cbbinvite`, mode 0600) and the hub's memory | the invitation, 1 hour by default, at most 24 hours |
-| Sealing keys | X-Wing, one per epoch: a 32-byte secret and a 1216-byte public key, which the device's keys statement carries (format section 10) | each device that reads copies or takes commands | on a computer `epochs.json`, each secret sealed under the device's local key (`local.json`, sealed by the TPM or the Secure Enclave where there is one); the phone's protected app storage | until the core erases the epoch (`keystore::rotate`) |
-| A copy's key | 32 random bytes | the device that copies, for each copy | only sealed to each reader, in the copy's wraps | the copy |
-| The robot's key | X-Wing, as above | the maintainer (`cbb-bug keygen`) | the secret on the robot's computer, never on cbb.tools; the public key in the build (`ROBOT_KEY_B64`) | until replaced in a release |
+| Root key | ECDSA P-256 | Main phone, or `cbb new` on a computer | Phone Secure Enclave, Android Keystore (StrongBox/TEE), Aurora OS 5 OP-TEE (app PIN), or HarmonyOS HUKS (gated by user auth); on a computer, TPM 2.0 (Linux/Windows) or Secure Enclave (Mac) when available, else service-only file | Until the main device changes ([protocol.md](protocol.md), section 9) |
+| Admin key | ECDSA P-256 | Each admin | Phone security hardware behind user auth; on computers, TPM 2.0 (Linux/Windows) or Secure Enclave (Mac) when available, else service-only file | Until removed, root changes, or device is silent for 35 days |
+| Recovery key | ECDSA P-256 (`K1`) and SLH-DSA-SHA2-128s (`K2`), derived from one 32-byte secret | Main device at group creation | Printed recovery sheet or sealed in a retired PIV slot on a YubiKey; not stored on devices | Until replaced by the owner |
+| Member key | ECDSA P-256 | Each device | Phone security hardware; on computers, TPM 2.0 (Linux/Windows) or Secure Enclave (Mac) when available, else service-only file | Until the device leaves the group |
+| Tunnel key | X25519 (32 bytes) | Each device using **Everywhere** | Sealed by TPM 2.0 or Secure Enclave when available, else service-only file; protected app storage/keychain on phones | Until the device leaves the group |
+| Tunnel preshared key | 32 bytes (derived from `X25519MLKEM768` TLS exporter) | Each tunnel client and hub | Same as tunnel key | Rotated on rekey; until the device leaves the group |
+| Server key | ECDSA P-256 | Each hub | TPM 2.0 or Secure Enclave when available, else service-only file | Until the hub leaves; each server credential lasts 35 days |
+| Forwarder / relay identity key | ECDSA P-256 | Server on first start | Server state directory (`forwarder.pem` / `relay.pem`) | Until replaced by the operator |
+| Release root keys | Hybrid ECDSA P-256 + SLH-DSA-SHA2-128s (`root-1`, `root-2`) | Maintainer | Two offline YubiKey 5C NFC devices (PIV slot 82, PIN + touch always; SLH-DSA half encrypted to each YubiKey) | Until replaced in a release |
+| Release, status, and channel keys | Hybrid ECDSA P-256 + SLH-DSA-SHA2-128s | Maintainer | YubiKey PIV slot 83 or Mac Secure Enclave (never CI); channel key on `cbb.tools` renews `stable.json` only | Listed in `keys.json`; `keys.json` and `release.json` valid at most 100 days, `stable.json` at most 8 days |
+| Pairing secrets | 6-digit code and CPace scalars | Pairing window / joiner per attempt | Memory only | 5-minute pairing window (or 3 wrong attempts) |
+| Invitation secret | 32 random bytes | Hub (`cbb invite` or admin phone) | `cbb://join#...` QR code or `cbb.cbbinvite` (mode `0600`) and hub memory | 1 hour default, up to 24 hours |
+| Sealing keys | X-Wing per epoch (32-byte secret, 1,216-byte public key) | Each reading device | `epochs.json` on computers (each secret sealed under `local.json`, hardware-sealed where available); protected app storage/keychain on phones | Until erased on epoch rotation (`keystore::rotate`) |
+| Copy key | 32 random bytes | Copying device per copy | Wrapped in X-Wing HPKE envelopes for each reader only | Single copy |
+| Push keys | 32-byte symmetric key per group + ECDSA P-256 send key per token | Phone app | Protected app storage / dedicated iOS push keychain access group | Rotated on membership changes (symmetric key) or token changes (send key) |
+| Bug report robot key | X-Wing (32-byte secret, 1,216-byte public key) | Maintainer (`cbb-bug keygen`) | Secret on the maintainer's host (never on `cbb.tools`); public key in `core/src/bug.rs` (`ROBOT_KEY_B64`) | Until replaced in a release |
 
-The lifetimes are in [limits](reference/limits.md#keys-and-signed-files); where each system keeps the
-files is in [devices, ports and files](reference/devices.md). The key levels (which keys
-must be in hardware, and how a device proves it) are in [keys](guide/keys.md) and the
-protocol, section 17.
+For exact lifetimes, see [Limits and lifetimes](reference/limits.md#keys-and-signed-files). For
+storage paths by operating system, see [Devices, ports and files](reference/devices.md). For key
+levels and hardware attestation, see [Keys and attestation](guide/keys.md) and
+[protocol.md](protocol.md), section 17.
 
 ## What is not encrypted
 
-- mDNS announcements: the device ID, the group tag and the port are public on the home
-  network (protocol, section 3).
-- WireGuard and AmneziaWG hide content, not size and timing: only chunk frames are padded,
-  to 16 KiB (threat 6 of the [threat model](threat-model.md)).
+- **mDNS announcements**: Device ID, group tag, and member port are broadcast on the local home
+  network ([protocol.md](protocol.md), section 3).
+- **Packet size and timing**: WireGuard and AmneziaWG hide content, not packet timing or exact
+  sizes outside padded 64 KiB blob segments and 16 KiB chunk frames (threat 6 in
+  [Threat model](threat-model.md)).
+- **Opt-in Roku remote**: Roku's External Control Protocol runs over plain HTTP on the home
+  network and requires explicit `-consent` ([Privacy: who sees what](guide/privacy.md)).
 
 ## Changing an algorithm
 
-A new algorithm comes with a new ALPN ID or a new value in a registry (protocol, section 19),
-in all four implementations and the interop vectors at once, and an entry in the
-[decisions](decisions.md). Members of the earlier release must keep working with the new
-one, so the old algorithm stays accepted until no supported release needs it.
+Introducing a new algorithm requires a new ALPN identifier or registry value
+([protocol.md](protocol.md), section 19), coordinated updates across implementations and
+interoperability vectors, and an entry in [Architecture decisions](decisions.md). For cross-version
+upgrade guarantees, see [Versions and compatibility](reference/compatibility.md).

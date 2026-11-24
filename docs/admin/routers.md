@@ -1,58 +1,70 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Routers and FreeBSD
 
-For administrators who run Connect Beyond Borders on an OpenWrt router, on OPNsense or on a FreeBSD
-server, and for any computer with several networks. A router is always on and sits on every
-home network, so it makes a good member and a good hub. This page covers what the
-installers set up, how to limit the service to the right networks, and how to check it.
-The install commands themselves are in [installing](../guide/install.md#openwrt).
+For administrators running Connect Beyond Borders on an OpenWrt router, an OPNsense firewall, a
+FreeBSD server, or any computer connected to multiple networks.
 
-## Which networks it answers on
+Because a router stays on and connects to every home network, it works well as an always-on member
+or hub. This page covers restricting the service to the right interfaces, what each installer sets
+up, how firewall rules work, and how to check the service. For installation commands, see
+[Installing: OpenWrt](../guide/install.md#openwrt) and
+[Installing: FreeBSD](../guide/install.md#freebsd).
 
-The service publishes itself in mDNS and takes connections on the member port only on the
-interfaces it is given. Everywhere else it neither answers nor listens, so the internet side
-of a router never sees it, even with a private address there or a firewall rule opened by
-mistake.
+## Choose which networks the service answers on
 
-| System | Where the list comes from | Default |
+The service advertises over mDNS and accepts connections on the member port only on its configured
+interfaces. On all other interfaces, it neither listens nor answers—so the internet side of a
+router never sees it, even if that interface has a private IP address or an accidental firewall
+rule.
+
+| System | Where the interface list is set | Default |
 |---|---|---|
-| OpenWrt | `list zone` in `/etc/config/cbb`: the devices of those firewall zones | `lan` |
-| FreeBSD, OPNsense | `CBB_INTERFACES` in `/usr/local/etc/cbb/cbb.env` | every interface |
-| Linux, macOS | `CBB_INTERFACES` in `/etc/cbb/cbb.env` | every interface |
+| OpenWrt | `list zone` in `/etc/config/cbb` (translated to `CBB_INTERFACES` by `/etc/init.d/cbb`) | `lan` |
+| FreeBSD, OPNsense | `CBB_INTERFACES` in `/usr/local/etc/cbb/cbb.env` | All interfaces |
+| Linux (system install), macOS | `CBB_INTERFACES` in `/etc/cbb/cbb.env` | All interfaces |
+| Linux (rootless install) | `CBB_INTERFACES` in `~/.config/cbb/cbb.env` | All interfaces |
+| Windows | `CBB_INTERFACES` in the service's `Environment` registry value ([Settings files](../reference/config.md#settings-files)) | All interfaces |
 
-`CBB_INTERFACES` takes interface names separated by commas or spaces (`igb1,igb1_vlan20`).
-Name it on any machine with a guest, IoT or internet interface. A member also answers
-only on the home networks it knows ([hardening](hardening.md)); the list of interfaces is
-the firmer limit, as it does not depend on what a network looks like.
+Set `CBB_INTERFACES` to interface names separated by commas or spaces (for example,
+`igb1,igb1_vlan20`) on any machine that has a guest, IoT, or WAN interface. Computers also stay
+quiet on unfamiliar networks ([Hardening](hardening.md)), while `CBB_INTERFACES` enforces a hard
+interface boundary regardless of network addressing.
 
 ## OpenWrt
 
-OpenWrt 25.12 or later. A router runs `cbb` without its helper; on MIPS it has no sync away
-from home yet ([roadmap](../roadmap.md), item 37).
+Supported on OpenWrt 25.12 or later (using `apk`). An OpenWrt router runs `cbb` without
+`cbb-helper`. MIPS (`mips` and `mipsle`) builds sync on the home network only and do not include
+syncing away from home ([Devices, ports and files](../reference/devices.md)).
 
-What the installer sets up:
+### What the installer sets up
 
-| What | Where |
+| Component | Location and behavior |
 |---|---|
-| The program | `/usr/bin/cbb` |
-| The service | `/etc/init.d/cbb` (procd), as the user `cbb` without capabilities and with `no_new_privs`; restarted if it stops |
-| Its settings | `/etc/config/cbb`, kept when it exists |
-| The keys and the group's state | `/etc/cbb/state`, mode 0700; a plain sysupgrade keeps the whole install, keys included |
-| The NTP hook | `/etc/hotplug.d/ntp/50-cbb`: the service starts once NTP has set the clock, as certificates need the time |
-| The log | the system log: `logread -e cbb` |
+| Program | `/usr/bin/cbb` |
+| Service | `/etc/init.d/cbb` (`procd`), running as user `cbb` with empty capabilities (`/etc/capabilities/cbb.json`), `no_new_privs`, and automatic restart |
+| Settings | `/etc/config/cbb` (preserved when reinstalling) |
+| Keys and group state | `/etc/cbb/state`, mode `0700`; listed in `/lib/upgrade/keep.d/cbb` so a standard `sysupgrade` keeps the full install and keys |
+| NTP hook | `/etc/hotplug.d/ntp/50-cbb`: starts the service after NTP sets the clock, because copy lifetimes and signed timestamps require an accurate clock |
+| Log | System log (`logread -e cbb`) |
 
-The settings, applied with `/etc/init.d/cbb reload`:
+### Configuration options
+
+Edit `/etc/config/cbb` (or use `uci`) and apply changes with `/etc/init.d/cbb reload`:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `port` | `8764` | the member port |
-| `list zone` | `lan` | the firewall zones the service works in; `wan`, and PPPoE, WireGuard and tunnel devices never count |
-| `wait_ntp` | `1` | start only once NTP has set the clock; `0` for a router whose clock keeps running while it is off |
+| `port` | `8764` | Member TCP port |
+| `list zone` | `lan` | Firewall zones where the service operates; `wan`, `wan6`, and PPPoE, WireGuard, and tunnel devices are always excluded |
+| `wait_ntp` | `1` | Wait for NTP before starting (`0` for a router with a battery-backed clock) |
 
-**The firewall.** The service's firewall rules come and go with it, through procd;
-`/etc/config/firewall` is never changed. A zone other than `lan` gets two rules while the
-service runs: the member port over TCP and mDNS over UDP 5353, from that zone. For an IoT
-network:
+### Firewall rules and extra zones
+
+`procd` publishes the service's `fw4` firewall rules dynamically while `cbb` runs and drops them
+when it stops; `/etc/config/firewall` is never edited. Every listed zone other than `lan` (which
+already accepts input by default) gets two rules while the service runs: incoming TCP on the member
+port and incoming UDP on port 5353 (mDNS).
+
+To add another zone (such as an `iot` network):
 
 ```sh
 uci add_list cbb.main.zone='iot'
@@ -61,73 +73,84 @@ uci commit cbb
 /etc/init.d/firewall reload     # loads the service's new rules
 ```
 
-**The hub.** `cbb global hub` on the router (as root, without `sudo`) asks before it opens the
-hub's UDP port from `wan`; with yes, that rule joins the service's own rules. No port
-forwarding is needed, unless another router sits in front ([away from
-home](../guide/away-from-home.md#2-turn-it-on-on-the-hub)).
+### Use the router as a hub
 
-**Updates.** From the package feed, `apk upgrade` keeps it current. Installed with `get.sh`,
-it updates itself once a day from cron if you said yes (`cbb update -auto on|off`). An
-attended sysupgrade (ASU, owut) leaves the program out: run the install command again after
-one; the keys stay.
+On non-MIPS routers, run `cbb global on` and `cbb global hub` as `root` (without `sudo`). When you
+give a public address, `cbb global hub` prompts before adding the hub's UDP rule from `wan` to the
+service's `procd` rules (`/etc/cbb/firewall.hub`). No port forwarding is needed unless another
+router sits in front ([Away from home: turn it on, on the hub](../guide/away-from-home.md#2-turn-it-on-on-the-hub)).
 
-**Removing it.** `apk del cbb` for the package, or
-`sh /usr/share/cbb/uninstall.sh`. Both keep the keys in `/etc/cbb`;
-`uninstall.sh --purge` deletes them too. `uninstall.sh` also deletes
-`/etc/config/cbb`, so note your zones first.
+### Update and remove on OpenWrt
+
+- **Updates:** If installed from the `apk` package feed, run `apk update && apk upgrade`. If
+  installed with `get.sh`, daily automatic updates run from `cron` when enabled
+  (`cbb update -auto on|off`). An attended sysupgrade (ASU or `owut`) omits packages outside
+  standard OpenWrt feeds: re-run the install command afterward, and your keys in `/etc/cbb/state`
+  remain intact.
+- **Removal:** Run `apk del cbb` (package feed) or `sh /usr/share/cbb/uninstall.sh` (`get.sh`
+  install). Both keep your keys in `/etc/cbb`; `sh /usr/share/cbb/uninstall.sh --purge` deletes
+  `/etc/cbb` as well. `uninstall.sh` removes `/etc/config/cbb`, so note your configured zones
+  before uninstalling.
 
 ## FreeBSD and OPNsense
 
-FreeBSD 15 on amd64 or arm64, and OPNsense on the same FreeBSD.
+Supported on FreeBSD 15 (`amd64` and `arm64`) and OPNsense running on FreeBSD 15.
 
-| What | Where |
+### What the installer sets up
+
+| Component | Location and behavior |
 |---|---|
-| The program | `/usr/local/bin/cbb` |
-| The service | the rc.d script `cbb`, through daemon(8); `cbb_enable="YES"` in rc.conf |
-| Its settings | `/usr/local/etc/cbb/cbb.env` |
-| The keys and the group's state | `/var/db/cbb` |
-| The log | syslog, `/var/log/messages` |
+| Program | `/usr/local/bin/cbb` (with `cbb-helper`, `cbb-forward`, and `cbb-relay` beside it) |
+| Service | `/usr/local/etc/rc.d/cbb`, running through `daemon(8)` with `cbb_enable="YES"` in `/etc/rc.conf` |
+| Settings | `/usr/local/etc/cbb/cbb.env` |
+| Keys and group state | `/var/db/cbb` |
+| Log | Syslog (`/var/log/messages`) |
 
-**The firewall.** The installer finds pf or ipfw, lists the rules it needs (the member port
-over TCP and mDNS over UDP 5353, from the private address ranges only) and asks before it
-adds them; `--express` adds them without asking, `--no-firewall` only prints them.
+### Firewall rules
 
-- **pf**: the rules live in the anchor `cbb`, loaded from
-  `/usr/local/etc/cbb/pf.anchor`. Three lines at the end of `/etc/pf.conf`, a
-  marker comment and the two that load the anchor, name it; the uninstaller removes exactly
-  those lines.
-- **ipfw**: rules in set 17, numbers 10500 and up, added again by the rc.d script after each
-  boot.
-- **OPNsense** writes pf's whole ruleset at each filter reload, so the installer adds a
-  plugin hook instead of touching `pf.conf`: the anchor follows every reload, and the
-  service shows under System, Diagnostics, Services. Turn off the mDNS repeater (Services,
-  mDNS Repeater): both need UDP 5353, and the service answers mDNS on each home interface
-  itself.
+The installer detects OPNsense, `pf`, or `ipfw`, lists the required rules (incoming TCP on the
+member port and incoming UDP on port 5353 from private address ranges only, plus `100.64.0.0/10` if
+`--home-cgnat on` is set), and asks before adding them. Pass `--express` to add them without
+prompting or `--no-firewall` to print manual commands only.
 
-The hub's port goes into the same anchor or rule set when `cbb global hub` opens it.
+- **`pf`:** Rules live in anchor `cbb`, loaded from `/usr/local/etc/cbb/pf.anchor`. The installer
+  appends three marked lines to `/etc/pf.conf` to load the anchor; the uninstaller removes only
+  those three lines.
+- **`ipfw`:** Rules are added in set 17 starting at rule 10500 and reloaded by `/usr/local/etc/rc.d/cbb`
+  on each start.
+- **OPNsense:** OPNsense regenerates the full `pf` ruleset on every filter reload, so the installer
+  adds the plugin hook `/usr/local/etc/inc/plugins.inc.d/cbb.inc` instead of editing `pf.conf`. The
+  anchor persists across filter reloads, and the service appears under **System > Diagnostics >
+  Services**. Turn off **Services > mDNS Repeater**, because both use UDP port 5353 and `cbb`
+  answers mDNS directly on each home interface.
 
-**pfSense** is not supported: the installer runs, but it prints the rules for Firewall,
-Rules instead of adding them, and a pfSense update may remove Connect Beyond Borders.
+When `cbb global hub` opens the hub's UDP port, it adds the rule to the same `pf` anchor or `ipfw`
+set 17.
 
-**Removing it.** `sh /usr/local/share/cbb/uninstall.sh` removes the program, the
-service and its firewall rules, and keeps the keys in `/var/db/cbb`; `--purge`
-deletes them too.
+**pfSense is not supported:** The installer adds `/usr/local/etc/rc.d/cbb.sh` and prints rules to
+add manually under **Firewall > Rules**, and a pfSense update may remove Connect Beyond Borders.
 
-## Check it
+### Remove on FreeBSD and OPNsense
 
-| Check | OpenWrt | FreeBSD, OPNsense | Linux |
+Run `sh /usr/local/share/cbb/uninstall.sh` as `root` to remove the binaries, service, OPNsense
+plugin hook, and installer-managed firewall rules while keeping your keys in `/var/db/cbb`. Add
+`--purge` to delete `/var/db/cbb` as well.
+
+## Check the service
+
+| Check | OpenWrt | FreeBSD and OPNsense | Linux |
 |---|---|---|---|
-| The service runs | `/etc/init.d/cbb status` | `service cbb status` | `systemctl status cbb` |
-| The group and the devices it sees | `cbb status` | `cbb status` | `cbb status` |
-| The interfaces it works on | `cat /var/run/cbb.interfaces` | `grep CBB_INTERFACES /var/log/messages` | `journalctl -u cbb \| grep CBB_INTERFACES` |
-| The firewall rules | `nft list ruleset \| grep cbb`; empty with only `lan`, which needs none | `pfctl -a cbb -s rules`, or `ipfw set 17 show` | as [the installer](../guide/install.md#the-firewall) reports them |
-| The log | `logread -e cbb` | `grep cbb /var/log/messages` | `journalctl -u cbb` |
+| Service status | `/etc/init.d/cbb status` | `service cbb status` | `systemctl status cbb` |
+| Group and peers | `cbb status` | `cbb status` | `cbb status` |
+| Active interfaces | `cat /var/run/cbb.interfaces` | `grep CBB_INTERFACES /var/log/messages` | `journalctl -u cbb \| grep CBB_INTERFACES` |
+| Firewall rules | `nft list ruleset \| grep cbb` (empty when only `lan` is configured) | `pfctl -a cbb -s rules` or `ipfw set 17 show` | See [Installing: the firewall](../guide/install.md#the-firewall) |
+| Service log | `logread -e cbb` | `grep cbb /var/log/messages` | `journalctl -u cbb` |
 
-The service logs the interfaces it keeps to at start, when `CBB_INTERFACES` is set. A
-`CBB_INTERFACES` line set by hand stays when the installer runs again or `cbb update`
-installs a new release.
+When `CBB_INTERFACES` is set, the service logs its allowed interfaces on startup. A `CBB_INTERFACES`
+entry added by hand stays intact when you re-run the installer or update with `cbb update`.
 
-If the service does not start on OpenWrt, the log says why: the zones have no devices, or
-NTP has not set the clock yet. Every setting is in
-[settings and environment variables](../reference/config.md), every port in
-[devices, ports and files](../reference/devices.md#ports).
+If the service does not start on OpenWrt, `logread -e cbb` shows why: either the listed zones have
+no eligible devices or the service is waiting for NTP to set the clock.
+
+For all settings, see [Settings and environment variables](../reference/config.md). For all ports,
+see [Devices, ports and files: ports](../reference/devices.md#ports).

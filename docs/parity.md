@@ -1,165 +1,124 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Platform parity
 
-Devices of one class can do the same things. A difference is allowed only where the
-system itself forces it, and then it is written here with the reason. The classes:
+For engineers and reviewers: the capabilities supported by each device class and which components
+have been tested on physical hardware. For user-facing platform capabilities, ports, and file
+paths, see [Devices, ports and files](reference/devices.md). For planned features and open work,
+see [Roadmap](roadmap.md).
 
-- **Computers**: Linux, macOS, Windows (`cbb`).
-- **Phones**: Android, iPhone, Aurora OS (the apps; the Aurora app also builds for Sailfish OS),
-  HarmonyOS 5 and later (`apps/harmony`, in development, ported from the Aurora app).
-- **Small devices**: `cbb` without its helper on small Linux devices, the ESP32 firmware, the ZX Spectrum
-  Next through its Pi.
+Devices within a class support the same feature set unless an operating system restriction prevents
+it:
 
-A feature added to one platform is planned for its whole class in the same task, or added
-here as a gap. This table is kept up to date with every such change.
+- **Computers**: Linux, macOS, and Windows (`cbb` with `cbb-helper`).
+- **Phones**: Android, iPhone, Aurora OS (and Sailfish OS, `apps/silica`), and HarmonyOS 5 and
+  later (`apps/harmony`).
+- **Small devices**: `cbb` without `cbb-helper` on small Linux devices and routers, the Arduino
+  Nano ESP32 firmware, and the ZX Spectrum Next (through its Raspberry Pi).
 
-Marks: **yes**; **OS** (differs because the system forces it; the reason follows);
-**gap** (missing for no system reason; the plan below closes it); **planned** (missing
-on every platform of the class, on the roadmap).
+Table markers: **yes** (supported), **OS** (restricted by the operating system; reason noted),
+**gap** (not yet implemented for that platform; tracked in [Roadmap](roadmap.md)), and
+**not yet** (in progress for an experimental small-device target).
 
 ## Computers
 
 | Capability | Linux | macOS | Windows | Notes |
 |---|---|---|---|---|
-| Service, agent, autostart | yes | yes | yes | systemd and desktop autostart; LaunchDaemon and LaunchAgent; Windows service and the sign-in entry |
-| Every `cbb` command (pair, revoke, admin, freeze, takeover, invite, global, copy, paste) | yes | yes | yes | one program; the service is the same code |
-| Secrets from password managers | yes | yes | yes | X11/Wayland hint, `ConcealedType`, the Windows clipboard formats |
+| Service, desktop agent, autostart | yes | yes | yes | systemd and desktop autostart; LaunchDaemon and LaunchAgent; Windows Service and sign-in entry |
+| Core `cbb` commands (`pair`, `remove`, `admin`, `freeze`, `recovery`, `invite`, `global`, `copy`, `paste`) | yes | yes | yes | Single `cbb` binary across all three platforms |
+| Skip password-manager secrets | yes | yes | yes | X11/Wayland hint, `ConcealedType`, Windows clipboard formats |
 | Battery detection | yes | yes | yes | |
-| Installer and uninstaller, `--purge` | yes | yes | yes | |
-| One-line installer with checksum check | yes (`get.sh`) | yes (`get.sh`) | yes (`get.ps1`) | |
-| Package manager | Homebrew | Homebrew | winget (`cbb install` after it) | each release writes the winget manifest; it reaches winget by a pull request to its repository (docs/maintainers/maintaining.md) |
-| Member port other than 8764 | yes (`--port`) | yes (`--port`) | yes (`-Port`) | |
-| Inbound only from the home network, in the program | yes | yes | yes | the member port drops other addresses |
-| Inbound only from the home network, by the system | yes (ufw, firewalld) | **OS** | yes (Windows Firewall) | the macOS application firewall allows or blocks a program, not an address; a Network Extension of the Mac app (roadmap item 22) |
-| Outbound only to the home network, and with `cbb global on` to the group's servers, in the program | yes | yes | yes | `internal/netguard` |
-| Outbound only to the home network, and with `cbb global on` to the group's servers, by the system | yes (systemd unit; a hub at its own address: **OS**) | **OS** | yes (firewall rule) | systemd cannot allow one port only, so a hub reached at its own address relies on the program; macOS: as above, roadmap item 22 |
-| 100.64.0.0/10 as the home network, on request | yes (`--home-cgnat on`) | yes (`--home-cgnat on`) | yes (`-HomeCgnat on`) | the program, the firewall rules and the outbound limit alike |
-| Firewall left alone on request | `--no-firewall`, `CBB_FIREWALL=no` | `--no-firewall`, `CBB_FIREWALL=no` | `-NoFirewall`, `CBB_FIREWALL=no` | |
-| Error details switch in `cbb` | `CBB_DEBUG=1`, debug builds | same | same | |
-| Error details switch in the installers | yes (`CBB_ERROR_DETAILS=1`) | yes (`CBB_ERROR_DETAILS=1`) | yes (`-Details`, `CBB_ERROR_DETAILS=1`) | |
-| Text-console helper (tmux) | yes (`--console`) | **OS** | **OS** | for a Linux machine without a desktop; a Mac and a Windows PC always have one |
-| Removal from the system's app list | — | **OS** | yes (Settings, Apps) | Linux has no common list; the Mac app (item 22) brings it to macOS |
-| Signed program | — | Developer ID, notarized, and the `.pkg` with CBB.app | ready, needs a certificate | the release signs with Authenticode once the secrets hold a certificate (G5) |
-| Device keys in hardware | yes, with a TPM (`internal/tpmkey`) | yes, the Secure Enclave on Apple silicon or the T2 chip (`internal/sekey`) | yes, with a TPM 2.0, not yet tested on a real PC | roadmap item 13 |
-| Update itself, by hand and once a day | yes (`cbb update`) | yes, or Homebrew | yes (`cbb update`), or winget | [installing](guide/install.md#updating) |
-| Quick actions and remote paste as a target | yes | yes | yes | each off until the device's own user turns it on |
-| Firewall rules only with the user's consent, listed one by one; `--express` without questions | yes | yes | yes (`-Express`) | nftables and iptables get the commands only, as their rules do not survive a restart |
-| Opening the hub's UDP port in the firewall, with consent | yes (ufw, firewalld; commands for nftables, iptables) | **OS** | yes | `cbb global hub` asks, `-firewall yes` without asking; the macOS application firewall already allows a listed program on every port |
-| Finding a firewall the installer does not know, by a check from home | yes | yes | yes | `cbb status` warns when the members at home could not connect and sync only because this computer dials them back |
-| Act as a Bluetooth keyboard for a TV, tablet or computer | yes (`cbb keyboard`, BLE) | **OS** | **OS** | macOS and Windows keep the HID service to the system |
-| Be the remote of an Android TV, a Google TV, an Apple TV or a Roku | yes (`cbb remote`) | yes | yes | the same Go code everywhere; the phones' apps follow |
-| The group's settings in the apps (the Mac app, the tray app): the copies' lifetimes, the admin keys, who stays when the main device changes, the recovery key on a YubiKey | yes | yes | yes | through `cbb ttl`, `cbb keys` and `cbb recovery -leave … -yubikey` as the administrator |
-| The group's notices, and joining by an invitation, in the apps (the Mac app, the tray app) | yes | yes | yes | the notices from `cbb status` with Hide (`dismiss`); "Join with an invitation" runs `cbb pair -invite - -app FILE` and shows the key fingerprint |
-| Tested on a real device | yes | yes | not yet | the 0.4 bench |
+| Installer and uninstaller (`--purge` / `-Purge`) | yes | yes | yes | |
+| One-line installer with checksum and signature verification | yes (`get.sh`) | yes (`get.sh`) | yes (`get.ps1`) | |
+| Package manager | Homebrew | Homebrew | winget (`cbb install` afterward) | Releases generate the winget manifest ([Maintaining](maintainers/maintaining.md)) |
+| Custom member port (default `8764`) | yes (`--port`) | yes (`--port`) | yes (`-Port`) | |
+| Inbound restricted to home network (in `cbb`) | yes | yes | yes | Member port drops non-home source addresses |
+| Inbound restricted to home network (by OS) | yes (ufw, firewalld) | **OS** | yes (Windows Firewall) | macOS application firewall filters per binary, not per IP range |
+| Outbound restricted to home network and group servers (in `cbb`) | yes | yes | yes | `internal/netguard` |
+| Outbound restricted to home network and group servers (by OS) | yes (systemd unit; direct-address hub: **OS**) | **OS** | yes (Windows Firewall rule) | systemd cannot restrict a single UDP port; macOS lacks per-address app firewall rules |
+| Optional `100.64.0.0/10` home network | yes (`--home-cgnat on`) | yes (`--home-cgnat on`) | yes (`-HomeCgnat on`) | Applied consistently to `cbb`, inbound firewall rules, and outbound limits |
+| Skip firewall changes on request | `--no-firewall`, `CBB_FIREWALL=no` | `--no-firewall`, `CBB_FIREWALL=no` | `-NoFirewall`, `CBB_FIREWALL=no` | |
+| Error details switch in `cbb` | `-debug`, `CBB_DEBUG=1` | same | same | |
+| Error details switch in installers | yes (`CBB_ERROR_DETAILS=1`) | yes (`CBB_ERROR_DETAILS=1`) | yes (`-Details`, `CBB_ERROR_DETAILS=1`) | |
+| Text-console helper (`tmux`) | yes (`--console`) | **OS** | **OS** | Intended for headless Linux machines |
+| Uninstall from OS app list | — | **OS** | yes (Settings, Apps) | Linux has no single system app list |
+| Signed binaries and packages | — | Developer ID, notarized, signed `.pkg` with Mac app | Ready; requires Authenticode certificate | Release workflow signs Windows binaries when a certificate secret is present |
+| Hardware-backed device keys | yes (TPM 2.0 via `internal/tpmkey`) | yes (Secure Enclave on Apple silicon or T2 via `member/src/sekey.rs`) | yes (TPM 2.0; not yet tested on physical PC hardware) | Falls back to service-only files when no hardware is present |
+| Self-update (manual and daily timer) | yes (`cbb update`) | yes (`cbb update` or Homebrew) | yes (`cbb update` or winget) | [Installing: updating](guide/install.md#updating) |
+| Remote paste and quick actions as target | yes | yes | yes | Disabled by default until enabled locally by that device's user |
+| Consent-based firewall rules (`--express` / `-Express` skips prompts) | yes | yes | yes | Prints manual commands for nftables and iptables |
+| Opening hub UDP port in firewall with consent | yes (ufw, firewalld; commands for nftables, iptables) | **OS** | yes | `cbb global hub` prompts (`-firewall yes` skips prompt); macOS firewall allows listed binaries on all ports |
+| Detect unknown blocking firewall via home check | yes | yes | yes | `cbb status` warns when home peers cannot connect inbound |
+| Act as a Bluetooth LE keyboard | yes (`cbb keyboard`, BlueZ) | **OS** | **OS** | macOS and Windows reserve the Bluetooth HID service for the OS |
+| Network TV remote (Android TV, Google TV, Apple TV, Roku) | yes (`cbb remote`) | yes | yes | Shared Go helper implementation |
+| Group settings in desktop apps (lifetimes, admin keys, recovery key on YubiKey) | yes (tray app) | yes (Mac app) | yes (tray app) | Invokes `cbb ttl`, `cbb keys`, and `cbb recovery -leave … -yubikey` |
+| Group notices and remote invitation join in desktop apps | yes (tray app) | yes (Mac app) | yes (tray app) | Displays `cbb status` notices; runs `cbb pair -invite - -app FILE` |
+| Tested on physical hardware | yes | yes | not yet | Windows tested in an Arm Windows 11 VM |
 
 ## Phones
 
 | Capability | Android | iPhone | Aurora OS | HarmonyOS | Notes |
 |---|---|---|---|---|---|
-| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE behind the app's own PIN, which the TEE checks (D-94): Aurora 5.1.5 gives a regular app neither its authentication service nor the fingerprint (a probe on the R570E and Open Mobile Platform's answer); making a group not yet tried on the phone | yes, the root key in HUKS behind the face, the fingerprint or the PIN (User Authentication Kit); not yet tried on a phone | StrongBox or TEE; Secure Enclave |
-| Add a computer or a small device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | yes, as an admin (the home window); not yet tried on a phone | the Aurora app reads the code with the core's reader |
-| Join another phone's group, as a member with one button | yes | yes | yes; the second button "Join as an admin" goes after the admin PIN (D-94) | yes; not yet tried on a phone | the root makes it an admin later (D-95) |
-| Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove, renew and take over from a lost root (its admin key in the TEE becomes the new root), as the root or an admin; not yet tried on the phone | remove and renew, as the root or an admin; not yet tried on a phone | the core's member signs (`cbb_member_manage`), the app's admin key in the TEE |
-| The root's settings: the takeover delay, the key level, handing the group over, the recovery key | yes | yes | yes, as the root, the recovery key as a sheet shown once (no YubiKey); on 0.6 a phone in the group changes the root with it (`change_root`), and restoring on a new phone comes with 0.7 (D-125); not yet tried on the phone | the key level, the copies' lifetimes and the recovery key as a sheet shown once, as the root; on 0.6 a phone in the group changes the root with it; not yet tried on a phone | built and signed in the core on every phone (`cbb_member_manage`, `CoreMember`) |
-| Change the root with the recovery key (0.6), and keep the key on a YubiKey | yes: the sheet, or a YubiKey over NFC or, on an iPhone with USB-C, plugged in when iOS shows it through CryptoTokenKit (else the app stays with NFC); sealing on the root phone; USB-C not yet tried with a real card | yes: the sheet or a YubiKey over NFC or USB-C (CCID through `UsbManager`); sealing on the root phone; USB-C not yet tried with a real card | the sheet, or a YubiKey plugged into USB-C through the system's pcscd (the core is its client, transport `pcsc`): the R570E sees the key, pcscd takes it and its socket is open inside the sandbox; the app's path not yet tried on the phone with a real card | the sheet, or a YubiKey over NFC (IsoDep) or USB-C (`usbManager`, transport `ccid_bulk`); not yet tried on a phone | `change_preview` and `change_root`; the core speaks PIV (`cbb_piv`): over NFC and on the iPhone's USB-C the app carries APDUs, on Android's and HarmonyOS's USB-C only the bytes of the CCID interface (transport `ccid_bulk`, the core frames them); HarmonyOS as Android, over IsoDep and `usbManager` (not built in CI) |
-| Make a phone or a computer an admin | yes | yes | yes, as the root, for a device connected; not yet tried on the phone | yes, as the root; not yet tried on a phone | a phone offers its admin key in its hellos once it is in the group; on Aurora after the admin PIN (D-94) |
-| Sync away from home | yes, in the background | while the app runs | yes, while the app runs, through `cbb`'s tunnel in the core (`TestFFIPhoneAway`), and the blind relay (Settings, "Blind relay"); not yet tried on the phone | while the member runs, as a continuous task where the system grants it, and the blind relay; not yet tried on a phone | **OS**: iOS stops a background app's network |
-| Receive copies without a tap | yes (foreground service) | **OS** | yes | while the app is in front | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
-| Send without a tap | yes (accessibility service) | **OS** | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |
-| Send from the share sheet and the text selection menu | yes | yes | yes, text, through the system's share menu; not yet tried on the phone | yes, text, links, images and files (Share → CBB); not yet tried on a phone | the iPhone's share extension; its menu's Share |
-| One-tap control outside the app | the house as a Quick Settings tile, notification button | the house as a Control Center control (iOS 18) | none: the cover has no action | the app icon's menu and two intents (Intents Kit), each opening the app | the iPhone's control has no long press to open the app: **OS** |
-| Home-screen widget | yes | yes | **OS** (no widgets; the cover instead) | yes (Form Kit) | "Sync clipboard"; on the iPhone it opens the app for a moment, as the control does |
-| Rename a device | yes | yes | yes; not yet tried on the phone | yes; not yet tried on a phone | Devices, Rename on an admin phone; `cbb rename` on an admin computer; a signed device record |
-| The group's notices, and the cards for a removed phone and a changed main device | yes | yes | yes; not yet tried on the phone | yes; not yet tried on a phone | the member's `notices` and `root_changed` (D-126) |
-| Error details switch without developer tools | yes | yes | yes | yes | seven taps on the version in Settings show it; `adb` and the Xcode launch argument work too |
-| Wallpaper colours theme | yes | **OS** | the ambience | no | Material You exists only on Android |
-| Remote paste, images and files | yes | yes | images and files both ways, through the share menu, the clipboard's image and Downloads; remote paste on a computer, text or pictures and files, from the device's page; not yet tried on the phone | remote paste on a computer, text or pictures and files, from the device's page; Share → CBB sends images and files; not yet tried on a phone | no phone takes a remote paste in 0.6 (0.7); the iPhone cannot (**OS**: no app may type into another) |
-| Remote invitations | yes, through a hub of the group | yes, through a hub of the group | yes, through a hub of the group; not yet tried on the phone | yes, through a hub of the group; not yet tried on a phone | roadmap item 12; computers make them with `cbb invite` |
-| Arrange the tiles and collections | yes | yes | yes, by a long press's menu and by a drag among the tiles; not yet tried on the phone | yes; not yet tried on a phone | kept on each installation; the watches show their phone's |
-| Act as a Bluetooth keyboard for a TV, tablet or computer | yes | **OS** | yes, as a Bluetooth LE keyboard through BlueZ; not yet tried on the phone | yes, HID over GATT without the LEDs' report; whether the system lets an app serve it is known only on a phone | iOS keeps the HID service to the system; some Android makers leave the profile out, which the app says |
-| Tested on a real phone | not yet | yes | yes, on Aurora 5.1.5 | not yet | the iPhone app on an iPhone 12 Pro Max, built with a developer's own team; the Aurora app on an F+ R570E |
+| Create group with hardware-backed root key | yes (StrongBox or TEE behind biometrics/lock) | yes (Secure Enclave behind Face ID/passcode) | yes (OP-TEE behind app PIN on Aurora 5, D-94; file key on Aurora 4 / Sailfish OS) | yes (HUKS behind User Authentication Kit) | Aurora 5.1.5 exposes no OS biometric API to regular apps |
+| Add a computer or small device by QR code | yes | yes | yes | yes | Core QR reader used on Aurora OS |
+| Join another group as a member | yes | yes | yes | yes | Every phone joins as a member; main device promotes admins afterward (D-95) |
+| Manage devices (make admin, remove, freeze/unfreeze, make hub) | yes | yes | yes | yes | Signed via the Rust core (`cbb_member_manage`) |
+| Main-device settings (key level, copy lifetimes, recovery key) | yes | yes | yes | yes | Built and signed in the Rust core (`cbb_member_manage`) |
+| Move the group with the recovery key (sheet or YubiKey) | yes: sheet, or YubiKey via NFC or USB-C (`UsbManager`, `ccid_bulk`) | yes: sheet, or YubiKey via NFC or USB-C (`CryptoTokenKit` where supported) | yes: sheet, or YubiKey via USB-C through `pcscd` (`pcsc`) | yes: sheet, or YubiKey via NFC (`IsoDep`) or USB-C (`usbManager`, `ccid_bulk`) | Core implements PIV (`cbb_piv`); moving a group runs on a device already in the group (D-125); USB-C card paths not yet tested on physical cards |
+| Sync away from home (**Everywhere**) | yes (background and foreground) | While app is open (**OS**) | While app runs (tunnel and blind relay) | While app runs or continuous task (tunnel and blind relay) | iOS suspends background network connections |
+| Receive copies automatically | yes (foreground service) | **OS** (while app is open) | yes | While app is in foreground | iOS restricts clipboard reads and writes to the foreground |
+| Send copies without a tap | yes (accessibility service) | **OS** | **OS** | **OS** | iOS uses Back Tap / Action button shortcut; Aurora OS and HarmonyOS send when brought to the foreground |
+| Share sheet / share menu | yes (text, images, files up to 100 MiB) | yes (text, links, images, files up to 50 MiB) | yes (text, images, files up to 50 MiB) | yes (text, links, images, files up to 50 MiB) | |
+| Quick control outside the app | Quick Settings tile, notification **Send** button | Control Center switch (iOS 18+) | App cover status and sync actions | App icon shortcuts and Intents Kit | iOS Control Center switches cannot long-press to open the app (**OS**) |
+| Home-screen widget | yes | yes | **OS** (uses app cover) | yes (Form Kit) | |
+| Rename a device | yes | yes | yes | yes | Signed device record |
+| Group notices and removed/changed-root cards | yes | yes | yes | yes | Driven by core `notices` and `root_changed` |
+| Error details switch without developer tools | yes | yes | yes | yes | Revealed by tapping version 7 times in Settings |
+| Dynamic wallpaper color theme | yes (Material You) | **OS** | System ambience | no | Material You is Android-only |
+| Images, files, and sending remote paste to computers | yes | yes | yes | yes | Phones do not receive remote paste (D-132); iOS forbids apps from typing into other apps (**OS**) |
+| Remote invitations (through a group hub) | yes | yes | yes | yes | |
+| Arrange tiles and local collections | yes | yes | yes | yes | Stored locally per installation; mirrored to paired watches |
+| Act as a Bluetooth LE keyboard | yes (where OEM includes HID profile) | **OS** | yes (BlueZ) | yes (HID over GATT, without LED reports) | iOS reserves Bluetooth HID for the OS |
+| Tested on physical phone | not yet | yes (iPhone 12 Pro Max) | yes (F+ R570E, Aurora 5.1.5) | not yet | Android tested in CI emulator; HarmonyOS native module, ArkTS, and Node logic tests run in CI |
 
 ## Small devices
 
-| Capability | `cbb` on a small Linux device | ESP32 | ZX Spectrum Next | Notes |
+| Capability | `cbb` on small Linux devices | Arduino Nano ESP32 | ZX Spectrum Next (with Pi) | Notes |
 |---|---|---|---|---|
-| Join by the phone's QR code or a computer's code | yes | not yet (0.7) | yes, through the Pi | |
-| Sync the clipboard | yes | not yet | yes, through the Pi | the firmware's sync is the next step of roadmap item 15 |
-| Listen for phones and Macs | yes | not yet | through the Pi | |
+| Join by phone QR code or computer code | yes | not yet | yes (through Pi) | |
+| Sync clipboard | yes | not yet | yes (through Pi) | ESP32 Wi-Fi, USB, and BLE keyboard firmware is built; sync tracked in [Roadmap](roadmap.md) |
+| Accept connections from phones and Macs | yes | not yet | yes (through Pi) | |
 | Secrets (`copy -secret`) | yes | not yet | yes (`.cbb text -s`, `.cbb copy -s`) | |
-| Sync away from home | yes, in a group of 0.6 (`member/tests/away_live.rs`) | planned | through the Pi | not on MIPS routers yet: `cbb` for MIPS is built without the tunnel |
-| Update itself | yes (`cbb update`, Linux and OpenWrt) | planned (OTA, roadmap item 29) | through the Pi | |
+| Sync away from home | yes (`member/tests/away_live.rs`) | not yet | yes (through Pi) | Excluded on 32-bit MIPS routers (no 64-bit atomics for GotaTun) |
+| Self-update | yes (`cbb update`, Linux and OpenWrt) | not yet | yes (`.cbb update` through Pi) | |
 | Error details switch | yes (`-debug`, `CBB_DEBUG=1`) | not yet | yes (`.cbb -d`) | |
-
-The ESP32 and the Next are being built, so "not yet" is progress, not a gap: each
-item is on its road to the set of `cbb` on Linux.
-
-## Plan
-
-One pull request each, in this order; anything under 100 lines rides in the open one.
-
-1. **G1**, done: `--port` in the Mac installer and `get.sh` on a Mac, kept in
-   `/etc/cbb/cbb.env` as on Linux.
-2. **G2**, done: `CBB_ERROR_DETAILS=1` in `install.sh`, `uninstall.sh` and `get.sh` on Linux
-   and macOS shows every command as it runs; without it a failure names its exit status.
-3. **P5**, done: an error details switch in both apps' Settings, hidden behind a few taps on the
-   version, besides the developer launch arguments.
-4. **P4**, done: rename a device in both apps (and `cbb rename` on computers), a signed record.
-5. **P1, P2**, done: the iPhone's Share extension and Control Center control.
-6. **P3**, done: a home-screen widget in both apps.
-7. **G4, G5**, done: a winget manifest from every release and `cbb install` after winget;
-   Authenticode signing in the release, waiting for the owner's certificate.
-8. **G6**, done: the firewall rules only with consent, the same on every
-   computer. The installer finds the firewall itself (ufw, firewalld, nftables, iptables on
-   Linux; Windows Firewall; the macOS application firewall), lists each rule it needs
-   (protocol, port, source, purpose) and asks `Add these rules now? [y/N]`. Yes: `cbb`
-   manages its rules from then on, the hub's UDP port at `cbb global hub` included (asked
-   again, since it faces the internet), and removes them on uninstall. No: it prints the
-   exact commands for that firewall and works while the rules are there. `--express` adds
-   them without a question and prints the same list as a report. The installers,
-   `cbb global hub` and the check from home do this. A member at home dials
-   the computer back, so `cbb status` says when an unknown firewall or a closed rule keeps
-   the others out. Messages are formal English, one fact per line.
-9. **L1**, done: `.cbb copy -s` and `.cbb text -s`, a secret from the Next (`cbb next copy -secret`).
-10. Roadmap item 22, the Mac app: the system's limits on a Mac (in and out), removal
-    from the system, the signed `.pkg`.
-11. **A1 to A7**: the Aurora app closes every gap of its column
-    before 0.6, so that the three phones move on together. A1: the devices as tiles or
-    a list, a device's page, Settings with the language and the error details. Then adding a
-    device by QR code, the admin's actions (after the core sends commands), the one button,
-    images and files and the group's alerts (after the phones' node moves into the core), the
-    cover, notifications and Share, sync away from home with the phones' tunnel, and a group
-    of its own with its root on the phone.
 
 ## On real devices
 
-What each part is, and whether it has run on real devices beyond CI. The README sums it up
-in three lines; this table has every part.
+This table records what each component implements, how CI verifies it, and what has run on
+physical hardware.
 
-| Part | State | On real devices |
+| Component | Build and CI status | Tested on physical hardware |
 |---|---|---|
-| Linux service, desktop clipboard (X11, Wayland), tmux, `cbb copy`/`paste` | works | yes (Raspberry Pi, Steam Deck) |
-| macOS service and pasteboard agent | works | yes |
-| Windows service, clipboard agent, installer | built, CI on windows-latest | in a Windows 11 virtual machine (Arm), not yet on a PC |
-| FreeBSD service and installer | built, CI in a FreeBSD 15.1 virtual machine | not yet |
-| OpenWrt service and installer | built, CI on OpenWrt in QEMU | not yet |
-| iPhone app (the phone as the root, admin phones, devices list) | built, CI on a simulator | yes, on an iPhone 12 Pro Max: the root key in the Secure Enclave with Face ID, admitting computers, making a computer an admin, sync both ways; not yet a second phone or the takeover |
-| Android app | built, CI; APK in every release | not yet |
-| Mac app (menu bar) and the tray app for Linux and Windows | built, CI; the tray app in the Windows and Linux releases | the Mac app on a Mac; the tray app in the Windows 11 virtual machine |
-| Apple Watch and Wear OS apps (devices, events, away switch) | built, CI | the Apple Watch app on an Apple Watch Ultra: its list and remote paste; Wear OS not yet |
-| `cbb` without its helper on a small Linux device | built, CI e2e with other members | joined a group on a Pi Zero W |
-| The Arduino Nano ESP32 | firmware: Wi-Fi, the USB port and Bluetooth LE as a keyboard; CI in QEMU; joining a group and syncing in 0.7 | not yet |
-| Sync away from home between computers (`cbb global`, `cbb invite`) | built | not yet |
-| Sync away from home for the phones and small devices | built | the iPhone on mobile data, through a Mac hub and the `cbb.tools` forwarder |
-| Several hubs (computers, routers and boards; no phone is one, D-134), your own blind relay | built | not yet |
-| Images, files and formatted text | built | not yet |
-| Remote paste and quick actions | built | remote paste from the iPhone and the watch to a Mac, at home and away from home; Windows, Linux and the quick actions not yet |
-| Keys in the TPM on Linux and Windows, proven Android keys, the group's key level (`cbb keys`) | built; CI against a software TPM | Windows in a virtual machine only |
-| Releases signed with the project's own keys | built; waits for the project's root keys | |
-| `cbb update`, automatic updates, the Android APK updating itself | built; takes only signed releases, so it waits for the root keys too | not yet |
-| The project's forwarder and relay at `cbb.tools`, open to everyone | being tested | the forwarder carried a phone's sync to a Mac hub |
-| Keyboards and TV remotes (`cbb keyboard`, `cbb remote`, the Android phone as a Bluetooth keyboard) | built, CI against fake TVs and BlueZ | typing on an Apple TV 4K |
-| Console paste on a key press | planned | |
-| Homebrew (`hunterewok/tap`) | a formula with each release | |
-| Signed macOS `.pkg` with the Mac app, TestFlight | built; the release signs them with the Apple developer account | not yet run |
-| App stores | planned | |
+| Linux service, desktop clipboard (X11, Wayland), `tmux`, `cbb copy` / `paste` | Built and tested in CI | Yes (Raspberry Pi, Steam Deck) |
+| macOS service and pasteboard agent | Built and tested in CI | Yes |
+| Windows service, clipboard agent, installer | Built and tested in CI (`windows-latest`) | Windows 11 Arm virtual machine only; not yet on a physical PC |
+| FreeBSD and OPNsense service and installer | Built and tested in CI (FreeBSD 15.1 VM) | Not yet |
+| OpenWrt service and installer | Built and tested in CI (OpenWrt in QEMU) | Not yet |
+| iPhone app (main device, admin, device list) | Built and tested in CI (iOS Simulator) | Yes (iPhone 12 Pro Max): root key in Secure Enclave with Face ID, admitting computers, promoting an admin computer, two-way sync; second phone and recovery not yet tried |
+| Android app (full and reproducible F-Droid APKs) | Built and tested in CI (unit tests, emulator, reproducibility) | Not yet |
+| Aurora OS and Sailfish OS app (`apps/silica`) | Built (unsigned RPMs for Aurora 5, Aurora 4, Sailfish OS) and Qt host tests in CI | Yes (F+ R570E on Aurora OS 5.1.5); group creation, YubiKey over `pcscd`, and away sync not yet tried on the phone |
+| HarmonyOS app (`apps/harmony`) | Rust core, N-API module, ArkTS compiler/linter, and Node logic tests in CI (HAP requires HarmonyOS CLI / DevEco Studio) | Not yet |
+| Mac app (menu bar) and Linux/Windows tray app | Built and tested in CI | Mac app on macOS; tray app in Windows 11 VM; Linux tray app not yet |
+| Apple Watch, Wear OS, and HarmonyOS watch apps | Built and tested in CI (Apple Watch, Wear OS, HarmonyOS watch Node tests) | Apple Watch Ultra (device list); Wear OS and HarmonyOS watch not yet |
+| `cbb` without `cbb-helper` on small Linux devices | Built and tested in CI e2e | Yes (joined a group on a Raspberry Pi Zero W) |
+| Arduino Nano ESP32 firmware | Wi-Fi, USB, and BLE keyboard built and tested in QEMU in CI | Not yet |
+| Sync away from home between computers (`cbb global`, `cbb invite`) | Built and tested in CI | Not yet |
+| Sync away from home for phones and small devices | Built and tested in CI | Yes: iPhone on mobile data through a Mac hub and the `cbb.tools` forwarder |
+| Multiple hubs and self-hosted blind relay (D-134) | Built and tested in CI | Not yet |
+| Images, files, and formatted text | Built and tested in CI | Not yet |
+| Remote paste and quick actions | Built and tested in CI | Remote paste from iPhone to Mac (at home and away); Windows, Linux, and quick actions not yet |
+| TPM 2.0 keys (Linux/Windows), Android Key Attestation, key levels (`cbb keys`) | Built and tested in CI against `swtpm` | Windows VM only; physical TPM PCs and Android hardware not yet |
+| Hybrid signed releases, `cbb update`, Android self-update | Built and tested in CI with pinned YubiKey roots (`internal/release/roots/roots.pem`) | Not yet exercised on a published user upgrade |
+| Project forwarder and open blind relay (`cbb.tools`) | Deployed and tested | Forwarder carried phone sync to a Mac hub |
+| Bluetooth keyboards and network TV remotes (`cbb keyboard`, `cbb remote`) | Built and tested in CI against fake TVs and BlueZ | Yes (typing on an Apple TV 4K) |
+| Homebrew (`hunterewok/tap`) and signed macOS `.pkg` / TestFlight | Release workflows configured | Not yet run end to end for a published release |

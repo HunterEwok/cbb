@@ -1,167 +1,177 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Settings and environment variables
 
-Every setting Connect Beyond Borders reads from a file or from the environment. The commands and
-their flags are in the [command reference](cli.md); where each system keeps its keys,
-state and logs is in [devices, ports and files](devices.md#files-and-logs).
+For users, administrators, and developers looking up every setting that Connect Beyond Borders
+reads from a settings file or environment variable. Commands and flags are in
+[Command reference](cli.md); paths for keys, state, and logs are in
+[Devices, ports and files](devices.md#files-and-logs).
 
-Most settings are made by a command or an installer flag, which writes the settings file
-for you. Edit the files by hand only where this page says so: `CBB_INTERFACES` has no
-option, so it is set by hand, and the installers and `cbb update` keep that line.
+Installers and `cbb` commands write most settings files automatically. Edit them by hand only when
+no command or installer option exists (such as `CBB_INTERFACES`, which installers and `cbb update`
+preserve).
 
-The tests' hooks, every `CBB_TEST_*` variable, `CBB_TPM_SIMULATOR` and, in `cbb` itself,
-`CBB_RELEASE_DIR` and `CBB_RELEASE_ROOTS`, are read only by a build for tests: `cbb` built with the feature `testhooks` (or the bench's `benchtime`),
-`cbb-helper` built with the tag `testhooks`, and Go's test binaries. A release ignores them
-([maintaining](../maintainers/maintaining.md), "Test builds").
+Test hooks (`CBB_TEST_*`, `CBB_TPM_SIMULATOR`, `CBB_HELPER`, and in `cbb` itself
+`CBB_RELEASE_DIR` and `CBB_RELEASE_ROOTS`) are read only by test builds (`cbb` with feature
+`testhooks` or `benchtime`, `cbb-helper` with build tag `testhooks`, and Go test binaries).
+Release builds ignore them ([Maintaining](../maintainers/maintaining.md), "Test builds").
 
 ## Settings files
 
-| File | Systems | Who writes it | What it holds |
+| File | Systems | Managed by | Contents |
 |---|---|---|---|
-| `/etc/cbb/cbb.env` | Linux, macOS | the installers (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | `CBB_PORT`, `CBB_HOME_CGNAT`, `CBB_INTERFACES`, one `NAME=value` per line; systemd passes them to the service. The service and `cbb` also read the file themselves |
-| `/usr/local/etc/cbb/cbb.env` | FreeBSD, OPNsense | the installer | the same as on Linux; rc.d passes them to the service |
-| `HKLM\SYSTEM\CurrentControlSet\Services\cbb`, the value `Environment` (a multi-string) | Windows | `install.ps1` (`-Port`, `-HomeCgnat`); `CBB_INTERFACES` by hand, which `install.ps1` keeps | the same values as the file on Linux |
-| `/etc/config/cbb` | OpenWrt | the package, then you (UCI) | `port`, the firewall `zone` list the service works in (it becomes `CBB_INTERFACES`), `wait_ntp` (start once NTP has set the clock); apply a change with `/etc/init.d/cbb reload` |
-| `/etc/cbb/forward.env` | a server running `cbb forward` | you | `CBB_FORWARD_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
-| `/etc/cbb/relay.env` | a server running `cbb relay` | you | `CBB_RELAY_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
+| `/etc/cbb/cbb.env` | Linux (system install), macOS | Installers (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | `KEY=value` lines (`CBB_PORT`, `CBB_HOME_CGNAT`, `CBB_INTERFACES`). Passed to systemd on Linux and read directly by `cbb` and the service on both systems. |
+| `~/.config/cbb/cbb.env` | Linux (rootless install) | `install.sh --rootless` (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | Same `KEY=value` format as `/etc/cbb/cbb.env`, for a rootless user service. |
+| `/usr/local/etc/cbb/cbb.env` | FreeBSD, OPNsense | Installer (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | Same `KEY=value` format as `/etc/cbb/cbb.env`; passed by rc.d and read directly by `cbb`. |
+| `HKLM\SYSTEM\CurrentControlSet\Services\cbb` (`Environment` multi-string value) | Windows | `install.ps1` (`-Port`, `-HomeCgnat`); `CBB_INTERFACES` by hand (preserved by `install.ps1`) | Same `NAME=value` entries as `cbb.env`. |
+| `/etc/config/cbb` | OpenWrt | Package/installer, then you (UCI) | `port`, firewall `zone` list (translated into `CBB_INTERFACES`), and `wait_ntp` (delay start until NTP sets the clock). Apply changes with `/etc/init.d/cbb reload`. |
+| `/etc/cbb/forward.env` | Forwarder server (`cbb-forward.service`) | Operator | `CBB_FORWARD_FLAGS`; see [Running your own servers](../admin/self-hosting.md). |
+| `/etc/cbb/relay.env` | Blind relay server (`cbb-relay.service`) | Operator | `CBB_RELAY_FLAGS`; see [Running your own servers](../admin/self-hosting.md). |
+| `/etc/cbb/push.env` | Push service (`cbb-push.service`) | Operator | `CBB_PUSH_FLAGS`; see `packaging/linux/cbb-push.service`. |
 
-The group's own settings (sync modes, remote paste, quick actions, the hubs, sync away from
-home) are not in these files: they live in the state directory, are changed by `cbb`
-commands or the apps, and some are signed by an admin.
+Group settings (sync mode, remote paste, quick actions, hubs, relays, copy lifetimes, key level,
+and sync away from home) live in the state directory and are modified through `cbb` commands or
+the apps.
 
 ## Environment variables
 
-A variable set in the environment wins over the same name in the settings file.
+A variable set in the process environment takes precedence over the same key in a settings file.
+
+### Runtime and service
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `CBB_DEBUG` | `cbb`, the tray app | `1` shows the underlying error under each message; `0` hides it in a development build, which shows it by default. The service's log always has the details. In the service's environment, also WireGuard's own messages for sync away from home and the member connections a peer closed or reset. The Mac app and the tray app pass it to `cbb` when their own error details switch is on. |
-| `CBB_PORT` | the service, the installers | The member port, 8764 by default. Change it by running the installer again with `--port N` (`-Port N` on Windows), which keeps it in the settings file. |
-| `CBB_INTERFACES` | the service | Network interfaces by name, separated by commas or spaces (`br-lan,br-iot`): mDNS, the member port and a listening join work only there, so that a router never answers on its internet side, even with a private address there or a firewall opened by mistake. Unset or empty, every interface. On OpenWrt the init script sets it from the zones in `/etc/config/cbb`. |
-| `CBB_HOME_CGNAT` | the service, the installers | `1` counts 100.64.0.0/10, the carrier-grade NAT range, as the home network too, for a home network that uses it: the service accepts and reaches it, publishes its addresses there, and the installers open it in the firewall and in the system's outbound limit (the systemd drop-in `cgnat.conf` on Linux, the Windows rule). Unset or `0`, it is outside the home network. Set it with `--home-cgnat on` (`off` goes back) or `-HomeCgnat on` on Windows. |
-| `CBB_TPM` | the service on Linux, Windows and macOS | `off` keeps new member and admin keys out of the TPM and a Mac's Secure Enclave, in files; a key already in one stays there. Unset, a computer with a TPM 2.0 or a Secure Enclave makes its keys in it ([keys and attestation](../guide/keys.md)). |
-| `CBB_CONTAINER` | the service | Set by the Docker image: the service runs in a container, whose keys are in a file in its volume, so it makes no group (`cbb new`, `cbb takeover`) and offers no admin key, and the root cannot make it an admin. |
-| `CBB_KEYS_IN_FILE` | the service, in a container | `yes` allows a container to hold the group's keys anyway: to make the group, or to be made an admin and so the hub. Anyone who copies its volume then has those keys. |
-| `CBB_ROOTLESS` | `cbb` on Linux | `1`, set by the user units of a rootless install (`install.sh --rootless`), makes `cbb` use the user's own paths: the socket in `$XDG_RUNTIME_DIR/cbb`, the state, settings and update folder under the user's home; the service then refuses to be the root, an admin or a hub. Unset, `cbb` in `~/.local/bin` does the same. |
-| `CBB_HELPER` | `cbb` built with the feature `testhooks` | For tests only, never read by a release: the Go helper `cbb-helper` to start, instead of the one beside the program; empty for none. Like the one beside it, it starts only if nobody but root or `cbb`'s user may change it (docs/design.md, "The service and its helper"). |
-| `CBB_SOCKET` | `cbb`, the Mac app | Another control socket, for tests or a second instance. |
-| `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
-| `CBB_STATE` | `cbb` | Another state directory. |
-| `CBB_TEST_MOVE_LINGER` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub that moves keeps serving its clients after the new hub serves, in place of 300. Never set by hand. |
-| `CBB_TEST_STANDBY_GRACE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub that lost the hub above it tries the hubs above before it serves again, in place of 60. Never set by hand. |
-| `CBB_TEST_UP_CHECK` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a device stays on a hub below the first before it tries the hubs above again, in place of 300. Never set by hand. |
-| `CBB_TEST_HUB_KEY_AHEAD` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, in place of three days. Never set by hand. |
-| `CBB_TEST_RESOLVE` | `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
-| `CBB_TEST_PUSH_AT` | `cbb` and the phone's member built with the feature `testhooks`, in `member/tests/phone_push.rs` | For tests only: the `ip:port` of the tests' push service, in place of the address its name in `keys.json` resolves to. Never set by hand. |
-| `CBB_TEST_ELSEWHERE` | `cbb service` | For tests only: a folder; while it holds a file named by the device's ID, the device neither publishes itself by mDNS nor dials the members it finds, as if on another network. |
-| `CBB_MDNS_TRACE` | `cbb service` | For tests only: a file to which the service appends, by the time of day in UTC, every event its mDNS browsing sees and mdns-sd's debug log (packets sent and received, the cache); the service tests set it and log the file when a test fails. |
-| `CBB_TEST_FALLBACK` | `cbb service` | For tests only: milliseconds a member waits for one with a lower device ID to dial it before it dials that one itself (30 s otherwise); set, the member also dials the members with a greater device ID at port 1, as if a firewall there dropped the member port. |
-| `CBB_TEST_APPLETV_NAME` | `cbb-helper` | For tests only: the name an Apple TV announces by mDNS, which the helper then takes instead of browsing for it; empty for none. |
-| `CBB_TEST_BLUEZ` | cbb-helper on Linux built with the test hooks | For tests only, never read by a release: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
-| `CBB_WRITE_MUTANTS` | the core's tests (`cargo test -p cbb-core`) | For development only: `1` writes `testdata/format/wave4-mutants.json` again from what the readers say, instead of failing when the file no longer matches them. |
-| `CBB_WRITE_BOUNDS` | the core's tests (`cargo test -p cbb-core`) | For development only: any value writes `testdata/format/bounds.json` and the bounds table of `docs/protocol.md` again from the registry of bounds (`core/src/bounds.rs`), instead of failing when they no longer match it. |
-| `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
-| `CBB_PUSH_FLAGS` | `cbb-push.service` | The flags of the project's push service on cbb.tools: `-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id` (the keys, and the Firebase project's service account `fcm.json` for `-fcm-account`, come from systemd's credentials), and `-new-state` on the very first start only (a missing state file stops any other start). |
-| `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group GROUP` (from `cbb status -relay`) or `-open`. |
-| `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
-| `CBB_TRAFFIC_OUT` | `site/deploy/cbb-traffic.sh` on cbb.tools | Where it writes the totals of the last 24 hours; `/srv/cbb.tools/status/traffic.json` by default. |
+| `CBB_ADMIN_SOCKET` | `cbb` | Override the admin socket path (defaults to `admin.sock` beside the control socket, or `admin\admin.sock` on Windows). |
+| `CBB_CONTAINER` | Service | Set by the Docker image (`docker`): marks the service as running in a container with file-backed keys, preventing `cbb new` and suppressing admin key offers unless `CBB_KEYS_IN_FILE=yes`. |
+| `CBB_DEBUG` | `cbb`, service, tray app, `cbb-forward`, `cbb-relay`, `cbb-push` | In `cbb`, `1`/`true`/`yes` shows underlying error details and `0`/`false`/`no` hides them (overrides build default; overridden by `-debug`). In the service environment, `1` also logs WireGuard tunnel details and peer connection closes/resets. In `cbb-forward`, `cbb-relay`, and `cbb-push`, `1` logs periodic counts and verbose diagnostics. The Mac and tray apps pass `CBB_DEBUG` to `cbb` according to their **Show error details** setting. |
+| `CBB_HOME_CGNAT` | Service, installers | `1` treats `100.64.0.0/10` (carrier-grade NAT range) as part of the home network in service checks, firewall rules, and outbound network limits (`cgnat.conf` on Linux, Windows Firewall rule). Unset or `0` treats it as external. Managed with `--home-cgnat on\|off` (`-HomeCgnat on\|off` on Windows). |
+| `CBB_INTERFACES` | Service | Comma- or space-separated network interface names (for example `br-lan,br-iot`) restricting mDNS and the member port. Unset or empty uses all interfaces. Set automatically from UCI zones on OpenWrt. |
+| `CBB_KEYS_IN_FILE` | Service (in a container) | `yes` allows a container (`CBB_CONTAINER` set) to create a group or offer an admin key stored in files inside its volume. |
+| `CBB_PORT` | Service, installers | Member TCP port (`8764` by default, range `1024`–`65535`). Change with `--port N` (`-Port N` on Windows) so installers update the settings file and firewall rules. |
+| `CBB_ROOTLESS` | `cbb` on Linux | `1` (set by rootless systemd user units) switches `cbb` to user-owned paths (`$XDG_RUNTIME_DIR/cbb`, `~/.config/cbb`, `~/.local/state/cbb`) and prevents the device from acting as main device, admin, or hub. Unset, running `cbb` from `~/.local/bin` enables rootless mode automatically. |
+| `CBB_SOCKET` | `cbb`, Mac app | Override the control socket path. |
+| `CBB_STATE` | `cbb` | Override the state directory path. |
+| `CBB_TPM` | Service on Linux, Windows, macOS | `off` creates new member and admin keys in files instead of a TPM 2.0 or Mac Secure Enclave (existing hardware keys stay in hardware). Unset uses hardware keys when available ([Keys and attestation](../guide/keys.md)). |
 
-### The installers
+### Servers and infrastructure
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `CBB_FIREWALL` | `get.sh`, Linux, macOS and FreeBSD `install.sh`, Windows `install.ps1` (through `get.ps1` too) | `express` adds the firewall rules without asking (`--express`), `no` adds none and prints the commands (`--no-firewall`); unset, the installer asks. |
-| `CBB_VERSION` | `get.sh`, `get.ps1` | A release such as `v0.5.0` instead of the latest. In a build of `cbb`, the version the release passes to `cargo build`. |
-| `CBB_AUTO_UPDATE` | the installers | `on` or `off` answers whether the computer updates itself once a day (`--auto-update`, `-AutoUpdate`); unset, they ask once. `cbb update -auto` changes it later. |
-| `CBB_PAIR` | `get.sh`, Linux and OpenWrt `install.sh` | `no` skips the pairing the installer starts at the end for a device in no group (`--no-pair`), for a scripted install; unset, it pairs when its output is a terminal. |
-| `CBB_INSTALL_METHOD` | the installers | How the program came, which they record for `cbb update` (`cbb update -installed-by`): `get` by default, `brew` for a Homebrew copy (found from its path), `winget` from winget's folder, `package` for the OpenWrt package. |
-| `CBB_UPDATING` | the installers | Set by `cbb update` while it runs the new release's installer, so they ask no question about automatic updates. |
-| `CBB_UPDATE_FROM`, `CBB_UPDATE_PARENT` | `cbb update` and `install.ps1` on Windows | Set by `cbb update` for the copy of itself it runs the update from: the program it was started as, and its own process ID, which `install.ps1` leaves running and renames aside instead of stopping. Never set by hand. |
-| `CBB_VERIFY` | `get.sh`, `get.ps1` | `skip` installs without checking the release's signature (`keys.json`, `stable.json`, `release.json`). Without it the installer stops when it cannot check the signature, for example without `openssl`, once the project's root keys are built into it. |
-| `CBB_ATTESTATION` | `get.sh`, `get.ps1` | `require` refuses to install unless GitHub's build attestation of the archive checks out (it needs `gh`, signed in); `skip` does not check it. Unset, it is checked when `gh` is signed in. |
-| `CBB_ERROR_DETAILS` | Linux, macOS and FreeBSD `install.sh` and `uninstall.sh`, `get.sh`, Windows `get.ps1`, `install.ps1` and `uninstall.ps1` | `1` shows every command the shell scripts run, so the output shows where and why one failed, and adds the full error record to the Windows scripts' messages (as `-Details` does). Without it a failed shell script names its exit status. |
-| `CBB_LANG` | `get.sh`, every `install.sh` and `uninstall.sh`, Windows `get.ps1`, `install.ps1` and `uninstall.ps1` | The language of the installers' messages: `zh`, `en`, `es`, `ru`, `ar`, `sw`, `he` or `hi`. Unset, it is the system's (the locale, as gettext reads it; on a Mac without one, the first of the user's languages; on Windows, the display language), and English where the project has no translation (packaging/l10n.sh). |
-| `CBB_OS_RELEASE` | the Linux `install.sh` | For tests: another `/etc/os-release`, whose `ID=steamos` makes it install as on SteamOS. |
-| `CBB_PF_CONF` | the FreeBSD firewall script | Another `pf.conf` than `/etc/pf.conf`, for tests. |
-| `CBB_IMAGE`, `CBB_PREVIEW` | `cbb`'s tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-member preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
-| `CBB_RELEASE_DIR` | `get.sh`, `get.ps1`; `cbb update` built with the feature `testhooks` | For tests: takes the release's files from this directory instead of downloading them. A release's `cbb update` ignores it. |
-| `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1`; `cbb` built with the feature `testhooks` | For tests, with `CBB_RELEASE_DIR`: a file with the root keys to check the release against instead of the project's own. A release's `cbb` always checks against its pinned roots. |
+| `CBB_FORWARD_FLAGS` | `cbb-forward.service` | Command-line flags passed to `cbb-forward` (for example `-vless-xhttp vpn.example.org`). |
+| `CBB_PUSH_FLAGS` | `cbb-push.service` | Command-line flags passed to `cbb-push` (`-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id`, and `-new-state` on first start only; platform keys come from systemd credentials). |
+| `CBB_RELAY_FLAGS` | `cbb-relay.service` | Command-line flags passed to `cbb-relay` (`-group GROUP` from `cbb status -relay`, or `-open`). |
+| `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` | Network interface measured for server traffic accounting ([The servers' budget](../relay-budget.md#money-and-traffic)); defaults to the default-route interface. |
+| `CBB_TRAFFIC_OUT` | `site/deploy/cbb-traffic.sh` | Output file path for 24-hour traffic totals (`/srv/cbb.tools/status/traffic.json` by default). |
 
-### For tests and development
-
-These change nothing in a normal installation. How the tests use them is in
-[CONTRIBUTING.md](../../CONTRIBUTING.md#development).
+### Installers and updates
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `CBB_TEST_X11` | Go tests of the desktop connector | Runs the tests against a real X server and xclip or xterm, for example in a container. |
-| `CBB_TEST_WAYLAND` | Go tests of the desktop connector | Runs the tests against a real Wayland compositor, such as a headless sway. |
-| `CBB_TEST_AVAHI` | Go tests of mDNS | Runs the tests that need avahi-daemon. |
-| `CBB_TEST_MDNS_USERS` | Go tests of mDNS | Runs the test of mDNS for other users' sessions, which needs root. |
-| `CBB_TEST_UINPUT` | Go tests of the uinput helper | `1` makes a missing `/dev/uinput` a failure instead of a skip. |
-| `CBB_TEST_CLIPBOARD` | Go tests of the Windows clipboard | `1` allows the tests to overwrite the clipboard. |
-| `CBB_UI_BROWSER` | Go tests of the tray app's window | The Chrome, Chromium or Edge to run the window in; without it the test looks in the usual places, and skips without a browser outside CI. |
-| `CBB_UPDATE_SCREENSHOTS` | Go tests of the tray app's window | Set (to anything), `TestWindow/screenshots` writes its pictures to `apps/desktop/testdata/screenshots` instead of comparing with them, after a change to the window. |
-| `CBB_SCREENSHOT_OUT` | Go tests of the tray app's window | The folder a failed screenshot comparison leaves the new picture and the difference in; by default `cbb-screenshots` in the system's temporary folder. |
-| `CBB_JS_COVERAGE` | Go tests of the tray app's window | A file the test writes the coverage of the window's scripts to, as LCOV, for `tools/coverage`'s row `js-tray`; CI sets it. |
-| `CBB_FFI_LIB` | The Aurora and HarmonyOS apps' tests on the computer (`apps/silica/tests/qt/run.sh`, `apps/harmony/nodetest/run.sh`) | A `libcbb_ffi.a` built for the computer to link the tests against, instead of building the core with cargo; CI sets it. |
-| `CBB_DANGEROUS_SHEET` | Go tests of the tray app's window, the Android app's unit tests | The folder `DangerousScreensTest` writes the Android pictures to (in `android/`) and `TestWindow/dangerous screens` writes `dangerous-screens.html` to: the dangerous screens in all eight languages (docs/testing.md, "The dangerous screens"); unset, it is skipped. |
-| `CBB_TEST_ACTIONS` | `cbb`, in the Go end-to-end tests (`internal/service`) | A folder that stands for the system's quick actions: a preset with a file `refuse-NAME` there is refused with its text, any other is noted in the file `ran` and not run. Never set by hand. |
-| `CBB_TEST_CLOCK` | the bench's time-scaled build (the feature `benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
-| `CBB_TEST_CLOCK_FILE` | the bench's time-scaled build | A file that holds the value of `CBB_TEST_CLOCK` when that is not set, so the bench moves a member's clock with a restart of the service. |
-| `CBB_TEST_SCALE` | the bench's time-scaled build | How many times faster long times run: 100000 by default, `1` for cases that move only the clock. |
-| `CBB_TEST_XHTTP_CA` | the bench's time-scaled build | A PEM file of a CA that the clients of VLESS over XHTTP trust beside the public ones, for the bench's web server in front of a forwarder (W46). Never in a release. |
-| `CBB_BENCH_SEED` | the bench's random walk (G40) | The walk's seed, which the run prints, to repeat a walk step by step. |
-| `CBB_TPM_SIMULATOR` | `cbb-helper` built with the tag `testhooks`, and Go's tests | A TPM simulator's command port (`host:port`, the platform port the next one) used in place of the TPM. Never set by hand. |
-| `CBB_TPM_REQUIRED` | Go tests of the TPM | Makes a missing `swtpm` a failure instead of a skip, as in CI. |
-| `CBB_SE_TEST` | Go tests on a Mac | `1` lets the tests of `internal/sekey` make keys in the Mac's Secure Enclave; without it no test key goes there. |
-| `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
-| `CBB_FAKE_HELPER` | `cbb`'s tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
-| `CBB_FAKE_HELPER_MODE` | `cbb`'s tests | Makes the test program play a `cbb-helper` that misbehaves as the value says (`crash`, `silent`, `garbage`, `hang`, `die-on-call`) or plays a TPM (`tpm`), for `member/tests/helper_faults.rs`. |
-| `CBB_TEST_ALONE` | Go tests of cbb without its helper | The cbb binary they run alone, without `cbb-helper` beside it (`cargo build` at the top, `target/`). |
-| `CBB_TEST_RUN_AS` | the Rust cbb's own tests | Set by `sys::tests::gives_up_root` for the copy of the test process it starts as root: that copy becomes `nobody` and checks that it cannot become root again. |
-| `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
-| `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
-| `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
-| `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
-| `CBB_PUSH_LIVE_ADDR` | the push service's tests, by hand | The address of a running cbb-push that the ignored test `live_push_to_a_phone` sends a body to a real phone through. |
-| `CBB_PUSH_LIVE_KIND` | the same test | `event` (the default) or `waits`: which body it seals. |
-| `CBB_PUSH_LIVE_PIN` | the same test | The pin of that cbb-push's key, base64, as it logs it. |
-| `CBB_PUSH_LIVE_ROOTS` | the push service's tests, by hand | The CA certificates the ignored test that reaches Apple's sandbox checks it with. |
-| `CBB_PUSH_LIVE_REG` | the same test | The phone's push registration, base64, as the app's test row copies it (launch argument `-PushTestTools YES`). |
-| `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`); tests set it. |
-| `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
-| `CBB_TEST_IPV6` | `cbb`'s tests | `1` makes the tests over IPv6 (the tunnel, the relay, the push service's dual-stack payer) fail where the system has no IPv6 loopback, instead of skipping them; CI and the bench set it. |
-| `CBB_TEST_RUST_SERVICE` | the Go end-to-end tests (`internal/service`) | The `cbb` binary the tests run as a Linux member with the default configuration, finding their peers by mDNS. |
-| `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (features `member` and `testhooks`, so it reads the tests' hooks): the Aurora app's joining and syncing with a software key. |
-| `CBB_REAL_FORWARDER` | `TestAwayThroughRealForwarder` | A forwarder on the internet, host:port (`cbb.tools:8764` for the project's): a Rust `cbb` hub registers with it and another, for which no UDP passes, reaches the hub over VLESS with XHTTP and syncs both ways, a check from a network that blocks WireGuard; without it the test is skipped. |
-| `CBB_REAL_FORWARDER_PIN` | `TestAwayThroughRealForwarder` | That forwarder's pin, base64, when it is not the project's. |
-| `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `verdicts::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
-| `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
-| `CBB_TEST_AHEAD_FILE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs. A release's build does not read it. Never set by hand. |
-| `CBB_RELEASE_BUILD` | building `cbb`, in the release workflow | Set to `1` by the release workflow: a build with a feature for tests only (`benchtime`, `testhooks`, `fuzzing`) then does not compile (docs/maintainers/maintaining.md, "Releases"). |
-| `CBB_TEST_RENEW_EVERY` | `cbb`, in the Go end-to-end tests (`internal/service`) | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
-| `CBB_TEST_ATTEST_ROOTS` | `cbb-helper` built with the tag `testhooks` and the Rust service built with the feature `testhooks`, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. A release's build does not read it. Never set by hand. |
-| `CBB_TEST_OWN_EVIDENCE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`, `TestEvidence`) | A JSON array of the helper's evidence the member sends as its own on every connection, as a phone sends its Android chain; read once when the service starts. The root checks it as any evidence. A release's build does not read it. Never set by hand. |
-| `CBB_TEST_TPM_ROOTS` | `cbb-helper` built with the tag `testhooks`, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |
-| `CBB_TEST_STATUS_URL` | `cbb-helper`, in the service's tests | Where the attestation status list and its keys are fetched from, in place of `https://cbb.tools/attest/`. Never set by hand. |
-| `CBB_TEST_STATUS_EVERY` | the Rust service, in the service's tests | How often, in milliseconds, the root fetches the attestation status list, in place of once a day. Never set by hand. |
-| `CBB_TEST_REFETCH_EVERY` | the Rust service built with the feature `testhooks`, in the service's tests | How often, in milliseconds, a failing link to the project's relay fetches the signed lists again from the relay's server, in place of every ten minutes. Never set by hand. |
-| `CBB_TEST_LISTS_MIRROR` | the Rust service built with the test hooks, in the service's tests | `PORT CAFILE`: the port the mirror on the project relay's server is reached at and the only roots its certificate is checked against, a test's mirror on loopback beside its relay. Never set by hand. |
-| `CBB_TEST_DEAD_UDP` | the Rust service, in the service's tests | An address (host:port) that never answers, which replaces the hubs' UDP addresses, as on a network that blocks WireGuard, so that the tunnel goes over VLESS. Never set by hand. |
-| `CBB_FULL_SIZE` | the core's records tests | `1` runs the records' tests at real size too (minutes; CI's rust job sets it). |
-| `CBB_UPDATE_VECTORS` | the core's keyboard and push tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
-| `CBB_ARCH` | the build of `cbb` in Rust (`packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
-| `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |
-| `CBB_TEAM` | `apps/ios/device.sh` | The Apple team that signs the iPhone app for your own phone, its 10-character ID; without it the script takes the Personal Team of the Apple ID signed in to Xcode. |
-| `CBB_DEVICE` | `apps/ios/device.sh` | The iPhone to install on, its identifier, when more than one is connected. |
-| `CBB_BUNDLE_ID` | `apps/ios/device.sh` | The app's bundle identifier for that build, `dev.<team>.cbb` by default, so that it never takes the release one. |
-| `CBB_NFC` | `apps/ios/device.sh` | `1` signs that build with NFC (`Nfc.entitlements`), for the recovery key on a YubiKey, where the team's profile may carry it. |
-| `CBB_DERIVED` | `apps/ios/device.sh` | Where the build goes, `/tmp/cbb-device.noindex` by default: a folder the Mac empties at a restart, and Spotlight skips it, so the built apps never show up in a search. |
-| `CBB_LOCK_CHILD`, `CBB_MDNS_CHILD` | Go tests | Set by a test for the child process it starts; never set them yourself. |
-| `CBB_MAP` | the ZX Next's `drvtest` example `run` | The map of the `CBB` it runs (`apps/zxnext/build/cbb.map`), for the overlays' pages ([apps/zxnext/README.md](../../apps/zxnext/README.md#testing-on-a-played-next)). |
-| `CBB_PI` | the ZX Next's `drvtest` install tests | The Pi's cbb that `build/CBB` was built with, when it is not `build/PIBRIDGE`. |
-| `CBB_UNLINKED` | the ZX Next's played card | A directory where a file `.cbb` deletes from the card is copied first, to look at it. |
-| `CBB_RELEASE_SIGN_DIR` | `tools/release-sign` | Another directory for the release signing tool's files than `tools/release-sign`. |
-| `CBB_RELEASE_PQ_DIR` | `tools/release-sign` | Where the post-quantum halves of the keys in hardware are kept, encrypted to that hardware (`HASH.age` and its `HASH.identity`): `~/.config/cbb-release/pq` by default (maintaining.md, "Two signatures"). |
-| `CBB_RELEASE_TAG` | `internal/release` tests | Set by the release workflow, on a tag and when run by hand: `TestPinnedRootsComplete` then fails unless every pinned root has both halves (maintaining.md, "Two signatures"); a tag and the keys check stop there, a rehearsal only warns (maintaining.md, "A rehearsal of a release"). |
+| `CBB_ATTESTATION` | `get.sh`, `get.ps1` | `require` fails installation unless GitHub build provenance attestation verifies (requires authenticated `gh`); `skip` skips attestation verification. Unset verifies when `gh` is signed in. |
+| `CBB_AUTO_UPDATE` | Installers | `on` or `off` sets daily automatic updates (`--auto-update`, `-AutoUpdate`); unset prompts once. Change later with `cbb update -auto`. |
+| `CBB_ERROR_DETAILS` | `get.sh`, `get.ps1`, all `install.*` and `uninstall.*` scripts | `1` enables shell command tracing (`set -x`) in POSIX scripts and full PowerShell error records (same as `-Details`) in Windows scripts. |
+| `CBB_FIREWALL` | `get.sh`, Linux/macOS/FreeBSD `install.sh`, Windows `get.ps1`/`install.ps1` | `express` adds firewall rules without prompting (`--express`/`-Express`); `no` adds no rules and prints commands (`--no-firewall`/`-NoFirewall`); unset prompts. |
+| `CBB_INSTALL_METHOD` | Installers | Installation source recorded via `cbb update -installed-by`: `get` (default), `brew`, `winget`, `docker`, or `package`. |
+| `CBB_LANG` | `get.sh`, `get.ps1`, all `install.*` and `uninstall.*` scripts | Override installer message language: `ar`, `en`, `es`, `he`, `hi`, `ru`, `sw`, or `zh`. Unset follows the system locale (falls back to English). |
+| `CBB_PAIR` | `get.sh`, Linux and OpenWrt `install.sh` | `no` skips automatic pairing at the end of installation on devices without `cbb-helper` (same as `--no-pair`). |
+| `CBB_UPDATE_FROM`, `CBB_UPDATE_PARENT` | `cbb update`, Windows `install.ps1` | Internal variables set by `cbb update` on Windows when running from a temporary copy so `install.ps1` renames instead of terminating the running updater process. Do not set by hand. |
+| `CBB_UPDATING` | Installers | Internal variable set by `cbb update` while invoking the new release's installer so interactive update prompts are skipped. |
+| `CBB_VERIFY` | `get.sh`, `get.ps1` | `skip` bypasses verifying signed release metadata (`keys.json`, `stable.json`, `release.json`). Unset stops installation if verification cannot run. |
+| `CBB_VERSION` | `get.sh`, `get.ps1`, Rust build | Release tag to install (such as `v0.6.0`) instead of the latest release. During builds, passes the release version string to `cargo build`. |
+
+### Tests, builds, and development
+
+These variables do not affect standard installations. See
+[Contributing](../../CONTRIBUTING.md#development) for how development and test workflows use them.
+
+| Variable | Read by | Meaning |
+|---|---|---|
+| `CBB_ARCH` | Rust `cbb` build (`packaging/build.sh`) | Release archive architecture name (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`) used by `cbb update`. |
+| `CBB_BENCH_SEED` | Bench random walk (G40) | Seed for replaying a bench random walk. |
+| `CBB_BUNDLE_ID` | `apps/ios/device.sh` | Bundle identifier for local iOS device builds (`dev.<team>.cbb` by default). |
+| `CBB_DANGEROUS_SHEET` | Tray window tests, Android unit tests | Output directory for multilingual confirmation-screen sheets (`TestWindow/dangerous screens`, `DangerousScreensTest`); skipped when unset. |
+| `CBB_DERIVED` | `apps/ios/device.sh` | DerivedData directory for local iOS device builds (`/tmp/cbb-device.noindex` by default). |
+| `CBB_DEVICE` | `apps/ios/device.sh` | Target iPhone identifier when multiple devices are connected. |
+| `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | Directory for Go `-cover` coverage output (`GOCOVERDIR`) in container tests ([Testing](../testing.md#coverage)). |
+| `CBB_FAKE_HELPER` | `cbb` unit tests | Causes the test binary to act as a fake `cbb-helper` for IPC tests. |
+| `CBB_FAKE_HELPER_MODE` | `cbb` fault tests (`member/tests/helper_faults.rs`) | Selects fake helper behavior (`crash`, `silent`, `garbage`, `hang`, `die-on-call`, or `tpm`). |
+| `CBB_FFI_LIB` | Aurora and HarmonyOS host tests (`apps/silica/tests/qt/run.sh`, `apps/harmony/nodetest/run.sh`) | Path to a prebuilt host `libcbb_ffi.a` instead of rebuilding with Cargo. |
+| `CBB_FULL_SIZE` | `cbb-core` record tests | `1` runs record tests at full production size limits. |
+| `CBB_HELPER` | `cbb` (`testhooks` build only) | Path to `cbb-helper` binary instead of the binary beside `cbb` (empty string disables helper). Subject to the same ownership check as the default helper. Ignored in release builds. |
+| `CBB_IMAGE`, `CBB_PREVIEW` | `cbb` image preview test | Input PNG/JPEG path (`CBB_IMAGE`) and output preview PNG path (`CBB_PREVIEW`) for inspecting `cbb next image` conversion (`cargo test -p cbb-member preview -- --ignored`). |
+| `CBB_JS_COVERAGE` | Tray window tests | Output LCOV path for frontend JavaScript coverage (`tools/coverage` row `js-tray`). |
+| `CBB_LOCK_CHILD`, `CBB_MDNS_CHILD` | Go tests | Internal markers set for child test processes. Do not set by hand. |
+| `CBB_MAP` | ZX Spectrum Next `drvtest` `run` example | Path to `cbb.map` (`apps/zxnext/build/cbb.map`) for overlay page lookup ([apps/zxnext/README.md](../../apps/zxnext/README.md#testing-on-a-played-next)). |
+| `CBB_MDNS_TRACE` | `cbb service` | File path for appending UTC-timestamped mDNS browsing events and debug logs. |
+| `CBB_NFC` | `apps/ios/device.sh` | `1` signs local iOS builds with `Nfc.entitlements` for YubiKey NFC support. |
+| `CBB_OS_RELEASE` | Linux `install.sh` | Alternate `/etc/os-release` path for testing (for example simulating `ID=steamos`). |
+| `CBB_PF_CONF` | FreeBSD firewall script | Alternate `pf.conf` path instead of `/etc/pf.conf` for testing. |
+| `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | Path to the `ffi/` `phone-on-linux` example binary (built with `member` and `testhooks`). |
+| `CBB_PI` | ZX Spectrum Next `drvtest` install tests | Alternate Pi binary path in place of `build/PIBRIDGE`. |
+| `CBB_PREVIOUS` | Go service compatibility tests (`TestPreviousRelease`) | Path to the previous release's `cbb` binary (as printed by `tools/e2e/previous.sh`). |
+| `CBB_PUSH_LIVE_ADDR` | Manual `cbb-push` live test (`live_push_to_a_phone`) | Address of a running `cbb-push` instance. |
+| `CBB_PUSH_LIVE_KIND` | Manual `cbb-push` live test | Sealed notification kind: `event` (default) or `waits`. |
+| `CBB_PUSH_LIVE_PIN` | Manual `cbb-push` live test | Base64 key pin of the target `cbb-push` instance. |
+| `CBB_PUSH_LIVE_REG` | Manual `cbb-push` live test | Base64 phone push registration token (from app launch argument `-PushTestTools YES`). |
+| `CBB_PUSH_LIVE_ROOTS` | Manual `cbb-push` live test | CA certificate bundle for checking Apple's sandbox APNs server. |
+| `CBB_REAL_FORWARDER` | `TestAwayThroughRealForwarder` | `host:port` of a live forwarder (such as `cbb.tools:8764`) for end-to-end VLESS/XHTTP tests; test skips when unset. |
+| `CBB_REAL_FORWARDER_PIN` | `TestAwayThroughRealForwarder` | Base64 key pin of `CBB_REAL_FORWARDER` when not using the project's forwarder. |
+| `CBB_RELAY_LIMITS` | `cbb-relay` (tests) | JSON object overriding open-relay limits (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `streams`). |
+| `CBB_RELAY_STATS_MS` | `cbb-relay` (tests) | Interval in milliseconds for logging group and device counts. |
+| `CBB_RELEASE_BUILD` | Release workflow Rust build | `1` causes compilation to fail if any test-only feature (`benchtime`, `testhooks`, `fuzzing`) is enabled. |
+| `CBB_RELEASE_DIR` | `get.sh`, `get.ps1`, `cbb update` (`testhooks` build only) | Local directory supplying release files instead of downloading over the network. Ignored by release builds of `cbb`. |
+| `CBB_RELEASE_PQ_DIR` | `tools/release-sign` | Directory holding age-encrypted post-quantum halves of hardware release keys (`~/.config/cbb-release/pq` by default). |
+| `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1`, `cbb` (`testhooks` build only) | Alternate release root keys file used with `CBB_RELEASE_DIR`. Ignored by release builds of `cbb`. |
+| `CBB_RELEASE_SIGN_DIR` | `tools/release-sign` | Alternate directory for `tools/release-sign` files. |
+| `CBB_RELEASE_TAG` | `internal/release` tests | Set by release workflows so `TestPinnedRootsComplete` requires both signature halves on every pinned root key. |
+| `CBB_REPO` | `tools/e2e/previous.sh` | GitHub repository (`owner/repo`) queried for previous releases (`HunterEwok/cbb` by default). |
+| `CBB_SCREENSHOT_OUT` | Tray window tests | Directory for saving failed screenshot diffs (`cbb-screenshots` in the system temp dir by default). |
+| `CBB_SE_TEST` | macOS Go tests (`internal/sekey`) | `1` permits tests to create keys in the Mac Secure Enclave. |
+| `CBB_SOURCE` | Rust core build | Commit identifier reported by the core's `version` call ([The core's entry point](../core-api.md)). |
+| `CBB_TEAM` | `apps/ios/device.sh` | 10-character Apple Team ID for signing local iOS builds (defaults to Xcode's signed-in Personal Team). |
+| `CBB_TEST_ACTIONS` | `cbb` (`testhooks` build only) | Directory simulating quick actions (`refuse-NAME` refuses an action; other presets log to `ran`). Ignored in release builds. |
+| `CBB_TEST_AHEAD_FILE` | `cbb` (`testhooks` build only) | File holding wall-clock offset in milliseconds, re-read dynamically during tests. Ignored in release builds. |
+| `CBB_TEST_ALONE` | Go end-to-end tests | Path to the `cbb` binary tested without `cbb-helper`. |
+| `CBB_TEST_APPLETV_NAME` | `cbb-helper` (`testhooks` build only) | Static Apple TV mDNS name used in tests instead of live browsing. Ignored in release builds. |
+| `CBB_TEST_ATTEST_ROOTS` | `cbb` and `cbb-helper` (`testhooks` builds only) | PEM file replacing Google's Android key attestation root certificates. Ignored in release builds. |
+| `CBB_TEST_AVAHI` | Go mDNS tests | Enables tests that require `avahi-daemon`. |
+| `CBB_TEST_BLUEZ` | `cbb-helper` on Linux (`testhooks` build only) | D-Bus address of a mock BlueZ daemon (`bluetest`) instead of the system bus. Ignored in release builds. |
+| `CBB_TEST_CLIPBOARD` | Windows Go clipboard tests | `1` permits tests to overwrite the live Windows clipboard. |
+| `CBB_TEST_CLOCK` | `benchtime` build | Wall-clock offset (duration or RFC 3339 timestamp) added to the system clock. Ignored in release builds. |
+| `CBB_TEST_CLOCK_FILE` | `benchtime` build | File supplying `CBB_TEST_CLOCK` when `CBB_TEST_CLOCK` is unset. Ignored in release builds. |
+| `CBB_TEST_DEAD_UDP` | `cbb` (`testhooks` build only) | Unresponsive `host:port` replacing hubs' UDP addresses to force VLESS fallback. Ignored in release builds. |
+| `CBB_TEST_ELSEWHERE` | `cbb` (`testhooks` build only) | Directory where a file named after a device ID disables mDNS advertising and local dialing for that device. Ignored in release builds. |
+| `CBB_TEST_FALLBACK` | `cbb` (`testhooks` build only) | Milliseconds to wait before reverse-dialing a lower-ID peer (default 30 s) and forces dialing higher-ID peers on port 1 to test firewall fallback. Ignored in release builds. |
+| `CBB_TEST_HUB_KEY_AHEAD` | `cbb` (`testhooks` build only) | Seconds before a new credential period that a hub advertises its next key (default 3 days). Ignored in release builds. |
+| `CBB_TEST_IPV6` | `cbb` tests | `1` fails IPv6 tests instead of skipping when IPv6 loopback is unavailable. |
+| `CBB_TEST_LISTS_MIRROR` | `cbb` (`testhooks` build only) | `PORT CAFILE` pointing signed-list fetches at a local test mirror with custom root CAs. Ignored in release builds. |
+| `CBB_TEST_MDNS_USERS` | Go mDNS tests | Enables root-only multi-user mDNS session tests. |
+| `CBB_TEST_MOVE_LINGER` | `cbb` (`testhooks` build only) | Seconds a retiring hub continues serving clients after `cbb global move` (default 300). Ignored in release builds. |
+| `CBB_TEST_OWN_EVIDENCE` | `cbb` (`testhooks` build only) | Path to a JSON array of attestation evidence sent by the member on every connection (`TestEvidence`). Ignored in release builds. |
+| `CBB_TEST_PUSH_AT` | `cbb` and phone member (`testhooks` build only) | `ip:port` overriding the push service address from `keys.json` (`member/tests/phone_push.rs`). Ignored in release builds. |
+| `CBB_TEST_REFETCH_EVERY` | `cbb` (`testhooks` build only) | Milliseconds between signed-list refetch attempts on relay failure (default 10 minutes). Ignored in release builds. |
+| `CBB_TEST_RENEW_EVERY` | `cbb` (`testhooks` build only) | Milliseconds between sealing-key rotation checks (default 1 hour). Ignored in release builds. |
+| `CBB_TEST_RESOLVE` | `cbb` (`testhooks` build only) | Comma-separated `host=ip` overrides for resolving project relay hostnames from `entries.json`. Ignored in release builds. |
+| `CBB_TEST_RUN_AS` | `cbb` unit tests (`sys::tests::gives_up_root`) | Internal marker for the unprivileged child process in privilege-drop tests. |
+| `CBB_TEST_RUST_RELAY` | Go relay tests | Path to the `cbb-relay` binary (falls back to `cbb-relay` beside `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`). |
+| `CBB_TEST_RUST_SERVICE` | Go end-to-end tests (`internal/service`) | Path to the `cbb` binary tested as a default Linux member using mDNS. |
+| `CBB_TEST_SCALE` | `benchtime` build | Time-acceleration multiplier for long intervals (`100000` by default; `1` moves only the clock). Ignored in release builds. |
+| `CBB_TEST_STANDBY_GRACE` | `cbb` (`testhooks` build only) | Seconds a standby hub waits before taking over from a higher-priority hub (default 60). Ignored in release builds. |
+| `CBB_TEST_STATUS_EVERY` | `cbb` (`testhooks` build only) | Milliseconds between attestation status-list fetches on the main device (default 1 day). Ignored in release builds. |
+| `CBB_TEST_STATUS_URL` | `cbb-helper` (`testhooks` build only) | Base URL overriding `https://cbb.tools/attest/` for attestation status-list tests. Ignored in release builds. |
+| `CBB_TEST_TPM_ROOTS` | `cbb-helper` (`testhooks` build only) | PEM file replacing built-in TPM manufacturer root certificates for EK verification. Ignored in release builds. |
+| `CBB_TEST_UINPUT` | Go uinput helper tests | `1` fails tests instead of skipping when `/dev/uinput` is absent. |
+| `CBB_TEST_UP_CHECK` | `cbb` (`testhooks` build only) | Seconds a client waits on a lower-priority hub before probing higher-priority hubs again (default 300). Ignored in release builds. |
+| `CBB_TEST_WAYLAND` | Go desktop connector tests | Runs clipboard tests against a live Wayland compositor. |
+| `CBB_TEST_X11` | Go desktop connector tests | Runs clipboard tests against a live X11 server. |
+| `CBB_TEST_XHTTP_CA` | `cbb` (`testhooks`/`benchtime` builds) | PEM file of extra root CAs trusted by VLESS over XHTTP clients in tests and on the bench. Ignored in release builds. |
+| `CBB_TPM_REQUIRED` | Go TPM tests | Fails TPM tests instead of skipping when `swtpm` is missing. |
+| `CBB_TPM_SIMULATOR` | `cbb-helper` (`testhooks` build) and Go tests | `host:port` of a TPM simulator command port (platform port is `port + 1`). Ignored in release builds. |
+| `CBB_UI_BROWSER` | Tray window tests | Path to Chrome, Chromium, or Edge binary for running tray UI tests. |
+| `CBB_UNLINKED` | ZX Spectrum Next simulated SD card | Directory where files deleted by `.cbb` are backed up for inspection. |
+| `CBB_UPDATE_SCREENSHOTS` | Tray window tests | Any non-empty value regenerates reference screenshots in `apps/desktop/testdata/screenshots`. |
+| `CBB_UPDATE_VECTORS` | `cbb-core` keyboard and push tests | `1` regenerates keyboard layout test vectors (`cargo test -p cbb-core keyboard`). |
+| `CBB_VERDICTS` | Cross-implementation verdict tests | Path to a `tools/difffuzz gen` corpus ([Differential fuzzing](../differential.md)). |
+| `CBB_VERDICTS_OUT` | Cross-implementation verdict tests | Output file path for verdict results (one line per case). |
+| `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Restricts the weekly fleet bench run to specified `-scenario` names. |
+| `CBB_WRITE_BOUNDS` | `cbb-core` tests | Any non-empty value regenerates `testdata/format/bounds.json` and the bounds table in `docs/protocol.md` from `core/src/bounds.rs`. |
+| `CBB_WRITE_MUTANTS` | `cbb-core` tests | `1` regenerates `testdata/format/wave4-mutants.json` from current reader outputs. |

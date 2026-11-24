@@ -1,59 +1,62 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Versions and compatibility
 
-Which releases of Connect Beyond Borders work together, and what an update keeps. The reasons are
-in the [decisions](../decisions.md) (D-131); the rules behind each line are in the
-[protocol](../protocol.md).
+For users and administrators checking which releases of Connect Beyond Borders work together in
+one group and what updates preserve. For architectural rationale, see
+[Decisions](../decisions.md) (D-131); for normative wire rules, see [Protocol](../protocol.md).
 
-## Keep one release in a group
+## Group release compatibility
 
-0.6 promises no more than 0.5 did: a device works in a group with devices of its own release,
-and the format of the group's records and messages may still change before 0.7 (D-131).
+Every device in a group must run the same release (D-131). Interoperability across different
+releases is not guaranteed while the wire format and record rules remain preliminary.
 
-| You have | It works |
+| Group configuration | Supported |
 |---|---|
-| A group where every device runs the same release | yes |
-| A group with devices of different releases | not promised: update every device to the same release |
-| A group made with 0.5 or earlier, on 0.6 | no: set the group up again once (below) |
+| All devices on the same release | Yes |
+| Devices on different releases in one group | Not guaranteed; update all devices to the same release |
+| Group created on 0.5 or earlier, upgraded to 0.6 | No; recreate the group once (see below) |
 
 ## Version numbers
 
-Releases follow [Semantic Versioning](https://semver.org/). Before 1.0.0 the middle number
-(0.6, 0.7) marks a release with new features, and the last (0.6.1) a release with fixes
-only. Security fixes go into the latest release only ([SECURITY.md](../../SECURITY.md),
-"Supported versions"), so keep every device on it.
+Releases follow [Semantic Versioning](https://semver.org/). Prior to 1.0.0, minor versions (such
+as `0.6.0`) introduce features or format changes, and patch versions (such as `0.6.1`) contain
+fixes only. Security fixes ship in the latest release only ([SECURITY.md](../../SECURITY.md)).
 
-The formats on the wire have numbers of their own:
+### Wire format identifiers
 
-| Format | In 0.6 | Where |
+| Component | Identifier | Specification |
 |---|---|---|
-| The member protocol | ALPN `cbb/4` | [protocol](../protocol.md), section 4, "The member protocol in 0.6" |
-| Pairing | ALPN `cbb-pair/3` | [protocol](../protocol.md), section 6, "Pairing in 0.6" |
-| The group's signed records | the records of 0.6, in one strict form of CBOR | [protocol](../protocol.md), section 10, "Records in 0.6" |
-| mDNS | TXT `v=1` | [protocol](../protocol.md), section 3 |
+| Member protocol | ALPN `cbb/4` | [Protocol](../protocol.md), section 4, "The member protocol in 0.6" |
+| Pairing | ALPN `cbb-pair/3` | [Protocol](../protocol.md), section 6, "Pairing in 0.6" |
+| Forwarder registration | ALPN `cbb-forward/3` | [Protocol](../protocol.md), section 13 |
+| Blind relay registration | ALPN `cbb-relay/3` | [Protocol](../protocol.md), section 14 |
+| Group signed records | Strict deterministic CBOR | [Protocol](../protocol.md), section 10, "Records in 0.6" |
+| Local discovery (mDNS) | TXT `v=1` | [Protocol](../protocol.md), section 3 |
 
 ## Updating a group
 
-Update every device of the group. A computer or a small device updates with `cbb update` or
-its daily timer, a phone or a tablet from its app store; the
-[installation guide](../guide/install.md#updating) has the commands. Each update keeps the
-device's settings, keys and place in the group, and a computer goes back to the previous
-version by itself if the new one does not start.
+Update every device in your group to the same release. Computers and small devices update with
+`cbb update` or the daily update timer; phones and tablets update from their app store or release
+APK ([Installing](../guide/install.md#updating)).
 
-## Groups made before 0.6
+Within a compatible release series, an update preserves keys, settings, and group membership. If an
+updated computer service fails to report the new version within 1 minute, `cbb update` rolls back
+to the previous binaries automatically.
 
-0.6 reads no records of earlier releases, so a group made with 0.5 is not carried over. At its
-first start on 0.6 a device leaves the old group, says so in `cbb status`, keeps its settings,
-and joins a new group like a new device: make the group again on the phone or with `cbb new`,
-then add the devices ([quick start](../guide/quickstart.md), or
-[without the app](../guide/without-app.md)).
+## Groups from 0.5 or earlier
 
-## What is checked
+Release 0.6 does not read record formats from 0.5 or earlier. On first start after updating from
+0.5, a device leaves its old group automatically, keeps its local settings, and notes the reset in
+`cbb status`. Recreate the group on your main device (in the phone app or with `cbb new`) and add
+each device again ([Quick start](../guide/quickstart.md) or
+[Without the app](../guide/without-app.md)).
 
-- CI's upgrade test (`tools/e2e/upgrade.sh`) takes members of the last published release and
-  updates them to the build under test: a member of a group made before 0.6 leaves it, says
-  so and keeps its settings, and a new group works.
-- Between fix releases of 0.6, the service's TestPreviousRelease puts a device of the previous
-  fix release (`tools/e2e/previous.sh`) in one group with this build.
-- Every release is signed, and a device installs only a signed release and never an older
-  one ([protocol](../protocol.md), section 16).
+## Automated compatibility checks
+
+- **Upgrade check (`tools/e2e/upgrade.sh`)**: Starts members on the previous published release and
+  upgrades them to the build under test, verifying that pre-0.6 groups leave cleanly with settings
+  intact and that new groups sync.
+- **Previous-release check (`TestPreviousRelease`, `tools/e2e/previous.sh`)**: Runs a member from
+  the previous compatible 0.6 patch release alongside the build under test in one group.
+- **Release signatures**: Every release is signed; devices install only verified releases and
+  reject downgrades ([Protocol](../protocol.md), section 16).
