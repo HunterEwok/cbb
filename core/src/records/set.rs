@@ -3043,9 +3043,33 @@ impl RecordSet {
     }
 
     /// Whether every live admin key but signer has acknowledged signer's
-    /// records up to seq. With no admin keys, at once.
+    /// records up to seq. With no admin keys, at once. The tests check
+    /// `Acks::acked` against it.
+    #[cfg(test)]
     fn acked(&self, state: &State, signer: &KeyHash, seq: u64) -> bool {
         Self::live_admins(state).iter().filter(|a| *a != signer).all(|a| self.acked_by(state, a, signer, seq))
+    }
+
+    /// What `acked_by` reads, gathered in one pass over the set, for a
+    /// caller that asks about many removals: `acked_by` reads the whole set
+    /// twice for each, and a checkpoint at the floor asks for each counting
+    /// removal and each admin key on every write.
+    fn acks(&self, state: &State) -> Acks {
+        let mut acks = Acks { live: Self::live_admins(state), granted: BTreeMap::new(), saw: BTreeMap::new() };
+        for e in self.records.values().filter(|e| !e.held && state.counting.contains(&e.record.id())) {
+            let b = e.record.body();
+            if let Kind::Device(d) = &b.kind
+                && let Some(a) = d.admin.as_ref().map(Key::hash)
+            {
+                let g = acks.granted.entry((b.signer, a)).or_insert(b.seq);
+                *g = (*g).min(b.seq);
+            }
+            for x in seen_of(&b.kind) {
+                let m = acks.saw.entry((b.signer, x.key)).or_insert(x.seq);
+                *m = (*m).max(x.seq);
+            }
+        }
+        acks
     }
 
     /// `unacknowledged` read through `waiting` and `acked_by`, one removal
@@ -3429,11 +3453,26 @@ impl RecordSet {
         // And only once every live admin key but its signer has
         // acknowledged it (`acked`): an admin that has not seen the
         // removal may still sign for the key, so the removal waits.
+        let acks = self.acks(state);
+        #[cfg(test)]
+        let mut checked = false;
         for e in entries().filter(|e| state.counting.contains(&e.record.id())) {
             if let Kind::Revoke(rm) = &e.record.body().kind
                 && under(&e.record)
                 && rm.keys.iter().all(settled)
-                && self.acked(state, &e.record.body().signer, e.record.body().seq)
+                && {
+                    let (signer, seq) = (&e.record.body().signer, e.record.body().seq);
+                    let ok = acks.acked(state, signer, seq);
+                    // The tests check the one pass against acked, once a
+                    // checkpoint: acked for every removal is what took the
+                    // tests at the floor minutes.
+                    #[cfg(test)]
+                    if !checked {
+                        checked = true;
+                        assert_eq!(ok, self.acked(state, signer, seq), "acked: the one pass and acked_by differ");
+                    }
+                    ok
+                }
             {
                 dropped.insert(e.record.id());
                 gone.extend(rm.keys.iter().copied());
@@ -5015,6 +5054,29 @@ impl RecordSet {
             out.entry(i.why).or_default().insert(i.record);
         }
         out
+    }
+}
+
+/// `RecordSet::acks`: the live admin keys, the lowest seq of each
+/// signer's counting grant of an admin key, by (signer, admin key), and
+/// the highest seq of each key that a signer's counting records saw, by
+/// (signer, key).
+struct Acks {
+    live: BTreeSet<KeyHash>,
+    granted: BTreeMap<(KeyHash, KeyHash), u64>,
+    saw: BTreeMap<(KeyHash, KeyHash), u64>,
+}
+
+impl Acks {
+    /// `RecordSet::acked_by` read from the one pass.
+    fn acked_by(&self, state: &State, a: &KeyHash, signer: &KeyHash, seq: u64) -> bool {
+        let above = self.granted.get(&(*signer, *a)).is_some_and(|named| seq < *named);
+        (above && state.roots.contains(signer)) || self.saw.get(&(*a, *signer)).is_some_and(|m| *m >= seq)
+    }
+
+    /// `RecordSet::acked` read from the one pass.
+    fn acked(&self, state: &State, signer: &KeyHash, seq: u64) -> bool {
+        self.live.iter().filter(|a| *a != signer).all(|a| self.acked_by(state, a, signer, seq))
     }
 }
 
