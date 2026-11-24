@@ -322,19 +322,18 @@ jobs:
             -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
-    name: build (${{ matrix.systems }})
+    # One job for every target CI builds on Linux: the two halves it was split
+    # into took 10 and 14 minutes, both far shorter than the longest jobs, so
+    # the split saved no time and took a second runner (docs/testing.md,
+    # "Running tests in parallel"). FreeBSD and Windows first, so the Windows
+    # archive reaches the installer's job as soon as before.
+    name: build (Linux, FreeBSD, Windows)
     needs: changes
     if: needs.changes.outputs.core == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - systems: Linux
-            targets: linux/amd64 linux/arm64 linux/arm/7 linux/arm/6
-          - systems: FreeBSD, Windows
-            targets: freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
+    env:
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -348,26 +347,27 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/zig"
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
-      - name: cbb and the Go programs beside it, and the release archive of each target, as at a release
-        # Two jobs, each building cbb (Rust, packaging/build.sh) and the
-        # Go programs for its targets: Rust builds each target from the start.
-        # go vet runs once per operating system: the code differs by system,
-        # not by architecture, and the check job vets Linux. ARMv6 is for the
-        # Raspberry Pi Zero W; the routers' MIPS builds are the rustmips job's.
-        env:
-          CGO_ENABLED: "0"
-          TARGETS: ${{ matrix.targets }}
-        run: |
-          # shellcheck disable=SC2086 # the targets are words
-          sh .github/build-targets.sh "$RUNNER_TEMP" $TARGETS
+      # Each step builds cbb (Rust, packaging/build.sh) and the Go programs for
+      # its targets, and the release archive of each, as at a release: Rust
+      # builds each target from the start. go vet runs once per operating
+      # system: the code differs by system, not by architecture, and the check
+      # job vets Linux. ARMv6 is for the Raspberry Pi Zero W; the routers' MIPS
+      # builds are the rustmips job's.
+      - name: cbb and the Go programs beside it for FreeBSD and Windows, and their release archives
+        run: sh .github/build-targets.sh "$RUNNER_TEMP" freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
       - name: keep the Windows archive for the installer test
-        if: contains(matrix.targets, 'windows/amd64')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-windows-amd64.zip
           path: ${{ runner.temp }}/dist/cbb-windows-amd64.zip
           if-no-files-found: error
           retention-days: 1
+      - name: room for the Linux builds
+        # The other targets' Rust builds (target/<triple>) are not used again;
+        # the host's build scripts and macros (target/release) are.
+        run: find target -mindepth 1 -maxdepth 1 -type d -name '*-*-*' -exec rm -rf {} +
+      - name: cbb and the Go programs beside it for Linux, and their release archives
+        run: sh .github/build-targets.sh "$RUNNER_TEMP" linux/amd64 linux/arm64 linux/arm/7 linux/arm/6
   buildmac:
     name: test and build (macOS), homebrew, Mac app
     needs: changes
