@@ -33,8 +33,13 @@ a checked box means the setting is in place.
 - [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
   setup) scan GitHub Actions, Go, Rust and Kotlin on every pull request, and
   `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes (on a pull
-  request called from `ci.yml` beside the other jobs), weekly, by hand and
-  before each release. GitHub rejects their results while the default setup is on.
+  request called from `ci.yml` beside the other jobs, and on `main` after the merge, a newer
+  push cancelling an older run), weekly, by hand and before each release, where `release.yml`
+  takes `main`'s passed analysis of the tagged commit when there is one rather than running
+  it again. The Go files only macOS builds compile are analyzed on a pull request in `ci.yml`'s
+  macOS job, and on `main` (`codeql.yml`'s `analyze (go, macos)`) only when a push changed
+  them, weekly and by hand: macOS runners are few. GitHub rejects their results while the
+  default setup is on.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
   OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
   weekly and on each push to `main`, and publishes the score for the README's badge.
@@ -206,7 +211,8 @@ Rules for workflows:
 - Built by CI from a tag, never on a laptop: push a tag `vX.Y.Z` on main
   (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`), and
   `.github/workflows/release.yml` builds the archives, `SHA256SUMS` and the attestations and,
-  once the iPhone app's CodeQL analysis passes on the tag (about half an hour),
+  once the iPhone app's CodeQL analysis has passed for the tagged commit (on `main` after the
+  merge, or on the tag in about half an hour when `main`'s run did not analyze it),
   makes a draft release, with notes generated from the merged pull requests. The maintainer
   signs and publishes it on their Mac with `release-sign publish` ("Signed releases" below).
   A tag `vX.Y.Z-rc.N` makes a pre-release, which `releases/latest` and so `get.sh` skip;

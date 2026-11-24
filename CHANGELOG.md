@@ -2307,6 +2307,11 @@ with 0.5 is set up again once. The details follow.
   stranger for a cookie, or the garbage has gone out) rather than after half a second; the
   tunnel's race test checks that each connection is through with a byte sent back before it
   ends the link; and the relay's test of its stop no longer waits 300 ms before the stop.
+- CodeQL takes macOS runners only when it has something new to analyze: the release takes
+  `main`'s passed analysis of the iPhone app for the tagged commit instead of running it again, a
+  newer push to `main` cancels the app's analysis still running for an older one, and the Go
+  files only macOS builds compile are analyzed after a merge only when the merge changed them
+  (and weekly).
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
