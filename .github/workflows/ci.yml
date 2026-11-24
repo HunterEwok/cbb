@@ -407,9 +407,12 @@ jobs:
           path: cover-go-macos-latest.out
           retention-days: 7
       - name: cbb, the Go programs beside it and the release archives, as at a release
-        if: env.CORE == 'true'
+        # Built once for this job: the formula's archive and the .pkg below
+        # take these programs, at the version they install (0.0.1).
+        if: env.CORE == 'true' || env.MACOS == 'true'
         env:
           CGO_ENABLED: "1"
+          CBB_VERSION: "0.0.1"
         run: sh .github/build-targets.sh "$RUNNER_TEMP" darwin/arm64/vet darwin/amd64
       - name: the agent's helper has the pasteboard
         if: env.CORE == 'true'
@@ -433,11 +436,8 @@ jobs:
           # The archive as the release workflow makes it; the formula wants the
           # other three too, so they are copies of it.
           rel="$RUNNER_TEMP/release"
-          rustup toolchain install stable --profile minimal
-          rustup default stable
           mkdir -p "$RUNNER_TEMP/bin"
-          CBB_VERSION=0.0.1 cargo build --locked --release -p cbb-member
-          cp target/release/cbb "$RUNNER_TEMP/bin/cbb"
+          cp "$RUNNER_TEMP/darwin-arm64/cbb" "$RUNNER_TEMP/bin/cbb"
           go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.0.1" -o "$RUNNER_TEMP/bin/cbb-helper" ./cmd/cbb-helper
           sh packaging/archive.sh "$RUNNER_TEMP/bin/cbb" darwin arm64 "$rel"
           for n in darwin-amd64 linux-amd64 linux-arm64; do
@@ -579,13 +579,10 @@ jobs:
             ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tail -n 50)
           app="$RUNNER_TEMP/derived/Build/Products/Release/CBB.app"
           sh packaging/macos/sign.sh - "$app"
-          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
+          # The programs the archives' step built.
           for a in arm64 amd64; do
-            t=aarch64-apple-darwin
-            [ "$a" = arm64 ] || t=x86_64-apple-darwin
-            cargo +stable build --locked --release -p cbb-member --target "$t"
-            cp "target/$t/release/cbb" "$RUNNER_TEMP/cbb-$a"
-            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-helper-$a" ./cmd/cbb-helper
+            cp "$RUNNER_TEMP/darwin-$a/cbb" "$RUNNER_TEMP/cbb-$a"
+            cp "$RUNNER_TEMP/darwin-$a/cbb-helper" "$RUNNER_TEMP/cbb-helper-$a"
             sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-$a"
             sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper-$a"
           done
@@ -1802,7 +1799,7 @@ jobs:
       - name: the Rust build from this pull request's cache
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
-          name: ios-sim
+          name: ios-sim-tests
       - name: the simulator boots while Rust builds
         # A fresh runner's first boot spends minutes migrating its data; started
         # here, the boot runs beside the Rust build, and test_on below finds the
@@ -1840,7 +1837,7 @@ jobs:
       - name: the Rust build into this pull request's cache
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
-          name: ios-sim
+          name: ios-sim-tests
           save: "true"
       - name: generate the Xcode project
         working-directory: apps/ios

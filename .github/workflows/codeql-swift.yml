@@ -50,7 +50,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
-          name: ios-sim
+          name: ios-sim-tests
       - name: generate the iPhone app's project and fetch its packages
         # Before CodeQL watches: Homebrew refuses to run under its tracer. The app
         # links the Rust core (ffi/), with the phones' tunnel, which Rust builds:
@@ -65,7 +65,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
-          name: ios-sim
+          name: ios-sim-tests
           save: "true"
       - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:

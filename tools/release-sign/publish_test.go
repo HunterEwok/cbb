@@ -212,7 +212,7 @@ func testKeys(t *testing.T) keyFiles {
 	prevRoots, prevAsk, prevNow := pinnedRoots, ask, now
 	pinnedRoots = func() []release.Key { return k.roots }
 	ask = func(string) bool { return true }
-	clock := time.Now()
+	clock := testStart
 	now = func() time.Time { return clock }
 	t.Cleanup(func() { pinnedRoots, ask, now = prevRoots, prevAsk, prevNow })
 	return k

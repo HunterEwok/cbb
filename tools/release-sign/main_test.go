@@ -43,10 +43,7 @@ func write(t *testing.T, path string, data []byte) string {
 
 func newKey(t *testing.T, dir, name string) (priv, pub string) {
 	t.Helper()
-	k, err := release.GenerateSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	k := pooledKey(t)
 	// Both halves in one file; the public keys named, as roots.pem names
 	// a root.
 	priv = write(t, filepath.Join(dir, name+".key"), must(release.MarshalSignerPEM(k)))
@@ -142,6 +139,7 @@ func TestFlow(t *testing.T) {
 }
 
 func TestDrill(t *testing.T) {
+	drillClock(t)
 	dist, roots := t.TempDir(), filepath.Join(t.TempDir(), "roots.pem")
 	archives(t, dist)
 	call(t, drill, "-version", "0.6.0", dist, roots)
@@ -157,6 +155,7 @@ func TestDrill(t *testing.T) {
 // Each envelope of drill -envelopes is taken by verify as the readers'
 // vectors say.
 func TestDrillEnvelopes(t *testing.T) {
+	drillClock(t)
 	dist, roots, envs := t.TempDir(), filepath.Join(t.TempDir(), "roots.pem"), t.TempDir()
 	archives(t, dist)
 	call(t, drill, "-version", "0.6.0", "-envelopes", envs, dist, roots)
@@ -190,6 +189,7 @@ func TestDrillEnvelopes(t *testing.T) {
 // here and many times that in an emulated machine, so the faults run side
 // by side.
 func TestDrillFaults(t *testing.T) {
+	drillClock(t)
 	// What the drills print is not read; stdout stays one writer while
 	// they run (call swaps it per command).
 	stdout = io.Discard

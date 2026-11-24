@@ -476,14 +476,7 @@ func TestReleaseVectors(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var v vectors
-	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
-		t.Fatal(err)
-	}
+	v := readVectors(t)
 	if len(v.Vectors) != 53 || len(v.Status) != 18 {
 		t.Fatalf("the file has %d vectors and %d of the list", len(v.Vectors), len(v.Status))
 	}
@@ -542,8 +535,23 @@ func TestReleaseVectors(t *testing.T) {
 	}
 }
 
+// readVectors reads testdata/interop/go-release.json, which makeVectors
+// wrote: its SLH-DSA signatures took makeVectors some 15 seconds to make.
+func readVectors(t *testing.T) vectors {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "go-release.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
 func TestCheckErrors(t *testing.T) {
-	v := makeVectors(t)
+	v := readVectors(t)
 	now := time.UnixMilli(v.NowMS)
 	at := func(name string) vector {
 		for _, c := range v.Vectors {
@@ -879,11 +887,15 @@ func TestCheckEntries(t *testing.T) {
 		},
 		func(e *Entries) { e.Relays = []EntryRelay{{Name: "cbb.tools:8765"}, {Name: "cbb.tools:8765"}} },
 	} {
-		b := entriesBody(7, nowMS-1000, 30*24*time.Hour)
-		bad(&b)
-		if _, _, err := CheckEntries(keys, sign(t, b, ch), roots, now, seen); err == nil {
-			t.Errorf("a bad one was taken: %+v", b)
-		}
+		// Side by side: each signs with SLH-DSA, a quarter of a second here.
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+			b := entriesBody(7, nowMS-1000, 30*24*time.Hour)
+			bad(&b)
+			if _, _, err := CheckEntries(keys, sign(t, b, ch), roots, now, seen); err == nil {
+				t.Errorf("a bad one was taken: %+v", b)
+			}
+		})
 	}
 }
 
@@ -1046,15 +1058,29 @@ func otherS(t *testing.T, sig []byte) []byte {
 // Signatures are made with S in the lower half, and the other S is refused.
 func TestLowS(t *testing.T) {
 	s := newSigner(t)
-	for range 20 {
-		f, err := Sign(releaseBody("0.6.0", "stable"), s.key)
+	f, err := Sign(releaseBody("0.6.0", "stable"), s.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Sigs[0].Alg != AlgES256 {
+		t.Fatalf("the first signature is of algorithm %d", f.Sigs[0].Alg)
+	}
+	// Each ECDSA signature has the high S half the time: twenty miss a
+	// signer that keeps it once in a million. The ES256 half alone, as Sign
+	// signs with it: an SLH-DSA signature costs a thousand times more.
+	sigs := [][]byte{f.Sigs[0].Sig}
+	for range 19 {
+		sig, err := signHalf(AlgES256, s.key[0], f.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, low := lowS(f.Sigs[0].Sig); !low {
+		sigs = append(sigs, sig)
+	}
+	for _, sig := range sigs {
+		if _, low := lowS(sig); !low {
 			t.Fatal("a signature with the high S")
 		}
-		if !verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, f.Sigs[0].Sig) || verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, otherS(t, f.Sigs[0].Sig)) {
+		if !verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, sig) || verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, otherS(t, sig)) {
 			t.Fatal("the low S refused or the high S taken")
 		}
 	}

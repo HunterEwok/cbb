@@ -93,6 +93,18 @@ func usage() {
 var (
 	now              = time.Now
 	stdout io.Writer = os.Stdout
+	// fileSigner is the signer of a key read from a file.
+	fileSigner = func(s release.Signer) release.Signer { return s }
+	// drillSigners makes drill's keys: the two roots, the release key and
+	// another key.
+	drillSigners = func() (ks [4]release.Signer, err error) {
+		for i := range ks {
+			if ks[i], err = release.GenerateSigner(); err != nil {
+				return ks, err
+			}
+		}
+		return ks, nil
+	}
 )
 
 func writeJSON(v any) error {
@@ -539,7 +551,7 @@ func signer(spec string) (release.Signer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w (a key in a file holds both halves, or names its other half with +slh:FILE)", arg, err)
 		}
-		return s, nil
+		return fileSigner(s), nil
 	}
 	// The passphrase of the sealed halves is asked and checked first,
 	// before the hardware is asked for anything.
@@ -688,21 +700,17 @@ func drill(args []string) error {
 		return errors.New("drill needs the directory and the file for the roots")
 	}
 	dir, rootsPath := fs.Arg(0), fs.Arg(1)
-	var ks [4]release.Signer
+	ks, err := drillSigners()
+	if err != nil {
+		return err
+	}
 	var roots []byte
-	for i := range ks {
-		k, err := release.GenerateSigner()
+	for i, k := range ks[:2] {
+		p, err := release.PublicPEM(k, fmt.Sprintf("drill-root-%d", i+1))
 		if err != nil {
 			return err
 		}
-		ks[i] = k
-		if i < 2 {
-			p, err := release.PublicPEM(k, fmt.Sprintf("drill-root-%d", i+1))
-			if err != nil {
-				return err
-			}
-			roots = append(roots, p...)
-		}
+		roots = append(roots, p...)
 	}
 	r, err := buildManifest(dir, *version, *relChannel, "", "")
 	if err != nil {

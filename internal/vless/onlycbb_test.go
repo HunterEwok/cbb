@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -238,10 +239,16 @@ func TestNoMirrorNoStreams(t *testing.T) {
 	if err := s.AddUser(id); err != nil {
 		t.Fatal(err)
 	}
+	// Side by side: a stream that gets nothing is waited for.
+	var wg sync.WaitGroup
 	for _, to := range targets(o, xnet.Network_TCP) {
-		if got := lineBack(t, hostile(t, l, xnet.Network_TCP, to.Addr().String(), to.Port())); got != "" {
-			t.Errorf("a stream to %v without a mirror got %q", to, got)
-		}
+		from := hostile(t, l, xnet.Network_TCP, to.Addr().String(), to.Port())
+		wg.Go(func() {
+			if got := lineBack(t, from); got != "" {
+				t.Errorf("a stream to %v without a mirror got %q", to, got)
+			}
+		})
 	}
+	wg.Wait()
 	o.check(t)
 }

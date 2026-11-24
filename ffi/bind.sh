@@ -67,7 +67,11 @@ ios-sim)
 	*) t=x86_64-apple-ios ;;
 	esac
 	rustup target add "$t" >/dev/null
-	IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --locked -p cbb-ffi --features member,tunnel --release --target "$t"
+	# For the simulator's tests, not for a phone: without the release's
+	# link-time optimization and single code generation unit, where the
+	# build spent most of its minutes.
+	CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+		IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --locked -p cbb-ffi --features member,tunnel --release --target "$t"
 	mkdir -p "$out/iphonesimulator"
 	cp "target/$t/release/libcbb_ffi.a" "$out/iphonesimulator/"
 	;;

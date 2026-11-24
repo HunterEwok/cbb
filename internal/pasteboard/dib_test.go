@@ -221,15 +221,10 @@ func FuzzDecodeDIB(f *testing.F) {
 // An image is refused by its size before it is decoded, whatever its file's
 // size: a solid PNG of a few hundred KB can hold billions of pixels.
 func TestDecodeImageBudget(t *testing.T) {
-	big := func(w, h int) []byte {
-		var b bytes.Buffer
-		// A palette image of one color: its rows compress to almost nothing.
-		img := image.NewPaletted(image.Rect(0, 0, w, h), color.Palette{color.Black})
-		if err := (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&b, img); err != nil {
-			t.Fatal(err)
-		}
-		return b.Bytes()
-	}
+	// A palette image of one color, one bit a pixel: its rows compress to
+	// almost nothing. Written row by row, not encoded from an image of
+	// 16384 by 16384 pixels in memory.
+	big := func(w, h int) []byte { return rawPNG(t, w, h, 1, 3, nil) }
 	for name, d := range map[string][2]int{"16384 square": {16384, 16384}, "wide": {1 << 18, 1 << 10}} {
 		data := big(d[0], d[1])
 		if len(data) > 1<<20 {

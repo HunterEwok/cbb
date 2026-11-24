@@ -2247,6 +2247,12 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- Tests that did the same slow work again take less time: the release files' tests sign each
+  body under each SLH-DSA key once and read the interop vectors from their file rather than
+  making them anew, the VLESS tests wait for the packets that must not come back at the same
+  time, the image budget's test writes its large PNGs row by row, and the macOS CI job builds
+  `cbb` once for its archives, Homebrew's formula and the .pkg. The simulator's library for the
+  iPhone app's tests builds without link-time optimization.
 - On a pull request the iPhone app's CodeQL analysis starts with the other CI jobs and takes
   the first free macOS runner, instead of waiting for the iPhone app's jobs to finish.
 - The project's full name is Connect Beyond Borders, everywhere it is written: the apps, the
