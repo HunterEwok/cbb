@@ -35,15 +35,26 @@ function prefs(kept = {}) {
   };
 }
 
-// A link with a fake wear; sent holds what the watch sent, decoded.
+// A link with a fake wear; sent holds what the watch sent, decoded, and
+// next() is a promise of the watch's next message, the event a test waits for.
 function linked(kept) {
   const link = new Link();
   const sent = [];
-  const wear = { up: true, send: async (d) => { sent.push(JSON.parse(Buffer.from(d).toString('utf8'))); return wear.up; }, close: () => {} };
+  const waiting = [];
+  const wear = {
+    up: true,
+    send: async (d) => {
+      sent.push(JSON.parse(Buffer.from(d).toString('utf8')));
+      for (const r of waiting.splice(0)) r();
+      return wear.up;
+    },
+    close: () => {},
+  };
   link.wear = wear;
   const p = prefs(kept);
   link.init(p);
-  return { link, sent, wear, p, got: (o) => link.got(json(o)) };
+  const next = () => new Promise((r) => waiting.push(r));
+  return { link, sent, wear, p, next, got: (o) => link.got(json(o)) };
 }
 
 // Shows body to the watch in parts of size bytes and waits for its answer.
@@ -51,8 +62,9 @@ async function show(l, body, size = 1000) {
   const bytes = Buffer.from(JSON.stringify(body));
   const parts = [];
   for (let i = 0; i < bytes.length; i += size) parts.push(bytes.subarray(i, i + size).toString('base64'));
+  const answered = l.next();
   for (let i = 0; i < parts.length; i++) l.got({ type: 'sign', part: i, parts: parts.length, data: parts[i] });
-  await new Promise((r) => setImmediate(r));
+  await answered;
   return l.sent.at(-1);
 }
 
@@ -120,8 +132,9 @@ describe('watch link', () => {
     ]) {
       assert.deepStrictEqual(await show(l, body), no, JSON.stringify(body));
     }
+    const answered = l.next();
     l.got({ type: 'sign', part: 0, parts: 1, data: Buffer.from('not json').toString('base64') });
-    await new Promise((r) => setImmediate(r));
+    await answered;
     assert.deepStrictEqual(l.sent.at(-1), no, 'garbage');
     assert.strictEqual(signed.length, 0);
     l.got({ type: 'done', ok: true });

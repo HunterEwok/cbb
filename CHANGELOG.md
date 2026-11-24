@@ -2298,6 +2298,9 @@ with 0.5 is set up again once. The details follow.
   made after the connection opened that must come first, and that a reach is kept by a key sent
   after it, instead of 300 or 500 ms of silence; the phone kits' tests of calls while the member
   stops wait until every caller has made a call rather than 20 ms.
+- The HarmonyOS watch's tests wait for the watch's answer itself rather than one turn of Node's
+  event loop, and the control socket's test of a connection within its limit reads it without
+  waiting instead of 100 ms.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.

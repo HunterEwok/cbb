@@ -2263,9 +2263,16 @@ mod tests {
         let mut past = UnixStream::connect(&path).unwrap();
         past.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         assert_eq!(past.read(&mut [0u8; 1]).unwrap(), 0, "the connection past the limit stays open");
+        // The connection past the limit was handled (its end read above),
+        // so the earlier ones were too, in the order they came: one that
+        // is open has nothing to read yet, one that was closed reads its end.
         let mut first = &open[0];
-        first.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
-        assert!(first.read(&mut [0u8; 1]).is_err(), "a connection within the limit was closed");
+        first.set_nonblocking(true).unwrap();
+        let read = first.read(&mut [0u8; 1]);
+        assert!(
+            read.as_ref().is_err_and(|e| e.kind() == std::io::ErrorKind::WouldBlock),
+            "a connection within the limit was closed: {read:?}"
+        );
         drop(open);
         let _ = std::fs::remove_dir_all(&dir);
     }
