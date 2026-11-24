@@ -189,7 +189,12 @@ class GroupTest {
             val before = clip()
             val text = "cbb-bench phone M7 not taken ${System.currentTimeMillis()}"
             Bench.copy(Bench.PC, text)
-            Thread.sleep(10_000)
+            // The copy reaches the phone in the mode send too: LiveGroup.copyArrived notes it
+            // (lastReceived) and then, on the same call, leaves the clipboard alone.
+            until(30, "${Bench.PC}'s copy reached the phone; the last it got is ${model.group.lastReceived}") {
+                model.group.lastReceived?.text == text
+            }
+            compose.waitForIdle()
             assertEquals("in the mode send the phone took ${Bench.PC}'s copy", before, clip())
         } finally {
             model.group.setOwnMode("shared")

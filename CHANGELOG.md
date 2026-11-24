@@ -2301,6 +2301,8 @@ with 0.5 is set up again once. The details follow.
 - The HarmonyOS watch's tests wait for the watch's answer itself rather than one turn of Node's
   event loop, and the control socket's test of a connection within its limit reads it without
   waiting instead of 100 ms.
+- The Android app's test of the mode send waits until the copy has reached the phone, which then
+  leaves its clipboard alone, instead of 10 seconds.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
