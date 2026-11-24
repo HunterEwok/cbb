@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# An experiment, on its own branch and never on main: why the FreeBSD
+# machine runs SHA-256 about 100 times slower on runners with Intel Xeon
+# processors than on AMD EPYC ones. The same machine starts with each
+# processor model below (QEMU's -cpu, put in by a wrapper around QEMU, as
+# vmactions/freebsd-vm names no model); each measures SHA-256 for 10 s and
+# runs internal/release's tests. The model that is fast on Intel shows the
+# feature at fault.
+name: freebsd cpu experiment
+
+on:
+  push:
+    branches: [claude/freebsd-cpu-experiment]
+
+permissions:
+  contents: read
+
+jobs:
+  vm:
+    name: freebsd (${{ matrix.cpu }}, ${{ matrix.try }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        cpu:
+          - host
+          - host,-sha-ni
+          - host,-avx512f
+          - host,-amx-tile,-amx-int8,-amx-bf16
+          - host,-xsaves,-xsavec
+          - qemu64
+        try: [1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the runner's processor
+        run: lscpu | grep -E 'Model name|Vendor ID|Flags' | cut -c1-2000
+      - name: QEMU, with its -cpu replaced
+        env:
+          CPU: ${{ matrix.cpu }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils ovmf
+          sudo dpkg-divert --local --divert /usr/bin/qemu-system-x86_64.real --rename /usr/bin/qemu-system-x86_64
+          sudo tee /usr/bin/qemu-system-x86_64 >/dev/null <<WRAP
+          #!/bin/bash
+          args=()
+          seen=
+          while [ \$# -gt 0 ]; do
+            if [ "\$1" = -cpu ] && [ \$# -gt 1 ]; then
+              args+=(-cpu "$CPU"); seen=1; shift 2; continue
+            fi
+            args+=("\$1"); shift
+          done
+          [ -n "\$seen" ] || args+=(-cpu "$CPU")
+          echo "qemu: \${args[*]}" >>/tmp/qemu-args.log
+          exec /usr/bin/qemu-system-x86_64.real "\${args[@]}"
+          WRAP
+          sudo chmod +x /usr/bin/qemu-system-x86_64
+      - name: SHA-256 and internal/release in the machine
+        uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
+        with:
+          release: "15.1"
+          prepare: pkg install -y go
+          run: |
+            set -e
+            export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
+            sysctl -n hw.model hw.ncpu kern.vm_guest
+            grep -E 'Features|AMD Features|Structured Extended' /var/run/dmesg.boot | head -8 || true
+            go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256 || true
+            go test -run '^$' -bench 'Hash8K$' -benchtime 10s crypto/sha256 || true
+            cd internal/release && /usr/bin/time go test -count=1 -timeout 15m . || true
+      - name: how QEMU was started
+        if: always()
+        run: cat /tmp/qemu-args.log || true
