@@ -148,8 +148,8 @@ kit's interop tests still do), and jobs shorter than the iPhone app's share a ma
 (`test and build (macOS), homebrew, Mac app`), and the phone kit with the iPhone's libraries.
 So the iPhone and the iPad, the longest, start at once, each booting its simulator while its
 Rust builds. The iPhone app's CodeQL analysis (`codeql-swift.yml`, about half an hour, built
-for the runner's processor only) runs on a pull request after them, from `ci.yml`, not beside
-them.
+for the runner's processor only) starts on a pull request with the other jobs, from `ci.yml`,
+and takes the first macOS runner that is free.
 
 The jobs that build the most Rust on the way to their tests (the iPhone app, the phone kit
 on macOS, the Android phone core and the service tests' build) keep their build in the Actions cache

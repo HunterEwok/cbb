@@ -1984,10 +1984,10 @@ jobs:
           if-no-files-found: ignore
   codeql-swift:
     # The iPhone app's CodeQL analysis, which takes a macOS runner for about half
-    # an hour, starts when the iPhone app's jobs are done, so they need not
-    # wait for it; it is not in ci-ok, and its results show under Security →
-    # Code scanning (codeql-swift.yml).
-    needs: [changes, app]
+    # an hour, starts with the other jobs and waits in the account's queue for
+    # the first free macOS runner; it is not in ci-ok, and its results show
+    # under Security → Code scanning (codeql-swift.yml).
+    needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.swift == 'true' }}
     uses: ./.github/workflows/codeql-swift.yml # zizmor: ignore[self-repository]
     permissions:

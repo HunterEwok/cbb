@@ -2247,6 +2247,8 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- On a pull request the iPhone app's CodeQL analysis starts with the other CI jobs and takes
+  the first free macOS runner, instead of waiting for the iPhone app's jobs to finish.
 - The project's full name is Connect Beyond Borders, everywhere it is written: the apps, the
   stores, the website and the documentation. The short name CBB and the command `cbb` stay.
 - CI's Rust tests run their two longest tests, the power cut at every byte of every save and

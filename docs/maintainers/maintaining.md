@@ -33,7 +33,7 @@ a checked box means the setting is in place.
 - [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
   setup) scan GitHub Actions, Go, Rust and Kotlin on every pull request, and
   `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes (on a pull
-  request called from `ci.yml` once the iPhone app's jobs are done), weekly, by hand and
+  request called from `ci.yml` beside the other jobs), weekly, by hand and
   before each release. GitHub rejects their results while the default setup is on.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
   OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
