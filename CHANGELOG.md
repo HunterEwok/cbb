@@ -2261,6 +2261,9 @@ with 0.5 is set up again once. The details follow.
   the forwarder wait for the event they check rather than for a time: a fake clock, timers the
   tests fire and a signal when the forwarder's state changes take the place of sleeps and
   polling, and the mDNS tests take a fraction of a second instead of 48 s.
+- The VLESS tests open each stream once and wait for it to end rather than trying again after a
+  pause: the tries had hidden that a group's fifth stream to the mirror is refused while its four
+  before are still ending, and the tests now wait for those to end.
 - `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
   that line ended it without its clean stop.
 - The Bluetooth keyboard stops being visible at the end of its time, not just after.
