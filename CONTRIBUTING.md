@@ -139,8 +139,8 @@ GOARCH=mips GOMIPS=softfloat go test -exec qemu-mips-static ./internal/mdns ./in
 
 ### The other parts
 
-The model of the record rules (Quint, Node; the `model` job in CI runs its scenarios in four
-parts by first letter, all but the two that take minutes each; the header of the model lists
+The model of the record rules (Quint, Node; the `model` job in CI runs its scenarios, all but
+the two that take minutes each, when the core or the model changes; the header of the model lists
 its promises for longer random runs):
 
 ```sh

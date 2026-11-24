@@ -103,9 +103,9 @@ parts instead, each on a machine of its own:
   coverage (the Rust `cbb`, `phone-on-linux`, a `cbb-helper` and the Go
   test binaries built with `-cover`), runs the Rust cbb's own tests and hands the build on as
   one archive.
-- `service tests on the Rust cbb (1)` to `(6)` each run a part of `internal/service`;
-  `(others)` runs the desktop connector, the relay, the phones' tunnel and the previous
-  release. Each writes its Go coverage (`cover-go-service-PART.out`) and its Rust profiles.
+- `service tests on the Rust cbb (1)` to `(3)` each run a part of `internal/service`, some
+  fourteen minutes each; `(3)` then runs the desktop connector and the previous release. Each
+  writes its Go coverage (`cover-go-service-PART.out`) and its Rust profiles.
 - `service tests on the Rust cbb, the coverage` adds up the Rust profiles of the build and
   every part into `rust-service`.
 
@@ -133,26 +133,28 @@ simulator are two jobs, the Rust workspace's checks and Raspberry Pi builds
 (`cbb (Rust), the checks and the Raspberry Pi builds`) and its optimized builds and installers
 (`cbb (Rust), the optimized builds and the installers`) run beside its tests (`cbb (Rust)`),
 which run as the service tests do: one job builds them once into a cargo-nextest archive,
-four parts run a share of its tests each (`--partition`; within a part cargo-nextest runs the
+two parts run a share of its tests each (`--partition`; within a part cargo-nextest runs the
 test binaries side by side, `.config/nextest.toml`, and the tests that time their own run
 run alone; the two longest, the power cut at every byte and the record sets' differential
-check, run after the shares, one in part 1 and one in part 4), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
-and the Kotlin kit's tests (`Android kit`) beside the Android apps' build (`Android app`).
+check, run after the shares, one in each part), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
+and the Kotlin kit's tests before the Android apps' build, in one job (`Android app`).
 
 The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
 the iPhone app's jobs build only the simulator's Rust library for the runner's processor
-(`ffi/bind.sh ios-sim`; the phone kit's macOS job builds all three with the latest Rust),
+(`ffi/bind.sh ios-sim`; the macOS job below builds all three with the latest Rust),
 they do not run for a change that touches only Go (`iosapp` in `.github/ci-changes.sh`; the
-kit's interop tests still do), and jobs shorter than the iPhone app's share a machine: macOS's
-`go test`, the macOS archives, Homebrew's formula and the Mac app
-(`test and build (macOS), homebrew, Mac app`), and the phone kit with the iPhone's libraries.
+kit's interop tests still do), and the jobs shorter than the iPhone app's share one machine
+(`test and build (macOS), homebrew, Mac app`): the phone kit's tests, macOS's `go test`, the
+macOS archives and the check that they ignore the test hooks, Homebrew's formula, the Mac app
+and the iPhone's libraries with the latest Rust. So at most five macOS jobs want a machine at
+once, and none waits for another.
 So the iPhone and the iPad, the longest, start at once, each booting its simulator while its
 Rust builds. The iPhone app's CodeQL analysis (`codeql-swift.yml`, about half an hour, built
 for the runner's processor only) starts on a pull request with the other jobs, from `ci.yml`,
 and takes the first macOS runner that is free.
 
 The jobs that build the most Rust on the way to their tests (the iPhone app, the phone kit
-on macOS, the Android phone core and the service tests' build) keep their build in the Actions cache
+in the macOS job, the Android phone core and the service tests' build) keep their build in the Actions cache
 (`.github/actions/rust-cache`). A pull request saves its own and its later runs take it, so
 they compile only the crates it changed; another pull request never reads it, and the release
 and F-Droid builds build from nothing.
@@ -448,8 +450,8 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov nextest` in the four `cbb (Rust)` parts, put together by `cbb (Rust), the coverage` |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
 | `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
-| `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
-| `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
+| `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `test and build (macOS), homebrew, Mac app` job |
+| `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 | `kotlin-watch` | lines of what the Android phone app and its Wear OS app share (`apps/android/shared`: `WatchState`, what the phone tells the watch, and the design) | the unit tests' coverage (`createDebugUnitTestCoverageReport`, JaCoCo) in the `Android app` job |
 | `js-tray` | lines of the tray app's scripts (`apps/desktop/frontend`) | the browser's count under `TestWindow` (`CBB_JS_COVERAGE`), as LCOV, in the `tray app (ubuntu-latest)` job |
 | `cpp-aurora` | lines of the Aurora app's code that runs without a screen (`apps/silica/src`: `errors`, `membership`, `events`, `core` and `platform/keystore_file`) | `apps/silica/tests/qt/run.sh` in the `Aurora and HarmonyOS apps' code on the computer` job: the tests on desktop Qt 5 against the core built for the computer, with gcov |

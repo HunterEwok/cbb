@@ -2247,6 +2247,16 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- CI splits a job into parts only where the parts finish sooner, and asks for at most five
+  macOS machines at once, so none of its macOS jobs waits for another: the phone kit's macOS
+  tests, the iPhone's libraries with the latest Rust and the macOS check that a release build
+  ignores the test hooks run in the job `test and build (macOS), homebrew, Mac app`, the check
+  on the programs that job already built for the archives; the Quint model runs in one job,
+  when the core or the model changes; the service tests run in three parts, not seven; the
+  Rust workspace's tests in two, not four; and the Kotlin kit's tests in the Android app's job.
+- A device writing to a full room checks which removals every admin has acknowledged in one
+  pass over its records instead of two passes for each removal and admin: the core's tests at
+  the room's limits run minutes faster, and so does each write on a device near them.
 - Tests that did the same slow work again take less time: the release files' tests sign each
   body under each SLH-DSA key once and read the interop vectors from their file rather than
   making them anew, the VLESS tests wait for the packets that must not come back at the same

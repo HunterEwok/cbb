@@ -147,29 +147,30 @@ environment secret**.
   client under Xvfb, against wl-clipboard and xclip;
 - **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
   entry;
-- **test and build (macOS), homebrew, Mac app**: `go test -race` on macOS, the macOS
-  release archives, then the formula written by `packaging/homebrew/formula.sh`, installed
-  with Homebrew, then the Mac app's tests and its `.pkg`, one after the other on one machine;
+- **test and build (macOS), homebrew, Mac app**: CBBKit's tests on macOS, `go test -race`
+  on macOS, the macOS release archives and the check that they ignore the test hooks, then
+  the formula written by `packaging/homebrew/formula.sh`, installed with Homebrew, then the
+  Mac app's tests and its `.pkg`, then the iPhone's libraries with the latest Rust (the phone
+  core), one after the other on one machine;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
   windows-latest;
-- **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
-  code (pairing over plain TCP on Linux; pairing and a member connection over TLS on macOS);
-  the macOS job also builds the iPhone's libraries with the latest Rust (the phone core);
+- **phone kit**: CBBKit's tests and its cross tests with the Go code on Linux (pairing over
+  plain TCP); on macOS (pairing and a member connection over TLS) they run in the macOS job
+  above;
 - **iPhone app**: the Xcode project from XcodeGen, built and tested without signing on an
   iPhone and an iPad simulator, one job for each, at the same time;
-- **Android kit**: the Kotlin kit's tests and its cross tests with the Go code and the
-  computers' cbb;
-- **Android app**: the app and the Wear OS app built, unit-tested and linted;
+- **Android app**: the Kotlin kit's tests and its cross tests with the Go code and the
+  computers' cbb, then the app and the Wear OS app built, unit-tested and linted;
 - **cbb (Rust), the checks and the Raspberry Pi builds**: `cargo check` on the oldest Rust,
   `cargo fmt`, `clippy` for each system, and the ARM64 and ARMv6 builds;
 - **cbb (Rust)**: the tests of the Rust workspace under coverage: one job builds them into a
-  cargo-nextest archive, four parts run a share of them each at the same time
+  cargo-nextest archive, two parts run a share of them each at the same time
   (`.config/nextest.toml`), and one job puts the parts' coverage together;
 - **cbb (Rust), the optimized builds and the installers**: the stack a verify needs in the
   optimized builds, the installers without the helper (`get.sh --no-helper`, rootless) and
   `cbb update` there, and the tests of cbb without its helper among other members;
-- **service tests on the Rust cbb**: the build, six parts of `internal/service` and the part
-  `others` at the same time, and their coverage (docs/testing.md, "Running tests in
+- **service tests on the Rust cbb**: the build, three parts of `internal/service` at the
+  same time (the last also the desktop connector and the previous release), and their coverage (docs/testing.md, "Running tests in
   parallel");
 - **the core on the ESP32**: the protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
   ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and

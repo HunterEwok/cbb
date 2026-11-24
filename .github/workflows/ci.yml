@@ -46,6 +46,7 @@ jobs:
       silica: ${{ steps.parts.outputs.silica }}
       harmony: ${{ steps.parts.outputs.harmony }}
       site: ${{ steps.parts.outputs.site }}
+      model: ${{ steps.parts.outputs.model }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -282,7 +283,7 @@ jobs:
   # format rule no vector refuses.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, androidkit, android, rust-coverage, service, service-coverage, trayapp, phonelogic]
+    needs: [changes, test, gocover, kit, buildmac, android, rust-coverage, service, service-coverage, trayapp, phonelogic]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -370,20 +371,24 @@ jobs:
   buildmac:
     name: test and build (macOS), homebrew, Mac app
     needs: changes
-    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' || needs.changes.outputs.macos == 'true'
-    # go test on macOS as the test job runs it on the other systems, then the
-    # macOS targets, built on macOS since the Mac's pasteboard agent needs cgo,
-    # then Homebrew's formula and the installers, then the Mac app and its
-    # .pkg, one after the other on one machine: macOS runners are few, and so
-    # the iPhone app's jobs, the longest, start at once (docs/testing.md,
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' || needs.changes.outputs.macos == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true'
+    # CBBKit's tests on macOS (the phone kit), go test on macOS as the test
+    # job runs it on the other systems, then the macOS targets, built on
+    # macOS since the Mac's pasteboard agent needs cgo, and the check that
+    # they ignore the test hooks, then Homebrew's formula and the installers,
+    # then the Mac app and its .pkg, then the iPhone's libraries with the
+    # latest Rust, one after the other on one machine: macOS runners are few,
+    # and so the iPhone app's jobs, the longest, start at once (docs/testing.md,
     # "Running tests in parallel"). Each installer is removed, and checked to
     # be gone, before the next one installs.
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     env:
       GO: ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' }}
       CORE: ${{ needs.changes.outputs.core }}
       MACOS: ${{ needs.changes.outputs.macos }}
+      RUST: ${{ needs.changes.outputs.rust }}
+      KIT: ${{ needs.changes.outputs.ios }}
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_ANALYTICS: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -395,6 +400,34 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
+      # The phone kit first, on the runner's Rust, with its build from this
+      # pull request's cache, saved before the other steps build into target.
+      - name: the kit's Rust build from this pull request's cache
+        if: env.KIT == 'true'
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: kit
+      - name: the Rust core, which the kit links
+        if: env.KIT == 'true'
+        run: sh ffi/bind.sh host "$RUNNER_TEMP/core"
+      - name: swift test (the phone kit)
+        if: env.KIT == 'true'
+        working-directory: apps/ios/CBBKit
+        run: |
+          swift test --enable-code-coverage -Xlinker -L"$RUNNER_TEMP/core"
+          cp "$(swift test --show-codecov-path)" "$GITHUB_WORKSPACE/coverage-swift-kit.json"
+      - name: the kit's Rust build into this pull request's cache
+        if: env.KIT == 'true'
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: kit
+          save: "true"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: env.KIT == 'true'
+        with:
+          name: coverage-swift-kit
+          path: coverage-swift-kit.json
+          retention-days: 7
       - name: go test
         if: env.GO == 'true'
         # The service's tests take close to go test's default 10 minutes
@@ -409,7 +442,7 @@ jobs:
       - name: cbb, the Go programs beside it and the release archives, as at a release
         # Built once for this job: the formula's archive and the .pkg below
         # take these programs, at the version they install (0.0.1).
-        if: env.CORE == 'true' || env.MACOS == 'true'
+        if: env.CORE == 'true' || env.MACOS == 'true' || env.RUST == 'true'
         env:
           CGO_ENABLED: "1"
           CBB_VERSION: "0.0.1"
@@ -430,6 +463,20 @@ jobs:
             done
           done
           "$RUNNER_TEMP/darwin-arm64/cbb" version
+      # The job "a release build ignores the test hooks" on macOS, on the
+      # programs the archives' step built.
+      - name: cbb and cbb-helper as the release builds them ignore the test hooks, all of them set
+        if: env.CORE == 'true' || env.RUST == 'true'
+        run: |
+          go build -o "$RUNNER_TEMP/release-sign" ./tools/release-sign
+          go build -o "$RUNNER_TEMP/hookprobe" ./tools/hookprobe
+          d=$RUNNER_TEMP/darwin-arm64
+          sh .github/release-ignores-hooks.sh "$d/cbb" "$d/cbb-helper" "$RUNNER_TEMP/release-sign" "$RUNNER_TEMP/hookprobe"
+      - name: a build with the hooks carries the release workflow's marker, and the checks refuse it
+        if: env.CORE == 'true' || env.RUST == 'true'
+        env:
+          RUSTUP_TOOLCHAIN: stable # as the archives' step builds cbb
+        run: sh .github/hooks-refused.sh
       - name: the formula installs a release archive
         if: env.CORE == 'true'
         run: |
@@ -608,6 +655,15 @@ jobs:
             echo "uninstall.sh left the package's receipt" >&2
             exit 1
           fi
+      - name: the phone core, the iPhone's libraries with the latest Rust
+        # The apps' jobs build them with the Rust the apps pin; this follows
+        # the latest. Last, so the steps above keep the runner's Rust.
+        if: env.RUST == 'true'
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sh ffi/bind.sh ios "$RUNNER_TEMP/phonecore"
+          find "$RUNNER_TEMP/phonecore" -maxdepth 3 | sort
 
   mips:
     name: test (linux/mips under qemu)
@@ -1712,62 +1768,23 @@ jobs:
           if (Test-Path "$env:ProgramFiles\cbb-update") { throw 'uninstall.ps1 left cbb update''s folder' }
 
   kit:
-    name: phone kit (${{ matrix.os }})
+    name: phone kit (Linux)
     needs: changes
-    # The macOS job also builds the phones' libraries with the latest Rust
-    # (phone core), when the Rust changes: macOS runners are few.
-    if: needs.changes.outputs.ios == 'true' || needs.changes.outputs.rust == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    # CBBKit's tests in the Swift container; on macOS they run, with the
+    # iPhone's libraries built with the latest Rust, in the job
+    # test and build (macOS), whose machine they share: macOS runners are few.
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 50
-    env:
-      KIT: ${{ needs.changes.outputs.ios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: the Rust build from this pull request's cache
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
-        with:
-          name: kit
       - name: the Rust core, which the kit links
-        if: env.KIT == 'true'
         # Built on the runner: the Swift container has no Rust.
         run: sh ffi/bind.sh host "$RUNNER_TEMP/core"
-      - name: swift test (in the Swift container on Linux)
-        if: env.KIT == 'true' && runner.os == 'Linux'
+      - name: swift test (in the Swift container)
         run: docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit swift:6.2-noble swift test -Xlinker -L/core
-      - name: swift test
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        working-directory: apps/ios/CBBKit
-        run: |
-          swift test --enable-code-coverage -Xlinker -L"$RUNNER_TEMP/core"
-          cp "$(swift test --show-codecov-path)" "$GITHUB_WORKSPACE/coverage-swift-kit.json"
-      - name: the Rust build into this pull request's cache
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
-        with:
-          name: kit
-          save: "true"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        with:
-          name: coverage-swift-kit
-          path: coverage-swift-kit.json
-          retention-days: 7
-      - name: the phone core, the iPhone's libraries with the latest Rust
-        # The apps' jobs build them with the Rust the apps pin; this follows
-        # the latest. Last, so the kit's steps keep the runner's Rust.
-        if: needs.changes.outputs.rust == 'true' && runner.os == 'macOS'
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-          sh ffi/bind.sh ios "$RUNNER_TEMP/phonecore"
-          find "$RUNNER_TEMP/phonecore" -maxdepth 3 | sort
 
   app:
     name: iPhone app (${{ matrix.device }})
@@ -2108,14 +2125,15 @@ jobs:
           # This runner has GTK 4 and WebKitGTK, which install.sh looks for.
           ! ldd "$RUNNER_TEMP/cbb-desktop" | grep 'not found'
 
-  androidkit:
-    name: Android kit
+  android:
+    name: Android app
     needs: changes
     if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # The kit's tests and its cross tests with Go and the computers' cbb, on a
-    # machine of their own beside the app's build (job Android app).
+    timeout-minutes: 40
+    # The Kotlin kit's tests and its cross tests with Go and the computers'
+    # cbb, then the apps' build: one job of some twenty minutes, since two
+    # machines finished no sooner than the iPhone app's jobs.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2155,45 +2173,6 @@ jobs:
           name: coverage-kotlin-kit
           path: apps/android/kit/build/reports/jacoco/test/jacocoTestReport.xml
           retention-days: 7
-
-  android:
-    name: Android app
-    needs: changes
-    if: needs.changes.outputs.android == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # The Kotlin kit's tests run beside it in the job Android kit.
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: the Gradle wrapper's jar is one Gradle published
-        # gradlew runs gradle-wrapper.jar from the repository before anything
-        # else, so a changed jar would run in every build; this checks it
-        # against the checksums of Gradle's own releases.
-        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - name: Gradle from the cache
-        id: gradle
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.gradle/wrapper/dists
-          key: gradle-dist-${{ runner.os }}-${{ hashFiles('apps/android/gradle/wrapper/gradle-wrapper.properties') }}
-      - name: Gradle, its download tried three times when it is not in the cache
-        if: steps.gradle.outputs.cache-hit != 'true'
-        working-directory: apps/android
-        run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
-      - name: Gradle's dependencies from the cache
-        # Maven Central refuses a runner that asks it too often (status
-        # 429); what a build of this job fetched before comes from here,
-        # Robolectric's Android jars too, which it fetches into ~/.m2.
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.gradle/caches/modules-2/files-2.1
-            ~/.gradle/caches/modules-2/metadata-*
-            ~/.m2/repository/org/robolectric
-          key: gradle-deps-${{ runner.os }}-${{ github.job }}-m2-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
@@ -2560,7 +2539,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # macOS's is in the job test and build (macOS), on its release build.
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
@@ -2586,29 +2566,16 @@ jobs:
           sh .github/hooks-marker.sh absent "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe"
           sh .github/release-ignores-hooks.sh "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe" "$RUNNER_TEMP/release-sign$exe" "$RUNNER_TEMP/hookprobe$exe"
       - name: a build with the hooks carries the release workflow's marker, and the checks refuse it
-        # The controls of the step above: each must fail for the hooks, not
-        # for another reason, so each looks for the words it fails with.
-        run: |
-          exe=$(go env GOEXE)
-          cargo build --locked --release -p cbb-member --features "$E2E_FEATURES" --target-dir "$RUNNER_TEMP/hooks"
-          go build -tags "$E2E_TAGS" -o "$RUNNER_TEMP/cbb-helper-hooks$exe" ./cmd/cbb-helper
-          cbb=$RUNNER_TEMP/hooks/release/cbb$exe helper=$RUNNER_TEMP/cbb-helper-hooks$exe
-          sh .github/hooks-marker.sh present "$cbb" "$helper"
-          if out=$(sh .github/release-ignores-hooks.sh "$cbb" "$helper" "$RUNNER_TEMP/release-sign$exe" "$RUNNER_TEMP/hookprobe$exe" 2>&1); then
-            echo "$out"; echo "the script took a build with the hooks" >&2; exit 1
-          fi
-          echo "$out"
-          echo "$out" | grep -qF "the test hooks changed what it does" || { echo "the script failed for another reason" >&2; exit 1; }
-          said=$("$RUNNER_TEMP/hookprobe$exe" "$helper")
-          echo "$said"
-          case $said in *"cbb-helper took an attestation"*) ;; *) echo "hookprobe did not see the hook" >&2; exit 1 ;; esac
+        run: sh .github/hooks-refused.sh
   # The service's tests run in parts at the same time (docs/testing.md,
   # "Running tests in parallel"): service-build builds every program once,
   # instrumented for the coverage, and runs the Rust cbb's own tests; each
   # part of service runs its share of ./internal/service (tools/shard splits
-  # them by the seconds in tools/shard/service.txt), the part "others" the
-  # connector, the relay, the phones' tunnel and the previous release, each
-  # on a machine of its own, so their mDNS and ports never meet;
+  # them by the seconds in tools/shard/service.txt), the last part then the
+  # connector and the previous release, one after the other, each part on a
+  # machine of its own, so their mDNS and ports never meet; three parts of
+  # some fourteen minutes, since more but shorter parts finish no sooner
+  # than the iPhone app's jobs and each takes a machine and its setup;
   # service-coverage adds up the Rust coverage of them all.
   service-build:
     name: service tests on the Rust cbb, the build
@@ -2716,11 +2683,11 @@ jobs:
       fail-fast: false
       matrix:
         # The parts of ./internal/service, as many as SERVICE_PARTS says.
-        part: ["1", "2", "3", "4", "5", "6", others]
+        part: ["1", "2", "3"]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      SERVICE_PARTS: 6
+      SERVICE_PARTS: 3
       # Where the instrumented Rust programs write their profiles, as
       # cargo llvm-cov show-env names them.
       LLVM_PROFILE_FILE: ${{ github.workspace }}/target/cbb-%p-%4m.profraw
@@ -2756,7 +2723,6 @@ jobs:
       # -test.v streams each test's lines as it runs, and a test that hangs
       # is named by the timeout's goroutine dump before the job's own limit.
       - name: this part of go test ./internal/service, with every Linux member a Rust cbb
-        if: matrix.part != 'others'
         env:
           PART: ${{ matrix.part }}
         run: |
@@ -2768,15 +2734,17 @@ jobs:
             CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
             CBB_PHONE_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/phone-on-linux" \
             "$GITHUB_WORKSPACE/target/go-tests/service.test" -test.run "$run" -test.timeout 25m -test.v
+      # The last part, after its share: the connector's and the previous
+      # release's tests, never beside the service's on one machine.
       - name: the desktop connector with a Rust cbb
-        if: matrix.part == 'others'
+        if: matrix.part == '3'
         run: |
           cd internal/connector
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
             "$GITHUB_WORKSPACE/target/go-tests/connector.test" -test.timeout 5m -test.v
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
-        if: matrix.part == 'others'
+        if: matrix.part == '3'
         run: |
           prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
           cd internal/service
@@ -2919,7 +2887,7 @@ jobs:
 
   # The Rust workspace's tests under coverage, in three steps that run as
   # the service tests' do: rust-build builds every test once into a
-  # cargo-nextest archive, four parts run a share of its tests each at the
+  # cargo-nextest archive, two parts run a share of its tests each at the
   # same time, and rust-coverage puts their profiles together into the one
   # report the coverage job reads (docs/testing.md, "Running tests in
   # parallel"). The optimized builds and the installers run beside them, in
@@ -2985,12 +2953,13 @@ jobs:
       fail-fast: false
       matrix:
         # A share of every test binary's tests each (cargo-nextest's
-        # --partition), as many parts as RUST_PARTS says.
-        part: ["1", "2", "3", "4"]
+        # --partition), as many parts as RUST_PARTS says: two, since the
+        # records' tests at the room's limits take seconds, not minutes.
+        part: ["1", "2"]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      RUST_PARTS: 4
+      RUST_PARTS: 2
       CBB_TEST_IPV6: "1" # the runner has the IPv6 loopback: its tests run, never skip
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -3020,23 +2989,23 @@ jobs:
           PART: ${{ matrix.part }}
         # nextest unpacks the archive into target/llvm-cov-target, which
         # has to be there already, empty. The two longest tests (minutes
-        # each) are left out of the shares and run after them in parts of
-        # their own, 1 and 4: the hash put both into part 1. That second
+        # each) are left out of the shares and run after them, one in each
+        # part: the hash put both into part 1. That second
         # run unpacks the archive again into an emptied directory, with
         # the first run's profiles kept aside.
         run: |
           long_1='test(=powerloss::a_power_cut_at_every_byte_of_every_save)'
-          long_4='test(=records::tests::differential::a_set_agrees_with_evaluate)'
+          long_2='test(=records::tests::differential::a_set_agrees_with_evaluate)'
           tests() {
             rm -rf target/llvm-cov-target
             mkdir -p target/llvm-cov-target
             cargo llvm-cov nextest --archive-file "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" --no-report "$@"
           }
-          tests --partition "hash:$PART/$RUST_PARTS" -E "not ($long_1 | $long_4)"
+          tests --partition "hash:$PART/$RUST_PARTS" -E "not ($long_1 | $long_2)"
           long=
           case $PART in
           1) long=$long_1 ;;
-          4) long=$long_4 ;;
+          2) long=$long_2 ;;
           esac
           if [ -n "$long" ]; then
             mkdir -p "$RUNNER_TEMP/profiles"
@@ -3565,7 +3534,7 @@ jobs:
     name: phone core (${{ matrix.target }})
     needs: changes
     if: needs.changes.outputs.rust == 'true'
-    # The iPhone's libraries are built in the phone kit's macOS job.
+    # The iPhone's libraries are built in the job test and build (macOS).
     strategy:
       fail-fast: false
       matrix:
@@ -3817,19 +3786,17 @@ jobs:
           if-no-files-found: ignore
 
   model:
-    name: model of the records' rules (Quint, ${{ matrix.part }})
+    name: model of the records' rules (Quint)
+    needs: changes
+    # docs/model/records-v3.qnt: the record rules of 0.6, which
+    # core/tests/records_model.rs pins against the core, so a change to
+    # either runs it. Its scenarios in one job of some eight minutes. Two
+    # take more than five minutes each in this simulator,
+    # headWithoutFirstTest and honestRefusesKnownKeyTest, and run with the
+    # random runs of the promises on a server (the model's header).
+    if: needs.changes.outputs.model == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        # docs/model/records-v3.qnt: the record rules of 0.6, which
-        # core/tests/records_model.rs pins against the core. Its tests by
-        # first letter, in four parts of a few minutes each. Two scenarios
-        # take more than five minutes each in this simulator,
-        # headWithoutFirstTest and honestRefusesKnownKeyTest, and run with
-        # the random runs of the promises on a server (the model's header).
-        part: ["a-e s-z", "f-h", "i-l", "m-r"]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -3837,12 +3804,9 @@ jobs:
       - name: the model's scenarios
         # The simulator runs in Node (the typescript backend), so nothing but
         # the Quint package is downloaded.
-        env:
-          PART: ${{ matrix.part }}
         run: |
-          letters=$(printf '%s' "$PART" | sed 's/ //g')
           npx --yes @informalsystems/quint@0.33.1 test --backend=typescript \
-            --match="^(?!headWithoutFirstTest$|honestRefusesKnownKeyTest$)[$letters][A-Za-z0-9]*Test$" \
+            --match="^(?!headWithoutFirstTest$|honestRefusesKnownKeyTest$)[A-Za-z0-9]*Test$" \
             docs/model/records-v3.qnt
 
   format:
@@ -3899,7 +3863,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust-build, rust, rust-coverage, rustinstall, rustmips, esp32, zxnext, silica, harmony, phonelogic, advisories, docker, differential, model, format]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust-build, rust, rust-coverage, rustinstall, rustmips, esp32, zxnext, silica, harmony, phonelogic, advisories, docker, differential, model, format]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
