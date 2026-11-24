@@ -386,7 +386,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "להקפיא את %@? הוא נשאר מנהל בשם, אבל שום דבר שהוא חותם עליו לא נחשב עד שהמכשיר הראשי יפשיר אותו."
+            "value": "להקפיא את %@? הוא נשאר מנהל רק להלכה, אבל שום דבר שהוא חותם עליו לא נחשב עד שהמכשיר הראשי יפשיר אותו."
           }
         },
         "hi": {
@@ -398,13 +398,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Заморозить %@? Он останется администратором по имени, но ничего из подписанного им не будет действовать, пока главное устройство его не разморозит."
+            "value": "Заморозить %@? Он формально останется администратором, но ничего из подписанного им не будет действовать, пока главное устройство его не разморозит."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gandisha %@? Kinabaki msimamizi kwa jina, lakini hakuna kitu kinachotia sahihi kinachohesabika hadi kifaa kikuu kikifungue."
+            "value": "Gandisha %@? Kinabaki msimamizi kwa jina, lakini hakuna kitu kinachotiwa sahihi nacho kinachohesabika hadi kifaa kikuu kikiyeyushe."
           }
         },
         "zh-Hans": {
@@ -1134,7 +1134,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Эти часы администратор группы."
+            "value": "Эти часы — администратор группы."
           }
         },
         "sw": {
@@ -1432,7 +1432,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إيقاف المزامنة بعيدًا عن المنزل"
+            "value": "إيقاف المزامنة خارج المنزل"
           }
         },
         "es": {
@@ -1450,7 +1450,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "घर से दूर सिंक बंद करें"
+            "value": "घर से बाहर सिंक बंद करें"
           }
         },
         "ru": {
@@ -1478,7 +1478,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إيقاف المزامنة بعيدًا عن المنزل على %@؟"
+            "value": "إيقاف المزامنة خارج المنزل على %@؟"
           }
         },
         "es": {
@@ -1496,7 +1496,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ पर घर से दूर सिंक बंद करें?"
+            "value": "%@ पर घर से बाहर सिंक बंद करें?"
           }
         },
         "ru": {

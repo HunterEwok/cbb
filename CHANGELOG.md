@@ -3338,6 +3338,12 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The interface texts in Arabic, Chinese, Hebrew, Hindi, Russian, Spanish and Swahili, read
+  line by line in the apps, `cbb` and the website: one word for each term, mistranslations,
+  missing words and punctuation (900 strings).
+- The documentation describes how things are, without dates and notes of how they came to
+  be; the README's quick start pairs with the six-digit code, and the Mac app's Sparkle notes
+  say that the app is in the release's `.pkg`.
 - The FreeBSD job no longer fails after its tests pass: its exit trap's `kill` of the
   measuring loops, already stopped, ended the script with status 1 under `set -e`.
 - A release's draft is made again when its CHANGELOG section is long: GitHub refuses notes
