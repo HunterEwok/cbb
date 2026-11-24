@@ -18,6 +18,34 @@ use std::time::Duration;
 use common::*;
 use serde_json::json;
 
+/// desk's wall clock, through the hook CBB_TEST_AHEAD_FILE, which its
+/// limit of one paste or action a second from one device reads
+/// (uptime::wall_ms): the test moves it past a second instead of waiting
+/// one.
+struct Clock {
+    file: std::path::PathBuf,
+    ms: std::cell::Cell<i64>,
+}
+
+impl Clock {
+    fn new(dir: &std::path::Path) -> Clock {
+        let file = dir.join("clock");
+        std::fs::write(&file, "0").unwrap();
+        Clock { file, ms: std::cell::Cell::new(0) }
+    }
+
+    fn env(&self) -> (&'static str, &str) {
+        ("CBB_TEST_AHEAD_FILE", self.file.to_str().unwrap())
+    }
+
+    /// Moves desk's clock a second and a little on: the limit's next
+    /// second.
+    fn next_second(&self) {
+        self.ms.set(self.ms.get() + 1100);
+        std::fs::write(&self.file, self.ms.get().to_string()).unwrap();
+    }
+}
+
 fn has(e: &str, part: &str) {
     assert!(e.contains(part), "{e:?} does not say {part:?}");
 }
@@ -66,7 +94,8 @@ fn runs_a_quick_action_on_a_member() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let acts = dir.to_str().unwrap();
-    let g = group_with(&["root", "desk"], &[("CBB_TEST_ACTIONS", acts)]);
+    let clock = Clock::new(&dir);
+    let g = group_with(&["root", "desk"], &[("CBB_TEST_ACTIONS", acts), clock.env()]);
     let (root, desk) = (&g[0], &g[1]);
     // Off on desk: refused there.
     has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "lock"})), "desk");
@@ -81,14 +110,14 @@ fn runs_a_quick_action_on_a_member() {
     // Too fast after it: one a second from one device.
     let e = root.err(true, json!({"op": "action_on", "device": "desk", "name": "lock"}));
     has(&e, "too many actions");
-    std::thread::sleep(Duration::from_millis(1100));
+    clock.next_second();
     // The system refuses it.
     std::fs::write(dir.join("refuse-lock"), "the screen is locked already").unwrap();
     has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "lock"})), "locked already");
     // Reboot is for admins with keys in hardware unless the user says
     // otherwise (D-71): the root's key is in a file.
     on("reboot");
-    std::thread::sleep(Duration::from_millis(1100));
+    clock.next_second();
     let e = root.err(true, json!({"op": "action_on", "device": "desk", "name": "reboot"}));
     assert!(!e.is_empty());
     // An action of desk's user's own runs in the session, through an agent.
@@ -98,10 +127,10 @@ fn runs_a_quick_action_on_a_member() {
         b"",
     );
     assert!(m.error().is_empty(), "{:?}", m.h);
-    std::thread::sleep(Duration::from_millis(1100));
+    clock.next_second();
     has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "backup"})), "agent");
     let got = watcher(desk, json!({"op": "watch", "act": true, "paste_only": true}), json!({"error": ""}));
-    std::thread::sleep(Duration::from_millis(1100));
+    clock.next_second();
     let m = root.ask(true, json!({"op": "action_on", "device": "desk", "name": "backup"}), b"");
     if root_user() {
         assert!(m.error().is_empty(), "{:?}\n{}", m.h, desk.log());
@@ -118,16 +147,20 @@ fn runs_a_quick_action_on_a_member() {
 /// allow it, and handed to the watcher that offers a target when on.
 #[test]
 fn pastes_on_a_member() {
-    let g = group(&["root", "desk"]);
+    let dir = std::env::temp_dir().join(format!("cbbt-paste-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let clock = Clock::new(&dir);
+    let g = group_with(&["root", "desk"], &[clock.env()]);
     let (root, desk) = (&g[0], &g[1]);
     has(&root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"hi"), "remote paste is off");
     desk.ok(true, json!({"op": "paste_receive", "name": "on"}));
     // On, with nothing that pastes.
     has(&root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"hi"), "nothing on this device can paste");
-    std::thread::sleep(Duration::from_millis(1100));
+    clock.next_second();
     has(&root.err_with(true, json!({"op": "paste_on", "device": "desk", "enter": true}), b"hi"), "without Enter");
     let got = watcher(desk, json!({"op": "watch", "inject": "tmux"}), json!({"error": ""}));
-    std::thread::sleep(Duration::from_millis(1100));
+    clock.next_second();
     let m = root.ask(true, json!({"op": "paste_on", "device": "desk"}), b"hello there");
     if root_user() {
         assert!(m.error().is_empty(), "{:?}\n{}", m.h, desk.log());
@@ -135,17 +168,17 @@ fn pastes_on_a_member() {
         assert_eq!((inj.s("op"), inj.payload.as_slice()), ("inject", &b"hello there"[..]));
         // Too fast after it.
         has(&root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"again"), "too many pastes");
-        std::thread::sleep(Duration::from_millis(1100));
+        clock.next_second();
         // A line break needs Enter.
         let e = root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"rm -rf x\nls");
         assert!(!e.is_empty());
-        std::thread::sleep(Duration::from_millis(1100));
+        clock.next_second();
         // Typed too.
         let m = root.ask(true, json!({"op": "paste_on", "device": "desk", "method": "type"}), b"typed");
         assert!(m.error().is_empty(), "{:?}", m.h);
         let inj = got.recv_timeout(Duration::from_secs(10)).expect("the typed inject");
         assert_eq!(inj.s("method"), "type");
-        std::thread::sleep(Duration::from_millis(1100));
+        clock.next_second();
         // A secret, on a device that cannot tell who sits at its screen,
         // is refused; as root it is taken.
         let m = root.ask(true, json!({"op": "paste_on", "device": "desk", "kind": "secret"}), b"pin");
@@ -157,7 +190,7 @@ fn pastes_on_a_member() {
         json!({"op": "watch", "inject": "desktop", "paste_only": true}),
         json!({"error": "the focused window takes no text", "refused": true}),
     );
-    std::thread::sleep(Duration::from_millis(1100));
+    clock.next_second();
     let m = root.ask(true, json!({"op": "paste_on", "device": "desk"}), b"to the desktop");
     if root_user() {
         // The desktop goes first and refuses; tmux then takes it.
@@ -168,4 +201,5 @@ fn pastes_on_a_member() {
     wait_for("desk's remote paste is off", || (desk.status()["paste"]["on"] != true).then_some(()), || desk.log());
     let log = std::fs::read_to_string(desk.state().join("paste-log.json")).unwrap_or_default();
     let _ = log;
+    let _ = std::fs::remove_dir_all(&dir);
 }

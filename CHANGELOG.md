@@ -2288,6 +2288,12 @@ with 0.5 is set up again once. The details follow.
 - The FreeBSD job measures SHA-256 on the runner and in the machine every 30 s, to tell a
   runner held back from a slow virtual machine, and a failed test run no longer keeps the
   machine's session open until the job's limit.
+- More of cbb's tests wait for what they check rather than for a time: the push service's tests
+  hold a send with the fake platform and wait for it to arrive there, and wait for the push
+  sender to be done with a body (`Sender::wait_handled`); the remote commands' tests move the
+  member's clock past its limit of one a second (`CBB_TEST_AHEAD_FILE`) instead of sleeping; and
+  the download's test checks that a tool past the limit is stopped, which before checked
+  nothing.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.

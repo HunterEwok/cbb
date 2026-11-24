@@ -1315,17 +1315,17 @@ mod tests {
             .unwrap();
         fetch_with("sh", "test", child, &path, 1000).unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"abc");
-        // No more than the limit reaches the disk while the tool goes on:
-        // the tool measures the file before it ends.
+        // A tool that writes on past the limit is stopped there, and
+        // waited for before fetch_with returns: it never gets to the
+        // command after its output (here one that would note the part's
+        // size), and the part is gone.
         let size = dir.join("size");
-        let script = format!("head -c 100000 /dev/zero; sleep 1; wc -c < {} > {}", path.display(), size.display());
+        let script = format!("head -c 100000 /dev/zero; wc -c < {} > {}", path.display(), size.display());
         let child =
             Command::new("sh").args(["-c", &script]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
         assert!(fetch_with("sh", "test", child, &path, 1000).is_err());
-        std::thread::sleep(Duration::from_millis(1500));
-        if let Ok(n) = fs::read_to_string(&size) {
-            assert!(n.trim().parse::<u64>().unwrap() <= 1001, "{} bytes on the disk", n.trim());
-        }
+        assert!(!size.exists(), "the tool went on past the limit");
+        assert!(!path.exists(), "the part of a refused download stays");
     }
 
     /// A tool that closes its output and then finishes is not stopped: its
