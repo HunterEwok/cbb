@@ -3308,6 +3308,11 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The FreeBSD job runs its Go tests without asynchronous preemption: in its machine on
+  the runners' Intel processors Go's preemption signal slowed SHA-256's SHA-NI instructions
+  100 times for the rest of each process, and the release tests took minutes instead of
+  seconds. The measurements of the runner and the machine kept while the cause was looked
+  for are gone.
 - The FreeBSD job no longer fails after its tests pass: its exit trap's `kill` of the
   measuring loops, already stopped, ended the script with status 1 under `set -e`.
 - A release's draft is made again when its CHANGELOG section is long: GitHub refuses notes

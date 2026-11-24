@@ -752,23 +752,6 @@ jobs:
           mkdir -p freebsd-bin
           cp "$dir/cbb" freebsd-bin/cbb
           CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath -o freebsd-bin/cbb-helper ./cmd/cbb-helper
-      - name: the runner's own load while the FreeBSD machine runs
-        # The machine's processor can stand still under the runner's KVM
-        # (steal, or the host's exits), which the guest counts as user time;
-        # the runner sees it: its steal time and KVM's exits, every 30 s.
-        # And what SHA-256 runs at on the runner itself over two seconds,
-        # beside the machine's own measure at the same times: when both
-        # fall, the runner is held back; when only the machine's does, KVM.
-        run: |
-          (
-            sudo dmesg | grep -i 'split.lock' || echo "no split lock in dmesg"
-            while sleep 30; do
-              date -u +%T
-              grep -E '^cpu ' /proc/stat
-              sudo cat /sys/kernel/debug/kvm/exits 2>/dev/null || true
-              openssl speed -seconds 2 -bytes 8192 sha256 2>/dev/null | tail -n 1
-            done
-          ) >"$RUNNER_TEMP/runner-load.log" 2>&1 &
       - name: go test in a FreeBSD 15.1 virtual machine
         uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
         with:
@@ -782,44 +765,19 @@ jobs:
             set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
             go version
-            # The processor the machine got and what a hash costs on it: the
-            # release tools sign with SLH-DSA-SHA2-128s, nearly all SHA-256,
-            # and their packages take about 40 s here, but ran past the 25
-            # minutes in some runs of the whole suite while SHA-256 alone ran
-            # at 1.8 GB/s under KVM. So the clock too: a time counter that
-            # traps to the host (i8254, ACPI) makes every reading of the time
-            # cost microseconds, and the scheduler reads it all the time.
+            # Go's preemption signal turns SHA-256's SHA-NI instructions 100
+            # times slower for the rest of the process in this machine on the
+            # runners' Intel Xeons (not on AMD EPYC, not on the runner
+            # itself, not in C code such as openssl): 18 MB/s instead of
+            # 1.8 GB/s, internal/release 420 s instead of 7 s, release-sign
+            # near the job's limit. Without the asynchronous preemption the
+            # same tests run at full speed; Go still switches goroutines at
+            # function calls (measured 2026-11-24).
+            export GODEBUG=asyncpreemptoff=1
             # kern.vm_guest is kvm when the machine runs under KVM rather
             # than QEMU's emulation (TCG).
             sysctl -n hw.model hw.ncpu kern.vm_guest
-            sysctl kern.timecounter.hardware kern.timecounter.choice kern.eventtimer.timer || true
-            go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256 || true
-            go test -run '^$' -bench '^BenchmarkNow$' -benchtime 200000x time || true
-            # The release package alone took over 10 minutes here in a run,
-            # user time equal to real time, where a Mac takes 13 s: the short
-            # runs above last milliseconds and miss a processor that stands
-            # still now and then. The same hashes over 10 s each, and where
-            # the release test spends its time.
-            go test -run '^$' -bench 'Hash8K$|Hash1K$' -benchtime 10s crypto/sha256 || true
-            # The test reads testdata beside its package: it runs there.
-            go test -c -o /tmp/release.test ./internal/release
-            (cd internal/release && /usr/bin/time /tmp/release.test -test.run 'TestCheckErrors$' -test.timeout 4m -test.cpuprofile /tmp/cpu.out </dev/null) || true
-            go tool pprof -top -nodecount 25 /tmp/release.test /tmp/cpu.out || true
-            # What uses the processors while the suite runs, every five
-            # minutes, so a slow run shows what it waited behind; and SHA-256
-            # over two seconds every 30 s, as the runner measures its own.
-            # Both end with the script, however it ends, or they hold the
-            # machine's session open until the job's limit. Under set -e a
-            # failing command in the trap ends it there, with status 1: the
-            # kill of the loops already stopped below fails, so it is
-            # allowed to, and the script's own status is kept.
-            (while sleep 300; do date; top -b -d1 -o cpu 12 | tail -n 16; done) &
-            top_pid=$!
-            (while sleep 30; do date -u +%T; openssl speed -seconds 2 -bytes 8192 sha256 2>/dev/null | tail -n 1; done) >/tmp/guest-sha.log 2>&1 &
-            sha_pid=$!
-            trap 'st=$?; kill "$top_pid" "$sha_pid" 2>/dev/null || true; cat /tmp/guest-sha.log || true; exit "$st"' EXIT
             go test -timeout 25m ./... </dev/null
-            kill "$top_pid" "$sha_pid" 2>/dev/null || true
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
             Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
@@ -913,9 +871,6 @@ jobs:
       - name: how QEMU ran the machine (-enable-kvm or accel=kvm under KVM)
         if: always()
         run: ps -ww -o args= -C qemu-system-x86_64 || true
-      - name: the runner's load while the machine ran
-        if: always()
-        run: cat "$RUNNER_TEMP/runner-load.log" || true
 
   openwrt:
     name: OpenWrt
