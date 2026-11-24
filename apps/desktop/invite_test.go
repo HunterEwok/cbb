@@ -15,8 +15,9 @@ import (
 // inviteRun stands for cbb invite -app as the administrator: it writes the
 // invitation, then the device that used it, waits for the user's answer
 // and writes that the device joined when the answer is yes; it hangs up
-// when the window removes the file.
-func inviteRun(t *testing.T, got chan<- string) func([]string, string, bool) error {
+// when the window removes the file. asked is told once the device is
+// written.
+func inviteRun(t *testing.T, got chan<- string, asked chan<- struct{}) func([]string, string, bool) error {
 	return func(args []string, _ string, _ bool) error {
 		var file, answers string
 		for i := range args[:len(args)-1] {
@@ -41,6 +42,7 @@ func inviteRun(t *testing.T, got chan<- string) func([]string, string, bool) err
 		write(a)
 		a.Joining = &InviteJoining{Name: "Anna's laptop", OS: "Windows", Fingerprint: "3F9A 1C2E"}
 		write(a)
+		asked <- struct{}{}
 		for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 			if _, err := os.Stat(file); err != nil {
 				return &adminError{msg: "cancelled"}
@@ -70,8 +72,9 @@ func inviteRun(t *testing.T, got chan<- string) func([]string, string, bool) err
 // group; a second invitation waits for none; a cancelled one says nothing.
 func TestInvite(t *testing.T) {
 	answers := make(chan string, 1)
+	asked := make(chan struct{}, 1)
 	old := adminRun
-	adminRun = inviteRun(t, answers)
+	adminRun = inviteRun(t, answers, asked)
 	t.Cleanup(func() { adminRun = old })
 	d := &Desk{tr: map[string]string{}}
 
@@ -83,14 +86,9 @@ func TestInvite(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() { d.Invite(); close(done) }()
-	var inv Invitation
-	for deadline := time.Now().Add(10 * time.Second); inv.Joining == nil; time.Sleep(20 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatalf("no device asked: %+v", inv)
-		}
-		inv = d.InviteState()
-	}
-	if !inv.Running || !strings.HasPrefix(inv.Image, "data:image/png;base64,") || inv.Text != "cbb://join#pAFQq83vEjRWeJA" {
+	<-asked
+	inv := d.InviteState()
+	if inv.Joining == nil || !inv.Running || !strings.HasPrefix(inv.Image, "data:image/png;base64,") || inv.Text != "cbb://join#pAFQq83vEjRWeJA" {
 		t.Fatalf("the invitation: %+v", inv)
 	}
 	if left := time.Until(time.UnixMilli(inv.Ends)); left < 59*time.Minute || left > time.Hour {
@@ -117,7 +115,7 @@ func TestInvite(t *testing.T) {
 	// A no: cbb hears it and the device stays out.
 	done = make(chan struct{})
 	go func() { d.Invite(); close(done) }()
-	waitInvite(t, d)
+	waitInvite(t, d, asked)
 	d.AnswerInvite(false)
 	if a := <-answers; a != "no" {
 		t.Fatalf("cbb heard %q", a)
@@ -130,7 +128,7 @@ func TestInvite(t *testing.T) {
 	// Cancelled: cbb hangs up, and the window says nothing of it.
 	done = make(chan struct{})
 	go func() { d.Invite(); close(done) }()
-	waitInvite(t, d)
+	waitInvite(t, d, asked)
 	d.CancelInvite()
 	<-done
 	if d.message != "" {
@@ -138,12 +136,13 @@ func TestInvite(t *testing.T) {
 	}
 }
 
-func waitInvite(t *testing.T, d *Desk) {
+// waitInvite waits until cbb has written the device that used the
+// invitation, and checks that the window shows it.
+func waitInvite(t *testing.T, d *Desk, asked <-chan struct{}) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); d.InviteState().Joining == nil; time.Sleep(20 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatal("no device asked")
-		}
+	<-asked
+	if inv := d.InviteState(); inv.Joining == nil {
+		t.Fatalf("no device asked: %+v", inv)
 	}
 }
 

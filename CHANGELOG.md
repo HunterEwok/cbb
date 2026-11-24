@@ -2269,6 +2269,13 @@ with 0.5 is set up again once. The details follow.
   sync with the compositor that it took the connector's requests, a pipe that xterm or foot
   writes to, the window's map and the end of the portal's keyboard connection; the portal's
   dialog takes its wait from a hook the test fires.
+- The desktop window's tests wait for the page to change or for its calls to the app to end, not
+  for a time or by asking again: a check that something did not happen looks once no call is
+  under way, and the invitation's tests wait for the stand-in for cbb to write the device.
+- The desktop window's dialogs for joining with an invitation, inviting a device and moving the
+  group here no longer take the close event left over from their last use for the user's answer:
+  opened again at once after a join ended, the join dialog ignored its OK, and a new invitation
+  could be cancelled by the close of the one before.
 - `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
   that line ended it without its clean stop.
 - The Bluetooth keyboard stops being visible at the end of its time, not just after.

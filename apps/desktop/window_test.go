@@ -42,10 +42,17 @@ import (
 // winRuntime is the stand-in for /wails/runtime.js.
 const winRuntime = `export const Call = {
   ByName: async (name, ...args) => {
-    const r = await fetch("/call/" + name, { method: "POST", body: JSON.stringify(args) });
-    const text = await r.text();
-    if (!r.ok) throw new Error(text);
-    return text ? JSON.parse(text) : null;
+    window.$pending++;
+    try {
+      const r = await fetch("/call/" + name, { method: "POST", body: JSON.stringify(args) });
+      const text = await r.text();
+      if (!r.ok) throw new Error(text);
+      return text ? JSON.parse(text) : null;
+    } finally {
+      // The caller goes on before the waiters look.
+      window.$pending--;
+      setTimeout(window.$wake);
+    }
   },
 };
 `
@@ -63,6 +70,8 @@ func TestWindow(t *testing.T) {
 	srv := httptest.NewServer(w.handler())
 	t.Cleanup(srv.Close)
 	w.page = startBrowser(t, exe)
+	w.page.call(t, "Page.enable", nil, nil)
+	w.page.call(t, "Page.addScriptToEvaluateOnNewDocument", map[string]any{"source": pageWatch}, nil)
 	w.cov = startJSCoverage(t, w.page)
 	w.url = srv.URL + "/index.html"
 	// What a subtest does not put in adminRun's place stands in too: the
@@ -187,22 +196,35 @@ func (w *window) eval(js string, out any) {
 	}
 }
 
-// wait waits until the JavaScript expression is true.
+// wait waits until the JavaScript expression is true: it looks again at
+// each change of the page and as each call to the app ends.
 func (w *window) wait(js string) {
 	w.t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
-	var last error
-	for time.Now().Before(deadline) {
-		var ok bool
-		if last = w.page.eval("!!("+js+")", &ok); last == nil && ok {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	var body string
-	w.page.eval(`document.body.innerText`, &body)
-	w.t.Fatalf("still not true after 15 s: %s (%v)\nthe window says:\n%s", js, last, body)
+	w.eval(`$until(() => (`+js+`))`, nil)
 }
+
+// pageWatch runs in the page before the app: it keeps the count of the
+// calls to the app under way (winRuntime) and of the dialogs closed whose
+// close event has not come, and waiters are told as each ends and as the
+// page changes. What the app's own refresh shows comes when
+// the app looks, as it does for its user.
+const pageWatch = `
+window.$pending = 0;
+window.$waiters = new Set();
+window.$wake = () => window.$waiters.forEach((f) => f());
+new MutationObserver((changes) => {
+  // A dialog that closes tells the app with its close event, which comes
+  // later: what the app does then is under way until it has come.
+  for (const c of changes) {
+    const d = c.target;
+    if (c.attributeName === "open" && d instanceof HTMLDialogElement && !d.open && c.oldValue !== null) {
+      window.$pending++;
+      d.addEventListener("close", () => setTimeout(() => { window.$pending--; window.$wake(); }), {once: true});
+    }
+  }
+  window.$wake();
+}).observe(document, {subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true});
+`
 
 // pageHelpers are short names the tests' JavaScript uses.
 const pageHelpers = `
@@ -217,6 +239,19 @@ var $menu = (ref) => { const c = $q('.cell[data-ref="' + ref + '"]'); if (!c) th
 var $order = () => $all("#devices .tiles > .cell").map((c) => c.dataset.ref);
 var $search = (text) => { const s = $q("#search"); s.value = text; s.dispatchEvent(new Event("input", {bubbles: true})); return true; };
 var $css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim().toUpperCase();
+var $until = (ok) => new Promise((done) => {
+  const look = () => {
+    let v = false;
+    try { v = !!ok(); } catch (e) {}
+    if (v) {
+      window.$waiters.delete(look);
+      done(true);
+    }
+  };
+  window.$waiters.add(look);
+  look();
+});
+var $settled = () => $until(() => window.$pending === 0);
 `
 
 // themes (A15): the ten colours in Dark, Light and System, kept in the
@@ -282,32 +317,29 @@ func (w *window) themes(t *testing.T) {
 	w.waitSettings(d, func(s Settings) bool { return s.Layout == "tiles" })
 }
 
-// waitSettings waits until desktop.json holds what ok wants.
+// waitSettings waits until the window's calls have ended, which write
+// desktop.json, and checks that it holds what ok wants.
 func (w *window) waitSettings(d *Desk, ok func(Settings) bool) {
 	w.t.Helper()
+	w.eval(`$settled()`, nil)
 	var s Settings
-	for range 50 {
-		s = Settings{}
-		if data, err := os.ReadFile(d.settingsPath); err == nil && json.Unmarshal(data, &s) == nil && ok(s) {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
+	data, err := os.ReadFile(d.settingsPath)
+	if err == nil {
+		err = json.Unmarshal(data, &s)
 	}
-	w.t.Fatalf("desktop.json holds %+v", s)
+	if err != nil || !ok(s) {
+		w.t.Fatalf("desktop.json holds %+v (%v)", s, err)
+	}
 }
 
-// waitArranged waits until the arrangement the member keeps passes ok.
+// waitArranged waits until the window's calls have ended, which change
+// the arrangement the member keeps, and checks that it passes ok.
 func (w *window) waitArranged(ok func(string) bool) {
 	w.t.Helper()
-	var b []byte
-	for range 50 {
-		b, _ = json.Marshal(w.svc.arranged())
-		if ok(string(b)) {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
+	w.eval(`$settled()`, nil)
+	if b, _ := json.Marshal(w.svc.arranged()); !ok(string(b)) {
+		w.t.Fatalf("the member keeps %s", b)
 	}
-	w.t.Fatalf("the member keeps %s", b)
 }
 
 // collections (A8): a new collection from a device's menu, another device
@@ -520,7 +552,7 @@ func (w *window) admin(t *testing.T) {
 	w.wait(`$q("#confirm").open && $q("#confirm-title").textContent === "Remove Living room TV?"`)
 	w.eval(`$clickText("#confirm menu button", "Cancel")`, nil)
 	w.wait(`!$q("#confirm").open`)
-	time.Sleep(300 * time.Millisecond)
+	w.eval(`$settled()`, nil)
 	if r := ran(); len(r) != 0 {
 		t.Errorf("a cancelled dialog ran %q", r)
 	}
@@ -597,11 +629,8 @@ func (w *window) admin(t *testing.T) {
 	w.eval(`$click('[data-action="forwarder"]')`, nil)
 	w.wait(`$q("#confirm").open && !$q("#confirm-input").hidden`)
 	w.eval(`$q("#confirm-input").value = " 203.0.113.9:8764   KEY "; $click("#confirm-ok")`, nil)
-	var r [][]string
-	for deadline := time.Now().Add(10 * time.Second); len(r) == 0 && time.Now().Before(deadline); {
-		time.Sleep(50 * time.Millisecond)
-		r = ran()
-	}
+	w.eval(`$settled()`, nil)
+	r := ran()
 	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-no-obfuscate", "-no-vless", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
 		t.Errorf("the forwarder ran %q", r)
 	}
@@ -615,11 +644,8 @@ func (w *window) admin(t *testing.T) {
 	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("over VLESS")`)
 	w.eval(`$click("#confirm-ok")`, nil)
 	// The message is still the one of the switch above, so wait for the run.
-	r = nil
-	for deadline := time.Now().Add(10 * time.Second); len(r) == 0 && time.Now().Before(deadline); {
-		time.Sleep(50 * time.Millisecond)
-		r = ran()
-	}
+	w.eval(`$settled()`, nil)
+	r = ran()
 	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no"}}) {
 		t.Errorf("VLESS on ran %q", r)
 	}
@@ -651,13 +677,8 @@ func (w *window) admin(t *testing.T) {
 	// ttl, and the admin keys, whose level files warns first.
 	waitRan := func(what string, want [][]string) {
 		t.Helper()
-		var r [][]string
-		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
-			if r = append(r, ran()...); len(r) >= len(want) {
-				break
-			}
-		}
-		if !reflect.DeepEqual(r, want) {
+		w.eval(`$settled()`, nil)
+		if r := ran(); !reflect.DeepEqual(r, want) {
 			t.Errorf("%s ran %q", what, r)
 		}
 	}
@@ -705,7 +726,7 @@ func (w *window) admin(t *testing.T) {
 	w.wait(`$q("#recover-dialog").open && !$q("#recover-key").hidden && $q("#recover-key").value === ""`)
 	w.eval(`$clickText("#recover-dialog menu button", "Cancel")`, nil)
 	w.wait(`!$q("#recover-dialog").open`)
-	time.Sleep(300 * time.Millisecond)
+	w.eval(`$settled()`, nil)
 	if r := ran(); len(r) != 0 {
 		t.Errorf("a cancelled move ran %q", r)
 	}
@@ -815,7 +836,7 @@ func (w *window) joinGroup(t *testing.T) {
 	w.wait(`$q("#join-invite-dialog").open && !$q("#join-invite-shown").hidden`)
 	w.eval(`$clickText("#join-invite-dialog menu button", "Cancel")`, nil)
 	w.wait(`!$q("#join-invite-dialog").open && !$q("#join-invite").disabled`)
-	time.Sleep(300 * time.Millisecond)
+	w.eval(`$settled()`, nil)
 	var msg string
 	w.eval(`$q("#message").textContent`, &msg)
 	if msg != "" && msg != "Joined the group." {
@@ -827,10 +848,11 @@ func (w *window) joinGroup(t *testing.T) {
 	w.wait(`$q("#join-invite-dialog").open`)
 	w.eval(`$clickText("#join-invite-dialog menu button", "Cancel")`, nil)
 	w.wait(`!$q("#join-invite-dialog").open`)
+	w.eval(`$settled()`, nil)
 	select {
 	case r := <-ran:
 		t.Errorf("a cancelled join by invitation ran %q", r.args)
-	case <-time.After(300 * time.Millisecond):
+	default:
 	}
 }
 

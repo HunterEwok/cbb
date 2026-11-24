@@ -138,8 +138,10 @@ var dangerousScreens = []dangerousScreen{
 			// window may come before the window's own call.
 			d := w.desk.Load()
 			d.CancelInvite()
-			for deadline := time.Now().Add(10 * time.Second); d.InviteState().Running && time.Now().Before(deadline); {
-				time.Sleep(20 * time.Millisecond)
+			// The window's call to Invite returns as cbb hangs up.
+			w.eval(`$settled()`, nil)
+			if inv := d.InviteState(); inv.Running {
+				w.t.Errorf("the invitation still runs: %+v", inv)
 			}
 		},
 	},

@@ -915,6 +915,20 @@ function ask(title, text, ok, field) {
   });
 }
 
+// closed resolves once the dialog has closed. A close event comes as a
+// task of its own: one left over from the dialog's last close, which
+// arrives after it opened again, finds it open and is not this one's.
+function closed(dlg) {
+  return new Promise((done) => {
+    const on = () => {
+      if (dlg.open) return;
+      dlg.removeEventListener("close", on);
+      done();
+    };
+    dlg.addEventListener("close", on);
+  });
+}
+
 async function act(method, ...args) {
   state.busy = true;
   render();
@@ -1289,7 +1303,7 @@ async function invite() {
     if (dlg.open) dlg.close("done");
   });
   dlg.onclose = () => {
-    if (running) call("CancelInvite").catch((e) => console.error("CancelInvite", e));
+    if (running && !dlg.open) call("CancelInvite").catch((e) => console.error("CancelInvite", e));
   };
   $("invite-yes").onclick = () => call("AnswerInvite", true).catch((e) => console.error("AnswerInvite", e));
   $("invite-no").onclick = () => call("AnswerInvite", false).catch((e) => console.error("AnswerInvite", e));
@@ -1350,7 +1364,7 @@ async function recovery() {
   sync();
   dlg.returnValue = "";
   dlg.showModal();
-  await new Promise((done) => dlg.addEventListener("close", done, { once: true }));
+  await closed(dlg);
   if (dlg.returnValue !== "ok") return;
   const leave = [...dlg.querySelectorAll("[data-stays]")].filter((c) => !c.checked).map((c) => c.dataset.stays);
   const card = $("recover-card").checked;
@@ -1384,7 +1398,7 @@ async function joinInvite() {
   dlg.onclose = null;
   dlg.returnValue = "";
   dlg.showModal();
-  await new Promise((done) => dlg.addEventListener("close", done, { once: true }));
+  await closed(dlg);
   if (dlg.returnValue !== "ok") return;
   const invitation = text.value.trim();
   text.value = "";
@@ -1397,7 +1411,7 @@ async function joinInvite() {
     if (dlg.open) dlg.close("done");
   });
   dlg.onclose = () => {
-    if (running) call("CancelJoin").catch((e) => console.error("CancelJoin", e));
+    if (running && !dlg.open) call("CancelJoin").catch((e) => console.error("CancelJoin", e));
   };
   dlg.returnValue = "";
   dlg.showModal();
