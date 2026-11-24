@@ -27,7 +27,7 @@ type fakeBoard struct {
 	has      bool
 	changes  chan Item
 	writes   chan Item
-	ownWrite bool // the clipboard still holds the last Write
+	ownWrite bool      // the clipboard still holds the last Write
 	cleared  chan bool // each ClearIfUnchanged: whether it gave the clipboard up
 }
 
