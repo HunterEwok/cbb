@@ -39,7 +39,7 @@ impl Keys {
             let sig: Signature = key.sign(tbs);
             Ok(sig.to_der().as_bytes().to_vec())
         })?;
-        let mut wireguard = certs::random_bytes::<32>();
+        let mut wireguard = cbb_core::bytes::random_bytes::<32>();
         // Clamped as an X25519 private key, as WireGuard's are.
         wireguard[0] &= 248;
         wireguard[31] = (wireguard[31] & 127) | 64;

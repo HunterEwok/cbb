@@ -290,7 +290,7 @@ pub fn authenticate(c: &mut dyn Card, key: &[u8]) -> Result<()> {
     let bad = || Error::msg("the YubiKey's answer to the management key does not parse");
     let (inner, _) = read_tlv(&w, 0x7c).ok_or_else(bad)?;
     let (witness, _) = read_tlv(inner, 0x80).ok_or_else(bad)?;
-    let challenge: [u8; 16] = cbb_core::certs::random_bytes();
+    let challenge: [u8; 16] = cbb_core::bytes::random_bytes();
     let decrypted = crypt(key, witness, false)?;
     let data = tlv(0x7c, &[tlv(0x80, &decrypted), tlv(0x81, &challenge)].concat());
     let (r, sw) = command(c, 0x87, alg, MANAGEMENT_SLOT, &data)?;
@@ -881,7 +881,7 @@ pub(crate) mod tests {
                     let key = self.management.1.clone();
                     let (first, rest) = read_tlv(outer, 0x80).unwrap();
                     if first.is_empty() {
-                        let w: [u8; 16] = cbb_core::certs::random_bytes();
+                        let w: [u8; 16] = cbb_core::bytes::random_bytes();
                         self.witness = Some(w);
                         let enc = crypt(&key, &w, true).unwrap();
                         return Ok(self.send(tlv(0x7c, &tlv(0x80, &enc))));
@@ -898,7 +898,7 @@ pub(crate) mod tests {
                     if !self.authed {
                         return Ok(sw(vec![], 0x6982));
                     }
-                    let k = SigningKey::from_bytes(&cbb_core::certs::random_bytes::<32>().into()).unwrap();
+                    let k = SigningKey::from_bytes(&cbb_core::bytes::random_bytes::<32>().into()).unwrap();
                     let point = public(&k);
                     self.slots.insert(p2, (k, None));
                     let mut out = vec![0x7f];
@@ -977,7 +977,7 @@ pub(crate) mod tests {
         let pk = public(&card.0.lock().unwrap().slots[&0x84].0);
         let mut k = find(vec![Box::new(card.clone())], &want).unwrap();
         assert_eq!(k.slot, 0x84);
-        let digest = cbb_core::certs::sha256(b"a record");
+        let digest = cbb_core::bytes::sha256(b"a record");
         assert!(sign(k.card.as_mut(), k.slot, &pk, &digest).is_err(), "signed without the PIN");
         verify(k.card.as_mut(), "123456").unwrap();
         sign(k.card.as_mut(), k.slot, &pk, &digest).unwrap();
@@ -1106,7 +1106,7 @@ pub(crate) mod tests {
             vec![slot],
             "self-signed certificates are no recovery keys"
         );
-        let digest = cbb_core::certs::sha256(b"a claim");
+        let digest = cbb_core::bytes::sha256(b"a claim");
         verify(&mut card, "123456").unwrap();
         sign(&mut card, slot, &point, &digest).unwrap();
 

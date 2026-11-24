@@ -24,7 +24,7 @@ impl Away {
         let Some(st) = cur.as_mut() else { return Ok(None) };
         let secret = st.private_key()?;
         let (_, public) = hubkey::key_for(&secret, &cbb_core::format::DeviceId(hub.0));
-        let name = cbb_core::certs::hex(&hub.0);
+        let name = cbb_core::bytes::hex(&hub.0);
         let mut next = st.clone();
         let mut side = next.toward.get(&name).map(crate::tunnel::Toward::side).unwrap_or_default();
         let confirm = side.connected(psk);
@@ -43,7 +43,7 @@ impl Away {
     pub fn confirmed_by(&self, hub: &DeviceId, confirm: &[u8; 32]) -> Result<bool> {
         let mut cur = self.st.lock().unwrap();
         let Some(st) = cur.as_mut() else { return Ok(false) };
-        let name = cbb_core::certs::hex(&hub.0);
+        let name = cbb_core::bytes::hex(&hub.0);
         let mut side = st.toward.get(&name).map(crate::tunnel::Toward::side).unwrap_or_default();
         if !side.confirmed(confirm) {
             return Ok(false);
@@ -59,7 +59,7 @@ impl Away {
     /// (`DeviceSide::to_try`); none before a `tunnel` went to it.
     pub fn keys_toward(&self, hub: &DeviceId) -> Vec<[u8; 32]> {
         let cur = self.st.lock().unwrap();
-        let name = cbb_core::certs::hex(&hub.0);
+        let name = cbb_core::bytes::hex(&hub.0);
         cur.as_ref().and_then(|st| st.toward.get(&name)).map(|t| t.side().to_try()).unwrap_or_default()
     }
 }
@@ -83,7 +83,7 @@ impl Away {
     pub fn handshaked(&self, hub: &DeviceId, psk: &[u8; 32]) -> Result<()> {
         let mut cur = self.st.lock().unwrap();
         let Some(st) = cur.as_mut() else { return Ok(()) };
-        let name = cbb_core::certs::hex(&hub.0);
+        let name = cbb_core::bytes::hex(&hub.0);
         let mut side = st.toward.get(&name).map(crate::tunnel::Toward::side).unwrap_or_default();
         side.handshake(psk);
         let mut next = st.clone();

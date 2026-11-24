@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(cards.len(), 1, "the reader without a card");
         let mut k = piv::find(cards, &want).unwrap();
         piv::verify(k.card.as_mut(), "123456").unwrap();
-        let digest = cbb_core::certs::sha256(b"a claim");
+        let digest = cbb_core::bytes::sha256(b"a claim");
         piv::sign(k.card.as_mut(), k.slot, &public, &digest).unwrap();
         drop(k);
         t.join().unwrap();

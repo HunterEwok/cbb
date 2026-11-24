@@ -531,10 +531,10 @@ impl Platform for UnifiedPush {
         if let Some(wait) = self.address(&d.tag, &host, addr.ip()) {
             return Outcome::Later(wait);
         }
-        let secret = p256::SecretKey::from_bytes(&cbb_core::certs::random_bytes::<32>().into());
+        let secret = p256::SecretKey::from_bytes(&cbb_core::bytes::random_bytes::<32>().into());
         let Ok(secret) = secret else { return Outcome::Later(Duration::from_secs(1)) };
         let plain = message(d.body, d.challenge.as_ref());
-        let Some(sealed) = encrypt(&plain, up.p256dh, up.auth, &secret, &cbb_core::certs::random_bytes()) else {
+        let Some(sealed) = encrypt(&plain, up.p256dh, up.auth, &secret, &cbb_core::bytes::random_bytes()) else {
             return Outcome::NoPath;
         };
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());

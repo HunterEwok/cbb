@@ -5,7 +5,6 @@
 //! the phones' apps take through ffi's `notices` and the computers' apps
 //! through the service's status, as `{id, kind, args, dismissable}`.
 
-use cbb_core::certs;
 use cbb_core::records::{DeviceId, KeyHash, RecordId, RecordSet};
 use serde_json::{Value, json};
 
@@ -57,7 +56,7 @@ pub fn of(set: &RecordSet, me: &DeviceId, now_ms: u64) -> Vec<Value> {
         let devices: Vec<String> = keys.iter().filter_map(device_of).collect();
         let Some(first) = devices.first() else { continue };
         out.push(notice(
-            certs::b64::encode(&id.0),
+            cbb_core::bytes::b64::encode(&id.0),
             "returned_after_removal",
             json!({ "device": first, "devices": devices.len() }),
             true,
@@ -68,6 +67,6 @@ pub fn of(set: &RecordSet, me: &DeviceId, now_ms: u64) -> Vec<Value> {
 
 /// The record ID of a notice the person hides, as `of` gives it.
 pub fn record_id(s: &str) -> Option<RecordId> {
-    let b = certs::b64::decode_str(s)?;
+    let b = cbb_core::bytes::b64::decode_str(s)?;
     Some(RecordId(b.try_into().ok()?))
 }

@@ -94,7 +94,7 @@ pub fn not_yet(what: &str) -> Error {
 /// The group's tag as mDNS publishes it (`g`): the first 8 bytes of the
 /// group ID in hex.
 pub fn tag(state: &State) -> String {
-    certs::hex(&state.group.0[..8])
+    cbb_core::bytes::hex(&state.group.0[..8])
 }
 
 /// A device ID as discovery and the old member name it.
@@ -500,7 +500,7 @@ impl Live {
             Some(MediaFrom::Group { manifest: c.content.manifest.clone()?, blob: c.blob, from: c.from })
         };
         if !copy.is_empty() {
-            let c = self.board.current().filter(|c| certs::hex(&c.id) == copy && c.content.writable());
+            let c = self.board.current().filter(|c| cbb_core::bytes::hex(&c.id) == copy && c.content.writable());
             return c
                 .and_then(group)
                 .ok_or_else(|| Error::msg("the copy to paste is no longer the group's current copy"));
@@ -750,11 +750,11 @@ impl Peers for Live {
     }
 
     fn window_fingerprint(&self) -> String {
-        certs::hex(&self.mesh.own().hash().0)
+        cbb_core::bytes::hex(&self.mesh.own().hash().0)
     }
 
     fn window_id(&self) -> String {
-        self.window_id.lock().unwrap().map(|id| certs::hex(&id)).unwrap_or_default()
+        self.window_id.lock().unwrap().map(|id| cbb_core::bytes::hex(&id)).unwrap_or_default()
     }
 
     fn found(&self, id: &certs::DeviceId, here: bool) {
@@ -777,7 +777,7 @@ impl Peers for Live {
 /// The first four bytes of a device ID in hex, as the log names a device.
 #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 fn id_text4(id: &DeviceId) -> String {
-    certs::hex(&id.0[..4])
+    cbb_core::bytes::hex(&id.0[..4])
 }
 
 #[cfg(feature = "tunnel")]

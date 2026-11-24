@@ -192,7 +192,7 @@ fn current(mesh: &Mesh, state: &State) -> Option<Held> {
         .map(|e| e.keys_for("push", pusher::SERVICE, now))
         .unwrap_or_default()
         .iter()
-        .map(|spki| cbb_core::certs::sha256(spki))
+        .map(|spki| cbb_core::bytes::sha256(spki))
         .collect();
     if pins.is_empty() {
         return None;
@@ -341,7 +341,7 @@ impl Mesh {
     pub fn push_face(&self) -> Option<[u8; 16]> {
         let now = crate::uptime::wall_ms();
         let keys = self.entries().map(|e| e.keys_for("push", pusher::SERVICE, now)).unwrap_or_default();
-        keys.iter().find_map(|spki| self.faces.kept(&cbb_core::certs::sha256(spki)).tag())
+        keys.iter().find_map(|spki| self.faces.kept(&cbb_core::bytes::sha256(spki)).tag())
     }
 
     /// Message `push` (t 28) from the peer over its own connection: its

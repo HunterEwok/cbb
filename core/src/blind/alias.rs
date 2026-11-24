@@ -52,7 +52,7 @@ pub fn expiry(starts_ms: u64, ends_ms: u64) -> u64 {
     if span == 0 {
         return ends_ms;
     }
-    ends_ms.saturating_sub(u64::from_be_bytes(crate::certs::random_bytes::<8>()).checked_rem(span).unwrap_or(0))
+    ends_ms.saturating_sub(u64::from_be_bytes(crate::bytes::random_bytes::<8>()).checked_rem(span).unwrap_or(0))
 }
 
 /// HKDF's info for a server key, the face's tag and a counter after it.
@@ -120,8 +120,8 @@ pub fn distinct(faces: &BTreeMap<KeyHash, Face>) -> bool {
 /// server key is derived for the tag; the versions start at a random number
 /// below 2^32, the expiry is the face's own ([`expiry`]).
 pub fn new_face(period_key: Vec<u8>, server_secret: &[u8; 32], starts_ms: u64, ends_ms: u64) -> Face {
-    let tag = crate::certs::random_bytes();
+    let tag = crate::bytes::random_bytes();
     let (_, server_key) = server_key(server_secret, &tag);
-    let start = u64::from(u32::from_be_bytes(crate::certs::random_bytes::<4>())).saturating_add(1);
+    let start = u64::from(u32::from_be_bytes(crate::bytes::random_bytes::<4>())).saturating_add(1);
     Face { tag, period_key, server_key, version: start, expires_ms: expiry(starts_ms, ends_ms) }
 }

@@ -242,7 +242,7 @@ pub fn digest_from<'a>(set_digest: &[u8; 32], lists: impl IntoIterator<Item = &'
     for h in &hashes {
         m.extend_from_slice(h);
     }
-    crate::certs::sha256(&m)
+    crate::bytes::sha256(&m)
 }
 
 /// The Welcome's tag `Tw` (message 67, field 4): HMAC-SHA-512 under

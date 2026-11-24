@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use cbb_core::certs::b64;
+use cbb_core::bytes::b64;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -461,7 +461,7 @@ mod tests {
         }
         #[derive(Deserialize)]
         struct Vectors {
-            #[serde(with = "crate::certs::b64")]
+            #[serde(with = "cbb_core::bytes::b64")]
             key: Vec<u8>,
             cases: Vec<Case>,
         }

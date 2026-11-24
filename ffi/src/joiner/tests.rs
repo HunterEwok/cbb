@@ -111,7 +111,7 @@ fn a_new_phone_joins_by_the_window_of_the_phone_that_made_the_group() {
     assert!(qr.starts_with("cbb://pair?addr=127.0.0.1:"), "{qr}");
     assert!(qr.contains(&format!("c={digits}")) && qr.contains(&format!("i={}", opened["id"].as_str().unwrap())));
     let t = read_code(&qr).unwrap();
-    assert_eq!(Some(certs::hex(&t.fp.unwrap().0)), opened["fingerprint"].as_str().map(String::from));
+    assert_eq!(Some(cbb_core::bytes::hex(&t.fp.unwrap().0)), opened["fingerprint"].as_str().map(String::from));
 
     let new_dir = tmp.join("new");
     let k = new_key();

@@ -38,7 +38,7 @@ fn a_window_announces_its_member_key_hash() {
     let (a, _) = two_dirs("window-fp");
     let l = open(&a);
     let fp = l.window_fingerprint();
-    assert_eq!(fp, certs::hex(&cbb_core::records::Key::es256(l.mesh.own().member.public()).hash().0));
+    assert_eq!(fp, cbb_core::bytes::hex(&cbb_core::records::Key::es256(l.mesh.own().member.public()).hash().0));
     assert_eq!(fp.len(), 64);
     assert!(fp.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
     // It is the start of the device ID too.

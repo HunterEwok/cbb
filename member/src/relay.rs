@@ -146,7 +146,7 @@ impl Credentialed {
         let mut k = self.name.clone();
         for c in self.creds.iter().chain([&self.period]) {
             k.push(' ');
-            k.push_str(&certs::hex(&certs::sha256(c)));
+            k.push_str(&cbb_core::bytes::hex(&cbb_core::bytes::sha256(c)));
         }
         k
     }

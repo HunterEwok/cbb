@@ -79,7 +79,7 @@ fn write(by_hub: &BTreeMap<DeviceId, Vec<Server>>) -> Vec<u8> {
         .iter()
         .map(|(hub, servers)| {
             let list = servers.iter().map(|s| serde_json::json!([s.address, b64.encode(s.pin)])).collect();
-            (cbb_core::certs::hex(&hub.0), serde_json::Value::Array(list))
+            (cbb_core::bytes::hex(&hub.0), serde_json::Value::Array(list))
         })
         .collect();
     serde_json::to_vec_pretty(&v).unwrap_or_default()

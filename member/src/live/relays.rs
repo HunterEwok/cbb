@@ -63,8 +63,8 @@ impl Live {
                     )));
                 }
             };
-            let pin = cbb_core::certs::b64::decode_str(key)
-                .filter(|b| cbb_core::certs::b64::encode(b) == *key)
+            let pin = cbb_core::bytes::b64::decode_str(key)
+                .filter(|b| cbb_core::bytes::b64::encode(b) == *key)
                 .and_then(|b| <[u8; 32]>::try_from(b).ok())
                 .ok_or_else(|| {
                     Error::msg(format!("{key:?} is not a relay's key; cbb relay prints it, 44 characters of base64"))

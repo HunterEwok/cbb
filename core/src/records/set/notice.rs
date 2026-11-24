@@ -247,7 +247,7 @@ impl RecordSet {
         let kind = Kind::Revoke(Removal { keys, seen: Vec::new() });
         let body = Body { group: self.group, signer: *remover, seq, prev, time_ms, kind, held: false };
         let bytes = body.encode();
-        let id = RecordId(crate::certs::sha256(&bytes));
+        let id = RecordId(crate::bytes::sha256(&bytes));
         // Never signed and never stored: evaluated as checked, beside the
         // set's own records, for this answer only.
         let trial = Record { bytes, sig: vec![], sig2: None, body, id };

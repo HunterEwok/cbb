@@ -17,7 +17,7 @@ use serde_json::{Map, Value};
 use zeroize::Zeroizing;
 
 use super::{Code, Refusal, b64_value, bad_args, json, refuse};
-use crate::certs::b64;
+use crate::bytes::b64;
 use crate::content::{TYPE_FILES, TYPE_MEDIA, TYPE_TEXT};
 use crate::copies::{self, Opened, OriginMap};
 use crate::error::Error;
@@ -48,9 +48,9 @@ fn refused(e: impl core::fmt::Display, message: &str) -> Refusal {
 /// and a slot per group (a new key whenever it registers again after a
 /// membership change; the slot kept), and a send key with each new token.
 fn new_key() -> Result<Vec<u8>, Refusal> {
-    let key = Zeroizing::new(crate::certs::random_bytes::<32>());
+    let key = Zeroizing::new(crate::bytes::random_bytes::<32>());
     let send = Zeroizing::new(crate::identity::new_key().map_err(|e| refuse(Code::Push, e))?);
-    let slot = crate::certs::random_bytes::<16>();
+    let slot = crate::bytes::random_bytes::<16>();
     let mut m = Map::new();
     m.insert("key".into(), b64_value(&key[..]));
     m.insert("send_key".into(), b64_value(&send[..]));

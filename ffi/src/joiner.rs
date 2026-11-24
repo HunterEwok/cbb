@@ -30,7 +30,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use cbb_core::certs;
 use cbb_core::error::{Error, Result};
 use cbb_core::format::{KeyHash, frame};
 use cbb_core::identity::ExternalKey;
@@ -67,12 +66,12 @@ struct NewArgs {
     name: String,
     os: String,
     /// The member key's public point, SEC1 uncompressed.
-    #[serde(with = "certs::b64")]
+    #[serde(with = "cbb_core::bytes::b64")]
     public: Vec<u8>,
     /// The admin key's public point, SEC1 uncompressed, for a phone that
     /// offers it (cbb_joiner_new_admin): the root keeps it, and makes the
     /// phone an admin with it later.
-    #[serde(with = "certs::b64::opt", default)]
+    #[serde(with = "cbb_core::bytes::b64::opt", default)]
     admin_public: Option<Vec<u8>>,
     /// A remote invitation's text, to join from afar in place of a window.
     #[serde(default)]
@@ -201,8 +200,11 @@ impl Joiner {
         if cbb_member::set::load(&dir, &local)?.is_some() {
             return Err(Error::msg("this phone is in a group already: leave it first"));
         }
-        let fingerprint =
-            if invite.is_empty() { String::new() } else { certs::b64::encode(&Key::es256(a.public.clone()).hash().0) };
+        let fingerprint = if invite.is_empty() {
+            String::new()
+        } else {
+            cbb_core::bytes::b64::encode(&Key::es256(a.public.clone()).hash().0)
+        };
         let key: Arc<dyn ExternalKey> = Arc::new(AppKey { public: a.public, sign, ctx });
         let shared = Arc::new(Shared {
             st: Mutex::new(StateAnswer {

@@ -145,7 +145,7 @@ pub fn group_path(id: &str) -> String {
     use base64::Engine as _;
     let mut b = Vec::from(&b"cbb group path\0"[..]);
     b.extend_from_slice(id.as_bytes());
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&crate::certs::sha256(&b)[..16])
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&crate::bytes::sha256(&b)[..16])
 }
 
 /// An offer's VLESS settings v with the user ID id in place of theirs and

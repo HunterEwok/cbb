@@ -64,7 +64,7 @@ pub fn found(dir: &Path, me: &Me<'_>, now_ms: u64) -> Result<Founded> {
 /// A new recovery secret and the recovery key its two halves make; a
 /// phone's new group (the ffi) makes its own the same way.
 pub fn new_recovery() -> Result<(Zeroizing<[u8; 32]>, Recovery)> {
-    let secret = Zeroizing::new(cbb_core::certs::random_bytes::<32>());
+    let secret = Zeroizing::new(cbb_core::bytes::random_bytes::<32>());
     let (k1, k2) = pq::recovery_keys(&secret).map_err(|e| e.context("cannot make the recovery key"))?;
     let k1 = Key::es256(k1.public_key().to_sec1_point(false).as_bytes().to_vec());
     let recovery = Recovery::new(k1, Key::new(ALG_SLH_DSA, k2.public()))

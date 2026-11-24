@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::certs::b64;
+use crate::bytes::b64;
 
 /// What a member can do (section 4, "Capabilities"): be one of the group's
 /// hubs, hold an admin key, and dial other members. A capability gives no

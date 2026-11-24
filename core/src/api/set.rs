@@ -26,7 +26,7 @@ use serde_json::{Map, Value};
 use zeroize::Zeroizing;
 
 use super::{Code, Refusal, b64_value, bad_args, json, refuse};
-use crate::certs::b64;
+use crate::bytes::b64;
 use crate::error::{Error, Result};
 use crate::identity::ExternalKey;
 use crate::records::body::{self, AdminKind, Device, Kind, Settings};

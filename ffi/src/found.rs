@@ -12,7 +12,6 @@
 
 use std::path::PathBuf;
 
-use cbb_core::certs;
 use cbb_core::error::{Error, Result};
 use cbb_core::records::body::{Device, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_PHONE, STORE_FILE, STORE_HARDWARE};
 use cbb_core::records::{Key, Kind, RecordSet};
@@ -31,10 +30,10 @@ struct Args {
     os: String,
     /// hardware or file: where the member key is, as the person reads it.
     store: String,
-    #[serde(with = "certs::b64")]
+    #[serde(with = "cbb_core::bytes::b64")]
     root_public: Vec<u8>,
     /// The member key's point.
-    #[serde(with = "certs::b64")]
+    #[serde(with = "cbb_core::bytes::b64")]
     public: Vec<u8>,
 }
 
@@ -152,7 +151,7 @@ mod tests {
         let member = FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap();
         let req = serde_json::json!({
             "dir": d.to_string_lossy(), "name": "iPhone", "os": "ios", "store": "hardware",
-            "root_public": certs::b64::encode(&root.public()), "public": certs::b64::encode(&member.public()),
+            "root_public": cbb_core::bytes::b64::encode(&root.public()), "public": cbb_core::bytes::b64::encode(&member.public()),
         });
         let req = serde_json::to_vec(&req).unwrap();
         assert!(on_06(&req));
@@ -187,7 +186,7 @@ mod tests {
         let member = FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap();
         let req = serde_json::to_vec(&serde_json::json!({
             "dir": d.to_string_lossy(), "name": "iPhone", "os": "ios", "store": "file",
-            "root_public": certs::b64::encode(&member.public()), "public": certs::b64::encode(&member.public()),
+            "root_public": cbb_core::bytes::b64::encode(&member.public()), "public": cbb_core::bytes::b64::encode(&member.public()),
         }))
         .unwrap();
         let got: serde_json::Value = serde_json::from_slice(&new_group(&req, no_sign, 0)).unwrap();

@@ -68,7 +68,7 @@ pub struct Forwarder {
 /// The mask key the test forwarder gives, made from a name rather than
 /// written out.
 pub fn mask() -> [u8; 32] {
-    cbb_core::certs::sha256(b"the test forwarder's mask key")
+    cbb_core::bytes::sha256(b"the test forwarder's mask key")
 }
 
 /// A plain answer: the registration 7, the mask, and the way over VLESS
@@ -192,7 +192,7 @@ fn serve(
     let hello = s.conn.export_keying_material([0u8; 32], b"cbb forwarder hello", None).unwrap();
     let proof_key = s.conn.export_keying_material([0u8; 32], b"cbb forwarder key", None).unwrap();
     sh.hello_keys.lock().unwrap().push(hello);
-    let eph = gotatun::x25519::StaticSecret::from(certs::random_bytes::<32>());
+    let eph = gotatun::x25519::StaticSecret::from(cbb_core::bytes::random_bytes::<32>());
     let e = gotatun::x25519::PublicKey::from(&eph);
     s.write_all(&v3::challenge(e.as_bytes()))?;
     s.flush()?;

@@ -13,7 +13,6 @@
 
 use std::sync::Mutex;
 
-use cbb_core::certs;
 use cbb_core::error::{Error, Result};
 use cbb_core::media::Part;
 use serde::{Deserialize, Serialize};
@@ -49,7 +48,7 @@ struct PartArgs {
     path: String,
     #[serde(default)]
     dir: bool,
-    #[serde(with = "certs::b64::opt", default)]
+    #[serde(with = "cbb_core::bytes::b64::opt", default)]
     data: Option<Vec<u8>>,
     #[serde(default)]
     file: Option<String>,
@@ -148,7 +147,7 @@ fn part_json(p: &Part, at: &std::path::Path) -> Value {
 #[cfg(test)]
 fn b64(b: &[u8]) -> Value {
     #[derive(Serialize)]
-    struct B<'a>(#[serde(with = "certs::b64")] &'a [u8]);
+    struct B<'a>(#[serde(with = "cbb_core::bytes::b64")] &'a [u8]);
     serde_json::to_value(B(b)).unwrap_or(Value::Null)
 }
 

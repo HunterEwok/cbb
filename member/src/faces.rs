@@ -316,7 +316,7 @@ impl Kept {
             .filter_map(|(k, h)| {
                 let d = member_of(state, k)?;
                 let name = hash_of(h.c.key.as_deref()?).0;
-                members.c.members.contains(&name).then(|| (b64(&name), cbb_core::certs::hex(&d.id.0)))
+                members.c.members.contains(&name).then(|| (b64(&name), cbb_core::bytes::hex(&d.id.0)))
             })
             .collect();
         Some(ForRelay {
@@ -434,7 +434,7 @@ impl Faces {
         let secret: [u8; 32] = match read_or_none(&secret_path)? {
             Some(b) => b.try_into().map_err(|_| Error::msg(format!("{} is not 32 bytes", secret_path.display())))?,
             None => {
-                let s = cbb_core::certs::random_bytes();
+                let s = cbb_core::bytes::random_bytes();
                 files::write_atomic(&secret_path, &s, 0o600)?;
                 s
             }
@@ -749,7 +749,7 @@ impl Faces {
         // The period, on the root, for a server it lists.
         if let (Some(root), true) = (s.root, listed && kept().period_due(state, now)) {
             let scalar: [u8; 32] = loop {
-                let d = cbb_core::certs::random_bytes();
+                let d = cbb_core::bytes::random_bytes();
                 if SigningKey::from_slice(&d).is_ok() {
                     break d;
                 }
@@ -764,7 +764,7 @@ impl Faces {
             }
             // The next period counts above the one it follows, by a
             // random step; the first starts where its face does.
-            let step = u64::from(u16::from_be_bytes(cbb_core::certs::random_bytes::<2>())).saturating_add(1);
+            let step = u64::from(u16::from_be_bytes(cbb_core::bytes::random_bytes::<2>())).saturating_add(1);
             let prev = kept().period.as_ref().map(|p| p.c.version);
             let version = prev.map_or(face.version, |v| v.saturating_add(step));
             let mut c = blank(TYPE_PERIOD, state.group.0, version, face.expires_ms);
@@ -852,7 +852,7 @@ pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -
         let pins: Vec<[u8; 32]> = if listed.is_empty() {
             built_in.iter().filter_map(|p| b64pin(p)).collect()
         } else {
-            listed.iter().map(|spki| cbb_core::certs::sha256(spki)).collect()
+            listed.iter().map(|spki| cbb_core::bytes::sha256(spki)).collect()
         };
         out.extend(pins.into_iter().map(|pin| Server { pin, address: name.to_string() }));
     }

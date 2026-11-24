@@ -57,7 +57,7 @@ struct StartArgs {
     /// makes.
     device: String,
     /// The member key's public point, SEC1 uncompressed.
-    #[serde(with = "certs::b64")]
+    #[serde(with = "cbb_core::bytes::b64")]
     public: Vec<u8>,
     #[serde(default)]
     peers: Vec<String>,
@@ -81,12 +81,12 @@ struct PushArgs {
 }
 
 #[derive(Deserialize)]
-struct B64(#[serde(with = "certs::b64")] Vec<u8>);
+struct B64(#[serde(with = "cbb_core::bytes::b64")] Vec<u8>);
 
 /// Bytes as JSON, base64.
 fn b64_value(b: &[u8]) -> Value {
     #[derive(serde::Serialize)]
-    struct B<'a>(#[serde(with = "certs::b64")] &'a [u8]);
+    struct B<'a>(#[serde(with = "cbb_core::bytes::b64")] &'a [u8]);
     serde_json::to_value(B(b)).unwrap_or(Value::Null)
 }
 
@@ -171,7 +171,7 @@ struct ManageArgs {
     os: String,
     /// The signing key's SubjectPublicKeyInfo in base64; absent for a step
     /// that signs nothing, as change_preview.
-    #[serde(default, with = "certs::b64")]
+    #[serde(default, with = "cbb_core::bytes::b64")]
     public: Vec<u8>,
 }
 
@@ -246,7 +246,7 @@ pub(crate) fn recovery_read(r: &Value) -> Result<cbb_core::sheet::Read> {
         cbb_core::sheet::read(t).map_err(|e| Error::msg(e.message()))?
     } else if let Some(s) = r.get("secret") {
         #[derive(serde::Deserialize)]
-        struct Der(#[serde(with = "certs::b64")] Vec<u8>);
+        struct Der(#[serde(with = "cbb_core::bytes::b64")] Vec<u8>);
         let Der(b) = serde_json::from_value(s.clone()).map_err(|_| Error::msg("the recovery secret is not base64"))?;
         let b = cbb_core::secret::Zeroizing::new(b);
         let secret: [u8; 32] =
@@ -297,7 +297,7 @@ fn current_json(c: &Current, now_ms: i64) -> Value {
     } else {
         Kind::Text
     };
-    let id = certs::hex(&c.id);
+    let id = cbb_core::bytes::hex(&c.id);
     json!({
         "id": id,
         "origin": id_text(&c.origin),
@@ -676,7 +676,7 @@ impl Phone {
             Ok(cbb_member::live::MediaFrom::Own(m)) => Some(m.manifest),
             _ => None,
         };
-        let id = l.media_copy().map(|i| certs::hex(&i)).unwrap_or_default();
+        let id = l.media_copy().map(|i| cbb_core::bytes::hex(&i)).unwrap_or_default();
         let ev = cbb_core::clip::Event {
             id,
             origin: id_text(&l.mesh.device()),
@@ -698,7 +698,7 @@ impl Phone {
             Kind::Text
         };
         Some(cbb_core::clip::Event {
-            id: certs::hex(&c.id),
+            id: cbb_core::bytes::hex(&c.id),
             origin: id_text(&c.origin),
             age: cbb_member::uptime::wall_ms().saturating_sub(c.at_ms).max(0),
             kind,
@@ -1217,7 +1217,7 @@ impl Phone {
     /// name.
     fn add_watch(&self, a: &ManageArgs, key: &AppKey, now: u64) -> Result<Value> {
         #[derive(serde::Deserialize)]
-        struct Der(#[serde(with = "certs::b64")] Vec<u8>);
+        struct Der(#[serde(with = "cbb_core::bytes::b64")] Vec<u8>);
         let Der(spki) =
             serde_json::from_value(json!(a.key.trim())).map_err(|_| Error::msg("the watch's key is not base64"))?;
         let point = certs::p256_spki(&spki)
@@ -1426,7 +1426,7 @@ fn deliver(ev: &Events, w: &Write) {
     let kind = if w.media.is_some() { Kind::Media } else { w.kind };
     let ttl_ms = w.ttl.map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
     ev.send(&Event::Write { text: &w.text, kind: kind_name(kind), ttl_ms });
-    let id = certs::hex(&w.id);
+    let id = cbb_core::bytes::hex(&w.id);
     ev.send(&Event::Copy {
         copy: json!({
             "id": id,
@@ -1485,8 +1485,8 @@ fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
         })
         .collect();
     json!({
-        "group": certs::b64::encode(&st.group.0),
-        "root": st.roots.last().map(|r| certs::b64::encode(&r.0)).unwrap_or_default(),
+        "group": cbb_core::bytes::b64::encode(&st.group.0),
+        "root": st.roots.last().map(|r| cbb_core::bytes::b64::encode(&r.0)).unwrap_or_default(),
         "root_device": st.root_device.as_ref().map(id_text).unwrap_or_default(),
         "me": {
             "device": id_text(me),
@@ -1927,7 +1927,7 @@ mod tests {
         assert_eq!(ok(&call("notices", Value::Null))["notices"], json!([]));
         assert!(error(&call("dismiss", Value::Null)).contains("a notice's id"));
         assert!(error(&call("dismiss", json!({ "id": "AAAA" }))).contains("a notice's id"));
-        let id = certs::b64::encode(&[9; 32]);
+        let id = cbb_core::bytes::b64::encode(&[9; 32]);
         ok(&call("dismiss", json!({ "id": id })));
         let phone = &*m.0;
         let rid = cbb_member::notices::record_id(&id).unwrap();

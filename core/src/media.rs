@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 
-use crate::certs::b64;
+use crate::bytes::b64;
 use crate::error::{Error, Result};
 
 /// The largest copy, all its parts together, that the group carries.

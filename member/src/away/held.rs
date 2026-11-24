@@ -35,7 +35,7 @@ impl Away {
         else {
             return Ok(None);
         };
-        let name = cbb_core::certs::hex(&from.0);
+        let name = cbb_core::bytes::hex(&from.0);
         if st.own_key(&key) || st.held.iter().any(|(d, h)| *d != name && h.key == key) {
             return Err(Error::msg(format!("{name} sent a tunnel key that another device or this hub holds")));
         }

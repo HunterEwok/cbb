@@ -129,7 +129,7 @@ impl Fake {
 }
 
 fn period(name: &str) -> SigningKey {
-    SigningKey::from_slice(&cbb_core::certs::sha256(name.as_bytes())).unwrap()
+    SigningKey::from_slice(&cbb_core::bytes::sha256(name.as_bytes())).unwrap()
 }
 
 fn point(k: &SigningKey) -> Vec<u8> {
@@ -808,7 +808,7 @@ fn live_push_to_a_phone() {
     let frame = STANDARD.decode(env("CBB_PUSH_LIVE_REG")).unwrap();
     let r = push::Registration::read(&frame::read(&frame, 1 << 16).unwrap().map).unwrap();
     let on = r.on.as_ref().expect("the registration has push off");
-    let id: [u8; 16] = cbb_core::certs::random_bytes();
+    let id: [u8; 16] = cbb_core::bytes::random_bytes();
     let body = match std::env::var("CBB_PUSH_LIVE_KIND").as_deref() {
         Ok("waits") => push::Body::Waits { id, origin: [1; 16] },
         _ => push::Body::Event { id, event: push::EVENT_JOINED, device: None, time_ms: Some(now_ms()) },

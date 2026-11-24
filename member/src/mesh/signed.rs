@@ -42,7 +42,7 @@ struct Log {
 }
 
 fn id_text(id: &RecordId) -> String {
-    crate::certs::hex(&id.0)
+    cbb_core::bytes::hex(&id.0)
 }
 
 fn load(dir: &Path, log: &dyn Fn(&str)) -> Log {

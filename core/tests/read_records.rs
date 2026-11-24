@@ -34,7 +34,7 @@ impl ExternalKey for K {
 }
 
 fn k(name: &str) -> K {
-    let sk = SigningKey::from_slice(&cbb_core::certs::sha256(name.as_bytes())).unwrap();
+    let sk = SigningKey::from_slice(&cbb_core::bytes::sha256(name.as_bytes())).unwrap();
     let key = Key::es256(sk.verifying_key().to_sec1_point(false).as_bytes().to_vec());
     let hash = key.hash();
     K { sk, key, hash }
@@ -108,7 +108,7 @@ fn root_with_dead_checkpoints(n: usize, ids: usize) -> (RecordSet, K, G) {
         let keep: Vec<RecordId> = {
             let mut v: Vec<RecordId> = (0..ids)
                 .map(|i| {
-                    RecordId(cbb_core::certs::sha256(
+                    RecordId(cbb_core::bytes::sha256(
                         &[&(c as u32).to_le_bytes()[..], &(i as u32).to_le_bytes()[..]].concat(),
                     ))
                 })
@@ -164,7 +164,7 @@ fn what_the_honest_checkpoint_names() {
 /// lists, restored.
 fn restarted(set: &RecordSet) -> RecordSet {
     let records: Vec<Record> =
-        set.marked(&cbb_core::certs::sha256(b"a local key")).into_iter().map(|(r, _)| r.clone()).collect();
+        set.marked(&cbb_core::bytes::sha256(b"a local key")).into_iter().map(|(r, _)| r.clone()).collect();
     let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
     RecordSet::restore(set.root().clone(), set.recovery().clone(), &records, &lists)
 }
@@ -285,7 +285,7 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
             let (seq, id) = g.heads[&root.hash];
             let mut keep: Vec<RecordId> = (0..2385u32)
                 .map(|i| {
-                    RecordId(cbb_core::certs::sha256(&[&(c as u32).to_le_bytes()[..], &i.to_le_bytes()[..]].concat()))
+                    RecordId(cbb_core::bytes::sha256(&[&(c as u32).to_le_bytes()[..], &i.to_le_bytes()[..]].concat()))
                 })
                 .collect();
             keep.sort();
@@ -640,7 +640,7 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
             for n in 0..16u32 {
                 let mut keys: Vec<KeyHash> = (0..256u32)
                     .map(|i| {
-                        KeyHash(cbb_core::certs::sha256(
+                        KeyHash(cbb_core::bytes::sha256(
                             &[&a.to_le_bytes()[..], &n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat(),
                         ))
                     })
@@ -1148,7 +1148,7 @@ fn checkpoints_keep_no_more_than_the_devices_the_group_may_have() {
 fn wide_removal(g: &mut G, by: &K, tag: &str, n: u32) -> Record {
     let mut keys: Vec<KeyHash> = (0..256u32)
         .map(|i| {
-            KeyHash(cbb_core::certs::sha256(&[tag.as_bytes(), &n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat()))
+            KeyHash(cbb_core::bytes::sha256(&[tag.as_bytes(), &n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat()))
         })
         .collect();
     keys.sort();
@@ -2530,7 +2530,7 @@ fn a_root_removal_in_a_full_room_names_what_it_pushes_out() {
             break;
         }
         let mut ids: Vec<RecordId> = (0..256u32)
-            .map(|i| RecordId(cbb_core::certs::sha256(&[&n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat())))
+            .map(|i| RecordId(cbb_core::bytes::sha256(&[&n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat())))
             .collect();
         ids.sort();
         let r = g.sign(&root, Kind::Thaw { ids, seen: Vec::new() });

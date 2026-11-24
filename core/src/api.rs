@@ -26,7 +26,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use zeroize::Zeroizing;
 
-use crate::certs::b64;
+use crate::bytes::b64;
 use crate::error::Error;
 use crate::strict;
 

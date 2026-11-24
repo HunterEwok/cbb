@@ -156,7 +156,7 @@ mod timing {
         let mut g = G::new();
         g.device("laptop", crate::records::body::ROLE_MEMBER, 0, |_| {});
         let r = g.checkpoint(crate::testkit::T0);
-        let local = crate::certs::sha256(b"a local key");
+        let local = crate::bytes::sha256(b"a local key");
         let mark = r.mark(&local);
         let t = t_of(&mark, |m| r.mark_holds(&local, m.try_into().unwrap()));
         assert!(t.abs() < MAX_T, "t = {t:.1}");
@@ -166,7 +166,7 @@ mod timing {
     #[ignore = "a timing measurement; run with --ignored timing"]
     fn timing_pin_mark() {
         let (root, recovery) = (k("root").key, crate::testkit::recovery());
-        let local = crate::certs::sha256(b"a local key");
+        let local = crate::bytes::sha256(b"a local key");
         let mark = pin_mark(&local, &root, &recovery);
         let t =
             t_of(&mark, |m| RecordSet::pinned(root.clone(), recovery.clone(), &local, m.try_into().unwrap()).is_some());

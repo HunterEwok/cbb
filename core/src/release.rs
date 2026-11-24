@@ -16,7 +16,7 @@ use p256::ecdsa::Signature;
 use p256::ecdsa::signature::Verifier;
 use serde::{Deserialize, Serialize};
 
-use crate::certs::{b64, hex, sha256};
+use crate::bytes::{b64, hex, sha256};
 use crate::error::{Error, Result};
 
 /// The largest body a file may carry.
@@ -959,7 +959,7 @@ pub fn parse_roots(pem: &str) -> Result<Vec<Key>> {
             ("-----END PUBLIC KEY-----", Some(_)) => {
                 let Some((name, text, _)) = block.take() else { break };
                 let der =
-                    crate::certs::b64::decode_str(&text).ok_or_else(|| Error::msg("a PUBLIC KEY is not base64"))?;
+                    crate::bytes::b64::decode_str(&text).ok_or_else(|| Error::msg("a PUBLIC KEY is not base64"))?;
                 if name.is_empty() || name.len() > 64 {
                     return Err(Error::msg("a root key has no Name"));
                 }
@@ -1044,7 +1044,7 @@ pub mod testing {
             REQUIRED
                 .iter()
                 .map(|a| {
-                    let b = crate::certs::b64::encode(&self.spki(*a));
+                    let b = crate::bytes::b64::encode(&self.spki(*a));
                     format!("-----BEGIN PUBLIC KEY-----\nName: {name}\n\n{b}\n-----END PUBLIC KEY-----\n")
                 })
                 .collect()

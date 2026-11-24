@@ -50,6 +50,7 @@ pub mod benchtime;
 pub mod blind;
 pub mod bounds;
 pub mod bug;
+pub mod bytes;
 pub mod certs;
 pub mod clip;
 pub mod commands;

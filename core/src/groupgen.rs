@@ -36,7 +36,7 @@ use alloc::vec::Vec;
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
-use crate::certs::sha256;
+use crate::bytes::sha256;
 use crate::identity::ExternalKey;
 use crate::records::body::*;
 use crate::records::eval::{Input, State, evaluate};

@@ -21,7 +21,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use cbb_core::certs;
 use cbb_core::error::{Error, Result};
 use cbb_core::identity::ExternalKey;
 use cbb_core::join::invitation::{MAX_FAILURES, Network, Open, WindowLink};
@@ -46,7 +45,7 @@ const STEP: Duration = Duration::from_secs(30);
 struct NewArgs {
     /// The public point of the key that admits, SEC1 uncompressed: the
     /// phone's admin key, or the root's.
-    #[serde(with = "certs::b64")]
+    #[serde(with = "cbb_core::bytes::b64")]
     public: Vec<u8>,
     /// The phone's home addresses, without a port: the QR code names each
     /// with the member port's. At most four go into it, best first.
@@ -174,7 +173,7 @@ impl Window {
         let point: [u8; 65] =
             own.as_slice().try_into().map_err(|_| Error::msg("this phone's member key is not a P-256 point"))?;
         let fp = Key::es256(point.to_vec()).hash();
-        let fingerprint = certs::hex(&fp.0);
+        let fingerprint = cbb_core::bytes::hex(&fp.0);
         let secs = match a.expires {
             0 => DEFAULT_SECS,
             n => n.min(MAX_SECS),
@@ -205,7 +204,7 @@ impl Window {
                 port,
                 &tag,
                 &fingerprint,
-                &certs::hex(&id),
+                &cbb_core::bytes::hex(&id),
             )
             .ok_or_else(|| Error::msg("cannot announce the window by mDNS"))?;
             *shared.announced.lock().unwrap_or_else(|e| e.into_inner()) = Some(ann);
@@ -281,7 +280,7 @@ impl Window {
         let modules = crate::join::modules(&qr)?;
         Ok((
             Window { live, shared },
-            NewAnswer { qr, digits, id: certs::hex(&id), fingerprint, expires: secs, modules },
+            NewAnswer { qr, digits, id: cbb_core::bytes::hex(&id), fingerprint, expires: secs, modules },
         ))
     }
 
@@ -408,7 +407,7 @@ pub(crate) fn admit_on(
         let asked = cbb_member::admitting::Asked {
             info,
             device: joiner_key.device_id(),
-            fingerprint: certs::b64::encode(&joiner_key.hash().0),
+            fingerprint: cbb_core::bytes::b64::encode(&joiner_key.hash().0),
         };
         if !confirm(&asked) {
             return Err(Error::with("the device was not admitted", cbb_member::admitting::Declined));

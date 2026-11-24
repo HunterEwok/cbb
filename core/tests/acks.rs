@@ -33,7 +33,7 @@ impl ExternalKey for K {
 }
 
 fn k(name: &str) -> K {
-    let sk = SigningKey::from_slice(&cbb_core::certs::sha256(name.as_bytes())).unwrap();
+    let sk = SigningKey::from_slice(&cbb_core::bytes::sha256(name.as_bytes())).unwrap();
     let key = Key::es256(sk.verifying_key().to_sec1_point(false).as_bytes().to_vec());
     let hash = key.hash();
     K { sk, key, hash }
@@ -604,7 +604,7 @@ fn a_removal_of_an_admin_key_stays_when_its_signer_is_taken_back() {
         }
         // A member restored from what the root saves.
         let saved: Vec<Record> =
-            set.marked(&cbb_core::certs::sha256(b"a local key")).into_iter().map(|(r, _)| r.clone()).collect();
+            set.marked(&cbb_core::bytes::sha256(b"a local key")).into_iter().map(|(r, _)| r.clone()).collect();
         let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
         let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &lists);
         check(&back, &format!("mode {mode}, restored"));

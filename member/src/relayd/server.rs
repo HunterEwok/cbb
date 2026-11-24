@@ -922,7 +922,7 @@ impl Inner {
     fn serve_dial(self: &Arc<Self>, m: &Arc<Member>, sid: u64, c: TcpStream, to: &str) {
         let ticket = {
             use base64::Engine;
-            base64::engine::general_purpose::STANDARD.encode(certs::random_bytes::<16>())
+            base64::engine::general_purpose::STANDARD.encode(cbb_core::bytes::random_bytes::<16>())
         };
         let (tx, rx) = mpsc::sync_channel(1);
         let mut st = self.lock();

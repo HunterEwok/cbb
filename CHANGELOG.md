@@ -3133,6 +3133,9 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The core's helpers for bytes (hex, SHA-256, base64 for JSON, random bytes) are in
+  `core/src/bytes.rs`, no longer among the certificates' code, and two functions nothing
+  called (`member_chain`, and `self_signed_by` apart from `self_signed`) are gone.
 - The phone as the hub: a hub is a computer, a router or a board, never a phone, not even the
   root's (D-134, which replaces D-64). The core makes no phone, watch or leaf a hub, the
   phones' member refuses a hub command and serves no tunnel, the root names no forwarder for a

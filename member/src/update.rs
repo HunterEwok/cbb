@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use cbb_core::certs::{hex, sha256};
+use cbb_core::bytes::{hex, sha256};
 use cbb_core::release::{self, File, Release, Seen};
 use serde::{Deserialize, Serialize};
 
@@ -788,7 +788,7 @@ pub fn read_roots(path: &Path) -> Result<Vec<release::Key>> {
 #[cfg(feature = "tunnel")]
 pub fn read_public_keys(path: &Path) -> Result<Vec<Vec<u8>>> {
     #[derive(Deserialize)]
-    struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
+    struct Der(#[serde(with = "cbb_core::bytes::b64")] Vec<u8>);
     closed_to_others(path)?;
     let text = fs::read_to_string(path).context(format!("cannot read {}", path.display()))?;
     let mut keys = Vec::new();
@@ -910,7 +910,7 @@ fn cron_timer(on: bool, exe: &Path) -> Result<()> {
         old.lines().filter(|l| !l.is_empty() && !l.ends_with(CRON_MARK)).map(String::from).collect();
     if on {
         // cron has no random delay: a time of day of this device's own.
-        let r = cbb_core::certs::random_bytes::<2>();
+        let r = cbb_core::bytes::random_bytes::<2>();
         let (hour, minute) = (1 + r[0] % 6, r[1] % 60);
         lines.push(format!("{minute} {hour} * * * {} update -timer {CRON_MARK}", exe.display()));
     }
@@ -960,7 +960,7 @@ mod tests {
     }
 
     use super::*;
-    use cbb_core::certs::b64;
+    use cbb_core::bytes::b64;
     use cbb_core::release::testing::TestKey;
     use std::cell::RefCell;
 

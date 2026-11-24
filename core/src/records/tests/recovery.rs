@@ -693,7 +693,7 @@ fn every_kind_of_record_in_any_order() {
 /// from its store only under the mark of both.
 #[test]
 fn a_device_pins_the_root_and_the_recovery_key() {
-    let local = crate::certs::sha256(b"a local key");
+    let local = crate::bytes::sha256(b"a local key");
     let root = k("root").key;
     let mark = pin_mark(&local, &root, &rk());
     assert!(RecordSet::pinned(root.clone(), rk(), &local, &mark).is_some());
@@ -702,7 +702,7 @@ fn a_device_pins_the_root_and_the_recovery_key() {
     let other2 = Recovery { k2: crate::records::pq::PqKey::from_seeds(&[9; 16], &[9; 16], &[9; 16]).key(), ..rk() };
     assert!(RecordSet::pinned(root.clone(), other2, &local, &mark).is_none());
     assert!(RecordSet::pinned(k("root 2").key, rk(), &local, &mark).is_none());
-    assert!(RecordSet::pinned(root, rk(), &crate::certs::sha256(b"another local key"), &mark).is_none());
+    assert!(RecordSet::pinned(root, rk(), &crate::bytes::sha256(b"another local key"), &mark).is_none());
 }
 
 /// The Group ID commits to the root and both halves of the recovery key.
@@ -1430,7 +1430,7 @@ fn a_full_groups_first_checkpoint_applies() {
 #[test]
 fn a_checkpoint_over_its_ceiling_is_not_signed() {
     let g = base();
-    let mut keep: Vec<RecordId> = (0..9000u32).map(|i| RecordId(crate::certs::sha256(&i.to_be_bytes()))).collect();
+    let mut keep: Vec<RecordId> = (0..9000u32).map(|i| RecordId(crate::bytes::sha256(&i.to_be_bytes()))).collect();
     keep.sort();
     let root = k("root");
     let head = Head { key: root.hash, seq: g.heads[&root.hash].0, id: g.heads[&root.hash].1 };
