@@ -117,15 +117,18 @@ class CoreMemberTest {
     fun stopsWhileCalled() {
         val m = group(1).root.member
         val calls = java.util.concurrent.atomic.AtomicInteger()
+        // Each caller has made a call before the member closes: close meets calls under way, not callers still starting.
+        val started = java.util.concurrent.CountDownLatch(4)
         val callers = List(4) {
             Thread {
-                repeat(2_000) {
+                repeat(2_000) { i ->
                     runCatching { m.current(); m.peers() }
                     calls.incrementAndGet()
+                    if (i == 0) started.countDown()
                 }
             }.apply { start() }
         }
-        Thread.sleep(20)
+        started.await()
         m.close()
         callers.forEach { it.join() }
         assertEquals(8_000, calls.get())

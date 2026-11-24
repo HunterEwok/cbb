@@ -259,14 +259,32 @@ fn the_current_copy_reaches_a_peer_that_connects_later() {
     assert!(rx.try_recv().is_err());
     connect(&a, &b);
     assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), content);
-    // Once seen, the same copy is not taken again on the next connection.
+    // Once seen, the same copy is not taken again on the next connection:
+    // b sends its current copy before its on_connected hooks run, so a
+    // copy b makes after them reaches a after it, on the one connection.
     b.close_connections();
     until("the connection gone", || a.connected().is_empty() && b.connected().is_empty());
+    let setup = after_setup(&b);
     connect(&a, &b);
-    until("connected again", || !a.connected().is_empty());
-    assert!(rx.recv_timeout(Duration::from_millis(500)).is_err());
+    setup.recv_timeout(Duration::from_secs(10)).expect("b's side of the connection set up");
+    let fence = Content::text("after the connection", false);
+    assert!(b.copy(&fence).unwrap());
+    assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), fence, "the copy seen before was taken again");
     a.close();
     b.close();
+}
+
+/// A channel that gets a message each time m's side of a connection has
+/// sent what it sends as the connection opens (the hello, the statements,
+/// the current copy and the rest): `Mesh::serve` runs the on_connected
+/// hooks after them.
+fn after_setup(m: &Mesh) -> mpsc::Receiver<()> {
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    m.on_connected(Box::new(move |_| {
+        let _ = tx.lock().unwrap().send(());
+    }));
+    rx
 }
 
 #[test]
@@ -293,9 +311,14 @@ fn a_current_copy_older_than_one_the_peer_holds_is_dropped() {
     // drops it as older.
     *b.current.lock().unwrap() = None;
     assert!(b.copy_at(&Content::text("older", false), earlier).unwrap());
+    let setup = after_setup(&b);
     connect(&a, &b);
-    until("connected again", || !a.connected().is_empty());
-    assert!(rx.recv_timeout(Duration::from_millis(500)).is_err(), "the older copy was taken");
+    setup.recv_timeout(Duration::from_secs(10)).expect("b's side of the connection set up");
+    // A copy made after the connection opened reaches a after b's current
+    // copy would have (after_setup): it comes first, so the older was dropped.
+    let fence = Content::text("after the connection", false);
+    assert!(b.copy(&fence).unwrap());
+    assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), fence, "the older copy was taken");
     a.close();
     b.close();
 }
@@ -415,12 +438,15 @@ fn other_messages_go_to_the_service_and_hub_shares_only_from_hubs() {
     assert_eq!(cbb_core::msg::check(&tunnel[4..]), Ok(cbb_core::msg::tables::T_TUNNEL));
     assert!(!a.may_be_hub(&b.device()));
     assert!(b.send(&a.device(), hubs));
-    assert!(b.send(&a.device(), tunnel));
+    assert!(b.send(&a.device(), tunnel.clone()));
     assert!(b.send(&a.device(), reach));
+    // A second key after the reach, on the same connection: when it comes,
+    // the reach before it was taken.
+    assert!(b.send(&a.device(), tunnel));
     assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), cbb_core::msg::tables::T_TUNNEL));
     // The member keeps a reach itself (`reach`), the device no record of
-    // the group names left out.
-    assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+    // the group names left out: the next to the service is the second key.
+    assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), cbb_core::msg::tables::T_TUNNEL));
     assert!(a.reach_of(&b.device()).is_empty());
     a.close();
     b.close();

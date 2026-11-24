@@ -211,18 +211,23 @@ final class CoreMemberTests: XCTestCase {
     func testStopsWhileCalled() throws {
         let m = try rootPhone().0.member
         let done = DispatchGroup()
+        // Each caller has made a call before the member stops: stop meets
+        // calls under way, not callers still starting.
+        let started = DispatchGroup()
         let calls = NSLock()
         var n = 0
         for _ in 0..<4 {
+            started.enter()
             DispatchQueue.global().async(group: done) {
-                for _ in 0..<2_000 {
+                for i in 0..<2_000 {
                     _ = try? m.current()
                     _ = try? m.peers()
                     calls.withLock { n += 1 }
+                    if i == 0 { started.leave() }
                 }
             }
         }
-        Thread.sleep(forTimeInterval: 0.02)
+        started.wait()
         m.stop()
         done.wait()
         XCTAssertEqual(calls.withLock { n }, 8_000)

@@ -2294,6 +2294,10 @@ with 0.5 is set up again once. The details follow.
   member's clock past its limit of one a second (`CBB_TEST_AHEAD_FILE`) instead of sleeping; and
   the download's test checks that a tool past the limit is stopped, which before checked
   nothing.
+- The mesh's tests prove that a copy is not taken again, or an older one is dropped, by a copy
+  made after the connection opened that must come first, and that a reach is kept by a key sent
+  after it, instead of 300 or 500 ms of silence; the phone kits' tests of calls while the member
+  stops wait until every caller has made a call rather than 20 ms.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
