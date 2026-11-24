@@ -26,6 +26,7 @@ import (
 type fakeLink struct {
 	mu    sync.Mutex
 	ports []*fakePort
+	clock *fakeClock // of the responders on it
 }
 
 // fakePort is one interface of a host, on one link.
@@ -66,6 +67,7 @@ type fakeHost struct {
 	sent    chan sentPacket
 	once    sync.Once
 	closed  chan struct{}
+	clock   *fakeClock // of the responder on this host, which counts what it has yet to handle
 }
 
 func prefixes(addrs ...string) []netip.Prefix {
@@ -177,10 +179,16 @@ func (h *fakeHost) sendFrom(ifIndex int, srcPort uint16, data []byte, dst netip.
 		if !dst.Addr().IsMulticast() && !slices.ContainsFunc(to.prefixes(), func(p netip.Prefix) bool { return p.Addr() == dst.Addr() }) || to.host.isCut() {
 			continue
 		}
+		to.host.mu.Lock()
+		clock := to.host.clock
+		to.host.mu.Unlock()
+		clock.add(to.host)
 		select {
 		case to.host.packets <- packet{data: slices.Clone(data), src: netip.AddrPortFrom(src, srcPort), ifIndex: to.index}:
 		case <-to.host.closed:
+			clock.done(to.host)
 		default:
+			clock.done(to.host)
 		}
 	}
 	return nil
@@ -209,12 +217,25 @@ const (
 	idB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
+// fakeClock is the responders' time in a test. It moves only when the
+// test moves it, and then wakes each responder and waits until every one
+// has handled what it was given: the tick, and every packet sent to it
+// until none is left. So a test looks at what the responders did once
+// they did it, without waiting for real time.
 type fakeClock struct {
-	mu sync.Mutex
-	t  time.Time
+	mu      sync.Mutex
+	settled *sync.Cond
+	t       time.Time
+	ticks   map[*fakeHost]chan time.Time
+	pending map[*fakeHost]int // packets and ticks each responder has yet to handle
+	busy    int               // their sum
 }
 
-func newClock() *fakeClock { return &fakeClock{t: time.Unix(1_000_000, 0)} }
+func newClock() *fakeClock {
+	c := &fakeClock{t: time.Unix(1_000_000, 0), ticks: map[*fakeHost]chan time.Time{}, pending: map[*fakeHost]int{}}
+	c.settled = sync.NewCond(&c.mu)
+	return c
+}
 
 func (c *fakeClock) now() time.Time {
 	c.mu.Lock()
@@ -222,16 +243,110 @@ func (c *fakeClock) now() time.Time {
 	return c.t
 }
 
-func (c *fakeClock) advance(d time.Duration) {
+// serve makes the clock the time of the responder on h, and returns its
+// ticks.
+func (c *fakeClock) serve(h *fakeHost) <-chan time.Time {
+	ch := make(chan time.Time, 1)
+	h.mu.Lock()
+	h.clock = c
+	ports := slices.Clone(h.ports)
+	h.mu.Unlock()
+	for _, p := range ports {
+		p.link.mu.Lock()
+		p.link.clock = c
+		p.link.mu.Unlock()
+	}
+	c.mu.Lock()
+	c.ticks[h] = ch
+	// What reached the host before its responder starts, it handles first.
+	c.pending[h] = len(h.packets)
+	c.busy += len(h.packets)
+	c.mu.Unlock()
+	return ch
+}
+
+// clockOf returns the clock of the responders on the host's first link.
+func (h *fakeHost) clockOf() *fakeClock {
+	p := h.port(1)
+	p.link.mu.Lock()
+	defer p.link.mu.Unlock()
+	return p.link.clock
+}
+
+// forget stops counting for the responder on h, which has stopped.
+func (c *fakeClock) forget(h *fakeHost) {
+	h.mu.Lock()
+	h.clock = nil
+	h.mu.Unlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.busy -= c.pending[h]
+	delete(c.pending, h)
+	delete(c.ticks, h)
+	c.settled.Broadcast()
+}
+
+// add counts a packet or a tick for the responder on h; a nil clock (no
+// responder on h) counts nothing.
+func (c *fakeClock) add(h *fakeHost) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.ticks[h]; ok {
+		c.pending[h]++
+		c.busy++
+	}
+}
+
+// done counts one handled by the responder on h.
+func (c *fakeClock) done(h *fakeHost) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.pending[h] > 0 {
+		c.pending[h]--
+		c.busy--
+	}
+	if c.busy == 0 {
+		c.settled.Broadcast()
+	}
+}
+
+// wait returns once every responder has handled what it was given.
+func (c *fakeClock) wait() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for c.busy > 0 {
+		c.settled.Wait()
+	}
+}
+
+// advance moves the clock on, wakes every responder and waits until each
+// has handled its tick and the packets that followed.
+func (c *fakeClock) advance(d time.Duration) {
+	c.mu.Lock()
 	c.t = c.t.Add(d)
+	for h, ch := range c.ticks {
+		select {
+		case ch <- c.t:
+			c.pending[h]++
+			c.busy++
+		default: // a tick it has yet to take is counted already
+		}
+	}
+	c.mu.Unlock()
+	c.wait()
 }
 
 type running struct {
 	r     *Responder
 	peers chan []Peer
 	stop  func()
+	clock *fakeClock
 }
 
 func start(t *testing.T, h *fakeHost, id string, port uint16, clock *fakeClock, opts ...func(*Config)) running {
@@ -241,6 +356,10 @@ func start(t *testing.T, h *fakeHost, id string, port uint16, clock *fakeClock, 
 		OnPeers: func(p []Peer) { peers <- p }, Logf: t.Logf}
 	if clock != nil {
 		cfg.Now = clock.now
+		cfg.ticks = clock.serve(h)
+		cfg.queued = func() { clock.add(h) }
+		cfg.handled = func() { clock.done(h) }
+		cfg.later = func(_ time.Duration, f func()) { f() }
 	}
 	for _, o := range opts {
 		o(&cfg)
@@ -258,36 +377,77 @@ func start(t *testing.T, h *fakeHost, id string, port uint16, clock *fakeClock, 
 			stopped = true
 			cancel()
 			<-done
+			if clock != nil {
+				clock.forget(h)
+			}
 		}
 	}
 	t.Cleanup(stop)
-	return running{r: r, peers: peers, stop: stop}
+	if clock != nil {
+		// Once the responder has taken a tick, its first timers, the
+		// announcements, have run.
+		clock.advance(0)
+	}
+	return running{r: r, peers: peers, stop: stop, clock: clock}
 }
 
 // settle moves the clock past the announcements, so the records may be
-// multicast again, and gives the responders time to notice.
+// multicast again.
 func settle(clock *fakeClock) {
 	for range announceCount {
 		clock.advance(1500 * time.Millisecond)
-		time.Sleep(3 * tick)
 	}
 	clock.advance(1500 * time.Millisecond)
-	time.Sleep(3 * tick)
 }
 
-func waitPeers(t *testing.T, ch <-chan []Peer, ok func([]Peer) bool) []Peer {
+// waitPeers returns the first list of peers, of those the responder
+// reported once every responder has handled what it was given, that ok
+// takes; it fails the test when none does.
+func waitPeers(t *testing.T, r running, ok func([]Peer) bool) []Peer {
 	t.Helper()
-	timeout := time.After(10 * time.Second)
+	r.clock.wait()
 	for {
 		select {
-		case p := <-ch:
+		case p := <-r.peers:
 			if ok(p) {
 				return p
 			}
-		case <-timeout:
-			t.Fatal("timed out waiting for peers")
+		default:
+			t.Fatal("no such list of peers")
+			return nil
 		}
 	}
+}
+
+// quiet tells whether the responder reported no peers, or only an empty
+// list, once every responder has handled what it was given.
+func quiet(r running) (bool, []Peer) {
+	r.clock.wait()
+	for {
+		select {
+		case p := <-r.peers:
+			if len(p) > 0 {
+				return false, p
+			}
+		default:
+			return true, nil
+		}
+	}
+}
+
+// advanceUntil moves the clock on by step until the responder reports a
+// list of peers that ok takes, for at most two minutes of the clock.
+func advanceUntil(t *testing.T, clock *fakeClock, step time.Duration, r running, ok func([]Peer) bool) {
+	t.Helper()
+	for range int(2 * time.Minute / step) {
+		clock.advance(step)
+		for len(r.peers) > 0 {
+			if ok(<-r.peers) {
+				return
+			}
+		}
+	}
+	t.Fatal("no such list of peers within two minutes of the clock")
 }
 
 func peerEqual(a, b Peer) bool {
@@ -317,7 +477,7 @@ func askRaw(t *testing.T, client *fakeHost, srcPort uint16, data []byte, name st
 	if err := client.sendFrom(1, srcPort, data, group4); err != nil {
 		t.Fatal(err)
 	}
-	timeout := time.After(time.Second)
+	client.clockOf().wait()
 	for {
 		select {
 		case p := <-client.packets:
@@ -332,7 +492,7 @@ func askRaw(t *testing.T, client *fakeHost, srcPort uint16, data []byte, name st
 			}) {
 				return &m
 			}
-		case <-timeout:
+		default:
 			return nil
 		}
 	}
@@ -349,8 +509,10 @@ func drain(h *fakeHost) {
 	}
 }
 
+// waitFor tells whether a packet that ok takes reached h, once every
+// responder has handled what it was given.
 func waitFor(h *fakeHost, ok func(*dnsmessage.Message) bool) bool {
-	timeout := time.After(5 * time.Second)
+	h.clockOf().wait()
 	for {
 		select {
 		case p := <-h.packets:
@@ -358,7 +520,7 @@ func waitFor(h *fakeHost, ok func(*dnsmessage.Message) bool) bool {
 			if m.Unpack(p.data) == nil && ok(&m) {
 				return true
 			}
-		case <-timeout:
+		default:
 			return false
 		}
 	}
@@ -368,9 +530,10 @@ func TestTwoMembersFindEachOther(t *testing.T) {
 	var l fakeLink
 	a := l.host("192.168.1.10", "fe80::a")
 	b := l.host("192.168.1.11", "fd00::b")
-	ra := start(t, a, idA, 4001, nil)
-	rb := start(t, b, idB, 4002, nil)
-	got := waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 2 })
+	clock := newClock()
+	ra := start(t, a, idA, 4001, clock)
+	rb := start(t, b, idB, 4002, clock)
+	got := waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 2 })
 	want := Peer{ID: idB, Port: 4002, TXT: []string{"v=1", "g=0123456789abcdef"},
 		Addrs: []netip.Addr{netip.MustParseAddr("192.168.1.11"), netip.MustParseAddr("fd00::b")}}
 	if !peerEqual(got[0], want) {
@@ -379,7 +542,7 @@ func TestTwoMembersFindEachOther(t *testing.T) {
 	if v, ok := got[0].TXTValue("G"); !ok || v != "0123456789abcdef" {
 		t.Errorf("TXTValue(G) = %q, %v", v, ok)
 	}
-	got = waitPeers(t, rb.peers, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 2 })
+	got = waitPeers(t, rb, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 2 })
 	if got[0].ID != idA || got[0].Addrs[1] != netip.MustParseAddr("fe80::a").WithZone("eth0") {
 		t.Errorf("B found %+v; want A with a link-local address on eth0", got[0])
 	}
@@ -391,10 +554,10 @@ func TestSetTXTReachesOthers(t *testing.T) {
 	a, b := l.host("192.168.1.10"), l.host("192.168.1.11")
 	ra := start(t, a, idA, 4001, clock)
 	rb := start(t, b, idB, 4002, clock)
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 })
+	waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 })
 	clock.advance(5 * time.Second) // past the cache-flush guard of a second
 	rb.r.SetTXT([]string{"v=1", "g=0123456789abcdef", "p=1"})
-	got := waitPeers(t, ra.peers, func(p []Peer) bool {
+	got := waitPeers(t, ra, func(p []Peer) bool {
 		v, ok := len(p) == 1, false
 		if v {
 			_, ok = p[0].TXTValue("p")
@@ -432,7 +595,8 @@ func TestLegacyUnicast(t *testing.T) {
 	var l fakeLink
 	a := l.host("192.168.1.10")
 	client := l.host("192.168.1.20")
-	start(t, a, idA, 4001, nil)
+	clock := newClock()
+	start(t, a, idA, 4001, clock)
 	m := ask(t, client, 40000, q(ServiceName, dnsmessage.TypePTR))
 	if m == nil {
 		t.Fatal("no answer to a legacy query")
@@ -455,7 +619,7 @@ func TestLegacyUnicast(t *testing.T) {
 	for range 20 {
 		client.sendFrom(1, 40000, data, group4)
 	}
-	time.Sleep(300 * time.Millisecond)
+	clock.wait()
 	answered := 0
 	for len(client.packets) > 0 {
 		var m dnsmessage.Message
@@ -483,7 +647,7 @@ func TestMulticastRateLimit(t *testing.T) {
 	for range 10 {
 		client.sendFrom(1, Port, data, group4)
 	}
-	time.Sleep(300 * time.Millisecond)
+	clock.wait()
 	n := 0
 	for {
 		select {
@@ -511,7 +675,6 @@ func TestDottedNamesDoNotHideQuestions(t *testing.T) {
 	client := l.host("192.168.1.20")
 	clock := newClock()
 	start(t, a, idA, 4001, clock)
-	time.Sleep(3 * tick)
 	settle(clock)
 	drain(client)
 	host := "cb-" + idA + ".local."
@@ -582,12 +745,8 @@ func TestOffLinkPacketsAreIgnored(t *testing.T) {
 	}
 	data, _ := resp.Pack()
 	stranger.sendFrom(1, Port, data, group4)
-	select {
-	case p := <-ra.peers:
-		if len(p) > 0 {
-			t.Errorf("a member from another network: %+v", p)
-		}
-	case <-time.After(500 * time.Millisecond):
+	if ok, p := quiet(ra); !ok {
+		t.Errorf("a member from another network: %+v", p)
 	}
 }
 
@@ -595,19 +754,17 @@ func TestBrowseOnly(t *testing.T) {
 	var l fakeLink
 	a, b := l.host("192.168.1.10"), l.host("192.168.1.11")
 	client := l.host("192.168.1.20")
-	ra := start(t, a, idA, 4001, nil)
-	rb := start(t, b, idB, 4002, nil, func(c *Config) { c.BrowseOnly = true })
+	clock := newClock()
+	ra := start(t, a, idA, 4001, clock)
+	rb := start(t, b, idB, 4002, clock, func(c *Config) { c.BrowseOnly = true })
 	// The browser finds the member, but publishes nothing itself.
-	waitPeers(t, rb.peers, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idA })
+	waitPeers(t, rb, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idA })
 	if m := ask(t, client, Port, q("cb-"+idB+".local.", dnsmessage.TypeA)); m != nil {
 		t.Errorf("a browser answered for itself: %v", m)
 	}
-	select {
-	case p := <-ra.peers:
-		if len(p) > 0 {
-			t.Errorf("the member found the browser: %+v", p)
-		}
-	case <-time.After(1500 * time.Millisecond):
+	settle(clock)
+	if ok, p := quiet(ra); !ok {
+		t.Errorf("the member found the browser: %+v", p)
 	}
 }
 
@@ -618,23 +775,11 @@ func TestGoodbyeOnStop(t *testing.T) {
 	b := l.host("192.168.1.11")
 	ra := start(t, a, idA, 4001, clock)
 	rb := start(t, b, idB, 4002, clock)
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 })
+	waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 })
 	rb.stop()
 	// The goodbye leaves the records a second to live: move the clock on
 	// until A has dropped B, well before B's records would expire.
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		for {
-			select {
-			case <-stop:
-				return
-			case <-time.After(50 * time.Millisecond):
-				clock.advance(500 * time.Millisecond)
-			}
-		}
-	}()
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 0 })
+	advanceUntil(t, clock, 500*time.Millisecond, ra, func(p []Peer) bool { return len(p) == 0 })
 	if waited := clock.now().Sub(time.Unix(1_000_000, 0)); waited > 60*time.Second {
 		t.Errorf("A dropped B only after %v", waited)
 	}
@@ -649,11 +794,10 @@ func TestRefreshKeepsMembers(t *testing.T) {
 	a, b := l.host("192.168.1.10"), l.host("192.168.1.11")
 	ra := start(t, a, idA, 4001, clock)
 	start(t, b, idB, 4002, clock)
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 1 })
+	waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 1 })
 	sawRefresh := false
 	for range 20 {
 		clock.advance(15 * time.Second)
-		time.Sleep(300 * time.Millisecond)
 		for len(ra.peers) > 0 {
 			if p := <-ra.peers; len(p) != 1 || len(p[0].Addrs) != 1 {
 				t.Fatalf("at %v A sees %+v", clock.now().Sub(time.Unix(1_000_000, 0)), p)
@@ -684,13 +828,9 @@ func TestRefindAfterOutage(t *testing.T) {
 	a, b := l.host("192.168.1.10"), l.host("192.168.1.11")
 	ra := start(t, a, idA, 4001, clock)
 	rb := start(t, b, idB, 4002, clock)
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 1 })
-	waitPeers(t, rb.peers, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 1 })
-	// The responders look at the clock every 250 ms.
-	step := func(d time.Duration, wait time.Duration) {
-		clock.advance(d)
-		time.Sleep(wait)
-	}
+	waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 1 })
+	waitPeers(t, rb, func(p []Peer) bool { return len(p) == 1 && len(p[0].Addrs) == 1 })
+	step := clock.advance
 	// browses counts A's browse queries sent since the last call, and
 	// reports whether any listed B as a known answer.
 	browses := func() (n int, knownB bool) {
@@ -709,12 +849,12 @@ func TestRefindAfterOutage(t *testing.T) {
 		return n, knownB
 	}
 	for range 100 { // 50 minutes: the browse queries are far apart now
-		step(30*time.Second, 20*time.Millisecond)
+		step(30 * time.Second)
 	}
 	b.setCut(true)
 	lost := false
 	for range 30 { // B's address and SRV records expire within 120 s
-		step(5*time.Second, 300*time.Millisecond)
+		step(5 * time.Second)
 		for len(ra.peers) > 0 {
 			lost = len(<-ra.peers) == 0
 		}
@@ -727,7 +867,7 @@ func TestRefindAfterOutage(t *testing.T) {
 	}
 	browses()
 	for range 20 {
-		step(time.Second, 300*time.Millisecond)
+		step(time.Second)
 	}
 	if n, knownB := browses(); n < 2 || knownB {
 		t.Errorf("A sent %d browse queries in the 20 s after it lost B, B a known answer: %v; want 2 or more, without B", n, knownB)
@@ -745,7 +885,7 @@ func TestRefindAfterOutage(t *testing.T) {
 	}
 	foundA, foundB := false, found(rb.peers, true)
 	for i := 0; i < 24 && !(foundA && foundB); i++ { // 2 minutes
-		step(5*time.Second, 300*time.Millisecond)
+		step(5 * time.Second)
 		foundA = found(ra.peers, foundA)
 		foundB = found(rb.peers, foundB)
 	}
@@ -846,10 +986,9 @@ func TestKnownAnswersInBrowseQueries(t *testing.T) {
 	a, b := l.host("192.168.1.10"), l.host("192.168.1.11")
 	ra := start(t, a, idA, 4001, clock)
 	start(t, b, idB, 4002, clock)
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 })
+	waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 })
 	drain(a)
 	clock.advance(70 * time.Second) // the next browse query is due
-	timeout := time.After(5 * time.Second)
 	for {
 		select {
 		case sp := <-a.sent:
@@ -864,7 +1003,7 @@ func TestKnownAnswersInBrowseQueries(t *testing.T) {
 				t.Errorf("a browse query without B as a known answer: %v", m.Answers)
 			}
 			return
-		case <-timeout:
+		default:
 			t.Fatal("no browse query")
 		}
 	}
@@ -904,25 +1043,13 @@ func TestAddressChange(t *testing.T) {
 	a, b := l.host("192.168.1.10"), l.host("192.168.1.11")
 	ra := start(t, a, idA, 4001, clock)
 	start(t, b, idB, 4002, clock)
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 })
+	waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 })
 	b.port(1).setAddrs("192.168.1.99")
 	clock.advance(rescanEvery + 2*time.Second)
 	// Keep time moving, a little at a time, until A has dropped the old
 	// address; it must happen through the cache flush, long before the
 	// old record's two minutes are up.
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		for {
-			select {
-			case <-stop:
-				return
-			case <-time.After(100 * time.Millisecond):
-				clock.advance(500 * time.Millisecond)
-			}
-		}
-	}()
-	waitPeers(t, ra.peers, func(p []Peer) bool {
+	advanceUntil(t, clock, 500*time.Millisecond, ra, func(p []Peer) bool {
 		return len(p) == 1 && slices.Equal(p[0].Addrs, []netip.Addr{netip.MustParseAddr("192.168.1.99")})
 	})
 	if d := clock.now().Sub(time.Unix(1_000_000, 0)); d > 60*time.Second {
@@ -938,7 +1065,6 @@ func TestAddressGoodbye(t *testing.T) {
 	b := l.host("192.168.1.11", "192.168.1.12")
 	client := l.host("192.168.1.20")
 	start(t, b, idB, 4002, clock)
-	time.Sleep(3 * tick)
 	drain(client)
 	b.port(1).setAddrs("192.168.1.12")
 	clock.advance(rescanEvery + time.Second)
@@ -1140,32 +1266,17 @@ func TestPublishOnlyWhereAllowed(t *testing.T) {
 		c.Publish = func(string, []netip.Prefix) bool { return allowed.Load() }
 	})
 	// The quiet member finds the other one, but is not found.
-	waitPeers(t, rb.peers, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idA })
-	select {
-	case p := <-ra.peers:
-		if len(p) > 0 {
-			t.Errorf("a member that may not publish was found: %+v", p)
-		}
-	case <-time.After(1500 * time.Millisecond):
+	waitPeers(t, rb, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idA })
+	settle(clock)
+	if ok, p := quiet(ra); !ok {
+		t.Errorf("a member that may not publish was found: %+v", p)
 	}
 	allowed.Store(true)
 	rb.r.Recheck()
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idB })
+	waitPeers(t, ra, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idB })
 	allowed.Store(false)
 	rb.r.Recheck()
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		for {
-			select {
-			case <-stop:
-				return
-			case <-time.After(50 * time.Millisecond):
-				clock.advance(500 * time.Millisecond)
-			}
-		}
-	}()
-	waitPeers(t, ra.peers, func(p []Peer) bool { return len(p) == 0 })
+	advanceUntil(t, clock, 500*time.Millisecond, ra, func(p []Peer) bool { return len(p) == 0 })
 }
 
 func TestOnlyListedInterfaces(t *testing.T) {
@@ -1183,15 +1294,11 @@ func TestOnlyListedInterfaces(t *testing.T) {
 	})
 	rh := start(t, home, idB, 4002, clock)
 	ro := start(t, outside, "cccccccccccccccccccccccccccccccc", 4003, clock)
-	waitPeers(t, rh.peers, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idA })
-	waitPeers(t, rr.peers, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idB })
+	waitPeers(t, rh, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idA })
+	waitPeers(t, rr, func(p []Peer) bool { return len(p) == 1 && p[0].ID == idB })
 	settle(clock)
-	select {
-	case p := <-ro.peers:
-		if len(p) > 0 {
-			t.Errorf("the router was found on its internet side: %+v", p)
-		}
-	case <-time.After(1500 * time.Millisecond):
+	if ok, p := quiet(ro); !ok {
+		t.Errorf("the router was found on its internet side: %+v", p)
 	}
 	if m := ask(t, outside, Port, q("cb-"+idA+".local.", dnsmessage.TypeALL)); m != nil && len(m.Answers) > 0 {
 		t.Errorf("the router answered on its internet side: %+v", m.Answers)

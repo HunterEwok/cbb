@@ -2257,6 +2257,13 @@ with 0.5 is set up again once. The details follow.
 - A device writing to a full room checks which removals every admin has acknowledged in one
   pass over its records instead of two passes for each removal and admin: the core's tests at
   the room's limits run minutes faster, and so does each write on a device near them.
+- The Go tests of mDNS, the desktop connector, the paste targets, the Bluetooth keyboard and
+  the forwarder wait for the event they check rather than for a time: a fake clock, timers the
+  tests fire and a signal when the forwarder's state changes take the place of sleeps and
+  polling, and the mDNS tests take a fraction of a second instead of 48 s.
+- `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
+  that line ended it without its clean stop.
+- The Bluetooth keyboard stops being visible at the end of its time, not just after.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.

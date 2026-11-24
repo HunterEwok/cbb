@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -53,6 +54,7 @@ func startForwarderWith(t *testing.T, cfg Config) (*Forwarder, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	f.mu.changed = sync.NewCond(&f.mu.Mutex)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -122,29 +124,24 @@ func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer,
 		cancel()
 		<-done
 	})
-	deadline := time.After(10 * time.Second)
 	for {
-		select {
-		case r := <-hs.reports:
-			if r.Err != nil {
-				t.Fatalf("registering: %v", r.Err)
+		r := <-hs.reports
+		if r.Err != nil {
+			t.Fatalf("registering: %v", r.Err)
+		}
+		if r.VLESS != nil {
+			hs.vless = r.VLESS
+		}
+		if r.Seen.IsValid() {
+			if r.OverVLESS != (hc.VLESS != nil && hc.Link.Endpoint.IsValid()) {
+				t.Fatalf("over VLESS: %v", r.OverVLESS)
 			}
-			if r.VLESS != nil {
-				hs.vless = r.VLESS
+			// Over VLESS the forwarder sees the hub at the port its
+			// side of VLESS sends the hub's packets from.
+			if !r.OverVLESS && r.Seen.Port() != uint16(h.UDPPort()) {
+				t.Fatalf("the forwarder sees the hub at %v, not on its port %d", r.Seen, h.UDPPort())
 			}
-			if r.Seen.IsValid() {
-				if r.OverVLESS != (hc.VLESS != nil && hc.Link.Endpoint.IsValid()) {
-					t.Fatalf("over VLESS: %v", r.OverVLESS)
-				}
-				// Over VLESS the forwarder sees the hub at the port its
-				// side of VLESS sends the hub's packets from.
-				if !r.OverVLESS && r.Seen.Port() != uint16(h.UDPPort()) {
-					t.Fatalf("the forwarder sees the hub at %v, not on its port %d", r.Seen, h.UDPPort())
-				}
-				return hs
-			}
-		case <-deadline:
-			t.Fatal("the forwarder never saw the hub's port")
+			return hs
 		}
 	}
 }
@@ -492,18 +489,7 @@ func TestRegistration(t *testing.T) {
 	if a.Error != "" || a.ID == 0 || len(a.Mask) != 32 {
 		t.Fatalf("a hub with its own key: %+v", a)
 	}
-	for i := 0; ; i++ {
-		f.mu.Lock()
-		_, there := f.regs[tag]
-		f.mu.Unlock()
-		if !there {
-			break
-		}
-		if i == 100 {
-			t.Fatal("the registration outlived its connection")
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	waitUntil(f, func() bool { return f.regs[tag] == nil })
 
 	// Another group cannot register that key.
 	other, _, otherGroup := member(t)
@@ -538,13 +524,9 @@ func TestWrongPin(t *testing.T) {
 	defer cancel()
 	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: Pin(other.Leaf)}, Key: key, Credentials: g.credentials(t), HubCert: g.hubCert(),
 		Send: func(netip.AddrPort, []byte) error { return nil }, Report: func(r Report) { reports <- r }})
-	select {
-	case r := <-reports:
-		if r.Registered || r.Err == nil || !strings.Contains(r.Err.Error(), "not the one given") {
-			t.Fatalf("with another forwarder's pin: %+v", r)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("no report")
+	r := <-reports
+	if r.Registered || r.Err == nil || !strings.Contains(r.Err.Error(), "not the one given") {
+		t.Fatalf("with another forwarder's pin: %+v", r)
 	}
 }
 
@@ -792,13 +774,9 @@ func TestRegistrationIDIsNoGroups(t *testing.T) {
 	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: pin}, Key: key, VLESSID: vless.RegistrationID,
 		Credentials: g.credentials(t), HubCert: g.hubCert(), Send: func(netip.AddrPort, []byte) error { return nil },
 		Report: func(r Report) { reports <- r }})
-	select {
-	case r := <-reports:
-		if r.Err == nil || !strings.Contains(r.Err.Error(), "not usable") {
-			t.Fatalf("a hub taking the registrations' user ID: %+v", r)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("no answer")
+	r := <-reports
+	if r.Err == nil || !strings.Contains(r.Err.Error(), "not usable") {
+		t.Fatalf("a hub taking the registrations' user ID: %+v", r)
 	}
 	if err := f.vless.AddUser(vless.RegistrationID); err == nil {
 		t.Error("the registrations' user ID was added as a group's")
@@ -816,13 +794,9 @@ func TestVLESSRefused(t *testing.T) {
 	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: pin}, Key: key, VLESSID: id,
 		Credentials: g.credentials(t), HubCert: g.hubCert(), Send: func(netip.AddrPort, []byte) error { return nil },
 		Report: func(r Report) { reports <- r }})
-	select {
-	case r := <-reports:
-		if r.Err == nil || !strings.Contains(r.Err.Error(), "no VLESS") {
-			t.Fatalf("a hub asking a forwarder without VLESS: %+v", r)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("no answer")
+	r := <-reports
+	if r.Err == nil || !strings.Contains(r.Err.Error(), "no VLESS") {
+		t.Fatalf("a hub asking a forwarder without VLESS: %+v", r)
 	}
 }
 
@@ -925,7 +899,7 @@ func TestRegistrationRemembersVersions(t *testing.T) {
 		t.Fatalf("the group's hub: %+v", a)
 	}
 	rc.Close()
-	waitUntil(t, "the registration to end with its connection", func() bool { return !f.registered(tag) })
+	waitUntil(f, func() bool { return f.regs[tag] == nil })
 	if a := rawRegister(t, f, pin, droppedCert, dk.PublicKey().Bytes(), dk, hubAuth{creds: [][]byte{before}}); !strings.Contains(a.Error, "older") {
 		t.Errorf("the dropped hub while the group is away: %+v", a)
 	}
@@ -1154,24 +1128,19 @@ func TestHubRegistersAgainWhenNoHelloComes(t *testing.T) {
 		cancel()
 		<-done
 	})
-	deadline := time.After(30 * time.Second)
 	for {
-		select {
-		case r := <-reports:
-			switch {
-			case r.Err != nil:
-				if !lose.Load() || !strings.Contains(r.Err.Error(), "saw none of the hub's hellos") {
-					t.Fatalf("registering: %v", r.Err)
-				}
-				lose.Store(false)
-			case r.Seen.IsValid():
-				if lose.Load() {
-					t.Fatal("seen with every hello lost")
-				}
-				return
+		r := <-reports
+		switch {
+		case r.Err != nil:
+			if !lose.Load() || !strings.Contains(r.Err.Error(), "saw none of the hub's hellos") {
+				t.Fatalf("registering: %v", r.Err)
 			}
-		case <-deadline:
-			t.Fatal("the hub never registered again")
+			lose.Store(false)
+		case r.Seen.IsValid():
+			if lose.Load() {
+				t.Fatal("seen with every hello lost")
+			}
+			return
 		}
 	}
 }

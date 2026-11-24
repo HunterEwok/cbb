@@ -21,7 +21,8 @@ import (
 func TestTypeLater(t *testing.T) {
 	defer func(d time.Duration) { TypingCheck = d }(TypingCheck)
 	TypingCheck = 10 * time.Millisecond
-	s := &Host{Logf: t.Logf}
+	free := make(chan string, 4)
+	s := &Host{Logf: t.Logf, typed: func(target string) { free <- target }}
 	var allowed atomic.Bool
 	allowed.Store(true)
 	stopped := make(chan error, 1)
@@ -39,21 +40,18 @@ func TestTypeLater(t *testing.T) {
 	if !s.typeLater("tv", allowed.Load, func(context.Context) error { return nil }) {
 		t.Error("another target was refused")
 	}
-	allowed.Store(false) // remote paste off, or the signer removed
-	select {
-	case err := <-stopped:
-		if err != context.Canceled {
-			t.Errorf("typing ended with %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("typing went on after the paste may no longer go on")
+	if got := <-free; got != "tv" {
+		t.Errorf("%s stopped typing, want tv", got)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for !s.typeLater("kb", func() bool { return true }, func(context.Context) error { return nil }) {
-		if time.Now().After(deadline) {
-			t.Fatal("the keyboard stays busy after typing stopped")
-		}
-		time.Sleep(10 * time.Millisecond)
+	allowed.Store(false) // remote paste off, or the signer removed
+	if err := <-stopped; err != context.Canceled {
+		t.Errorf("typing ended with %v", err)
+	}
+	if got := <-free; got != "kb" {
+		t.Errorf("%s stopped typing, want kb", got)
+	}
+	if !s.typeLater("kb", func() bool { return true }, func(context.Context) error { return nil }) {
+		t.Fatal("the keyboard stays busy after typing stopped")
 	}
 }
 
@@ -65,12 +63,17 @@ func TestTVPasteStopsWhenNotAllowed(t *testing.T) {
 	defer func(d func(context.Context, string, string) (net.Conn, error)) { TVDial = d }(TVDial)
 	TVDial = (&net.Dialer{}).DialContext
 	var keys atomic.Int32
+	pressed := make(chan struct{}, 3)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/query/device-info":
 			w.Write([]byte(`<?xml version="1.0"?><device-info><user-device-name>Living room</user-device-name></device-info>`))
 		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/keypress/"):
 			keys.Add(1)
+			select {
+			case pressed <- struct{}{}:
+			default:
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -80,7 +83,8 @@ func TestTVPasteStopsWhenNotAllowed(t *testing.T) {
 	if err := tvremote.Save(dir, tvremote.State{TVs: []tvremote.TV{{Name: "tv", Kind: tvremote.Roku, Host: srv.Listener.Addr().String(), Pastes: true}}}); err != nil {
 		t.Fatal(err)
 	}
-	s := &Host{Dir: dir, Logf: t.Logf}
+	free := make(chan string, 1)
+	s := &Host{Dir: dir, Logf: t.Logf, typed: func(target string) { free <- target }}
 	var allowed atomic.Bool
 	allowed.Store(true)
 	text := strings.Repeat("a", 400) // 8 s at a Roku's pace
@@ -88,14 +92,13 @@ func TestTVPasteStopsWhenNotAllowed(t *testing.T) {
 	if !ok || res.Status != Done {
 		t.Fatalf("tvPaste: %v %+v", ok, res)
 	}
-	for keys.Load() < 3 {
-		time.Sleep(5 * time.Millisecond)
+	for range 3 {
+		<-pressed
 	}
 	allowed.Store(false)
-	time.Sleep(200 * time.Millisecond)
-	stopped := keys.Load()
-	time.Sleep(300 * time.Millisecond)
-	if n := keys.Load(); n != stopped || n >= int32(len(text)) {
-		t.Fatalf("%d keys, then %d, after the paste was no longer allowed", stopped, n)
+	// Once the TV is free again, its typing has ended: no key goes after.
+	<-free
+	if n := keys.Load(); n >= int32(len(text)) {
+		t.Fatalf("all %d keys went, though the paste was no longer allowed", n)
 	}
 }

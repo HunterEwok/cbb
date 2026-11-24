@@ -36,6 +36,9 @@ type Host struct {
 	// typing holds the targets that type a paste after its answer (the
 	// Bluetooth keyboard, a Roku): one text at a time on each.
 	typing map[string]bool
+	// typed, if set, is told each target that has stopped typing and is
+	// free again: tests wait for it.
+	typed func(target string)
 }
 
 // Close takes the keyboard off BlueZ and ends a TV pairing, as the service
@@ -132,7 +135,11 @@ func (h *Host) typeLater(target string, still func() bool, typ func(context.Cont
 			cancel()
 			h.mu.Lock()
 			delete(h.typing, target)
+			typed := h.typed
 			h.mu.Unlock()
+			if typed != nil {
+				typed(target)
+			}
 		}()
 		if err := typ(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			h.Logf("cbb: typing a paste on %s: %v", target, err)

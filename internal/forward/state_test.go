@@ -166,12 +166,19 @@ func TestVersionsBoundsAnEntrysLife(t *testing.T) {
 }
 
 // TestVersionsWriteLeavesTheLock checks that keeping a credential does not
-// write the file, that the file follows within the delay and when the table
-// is flushed, and that what was written is read back.
+// write the file, that its timer of the delay writes it and so does a
+// flush, and that what was written is read back.
 func TestVersionsWriteLeavesTheLock(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "state.json")
 	v := testVersions(t, file)
-	v.delay = 50 * time.Millisecond
+	var write func()
+	v.after = func(d time.Duration, f func()) stopper {
+		if d != writeDelay || write != nil {
+			t.Errorf("a write after %v, with one waiting: %v", d, write != nil)
+		}
+		write = f
+		return stoppedTimer{}
+	}
 	a := netip.MustParseAddr("192.0.2.7")
 	p := periodOf("p", 3, time.Now().Add(time.Hour))
 	if err := v.keep(p, a); err != nil {
@@ -180,19 +187,16 @@ func TestVersionsWriteLeavesTheLock(t *testing.T) {
 	if _, err := os.Stat(file); err == nil {
 		t.Fatal("keep wrote the file at once")
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, err := os.Stat(file); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the file was not written within the delay")
-		}
-		time.Sleep(10 * time.Millisecond)
+	if write == nil {
+		t.Fatal("keep set no write")
 	}
+	write()
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("the delay's end wrote no file: %v", err)
+	}
+	write = nil
 	// A change right before the end is written by flush.
 	q := periodOf("q", 1, time.Now().Add(time.Hour))
-	v.delay = time.Hour
 	if err := v.keep(q, a); err != nil {
 		t.Fatal(err)
 	}
@@ -212,3 +216,8 @@ func TestVersionsWriteLeavesTheLock(t *testing.T) {
 	}
 
 }
+
+// stoppedTimer is a test's timer that never fires by itself.
+type stoppedTimer struct{}
+
+func (stoppedTimer) Stop() bool { return true }

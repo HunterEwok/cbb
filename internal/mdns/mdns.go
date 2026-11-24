@@ -82,6 +82,18 @@ type Config struct {
 
 	// net is the network; the system's sockets if nil.
 	net transport
+
+	// Tests' hooks, with a fake clock: ticks, if set, takes the ticker's
+	// place, so that the responder looks at the clock when it moves;
+	// queued, if set, is called before a change is handed to the
+	// responder's goroutine, and handled once the responder has handled a
+	// packet, a tick or a change, its timers included (and for a change
+	// that a waiting one covers); later, if set, takes time.AfterFunc's
+	// place for the answers that wait.
+	ticks   <-chan time.Time
+	queued  func()
+	handled func()
+	later   func(time.Duration, func())
 }
 
 // A Responder publishes this member and browses for the others.
@@ -168,9 +180,15 @@ func (r *Responder) Recheck() {
 }
 
 func (r *Responder) wake() {
+	if r.cfg.queued != nil {
+		r.cfg.queued()
+	}
 	select {
 	case r.kick <- struct{}{}:
-	default:
+	default: // a change waiting already covers this one
+		if r.cfg.handled != nil {
+			r.cfg.handled()
+		}
 	}
 }
 
@@ -225,8 +243,17 @@ func (r *Responder) Run(ctx context.Context) error {
 	s.rescan(start)
 	s.nextRescan = start.Add(rescanEvery)
 	s.nextQuery, s.queryGap = start, time.Second
-	ticker := time.NewTicker(tick)
-	defer ticker.Stop()
+	ticks := r.cfg.ticks
+	if ticks == nil {
+		ticker := time.NewTicker(tick)
+		defer ticker.Stop()
+		ticks = ticker.C
+	}
+	handled := func() {
+		if r.cfg.handled != nil {
+			r.cfg.handled()
+		}
+	}
 	for {
 		now := r.now()
 		s.timers(now)
@@ -248,6 +275,8 @@ func (r *Responder) Run(ctx context.Context) error {
 				return errors.New("mdns: the network connection closed")
 			}
 			s.handle(p, r.now())
+			s.timers(r.now())
+			handled()
 		case <-r.kick:
 			r.mu.Lock()
 			pending := r.pending
@@ -256,7 +285,11 @@ func (r *Responder) Run(ctx context.Context) error {
 			for _, c := range pending {
 				s.apply(c, r.now())
 			}
-		case <-ticker.C:
+			s.timers(r.now())
+			handled()
+		case <-ticks:
+			s.timers(r.now())
+			handled()
 		}
 	}
 }
@@ -662,7 +695,11 @@ func (s *state) respond(q *dnsmessage.Message, p packet, ifc iface, now time.Tim
 	// record, wait 20 to 120 ms, so the answers of the members do not
 	// collide (RFC 6762 section 6).
 	if slices.ContainsFunc(answers, func(r rr) bool { return !r.unique }) {
-		time.AfterFunc(time.Duration(20+rand.IntN(100))*time.Millisecond, send)
+		later := s.r.cfg.later
+		if later == nil {
+			later = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
+		}
+		later(time.Duration(20+rand.IntN(100))*time.Millisecond, send)
 		return
 	}
 	send()

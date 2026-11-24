@@ -13,7 +13,6 @@ import (
 	"image/gif"
 	"image/png"
 	"testing"
-	"time"
 
 	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
@@ -71,13 +70,8 @@ func TestImages(t *testing.T) {
 
 	jpeg := Image{Type: clip.TypeJPEG, Data: []byte("not really a JPEG")}
 	copyImage(t, socket, jpeg, "a photo")
-	select {
-	case img := <-b.images:
-		if img.Type != jpeg.Type || !bytes.Equal(img.Data, jpeg.Data) {
-			t.Errorf("wrote %s of %d bytes", img.Type, len(img.Data))
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the image did not reach the desktop")
+	if img := <-b.images; img.Type != jpeg.Type || !bytes.Equal(img.Data, jpeg.Data) {
+		t.Errorf("wrote %s of %d bytes", img.Type, len(img.Data))
 	}
 	if it, _, _ := b.Current(); it.Text != "a photo" {
 		t.Errorf("the image's text is %q", it.Text)

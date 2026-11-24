@@ -76,17 +76,19 @@ type versions struct {
 	file   string // "" keeps it in memory only
 	secret []byte
 	now    func() time.Time
-	delay  time.Duration                    // writeDelay
-	logf   func(format string, args ...any) // nil logs nothing
+	delay  time.Duration // writeDelay
+	// after starts the write's timer: time.AfterFunc; tests replace it.
+	after func(time.Duration, func()) stopper
+	logf  func(format string, args ...any) // nil logs nothing
 
 	mu      sync.Mutex
 	entries map[string]versionEntry // by hashed tag
 	nets    *budget.Count           // entries added from each network since the start
 	seq     uint64
-	pruneAt time.Time   // no entry expires before this
-	dirty   bool        // changes not yet written
-	timer   *time.Timer // the pending write
-	write   sync.Mutex  // one write at a time
+	pruneAt time.Time  // no entry expires before this
+	dirty   bool       // changes not yet written
+	timer   stopper    // the pending write
+	write   sync.Mutex // one write at a time
 }
 
 // A versionEntry is one period's newest credential: its version, the
@@ -246,13 +248,20 @@ func (v *versions) changedLocked() {
 	}
 	v.dirty = true
 	if v.timer == nil {
-		v.timer = time.AfterFunc(v.delay, func() {
+		after := v.after
+		if after == nil {
+			after = func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) }
+		}
+		v.timer = after(v.delay, func() {
 			if err := v.flush(); err != nil && v.logf != nil {
 				v.logf("forward: keeping the state: %v", err)
 			}
 		})
 	}
 }
+
+// A stopper is a timer that can be stopped, as a time.Timer.
+type stopper interface{ Stop() bool }
 
 // flush writes the table if it changed since it was last written. The table
 // is copied under the lock; it is encoded and written outside it.

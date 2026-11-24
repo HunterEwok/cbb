@@ -10,6 +10,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,13 +67,8 @@ func TestKeyboard(t *testing.T) {
 	}
 	want, _ := keyboard.US.Reports("Hi!")
 	for i, w := range want {
-		select {
-		case v := <-reports:
-			if !slices.Equal(v, w[:]) {
-				t.Fatalf("report %d: %x, want %x", i, v, w)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatalf("report %d did not come", i)
+		if v := <-reports; !slices.Equal(v, w[:]) {
+			t.Fatalf("report %d: %x, want %x", i, v, w)
 		}
 	}
 	stop()
@@ -81,7 +77,20 @@ func TestKeyboard(t *testing.T) {
 	}
 
 	// Visible for a moment: discoverable and pairable, with the agent the
-	// default, which takes a pairing then and refuses it after.
+	// default, which takes a pairing then and refuses it after. The test
+	// keeps the keyboard's clock and runs its timer.
+	var mu sync.Mutex
+	clock := time.Unix(1_000_000, 0)
+	var hide func()
+	k.mu.Lock()
+	k.now = func() time.Time { mu.Lock(); defer mu.Unlock(); return clock }
+	k.afterFun = func(d time.Duration, f func()) {
+		if d != 300*time.Millisecond {
+			t.Errorf("visible for %v", d)
+		}
+		hide = f
+	}
+	k.mu.Unlock()
 	if err := k.Visible(300 * time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +98,10 @@ func TestKeyboard(t *testing.T) {
 	if err := ag.Call(agentIface+".RequestAuthorization", 0, dbus.ObjectPath("/org/bluez/hci0/dev_AA")).Err; err != nil {
 		t.Fatalf("a pairing while visible: %v", err)
 	}
-	time.Sleep(600 * time.Millisecond)
+	mu.Lock()
+	clock = clock.Add(300 * time.Millisecond)
+	mu.Unlock()
+	hide()
 	if err := ag.Call(agentIface+".RequestAuthorization", 0, dbus.ObjectPath("/org/bluez/hci0/dev_AA")).Err; err == nil {
 		t.Fatal("a pairing was taken after the keyboard stopped being visible")
 	}
@@ -143,25 +155,27 @@ func TestForgetsStaleBond(t *testing.T) {
 	if err := f.Disconnect(tv, "org.bluez.Reason.Remote"); err != nil {
 		t.Fatal(err)
 	}
-	// Another program on the bus that says the same is not BlueZ.
-	if err := f.Connect(t).Emit(tv, deviceIface+".Disconnected", reasonAuth, ""); err != nil {
+	// Another program on the bus that says the same is not BlueZ. A call
+	// on its connection returns once the bus has passed its signal on, so
+	// the keyboard has it before BlueZ's own below: had it taken it, the
+	// TV's bond would go twice.
+	other := f.Connect(t)
+	if err := other.Emit(tv, deviceIface+".Disconnected", reasonAuth, ""); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(300 * time.Millisecond)
-	if got := f.Removed(); len(got) != 0 {
-		t.Fatalf("a signal from another program removed %v", got)
+	if err := other.BusObject().Call("org.freedesktop.DBus.GetId", 0).Err; err != nil {
+		t.Fatal(err)
 	}
 	if err := f.Disconnect(tv, reasonAuth); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for len(f.Removed()) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	if got := <-f.Removals(); got != tv {
+		t.Fatalf("removed %v, want %s", got, tv)
 	}
+	k.Close()
 	if got := f.Removed(); len(got) != 1 || got[0] != tv {
 		t.Fatalf("removed %v, want only %s", got, tv)
 	}
-	k.Close()
 	// The hosts are kept: none left once the TV's bond went.
 	if hosts := loadHosts(dir); len(hosts) != 0 {
 		t.Errorf("hosts kept: %v", hosts)

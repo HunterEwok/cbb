@@ -58,7 +58,7 @@ func TestRefusedGroups(t *testing.T) {
 	// Put on the list, B goes; A, taken off it, comes back.
 	writeList(t, path, tagB+"\n", 2*time.Minute)
 	f.reloadRefused()
-	waitUntil(t, "the refused group dropped", func() bool { return !f.registered(tagB) })
+	waitUntil(f, func() bool { return f.regs[tagB] == nil })
 	tcA, a := rawOpen(t, f, pin, certA, key.PublicKey().Bytes(), key, gA.auth(t))
 	if tcA == nil || a.Error != "" {
 		t.Fatalf("a group taken off the list: %+v", a)

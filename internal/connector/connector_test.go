@@ -28,11 +28,11 @@ type fakeBoard struct {
 	changes  chan Item
 	writes   chan Item
 	ownWrite bool // the clipboard still holds the last Write
-	cleared  chan struct{}
+	cleared  chan bool // each ClearIfUnchanged: whether it gave the clipboard up
 }
 
 func newBoard() *fakeBoard {
-	return &fakeBoard{changes: make(chan Item, 16), writes: make(chan Item, 16), cleared: make(chan struct{}, 4)}
+	return &fakeBoard{changes: make(chan Item, 16), writes: make(chan Item, 16), cleared: make(chan bool, 16)}
 }
 
 func (b *fakeBoard) Current() (Item, bool, error) {
@@ -66,8 +66,8 @@ func (b *fakeBoard) ClearIfUnchanged() error {
 	defer b.mu.Unlock()
 	if b.ownWrite {
 		b.item, b.has = Item{}, false
-		b.cleared <- struct{}{}
 	}
+	b.cleared <- b.ownWrite
 	return nil
 }
 
@@ -202,10 +202,49 @@ func paste(t *testing.T, socket string) string {
 
 func run(t *testing.T, socket string, b Board) {
 	t.Helper()
+	runWith(t, func(context.Context) Config { return Config{Socket: socket, Board: b, Logf: t.Logf} })
+}
+
+// runWith runs the connector with the Config cfg makes for its context.
+func runWith(t *testing.T, cfg func(context.Context) Config) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, Config{Socket: socket, Board: b, Logf: t.Logf}) }()
+	c := cfg(ctx)
+	go func() { done <- Run(ctx, c) }()
 	t.Cleanup(func() { cancel(); <-done })
+}
+
+// waits makes the connector tell each wait before a try on the channel it
+// returns, and try again at once; after release it tells no more.
+func waits(ctx context.Context, cfg *Config) (asked <-chan time.Duration, release func()) {
+	ch := make(chan time.Duration)
+	released := make(chan struct{})
+	cfg.wait = func(d time.Duration) <-chan time.Time {
+		select {
+		case ch <- d:
+		case <-released:
+		case <-ctx.Done():
+		}
+		now := make(chan time.Time, 1)
+		now <- time.Time{}
+		return now
+	}
+	var once sync.Once
+	return ch, func() { once.Do(func() { close(released) }) }
+}
+
+// fakeTimer is a secret's expiry, which the test runs or sees stopped.
+type fakeTimer struct {
+	d       time.Duration
+	f       func()
+	stopped chan struct{}
+	once    sync.Once
+}
+
+func (ft *fakeTimer) Stop() bool {
+	ft.once.Do(func() { close(ft.stopped) })
+	return true
 }
 
 func TestConnector(t *testing.T) {
@@ -241,13 +280,8 @@ func TestConnector(t *testing.T) {
 
 func expectWrite(t *testing.T, b *fakeBoard, text string, secret bool) {
 	t.Helper()
-	select {
-	case w := <-b.writes:
-		if w.Text != text || w.Secret != secret {
-			t.Errorf("write %+v, want %q (secret %v)", w, text, secret)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatalf("no write of %q", text)
+	if w := <-b.writes; w.Text != text || w.Secret != secret {
+		t.Errorf("write %+v, want %q (secret %v)", w, text, secret)
 	}
 }
 
@@ -333,14 +367,9 @@ func listenFake(t *testing.T, socket string) *fakeService {
 
 func (f *fakeService) next(t *testing.T) *fakeSession {
 	t.Helper()
-	select {
-	case s := <-f.sessions:
-		t.Cleanup(func() { s.c.Close() })
-		return s
-	case <-time.After(10 * time.Second):
-		t.Fatal("the connector did not connect")
-		return nil
-	}
+	s := <-f.sessions
+	t.Cleanup(func() { s.c.Close() })
+	return s
 }
 
 func socketPath(t *testing.T) string {
@@ -353,17 +382,13 @@ func socketPath(t *testing.T) string {
 	return filepath.Join(dir, "c.sock")
 }
 
-func expectCleared(t *testing.T, b *fakeBoard, want bool) {
+// expectCleared runs a secret's expiry and checks whether it gave the
+// clipboard up.
+func expectCleared(t *testing.T, b *fakeBoard, ft *fakeTimer, want bool) {
 	t.Helper()
-	select {
-	case <-b.cleared:
-		if !want {
-			t.Error("the clipboard was given up")
-		}
-	case <-time.After(time.Second):
-		if want {
-			t.Error("the clipboard was not given up")
-		}
+	ft.f()
+	if got := <-b.cleared; got != want {
+		t.Errorf("the clipboard given up: %v, want %v", got, want)
 	}
 }
 
@@ -372,7 +397,14 @@ func TestSecretExpires(t *testing.T) {
 	f := listenFake(t, socket)
 	b := newBoard()
 	b.item, b.has = Item{Text: "on the desktop"}, true
-	run(t, socket, b)
+	timers := make(chan *fakeTimer, 8)
+	runWith(t, func(context.Context) Config {
+		return Config{Socket: socket, Board: b, Logf: t.Logf, after: func(d time.Duration, f func()) stopper {
+			ft := &fakeTimer{d: d, f: f, stopped: make(chan struct{})}
+			timers <- ft
+			return ft
+		}}
+	})
 	s := f.next(t)
 	if string(s.watch.Payload) != "on the desktop" || s.watch.Kind != control.KindText {
 		t.Errorf("the watch request carried %+v %q", s.watch.Header, s.watch.Payload)
@@ -381,20 +413,30 @@ func TestSecretExpires(t *testing.T) {
 	// The connector gives up a secret after the lifetime the service sent.
 	s.write(t, control.Header{Kind: control.KindSecret, Seq: 1, TTLMS: 50}, "one-time code")
 	expectWrite(t, b, "one-time code", true)
-	expectCleared(t, b, true)
+	ft := <-timers
+	if ft.d != 50*time.Millisecond {
+		t.Errorf("the secret expires after %v, want 50ms", ft.d)
+	}
+	expectCleared(t, b, ft, true)
 
-	// Not when the user copied something else meanwhile.
+	// Not when the user copied something else meanwhile: once the service
+	// has the user's copy, the expiry finds it.
 	s.write(t, control.Header{Kind: control.KindSecret, Seq: 2, TTLMS: 300}, "another code")
 	expectWrite(t, b, "another code", true)
+	ft = <-timers
 	b.copyOn(Item{Text: "the user's copy"})
-	expectCleared(t, b, false)
+	if m, err := s.r.Read(); err != nil || string(m.Payload) != "the user's copy" {
+		t.Fatalf("the service got %+v, %v", m, err)
+	}
+	expectCleared(t, b, ft, false)
 
 	// A text written after a secret cancels its expiry.
 	s.write(t, control.Header{Kind: control.KindSecret, Seq: 3, TTLMS: 300}, "a third code")
 	expectWrite(t, b, "a third code", true)
+	ft = <-timers
 	s.write(t, control.Header{Seq: 4}, "plain text")
 	expectWrite(t, b, "plain text", false)
-	expectCleared(t, b, false)
+	<-ft.stopped
 
 	// Writes out of order are dropped.
 	s.write(t, control.Header{Seq: 2}, "old")
@@ -404,16 +446,25 @@ func TestSecretExpires(t *testing.T) {
 	// A secret still expires when the service connection ends.
 	s.write(t, control.Header{Kind: control.KindSecret, Seq: 6, TTLMS: 300}, "code before a restart")
 	expectWrite(t, b, "code before a restart", true)
+	ft = <-timers
 	s.c.Close()
-	expectCleared(t, b, true)
+	expectCleared(t, b, ft, true)
 }
 
 func TestReconnect(t *testing.T) {
 	socket := socketPath(t)
 	b := newBoard()
 	// No service yet: Run keeps trying and does not fail.
-	run(t, socket, b)
-	time.Sleep(200 * time.Millisecond)
+	var asked <-chan time.Duration
+	var release func()
+	runWith(t, func(ctx context.Context) Config {
+		cfg := Config{Socket: socket, Board: b, Logf: t.Logf}
+		asked, release = waits(ctx, &cfg)
+		return cfg
+	})
+	<-asked
+	<-asked
+	release()
 	f := listenFake(t, socket)
 	s := f.next(t)
 	s.write(t, control.Header{Seq: 1}, "first session")
@@ -452,7 +503,7 @@ func TestRefusedThenWatches(t *testing.T) {
 	t.Cleanup(func() { ln.Close() })
 	var mu sync.Mutex
 	inGroup := false
-	watching := make(chan time.Time, 1)
+	watching := make(chan struct{}, 1)
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -473,26 +524,30 @@ func TestRefusedThenWatches(t *testing.T) {
 				continue
 			}
 			control.Write(c, &control.Message{Header: control.Header{Op: control.OpReply}})
-			watching <- time.Now()
+			watching <- struct{}{}
 			t.Cleanup(func() { c.Close() })
 			return
 		}
 	}()
-	run(t, socket, newBoard())
-	// A growing backoff would wait from 7 s to 15 s here.
-	time.Sleep(8 * time.Second)
+	var asked <-chan time.Duration
+	var release func()
+	runWith(t, func(ctx context.Context) Config {
+		cfg := Config{Socket: socket, Board: newBoard(), Logf: t.Logf}
+		asked, release = waits(ctx, &cfg)
+		return cfg
+	})
+	// A growing backoff would wait longer at each refusal; the connector
+	// asks again after refusedWait each time.
+	for range 6 {
+		if d := <-asked; d != refusedWait {
+			t.Errorf("after a refusal the connector waits %v, want %v", d, refusedWait)
+		}
+	}
 	mu.Lock()
 	inGroup = true
-	joined := time.Now()
 	mu.Unlock()
-	select {
-	case at := <-watching:
-		if d := at.Sub(joined); d > refusedWait+time.Second {
-			t.Errorf("watching %v after the join, want within %v", d, refusedWait)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("the connector never watched")
-	}
+	release()
+	<-watching
 }
 
 // fakeTarget pastes into a list, and refuses what says "locked".
