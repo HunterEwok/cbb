@@ -313,6 +313,12 @@ func session(ctx context.Context, cfg Config, exp *expiry, cp *copies) error {
 		return err
 	}
 	defer c.Close()
+	// Closing the connection on cancel must cover the watch request too: a
+	// service that accepts but never answers would otherwise hold Run.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() { c.Close() })
+	defer stop()
 	watchReq := &control.Message{Header: control.Header{Op: control.OpWatch}}
 	tgt := cfg.target()
 	if tgt != nil {
@@ -335,10 +341,6 @@ func session(ctx context.Context, cfg Config, exp *expiry, cp *copies) error {
 		}
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	stop := context.AfterFunc(ctx, func() { c.Close() })
-	defer stop()
 
 	var sendMu sync.Mutex
 	send := func(m *control.Message) error {
