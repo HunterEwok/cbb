@@ -156,6 +156,19 @@ fn the_root_makes_a_hub_that_only_passes_copies_on() {
     // Again: nothing more to write.
     assert!(set_forward_only(&mut set, &*root, "pi", T + 6).unwrap().is_empty());
     assert!(!is_forward_only(find(&st, "laptop").unwrap().rights));
+
+    // A rootless install is never a hub, not even one that passes copies on.
+    let k = SigningKey::from_slice(&[10; 32]).unwrap();
+    let mut user =
+        Device::new(Key::es256(k.verifying_key().to_sec1_point(false).as_bytes().to_vec()), "user box", ROLE_MEMBER);
+    user.rights = body::RIGHT_READ | body::RIGHT_SEND;
+    user.caps = body::CAP_HUB;
+    user.store = body::STORE_ROOTLESS;
+    let st = set.state();
+    set.write_record(&st, &*root, Kind::device(user), T + 7).unwrap();
+    let err = set_forward_only(&mut set, &*root, "user box", T + 8).unwrap_err();
+    assert!(err.to_string().contains("without root"), "{err}");
+    assert!(!is_forward_only(find(&set.state(), "user box").unwrap().rights));
 }
 
 /// The root records where a member's keys live as its hello says: `file`
