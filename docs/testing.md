@@ -304,7 +304,7 @@ A run reports, for each stand: the days, the commit, the hardware (`soak start` 
 machine and its cores), copies sent, checked and missed, kills and broken starts, the delivery
 times, the memory and open files with their growth, and the verdict. The documents give only
 numbers measured that way. A soak is not a condition of a release in 0.6; seven days on a
-release candidate's build is planned for 0.7 ([roadmap](roadmap.md), item 70).
+release candidate's build is planned for 0.7 ([roadmap](roadmap.md), item 71).
 
 ## Bench scenarios
 

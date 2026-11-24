@@ -2247,6 +2247,9 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The roadmap: sync away from home by consent (item 58) is planned for 0.7, the check that
+  the ways out carry only cbb (item 61) is done, its tests listed in the maintainers' guide,
+  and long runs as a condition of a release have their own number (item 71).
 - CI splits a job into parts only where the parts finish sooner, and asks for at most five
   macOS machines at once, so none of its macOS jobs waits for another: the phone kit's macOS
   tests, the iPhone's libraries with the latest Rust and the macOS check that a release build

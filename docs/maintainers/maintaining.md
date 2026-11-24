@@ -542,8 +542,18 @@ not an abuse report: SECURITY.md.
 
 The forwarder, VLESS, the relay and the mirror on cbb.tools must never take a user anywhere
 but cbb (docs/roadmap.md, item 61). The code holds this without any rule on the server;
-the server must not add a way around it. After each change on the server, run this check,
-reading only, and keep its result in the private runbook:
+the server must not add a way around it: the forwarder only passes WireGuard packets
+between a group's hub and its clients, VLESS's one outbound goes to the forwarder, its
+registrations or the mirror whatever the client asked for, and the hub's in-process stack
+opens only the member port and forwards nothing. Tests hold it, in which a client that is
+not ours asks for other addresses (TCP and UDP, IPv4, IPv6 and names, the server's own
+loopback services among them) and reaches nothing: VLESS over XHTTP
+(`internal/vless/onlycbb_test.go`), the hub's tunnel (`internal/tunnel/onlycbb_test.go`), the
+Rust hub and the phones' (`member/src/hub.rs`, `a_client_reaches_only_the_member_listener`),
+the relay (`member/src/nettest/relayd.rs`, `a_dial_reaches_no_address`) and `cbb`'s tunnel
+(`member/src/tunnel.rs`, `link_reaches_nothing_from_the_tunnel`); the forwarder's
+`FuzzForwardWire` sends a packet only to an endpoint it knows. After each change on the
+server, run this check, reading only, and keep its result in the private runbook:
 
 - `sysctl net.ipv4.ip_forward net.ipv6.conf.all.forwarding` both 0; `iptables -S` and
   `ip6tables -S` with `FORWARD DROP`, `iptables -t nat -S` and `ip6tables -t nat -S` with no

@@ -263,7 +263,7 @@ one F-case every hour. Pass when every text arrived, memory and file descriptors
 service stay flat (sampled every 5 minutes), and no service restarted except by a test. The fleet's
 `E10-soak` scenario runs it in containers (`-soak-for 24h`): four members, a cut, a frozen
 member or a killed service each hour. The long run is not a condition of a release in 0.6; it
-becomes one in 0.7 ([roadmap](../roadmap.md), item 70).
+becomes one in 0.7 ([roadmap](../roadmap.md), item 71).
 
 ## 11. Automation
 
