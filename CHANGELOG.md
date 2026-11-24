@@ -2257,6 +2257,9 @@ with 0.5 is set up again once. The details follow.
 - A device writing to a full room checks which removals every admin has acknowledged in one
   pass over its records instead of two passes for each removal and admin: the core's tests at
   the room's limits run minutes faster, and so does each write on a device near them.
+- The core's tests of a lost root with a full room evaluate the records once after each change
+  of the root rather than once for each device they look for: the longest of them takes
+  seconds, not minutes.
 - Tests that did the same slow work again take less time: the release files' tests sign each
   body under each SLH-DSA key once and read the interop vectors from their file rather than
   making them anew, the VLESS tests wait for the packets that must not come back at the same

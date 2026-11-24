@@ -89,10 +89,6 @@ fn fill(g: &mut G, root: &K, devices: usize, tag: &str) -> (usize, usize) {
     (d, r)
 }
 
-fn live(g: &G, member: &K) -> bool {
-    g.state().device_by_key(&member.hash).is_some()
-}
-
 /// One change: the first root's room is full of device records and
 /// removals, it wrote no checkpoint, and the recovery key's holder changes
 /// the root. Then a second and a third change, each new root lost after
@@ -114,11 +110,13 @@ fn a_lost_roots_full_room_never_refuses_the_recovery_key() {
             let w = change(&mut g, &k(&format!("n{n}")), &k(&format!("p{n}")));
             let w = w.unwrap_or_else(|e| panic!("change {n} with {devices} devices and {r} removals: {e}"));
             assert!(w.list.0.len() <= LIST_MAX);
+            // One evaluation per change: each checks every signature.
+            let st = g.state();
             for m in &before {
-                assert!(live(&g, m), "change {n} dropped a device");
+                assert!(st.device_by_key(&m.hash).is_some(), "change {n} dropped a device");
             }
             for p in 1..=n {
-                assert!(live(&g, &k(&format!("p{p}"))), "change {n} dropped phone {p}");
+                assert!(st.device_by_key(&k(&format!("p{p}")).hash).is_some(), "change {n} dropped phone {p}");
             }
         }
     }
@@ -193,8 +191,9 @@ fn a_full_room_of_carried_records_and_three_changes() {
         // The removals ride re-issued: the list holds the admins' records.
         assert!(w.list.0.len() <= 4 * ADMIN_KEYS_MAX, "change {n}: list of {}", w.list.0.len());
         removed_stay_out(&g, removed, &format!("change {n}"));
+        let st = g.state();
         for x in &admitted[removed.len()..] {
-            assert!(g.state().device_by_key(x).is_some(), "change {n}: a device that counted is out");
+            assert!(st.device_by_key(x).is_some(), "change {n}: a device that counted is out");
         }
     }
 }
