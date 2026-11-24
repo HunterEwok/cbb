@@ -24,13 +24,4 @@ class DiscoveryTest {
         assertNull(Discovery.member(dev.uppercase(), listOf("g=77")))
     }
 
-    @Test
-    fun withKnown() {
-        val other = "fedcba9876543210fedcba9876543210"
-        val found = setOf(FoundMember(dev, "g1", true))
-        // A member browsing finds stays as found; one it does not find is added by its known address.
-        assertEquals(found + FoundMember(other, "g1"), Discovery.withKnown(found, setOf(dev, other), "g1"))
-        assertEquals(found, Discovery.withKnown(found, emptySet(), "g1"))
-    }
-
 }

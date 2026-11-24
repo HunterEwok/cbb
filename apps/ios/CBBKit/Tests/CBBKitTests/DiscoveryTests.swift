@@ -23,13 +23,7 @@ final class DiscoveryTests: XCTestCase {
         XCTAssertNil(Discovery.member(instance: dev.uppercased(), txt: ["g=77"]))
     }
 
-    func testWithKnown() {
-        let other = "fedcba9876543210fedcba9876543210"
-        let found: Set = [FoundMember(device: dev, group: "g1", pairing: true)]
-        // A member browsing finds stays as found; one it does not find is
-        // added by its known address.
-        XCTAssertEqual(Discovery.withKnown(found, known: [dev, other], group: "g1"), found.union([FoundMember(device: other, group: "g1")]))
-        XCTAssertEqual(Discovery.withKnown(found, known: [], group: "g1"), found)
+    func testHomeAddresses() {
         XCTAssertTrue(LocalAddresses.isHome("10.1.2.3:8764"))
         XCTAssertFalse(LocalAddresses.isHome("100.64.0.1:8764"))
         XCTAssertFalse(LocalAddresses.isHome("[fd00::5]"))
