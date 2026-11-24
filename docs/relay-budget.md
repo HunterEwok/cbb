@@ -275,11 +275,11 @@ The guarantees above are tested, the forwarder's in Go and the relay's in Rust
   `TestRegistrationsBoundByEveryLevel`, `requests_bound_by_wide_network`,
   `TestVLESSUsersLeaveTheScanBudget`, `TestKnownClientKeepsItsGroup`;
 - XHTTP takes no upload over its limit and queues no more than its limit for a session
-  that no client opened: `TestXHTTPHoldsLittleForStrangers`.
-- Uploads to sessions whose download is not open pay by source and from all sources
+  that no client opened: `TestXHTTPHoldsLittleForStrangers`;
+- uploads to sessions whose download is not open pay by source and from all sources
   together: `TestFrontUploadsPayBySource`; the client's address comes only from the web
-  server on the loopback: `TestFrontClientAddress`, `TestRegistrationStream`.
-- Registrations over VLESS pay by source, and those from addresses not known leave the
+  server on the loopback: `TestFrontClientAddress`, `TestRegistrationStream`;
+- registrations over VLESS pay by source, and those from addresses not known leave the
   direct ones room: `TestRegistrationsOverVLESSPayBySource`.
 
 A new limit goes into this page and into `internal/budget` first: a cap added alone, in one

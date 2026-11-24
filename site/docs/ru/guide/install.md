@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 556711697ffe -->
+<!-- source: c58263ffc4ea -->
 # Установка
 
 Connect Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —

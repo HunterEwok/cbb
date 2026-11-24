@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 185393ae83f0 -->
+<!-- source: ab9f2aaae728 -->
 # Faragha: nani anaona nini
 
 Kwa yeyote anayetaka kujua kinachotoka kwenye vifaa vyake. Connect Beyond Borders haina akaunti, wingu wala telemetri: unachonakili kimesimbwa mwisho hadi mwisho, kimefungwa kwenye kifaa kinachokinakili kwa ajili ya vifaa vya kikundi chako vinavyosoma nakala, na hakuna kingine kinachoweza kukifungua: wala seva, wala mtandao, wala kifaa kilicho katikati. Ukurasa huu unaeleza kile ambacho vifaa vinavyopitisha nakala bado vinaweza kuona, na kila kitu ambacho mtu nje ya kikundi anaweza kuona, na jinsi ya kukizima.
@@ -20,7 +20,7 @@ Kisichoonekana kamwe: kama ni maandishi, siri, picha au faili; maandishi yenyewe
 
 ## Vighairi
 
-Vyote viwili ni chaguo lako:
+Kila kimoja ni chaguo lako:
 
 - **Roku** iliyoongezwa kwa `cbb remote add -roku -consent` hupata maandishi yake kama HTTP wazi kwenye mtandao wako wa nyumbani ([kibodi na televisheni](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
 - **Kitovu kinachosoma nakala** ni msimamizi uliyemchagua, kwa hiyo nakala hufungwa kwa ajili yake kama kwa vifaa vyako vingine. Kompyuta inayowaka kila wakati ambayo funguo zake ziko kwenye faili tu, kama Raspberry Pi, ifanye badala yake **kitovu kinachopitisha nakala tu**: hakuna nakala inayofungwa kwa ajili yake, kwa hiyo haisomi yoyote ([ukiwa mbali na nyumbani](away-from-home.md)). Amri, kama kubandika kwa mbali au kitendo cha haraka, hufungwa kwa ajili ya kifaa kimoja zinachokiendea katika hali zote mbili ([kubandika kwa mbali](remote-paste.md)).

@@ -38,7 +38,7 @@ names; the exact size.
 
 ## Exceptions
 
-Both are your choice:
+Each is your choice:
 
 - A **Roku** added with `cbb remote add -roku -consent` gets its text as plain HTTP on your
   home network ([keyboards and TVs](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).

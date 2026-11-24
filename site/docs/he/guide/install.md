@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 556711697ffe -->
+<!-- source: c58263ffc4ea -->
 # התקנה
 
 Connect Beyond Borders רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 185393ae83f0 -->
+<!-- source: ab9f2aaae728 -->
 # Privacidad: quién ve qué
 
 Para quien quiera saber qué sale de sus dispositivos. Connect Beyond Borders no tiene cuentas, ni
@@ -40,7 +40,7 @@ los archivos; el tamaño exacto.
 
 ## Excepciones
 
-Las dos dependen de ti:
+Cada una depende de ti:
 
 - Un **Roku** añadido con `cbb remote add -roku -consent` recibe su texto como HTTP sin cifrar en tu red doméstica ([teclados y televisores](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
 - Un **hub que lee las copias** es un administrador que tú elegiste, así que las copias se sellan

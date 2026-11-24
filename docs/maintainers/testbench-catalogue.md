@@ -126,7 +126,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G26 | `cbb takeover` when the root computer is lost; the new root admits and makes admins; the old root comes back and is refused [L6] | real, fleet | |
 | G27 | A takeover undone: the old root is still there and removes the admin that took over, before or after it hears of the takeover (its status names that admin); the takeover stops counting | fleet | |
 | G28 | A phone's group: an admin phone takes over from a lost root phone (`root` records); no device pairs again; members that were off follow | ui, fleet | |
-| G29 | The records `cbb upgrade` gave a group made before 0.4 (version 1) are refused, in Go and in the Rust core the phones and cbb use: legacy groups and `cbb upgrade` went with records version 2, and such a group is set up again [L9] | fleet | |
+| G29 | The records `cbb upgrade` gave a group made before 0.4 (version 1) are refused, in Go and in the Rust core the phones and cbb use: records version 2 has no legacy groups and no `cbb upgrade`, and such a group is set up again [L9] | fleet | |
 | G30 | `cbb rename` on an admin for any device, the root and itself; every device and app shows the new name; 1 and 64 characters taken, 0 and 65 refused, Unicode names | real, fleet | |
 | G31 | Records converge in any order: 200 records delivered to 10 members in random orders give one devices list | fleet | |
 | G32 | Record limits: 4096 records, 1024 per signer; an admin that floods records cannot push out the root's removal | fleet | |

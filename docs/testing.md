@@ -31,9 +31,9 @@ request is up to date with main, whose run tested those files when they last cha
 - Go tests run with the race detector on Linux x86-64, Linux ARM64 and macOS, under QEMU
   for big-endian 32-bit MIPS, and on FreeBSD. A change to Go is tested under it on a Mac too
   before it is pushed, since a fault of one system's race build shows only there: gVisor's
-  race build on ARM64 kept its network stack from ever sleeping (fixed in its 2026-08 versions),
-  which on the runner's three cores slowed the tunnel's tests past their waits, while Linux
-  x86-64 passed them in a fraction of a second.
+  race build on ARM64 before its 2026-08 versions keeps its network stack from ever sleeping,
+  which on the runner's three cores slows the tunnel's tests past their waits, while Linux
+  x86-64 passes them in a fraction of a second.
 - Time comes from the caller (`now time.Time`), so a test sets the clock; lifetimes and
   renewals are tested at their edges without waiting.
 - The TPM code runs against swtpm (`internal/tpmkey`), the ei protocol against a test EIS
@@ -140,7 +140,7 @@ check, run after the shares, one in each part), and `cbb (Rust), the coverage` p
 and the Kotlin kit's tests before the Android apps' build, in one job (`Android app`).
 A job is split only where its parts finish sooner than the longest jobs: CI builds every
 Linux, FreeBSD and Windows target in one job (`build (Linux, FreeBSD, Windows)`, about 24
-minutes), since its two halves of 10 and 14 minutes ended long before the rest and only took a
+minutes), since its two halves of 10 and 14 minutes would end long before the rest and only take a
 second runner.
 
 The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
@@ -288,7 +288,7 @@ no copy was missed, every start was whole, no member's RSS floor grew over its f
 more than 1 MiB on the calm stand or 4 MiB on the loaded one, no member's RSS floor rose in three
 windows in a row (a rise being at least 64 KiB over the previous window's floor), no member's floor of open files rose over its first window's, the members' folders (state, records
 and logs) grew by at most 20 MiB a day each (measured from six hours after the first sample), and
-the delivery time's p95 is at most 10 s. The bounds were fixed before any long run was measured: a run over
+the delivery time's p95 is at most 10 s. The bounds are fixed ahead of any long run's measures: a run over
 them is a finding, not a reason to move them. Beside the verdict the single samples' numbers are
 printed as `raw_*`, for reading. A checked copy that is not on every member within 60 s counts as
 missed, also when it was sent just after a kill: a restarted member is back and has it within a
@@ -538,17 +538,17 @@ The nightly workflow changes the code one place at a time (drops a check, turns 
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
 the strict form of signed bodies (`core/src/strict.rs`), in eight shards. A change that every test still passes is listed as missed, in the run's
 summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
-does not name (no new survivor, from the first day); the list holds the baseline of
-2026-11-11, and each of those gets a test or a note why it cannot matter.
+does not name (no new survivor, from the first day); the list holds the baseline,
+and each of those gets a test or a note why it cannot matter.
 
-The service's readers of outside input already fail on a new one: `cargo mutants` on the
+The service's readers of outside input fail on a new one too: `cargo mutants` on the
 control socket's messages (`member/src/control.rs`), the pairing window
 (`member/src/window.rs`) and the seals of the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
 compares what lived with the known list, `tools/mutants/missed.txt`, line and column aside. A
 mutant on that list either changes nothing a caller can see (an equivalent mutant, with why
 in a comment) or lives in code that only Go's end-to-end tests reach, which `cargo mutants`
 does not run (the window's exchange with a joiner). A new survivor gets a test; a mutant that
-the tests now catch can leave the list.
+the tests catch can leave the list.
 
 To run them locally:
 
@@ -600,5 +600,5 @@ fix that removes the cause. The bench finds them too: `go run ./tools/bench -rep
 
 | Test | Where | Seen | What is known |
 |---|---|---|---|
-| `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
-| `TestWindow` | `apps/desktop`, Windows and Linux | rarely: once on Linux in some 300 runs, 2026-11 | Chrome runs but gives no DevTools port within 30 seconds; on Linux its last line came 5 seconds after the start, after failed D-Bus calls to the desktop portal. The test now writes how long each start took to the job's summary and keeps the last 200 lines of Chrome's detailed log (`--v=1`), to be read when it fails again |
+| `TestSeveralHubs` | `internal/service` | about one run in six | not yet found |
+| `TestWindow` | `apps/desktop`, Windows and Linux | rarely: once on Linux in some 300 runs | Chrome runs but gives no DevTools port within 30 seconds; on Linux its last line comes 5 seconds after the start, after failed D-Bus calls to the desktop portal. The test writes how long each start took to the job's summary and keeps the last 200 lines of Chrome's detailed log (`--v=1`), to be read when it fails again |
