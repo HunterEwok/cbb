@@ -15,7 +15,7 @@ end, with no accounts and nothing kept in a cloud. Its short name is CBB and its
 > iPhone and an Apple Watch; Windows only in a virtual machine, Android only in CI's emulator.
 > [Status](#status) has more.
 
-![The phone adds each computer by its QR code; then the devices share one clipboard](docs/images/group.svg)
+![Each computer joins the phone's group by the six digits the phone shows; then the devices share one clipboard](docs/images/group.svg)
 
 ## Get started
 
@@ -34,8 +34,9 @@ end, with no accounts and nothing kept in a cloud. Its short name is CBB and its
    irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
    ```
 
-3. Run `sudo cbb pair` on the computer and scan its QR code in the app. Its copies then go
-   to the group and the group's come to it; `cbb sync off` keeps its clipboard its own.
+3. Tap **+** (Add a device) in the app, run `sudo cbb pair -code` on the computer and type
+   the six digits the app shows. Its copies then go to the group and the group's come to it;
+   `cbb sync off` keeps its clipboard its own.
 
 To check the installer before running it, download it with the release's `SHA256SUMS`:
 

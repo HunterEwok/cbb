@@ -2247,6 +2247,17 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The phone apps' accessibility test keeps the element tree with its picture when the audit
+  reports an issue it ties to no element, so CI's log shows what was on the screen.
+- "How it works" explains first what happens to a copy, then the group, its keys and the
+  ways away from home, in the apps' terms and without the commands' flags, which the guides
+  and the reference keep. The pictures say a hub is a computer or router at home and that
+  a blind relay is your own or the project's; the privacy page lists what the push service
+  and the platforms' push services see, and the design and the apps' page describe the
+  prompt notifications as built.
+- The roadmap: sync away from home by consent (item 58) is planned for 0.7, the check that
+  the ways out carry only cbb (item 61) is done, its tests listed in the maintainers' guide,
+  and long runs as a condition of a release have their own number (item 71).
 - CI splits a job into parts only where the parts finish sooner, and asks for at most five
   macOS machines at once, so none of its macOS jobs waits for another: the phone kit's macOS
   tests, the iPhone's libraries with the latest Rust and the macOS check that a release build
@@ -2285,9 +2296,36 @@ with 0.5 is set up again once. The details follow.
 - `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
   that line ended it without its clean stop.
 - The Bluetooth keyboard stops being visible at the end of its time, not just after.
-- The FreeBSD job measures SHA-256 on the runner and in the machine every 30 s, to tell a
-  runner held back from a slow virtual machine, and a failed test run no longer keeps the
-  machine's session open until the job's limit.
+- More of cbb's tests wait for what they check rather than for a time: the push service's tests
+  hold a send with the fake platform and wait for it to arrive there, and wait for the push
+  sender to be done with a body (`Sender::wait_handled`); the remote commands' tests move the
+  member's clock past its limit of one a second (`CBB_TEST_AHEAD_FILE`) instead of sleeping; and
+  the download's test checks that a tool past the limit is stopped, which before checked
+  nothing.
+- The mesh's tests prove that a copy is not taken again, or an older one is dropped, by a copy
+  made after the connection opened that must come first, and that a reach is kept by a key sent
+  after it, instead of 300 or 500 ms of silence; the phone kits' tests of calls while the member
+  stops wait until every caller has made a call rather than 20 ms.
+- The HarmonyOS watch's tests wait for the watch's answer itself rather than one turn of Node's
+  event loop, and the control socket's test of a connection within its limit reads it without
+  waiting instead of 100 ms.
+- The Android app's test of the mode send waits until the copy has reached the phone, which then
+  leaves its clipboard alone, instead of 10 seconds.
+- The hub's tests under a flood start the client once the flood is under way (the hub asks a
+  stranger for a cookie, or the garbage has gone out) rather than after half a second; the
+  tunnel's race test checks that each connection is through with a byte sent back before it
+  ends the link; and the relay's test of its stop no longer waits 300 ms before the stop.
+- CodeQL takes macOS runners only when it has something new to analyze: the release takes
+  `main`'s passed analysis of the iPhone app for the tagged commit instead of running it again, a
+  newer push to `main` cancels the app's analysis still running for an older one, and the Go
+  files only macOS builds compile are analyzed after a merge only when the merge changed them
+  (and weekly).
+- The VLESS tests tell a refused client from an accepted one by the web server's own events:
+  the stream it closed, the site it served for a wrong path or the TLS handshake it failed,
+  instead of a second without an answer for each refusal.
+- The service tests of remote paste, quick actions, peripherals, the keyboard and the TV remote
+  move the member's clock past its limit of one a second (`CBB_TEST_AHEAD_FILE`) instead of
+  sleeping a second.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
@@ -3106,6 +3144,11 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The phone kits' `Discovery.withKnown`, which no app called: the apps dial the members
+  that browsing finds.
+- The core's helpers for bytes (hex, SHA-256, base64 for JSON, random bytes) are in
+  `core/src/bytes.rs`, no longer among the certificates' code, and two functions nothing
+  called (`member_chain`, and `self_signed_by` apart from `self_signed`) are gone.
 - The phone as the hub: a hub is a computer, a router or a board, never a phone, not even the
   root's (D-134, which replaces D-64). The core makes no phone, watch or leaf a hub, the
   phones' member refuses a hub command and serves no tunnel, the root names no forwarder for a
@@ -3308,13 +3351,31 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On an iPhone at the accessibility text sizes the count of devices online stands above the
+  sync switches, set by the text size rather than by what fits, so the layout does not
+  change while the text grows.
+- A device installed without root can no longer be made a hub that only passes copies on:
+  `cbb` refused it as a trusted hub only, while every program of its user can take its keys
+  (D-79).
+- `cbb-helper` stops at once while the service has taken its connection but not yet
+  answered its watch request: stopping closes the connection from the moment it is open,
+  not only after the answer.
+- On an iPad, a device chosen with the arrow keys reads as selected to VoiceOver, as one
+  chosen by a tap does: the screen tells it that it changed.
+- A published pre-release gets its Docker image's version tag and its release check:
+  `published.yml` waited for a `stable.json` that names it, which no pre-release has, and
+  checked the error GitHub answered in its place. It now checks a pre-release by name
+  (`release-sign verify -pinned`) with the branch `channel`'s `keys.json`.
 - The FreeBSD job runs its Go tests without asynchronous preemption: in its machine on
   the runners' Intel processors Go's preemption signal slowed SHA-256's SHA-NI instructions
   100 times for the rest of each process, and the release tests took minutes instead of
-  seconds. The measurements of the runner and the machine kept while the cause was looked
-  for are gone.
-- The FreeBSD job no longer fails after its tests pass: its exit trap's `kill` of the
-  measuring loops, already stopped, ended the script with status 1 under `set -e`.
+  seconds.
+- The interface texts in Arabic, Chinese, Hebrew, Hindi, Russian, Spanish and Swahili, read
+  line by line in the apps, `cbb` and the website: one word for each term, mistranslations,
+  missing words and punctuation (900 strings).
+- The documentation describes how things are, without dates and notes of how they came to
+  be; the README's quick start pairs with the six-digit code, and the Mac app's Sparkle notes
+  say that the app is in the release's `.pkg`.
 - A release's draft is made again when its CHANGELOG section is long: GitHub refuses notes
   over 125,000 characters, so `packaging/release-notes.sh` gives a section over 60,000
   only its opening summary and a link to CHANGELOG.md, and CI checks the notes stay under

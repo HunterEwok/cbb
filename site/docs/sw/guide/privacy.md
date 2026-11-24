@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 185393ae83f0 -->
+<!-- source: 88b94d959724 -->
 # Faragha: nani anaona nini
 
 Kwa yeyote anayetaka kujua kinachotoka kwenye vifaa vyake. Connect Beyond Borders haina akaunti, wingu wala telemetri: unachonakili kimesimbwa mwisho hadi mwisho, kimefungwa kwenye kifaa kinachokinakili kwa ajili ya vifaa vya kikundi chako vinavyosoma nakala, na hakuna kingine kinachoweza kukifungua: wala seva, wala mtandao, wala kifaa kilicho katikati. Ukurasa huu unaeleza kile ambacho vifaa vinavyopitisha nakala bado vinaweza kuona, na kila kitu ambacho mtu nje ya kikundi anaweza kuona, na jinsi ya kukizima.
@@ -20,7 +20,7 @@ Kisichoonekana kamwe: kama ni maandishi, siri, picha au faili; maandishi yenyewe
 
 ## Vighairi
 
-Vyote viwili ni chaguo lako:
+Kila kimoja ni chaguo lako:
 
 - **Roku** iliyoongezwa kwa `cbb remote add -roku -consent` hupata maandishi yake kama HTTP wazi kwenye mtandao wako wa nyumbani ([kibodi na televisheni](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
 - **Kitovu kinachosoma nakala** ni msimamizi uliyemchagua, kwa hiyo nakala hufungwa kwa ajili yake kama kwa vifaa vyako vingine. Kompyuta inayowaka kila wakati ambayo funguo zake ziko kwenye faili tu, kama Raspberry Pi, ifanye badala yake **kitovu kinachopitisha nakala tu**: hakuna nakala inayofungwa kwa ajili yake, kwa hiyo haisomi yoyote ([ukiwa mbali na nyumbani](away-from-home.md)). Amri, kama kubandika kwa mbali au kitendo cha haraka, hufungwa kwa ajili ya kifaa kimoja zinachokiendea katika hali zote mbili ([kubandika kwa mbali](remote-paste.md)).
@@ -33,6 +33,8 @@ Vyote viwili ni chaguo lako:
 | Wengine kwenye mtandao wako wa nyumbani | kwamba vifaa vilivyopo vinaendesha Connect Beyond Borders, vitambulisho vyao vya kifaa vya nasibu na lebo ya kikundi chako katika mDNS, na ni vipi vinavyozungumza na kwa kiasi gani; kamwe si majina ya vifaa wala maudhui | hakuna cha kufanya; kompyuta huchapisha tu kwenye mitandao ya nyumbani inayoijua |
 | Wengine kwenye mtandao ulio mbali na nyumbani (mkahawa, hoteli) | kwamba kifaa kinazungumza WireGuard, au kwa VLESS kwamba kinafungua muunganisho wa TLS kwenda kwenye kitovu au kisambazaji chako, lini na kwa kiasi gani | VPN ya mfumo huficha hata hilo |
 | Kisambazaji (chako, au cha mradi kwenye `cbb.tools`) | anwani ambazo pakiti zilizosimbwa hutoka na zinazoelekea kwenye kitovu chako, lini na ukubwa wake; si kikundi au kifaa kipi zinakomilikiwa | endesha chako mwenyewe, au elekeza mlango kwenye kitovu chako na usitumie chochote |
+| Huduma ya arifa za kusukuma (ya mradi kwenye `cbb.tools`) | tokeni ya arifa ya simu na anwani ya mwanachama anayeituma, arifa inapotumwa; arifa imefungwa kwa ajili ya simu hiyo, kwa hiyo haijui inachosema | zima **Niarifu programu ikiwa imefungwa** katika Mipangilio ya programu |
+| Apple, Google, au seva yako ya UnifiedPush | kwamba arifa ya kusukuma ilikwenda kwenye simu, na lini; hakuna chochote ndani yake | mpangilio huo huo |
 | Relei pofu | ni vifaa vipi vya kikundi vilivyo mtandaoni sasa na vinavyozungumza, lini na kwa kiasi gani; haihifadhi chochote kati ya hayo | endesha yako mwenyewe, au tumia kitovu |
 | Kampuni inayopangisha kisambazaji au relei | anwani zinazozungumza nacho, lini na kwa kiasi gani | VPN ya mfumo kwenye kifaa |
 | GitHub, au `dl.cbb.tools` GitHub isipojibu | anwani yako na kwamba unatumia Connect Beyond Borders, kwa kila ukaguzi wa sasisho na upakuaji; hakuna kuhusu kikundi | `sudo cbb update -auto off`, au kioo chako mwenyewe (`-mirror`) |

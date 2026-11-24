@@ -90,7 +90,7 @@ fn go_release() {
     let channel: File = serde_json::from_value(ev["channel_file"].clone()).unwrap();
     for e in envelopes {
         let label = e["name"].as_str().unwrap();
-        let raw = crate::certs::b64::decode_str(e["release"].as_str().unwrap()).unwrap();
+        let raw = crate::bytes::b64::decode_str(e["release"].as_str().unwrap()).unwrap();
         let taken = File::parse(&raw).map_err(|e| alloc::format!("{e}")).and_then(|r| {
             release::check(
                 &keys,

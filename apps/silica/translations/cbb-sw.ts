@@ -210,7 +210,7 @@
     </message>
     <message>
         <source>Removed</source>
-        <translation>Kinaondolewa</translation>
+        <translation>Kimeondolewa</translation>
     </message>
     <message>
         <source>Stays</source>
@@ -429,11 +429,11 @@
     </message>
     <message>
         <source>Unfreeze</source>
-        <translation>Fungua</translation>
+        <translation>Yeyusha</translation>
     </message>
     <message>
         <source>Unfreezing %1</source>
-        <translation>Inafungua %1</translation>
+        <translation>Inayeyusha %1</translation>
     </message>
     <message>
         <source>Unmute</source>
@@ -463,7 +463,7 @@
     </message>
     <message>
         <source>Mute until unmuted</source>
-        <translation>Nyamazisha hadi uondoe</translation>
+        <translation>Nyamazisha hadi unyamazishaji uondolewe</translation>
     </message>
     <message>
         <source>Off for 15 minutes</source>
@@ -689,7 +689,7 @@
     </message>
     <message>
         <source>%1 joined the group.</source>
-        <translation>%1 amejiunga na kikundi.</translation>
+        <translation>%1 kimejiunga na kikundi.</translation>
     </message>
     <message>
         <source>%1 moved the group to itself: it is the group's main device now.</source>
@@ -697,15 +697,15 @@
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>%1 imegandishwa: vingine vinakikataa hadi msimamizi akiyeyushe.</translation>
+        <translation>%1 kimegandishwa: vingine vinakikataa hadi msimamizi akiyeyushe.</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
-        <translation>%1 ameondolewa kwenye kikundi.</translation>
+        <translation>%1 kimeondolewa kwenye kikundi.</translation>
     </message>
     <message>
         <source>%1 was unfrozen.</source>
-        <translation>%1 imeyeyushwa.</translation>
+        <translation>%1 kimeyeyushwa.</translation>
     </message>
 </context>
 <context>
@@ -830,7 +830,7 @@
     <name>InvitePage</name>
     <message>
         <source>%1 joined the group; it appears in the list once it connects.</source>
-        <translation>%1 amejiunga na kikundi; kitaonekana kwenye orodha kikiunganishwa.</translation>
+        <translation>%1 kimejiunga na kikundi; kitaonekana kwenye orodha kikiunganishwa.</translation>
     </message>
     <message>
         <source>Admit</source>
@@ -1154,7 +1154,7 @@
     </message>
     <message>
         <source>This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.</source>
-        <translation>Simu hii iko katika kikundi kilichoundwa kabla ya 0.6, ambacho toleo hili halikiendeshi tena. Kiondoke kwenye simu hii, kisha unda kikundi kipya au ujiunge na kimoja. Hakuna kinachofutwa hadi uondoke.</translation>
+        <translation>Simu hii iko katika kikundi kilichoundwa kabla ya 0.6, ambacho toleo hili halikiendeshi tena. Ondoka kwenye kikundi hicho kwenye simu hii, kisha unda kikundi kipya au ujiunge na kimoja. Hakuna kinachofutwa hadi uondoke.</translation>
     </message>
     <message>
         <source>Turn Everywhere off</source>
@@ -1271,7 +1271,7 @@
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
-        <translation>Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</translation>
+        <translation>Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi hakilindi kikundi vizuri kama simu yenye vyote viwili.</translation>
     </message>
     <message>
         <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
@@ -1301,7 +1301,7 @@
     <name>PastePage</name>
     <message>
         <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
-        <translation>Kubandika kunafaa programu nyingi; kuandika kunafaa zile zisizokubali kubandika, na hadi KB 4 tu. Enter huendesha amri kwenye kituo, kwa hiyo kompyuta huikubali tu ikiwa mtumiaji wake aliruhusu. Siri haiachi alama kwenye kumbukumbu au ubao wa kunakili wa kompyuta.</translation>
+        <translation>Kubandika kunafaa programu nyingi; kuandika kunafaa zile zisizokubali kubandika, na hadi KB 4 tu. Enter huendesha amri kwenye terminal, kwa hiyo kompyuta huikubali tu ikiwa mtumiaji wake aliruhusu. Siri haiachi alama kwenye kumbukumbu au ubao wa kunakili wa kompyuta.</translation>
     </message>
     <message>
         <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
@@ -1494,15 +1494,15 @@
     <name>RelayDialog</name>
     <message>
         <source>Meet at this relay</source>
-        <translation>Kutana kwenye kipitishi hiki</translation>
+        <translation>Kutana kwenye relei hii</translation>
     </message>
     <message>
         <source>Meet at this relay?</source>
-        <translation>Mkutane kwenye kipitishi hiki?</translation>
+        <translation>Mkutane kwenye relei hii?</translation>
     </message>
     <message>
         <source>The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.</source>
-        <translation>Ubao wa kunakili unabaki umesimbwa mwisho hadi mwisho kati ya vifaa: kipitishi hakiwezi kuusoma wala kujifanya kifaa. Lakini, wakati vifaa vinakitumia, hujua vifaa vipi vya kikundi viko mtandaoni na anwani zao za intaneti, na vipi vinazungumza, lini na kiasi gani vinatuma. Kitovu cha kikundi chenyewe hakivujishi chochote kati ya haya. Tumia kipitishi unachoendesha mwenyewe, au ambacho unamwamini mwendeshaji wake kwa hili.</translation>
+        <translation>Ubao wa kunakili unabaki umesimbwa mwisho hadi mwisho kati ya vifaa: relei haiwezi kuusoma wala kujifanya kifaa. Lakini, wakati vifaa vinaitumia, hujua vifaa vipi vya kikundi viko mtandaoni na anwani zao za intaneti, na vipi vinazungumza, lini na kiasi gani vinatuma. Kitovu cha kikundi chenyewe hakivujishi chochote kati ya haya. Tumia relei unayoiendesha mwenyewe, au ambayo unamwamini mwendeshaji wake kwa hili.</translation>
     </message>
 </context>
 <context>
@@ -1521,35 +1521,35 @@
     </message>
     <message>
         <source>Connecting to the relay…</source>
-        <translation>Inaunganisha na kipitishi…</translation>
+        <translation>Inaunganisha na relei…</translation>
     </message>
     <message>
         <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
-        <translation>Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye kipitishi, kama kile kilichowekwa kwa cbb relay, wakati programu inasawazisha. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini kipitishi hujua vipi viko mtandaoni na anwani zake, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha.</translation>
+        <translation>Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye relei, kama ile iliyowekwa kwa cbb relay, wakati programu inasawazisha. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini relei hujua vipi viko mtandaoni na anwani zao, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha.</translation>
     </message>
     <message>
         <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
-        <translation>Weka anwani ya kipitishi pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu.</translation>
+        <translation>Weka anwani ya relei pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu.</translation>
     </message>
     <message>
         <source>Leave the relay</source>
-        <translation>Ondoka kwenye kipitishi</translation>
+        <translation>Ondoka kwenye relei</translation>
     </message>
     <message>
         <source>Meet at this relay</source>
-        <translation>Kutana kwenye kipitishi hiki</translation>
+        <translation>Kutana kwenye relei hii</translation>
     </message>
     <message>
         <source>Off: this phone meets nobody at a relay.</source>
-        <translation>Kimezimwa: simu hii haikutani na yeyote kwenye kipitishi.</translation>
+        <translation>Kimezimwa: simu hii haikutani na yeyote kwenye relei.</translation>
     </message>
     <message>
         <source>Relay address, such as 198.51.100.9:8764</source>
-        <translation>Anwani ya kipitishi, kama 198.51.100.9:8764</translation>
+        <translation>Anwani ya relei, kama 198.51.100.9:8764</translation>
     </message>
     <message>
         <source>Relay key, 44 characters</source>
-        <translation>Ufunguo wa kipitishi, herufi 44</translation>
+        <translation>Ufunguo wa relei, herufi 44</translation>
     </message>
     <message>
         <source>Renew the group's keys for sync away from home</source>
@@ -1565,7 +1565,7 @@
     </message>
     <message>
         <source>Waiting: the relay works while the app syncs.</source>
-        <translation>Inasubiri: kipitishi hufanya kazi wakati programu inasawazisha.</translation>
+        <translation>Inasubiri: relei hufanya kazi wakati programu inasawazisha.</translation>
     </message>
 </context>
 <context>
@@ -1671,11 +1671,11 @@
     </message>
     <message>
         <source>Hardware</source>
-        <translation>Vifaa</translation>
+        <translation>Maunzi</translation>
     </message>
     <message>
         <source>Hardware or a file</source>
-        <translation>Vifaa au faili</translation>
+        <translation>Maunzi au faili</translation>
     </message>
     <message>
         <source>In a file on the phone</source>
@@ -1743,7 +1743,7 @@
     </message>
     <message>
         <source>Proven hardware only</source>
-        <translation>Vifaa vilivyothibitishwa tu</translation>
+        <translation>Maunzi yaliyothibitishwa tu</translation>
     </message>
     <message>
         <source>Puts the error itself under each error message</source>
@@ -1878,7 +1878,7 @@
     </message>
     <message>
         <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>Fanya kompyuta ya nyumbani kuwa kituo, kwenye mipangilio yake ya hali ya juu.</translation>
+        <translation>Fanya kompyuta ya nyumbani kuwa kituo, kwenye mipangilio yake ya kina.</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1886,7 +1886,7 @@
     </message>
     <message>
         <source>Move the group to a new main device with the group's recovery key.</source>
-        <translation>Hamisha kikundi kwenda kifaa kikuu kipya kwa ufunguo wa kurejesha wa kikundi.</translation>
+        <translation>Hamishia kikundi kwenye kifaa kikuu kipya kwa ufunguo wa urejeshaji wa kikundi.</translation>
     </message>
     <message>
         <source>Muted: %1.</source>
@@ -1922,7 +1922,7 @@
     </message>
     <message>
         <source>The backup server does not answer.</source>
-        <translation>Seva mbadala haijibu.</translation>
+        <translation>Seva ya akiba haijibu.</translation>
     </message>
     <message>
         <source>The base %1 does not answer.</source>
@@ -1958,11 +1958,11 @@
     </message>
     <message>
         <source>The group's recovery key was used twice, so the group stopped for good.</source>
-        <translation>Ufunguo wa kurejesha wa kikundi ulitumika mara mbili, kwa hivyo kikundi kimesimama kabisa.</translation>
+        <translation>Ufunguo wa urejeshaji wa kikundi ulitumika mara mbili, kwa hivyo kikundi kimesimama kabisa.</translation>
     </message>
     <message>
         <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>Orodha ya vituo vya kuingia vya seva za muunganisho imepitwa na wakati.</translation>
+        <translation>Orodha ya milango ya kuingilia ya seva za muunganisho imepitwa na wakati.</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1982,7 +1982,7 @@
     </message>
     <message>
         <source>This device and the group disagree about which device is the main one.</source>
-        <translation>Kifaa hiki na kikundi hawakubaliani kuhusu kifaa kipi ni kikuu.</translation>
+        <translation>Kifaa hiki na kikundi havikubaliani kuhusu kifaa kipi ni kikuu.</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -2057,7 +2057,7 @@
     <name>WindowPage</name>
     <message>
         <source>%1 is in the group now.</source>
-        <translation>%1 sasa yuko kwenye kikundi.</translation>
+        <translation>%1 sasa kiko kwenye kikundi.</translation>
     </message>
     <message>
         <source>Add a device</source>

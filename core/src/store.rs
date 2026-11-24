@@ -22,7 +22,7 @@
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
-use crate::certs::sha256;
+use crate::bytes::sha256;
 
 const MAGIC: &[u8; 4] = b"cbb1";
 

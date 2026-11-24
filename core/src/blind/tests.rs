@@ -13,7 +13,7 @@ use serde_json::Value as Json;
 use super::alias::{self, Face};
 use super::card::{self, Card};
 use super::credential::{self, Chain, Credential};
-use crate::certs::sha256;
+use crate::bytes::sha256;
 use crate::format::{Alg, Key, Rule};
 use crate::identity::ExternalKey;
 

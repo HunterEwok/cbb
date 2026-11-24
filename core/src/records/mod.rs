@@ -105,7 +105,7 @@ pub use eval::{Input, State, evaluate};
 pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId, Recovery, group_id};
 pub use set::{RecordSet, Stuck};
 
-use crate::certs::sha256;
+use crate::bytes::sha256;
 use crate::identity::ExternalKey;
 
 /// The label records are signed under.

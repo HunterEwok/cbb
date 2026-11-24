@@ -207,7 +207,7 @@ pub fn offer_id(confirm: &[u8; 32]) -> [u8; 16] {
     b.extend_from_slice(b"cbb offer id v1\0");
     b.extend_from_slice(confirm);
     let mut id = [0u8; 16];
-    for (d, s) in id.iter_mut().zip(crate::certs::sha256(&b)) {
+    for (d, s) in id.iter_mut().zip(crate::bytes::sha256(&b)) {
         *d = s;
     }
     id

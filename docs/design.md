@@ -68,8 +68,8 @@ What the design cannot choose:
   licence under `internal/third_party` and `core/src/third_party`.
 - **Small devices.** `cbb`'s protocol core is `no_std` Rust with no I/O, so that it
   fits an ESP32.
-- **Signing.** Apple's and Microsoft's code signing need accounts the project is still
-  getting; development and CI never wait for them (ad hoc signing).
+- **Signing.** Apple's code signing needs the project's developer account and Windows'
+  a code signing certificate; development and CI never wait for them (ad hoc signing).
 
 ## 3. Context and scope
 
@@ -212,7 +212,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
   sends `peripheral-stop` (`TestAlonePeripherals`).
 - **The way over VLESS.** `cbb` makes it itself, over XHTTP (`member/src/vless.rs`); the
-  helper has no part in it (REALITY, which it once made for `cbb`, is gone: D-91).
+  helper has no part in it (D-91).
 - **The agent.** `cbb agent`, which the user's session starts, links that session's clipboard
   with the service: it starts its own `cbb-helper`, with the session's whole environment (its
   display and D-Bus), and asks it `agent` with the service's socket. The helper runs the Go
@@ -234,7 +234,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   into the hardware through the helper where it can. Its hello
   carries the capabilities its own device record names (or, before it has one, its `-caps`
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
-  dials the members with a higher device ID, without it it publishes `r=listen` and waits.
+  dials the members with a higher device ID; without it, it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
   `key_level`, `ttl`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair`, a pairing window that a new device dials (`cbb pair`, the core's admission),
@@ -544,7 +544,7 @@ creates the phone is the root of the group (D-34 to D-36, D-105; the wire side i
 
 ### Watches
 
-Decided on 2026-10-24: a watch is never the group's root, but it carries notifications, a
+A watch is never the group's root, but it carries notifications, a
 switch for sync away from home and the emergency actions, with an admin key of its own. In
 0.6 the root phone adds a watch with its key (`add_watch`, D-124) and the watch shows the
 group, but nothing signs on the wrist: the emergency actions below come with 0.7, and the
@@ -595,14 +595,14 @@ turns it off, as any admin turns remote paste off (D-59).
 
 On Android the foreground service receives the events by itself, so the watch hears of them
 at once. On the iPhone the app has no background sync and learns of events only when it
-syncs, so a notification may come late. To make it prompt, the hub could wake the phone with
-an Apple push whose content is encrypted to the phone's key and decrypted only on the phone
-(a Notification Service Extension); Apple would see that a push was sent, and when, but
-nothing in it. Decided (D-74): the push goes through a stateless sender at `cbb.tools`,
+syncs. To make it prompt, the hub wakes the phone with an Apple push whose content is sealed
+to the phone's key and opened only on the phone (a Notification Service Extension); Apple
+sees that a push was sent, and when, but nothing in it (D-74). The push goes through a
+stateless sender at `cbb.tools`,
 since only the app's developer holds the key for Apple's push service, and the user agrees
 to it first, after being told what Apple and `cbb.tools` learn (that a push was sent and
-when; the push token, the hub's address and the time). It needs the Apple developer
-account; until then, and for users who do not agree, iPhone notifications come with the
+when; the push token, the hub's address and the time). It uses the Apple developer
+account; for users who do not agree, iPhone notifications come with the
 next sync or a background refresh. The lock screen shows the full text, and the app points
 to the system setting that hides previews until the phone is unlocked.
 
@@ -618,8 +618,10 @@ One pull request each, smaller ones together:
    Kotlin, the interop vectors, certifying a watch from the root phone; the signed command
    that turns sync away from home off on a member. Done; not yet tried on a real watch.
 4. Emergency actions on the watch, and the quick actions. Done.
-5. Prompt iPhone notifications through an encrypted Apple push (D-74). Not built yet; the
-   Apple developer account and its APNs keys are there.
+5. Prompt notifications through a sealed push (D-74): the push sender (`pusher.rs`, "Push"
+   above), the push service (`member/src/pushd`: Apple, Firebase and UnifiedPush) and the
+   phones' setting "Notify me when the app is closed". Done; members send to the project's
+   service once a `keys.json` they hold lists it (protocol.md, section 13).
 
 Not yet verified on a real watch: the Secure Enclave key on the watch, WatchConnectivity
 waking the phone app in the background long enough to send a record, the Data Layer
@@ -635,7 +637,7 @@ setting, which the root (or an admin) sets with `cbb ttl` or on a phone and ever
 stamps on the copies it makes (D-129): an ordinary copy 5 minutes by default (1 minute to 1
 hour), a secret 60 seconds by default (5 seconds to 1 minute). A phone listens only
 sometimes, since Android and iOS let an app read the clipboard only while it is on screen, so
-it follows two rules of its own (the owner, 2026-11-22; D-128):
+it follows two rules of its own (D-128):
 
 1. **The gesture swaps.** One button (a tap, the Action button or Back Tap on the iPhone, a
    double tap, the quick tile or the share action where the phone offers one) always swaps
@@ -648,8 +650,7 @@ it follows two rules of its own (the owner, 2026-11-22; D-128):
 2. **Opening the app makes the phone listen like the others.** When the app starts or comes
    back from the background (both alike), the phone works as a device that always listens
    while it is on screen; closing it and sending it to the background are alike too, and the
-   phone then works with its own clipboard again. Opening swaps nothing (the owner,
-   2026-11-22): a phone whose clipboard changed since the app last saw it (the system's
+   phone then works with its own clipboard again. Opening swaps nothing: a phone whose clipboard changed since the app last saw it (the system's
    change count, read without the text) sends that copy, as a watcher reports a copy, and
    otherwise it takes the group's buffer, so a phone that copied nothing never sends back an
    old text. A group copy that waited and so did not reach the phone's clipboard is not lost
@@ -888,7 +889,7 @@ sync away from home, the admins, and remote paste.
   always the latest event, so all members converge whatever happens to the connections. What
   goes into a member's own clipboard is a local decision:
   - on a device that always listens, an event that becomes the group's current event is
-    written while sync is on and the event lives (its own `ttl`, D-129; the owner, 2026-11-22;
+    written while sync is on and the event lives (its own `ttl`, D-129;
     D-128): its own
     clipboard always equals the group's buffer. A copy made before the current one never
     becomes current, so it changes nothing; a member back from offline whose live copy was
@@ -1444,7 +1445,7 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   learns the group's obfuscation settings and, with VLESS, the group's VLESS user ID; and from the
   number of clients that send packets, roughly how many devices are away from home. It does
   not learn the texts, the devices' names, or which client address is which device. This
-  metadata is accepted by design (owner decision, 2026-10-24): it reveals that a group
+  metadata is accepted by design: it reveals that a group
   exists and how busy it is, never what it syncs, and hiding it would need a chain of relays. It logs none of it; what it knows lives in memory while the
   connections last, but for the credentials' versions above. The clients' addresses cannot be hidden from it, since they are where its
   answers go; a chain of relays in the manner of Tor would hide them at a cost in speed and
@@ -1678,8 +1679,8 @@ relay, or a hub.
    ClientHello and HTTP/1.1 where Xray's client shows a browser's and HTTP/2. The site's
    certificate is checked against the system's roots with `cbb_core::tls::web`, which adds
    RSA and P-384 to the members' provider. REALITY, which borrows a well-known site's TLS,
-   was dropped rather than written in Rust (D-91): it needs a browser's ClientHello, which
-   rustls does not make, and nobody used it once `cbb.tools` ran XHTTP; a browser-like
+   is not written in Rust (D-91): it needs a browser's ClientHello, which
+   rustls does not make, and `cbb.tools` runs XHTTP; a browser-like
    ClientHello for the Rust XHTTP comes first, should a network single out rustls's.
 
 sing-box is not used (GPL).
@@ -1819,7 +1820,7 @@ with their names, systems and dates:
 
 #### What is left to hide
 
-Researched and decided for 0.6 (D-75). Even with the credentials the servers see something; from the
+Even with the credentials the servers see something (D-75); from the
 most to the least revealing: the addresses of the hub and its clients, their online times
 and the volume; a stable pseudonym per device; the group tag; how many devices there are;
 when the root changes; the root key. Decided:
@@ -1920,8 +1921,7 @@ below).
 
 ### Members, capabilities, admins and the operating system
 
-Decided on 2026-10-24 (D-50 to D-53); the roles `full` and `lite` became one role `member`
-with capabilities on 2026-11-08 (D-89).
+The decisions are D-50 to D-53, and D-89 for the one role `member` with capabilities.
 
 **The operating system is not the role.** Each device states its operating system in `os`,
 in the pairing Info, in its hello and in its device record: `linux`, `windows`, `macos`, `ios`,
@@ -1983,10 +1983,10 @@ a phone group, without a new group:
 
 ### Who may remove an admin
 
-Decided on 2026-10-24 (D-60). An admin computer keeps its admin key in a file, so it is the
+An admin computer keeps its admin key in a file, so it is the
 admin a thief gets most easily: with the laptop, or with a copy of the file. The root and
 the admin phones keep theirs in the Secure Enclave or the Keystore, behind Face ID or the
-fingerprint. So the question is what an admin computer may do to another admin.
+fingerprint. So the question is what an admin computer may do to another admin (D-60).
 
 **The rule.** The root and the admin phones remove any admin (`cbb remove` on the root, Remove
 in the apps). An admin computer removes ordinary devices only; it never removes the root or
@@ -2320,7 +2320,7 @@ docs/protocol.md, section 16.
   installed copy has one.
 - **The tray app** checks with the service and shows "update available" with a button that
   runs `cbb update` through UAC or pkexec, like its other admin actions.
-- **The Mac app:** Sparkle with its EdDSA signature, now that the release signs and notarizes
+- **The Mac app:** Sparkle with its EdDSA signature, since the release signs and notarizes
   the app (not built yet), with the same manifest feeding the appcast.
 - **Small Linux devices:** `cbb update` the same way, for their archive (built).
 - **The Nano ESP32:** OTA into the second app partition, checked against the manifest and
@@ -2393,7 +2393,7 @@ docs/protocol.md, section 16.
 
 ### Versions in one group
 
-0.6 promises what 0.5 did (D-131): a device works in a group with devices of its own
+0.6 promises (D-131) that a device works in a group with devices of its own
 release, so every device of a group is updated to the same release, and the format of the
 records and messages may still change before 0.7. The records already leave room for later
 versions: a record of a later `v` is kept and passed on in sync, never applied, and the
@@ -2442,7 +2442,7 @@ infrastructure, not a place to copy and paste:
 
 #### One program on routers
 
-Since 0.6 a router runs the same `cbb` as every computer, in Rust, without `cbb-helper`, which
+A router runs the same `cbb` as every computer, in Rust, without `cbb-helper`, which
 only a desktop, a TPM or Bluetooth needs. It can be the hub, with AmneziaWG and VLESS. It
 builds for aarch64, armv7 and x86-64 with stable Rust; mips and mipsle are Tier 3 in Rust
 (nightly and `-Zbuild-std`) and are built without the tunnel for now (roadmap item 37).
@@ -2624,8 +2624,8 @@ has lingering). So a rootless device:
 - says `rootless` in its hello's `key_store` and gets it as `store` in its device record
   (docs/protocol.md, section 17); a reader that does not know the value takes it as `file`;
 - is never the group's root, an admin or a trusted hub, not even after the warning that lets
-  a device with keys in a file be one (D-66): any program of the user can copy its keys; it
-  may be a hub that only passes copies on, whose keys open no copy;
+  a device with keys in a file be one (D-66), nor a hub that only passes copies on: any
+  program of the user can copy its keys;
 - has quick actions and remote paste off, as every device until its own user turns them on
   (D-71);
 - is shown as rootless in `cbb status` and on the phones' device pages.

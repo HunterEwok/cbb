@@ -958,7 +958,7 @@ mod watch {
         if !ctx.is_null() {
             return 1;
         }
-        let Ok(s): Result<p256::ecdsa::Signature, _> = key().sign_prehash(&cbb_core::certs::sha256(body)) else {
+        let Ok(s): Result<p256::ecdsa::Signature, _> = key().sign_prehash(&cbb_core::bytes::sha256(body)) else {
             return 1;
         };
         let der = s.to_der();

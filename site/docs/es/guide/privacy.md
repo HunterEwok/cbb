@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 185393ae83f0 -->
+<!-- source: 88b94d959724 -->
 # Privacidad: quién ve qué
 
 Para quien quiera saber qué sale de sus dispositivos. Connect Beyond Borders no tiene cuentas, ni
@@ -40,7 +40,7 @@ los archivos; el tamaño exacto.
 
 ## Excepciones
 
-Las dos dependen de ti:
+Cada una depende de ti:
 
 - Un **Roku** añadido con `cbb remote add -roku -consent` recibe su texto como HTTP sin cifrar en tu red doméstica ([teclados y televisores](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
 - Un **hub que lee las copias** es un administrador que tú elegiste, así que las copias se sellan
@@ -59,6 +59,8 @@ Las dos dependen de ti:
 | Otros en tu red doméstica | que hay dispositivos que ejecutan Connect Beyond Borders, sus ID de dispositivo aleatorios y la etiqueta de tu grupo en mDNS, y cuáles se comunican y cuánto; nunca los nombres de los dispositivos ni los contenidos | nada que hacer; un ordenador publica solo en las redes domésticas que conoce |
 | Otros en una red fuera de casa (una cafetería, un hotel) | que el dispositivo habla WireGuard, o que con VLESS abre una conexión TLS a tu hub o reenviador, cuándo y cuánto | una VPN del sistema oculta incluso eso |
 | El reenviador (el tuyo, o el del proyecto en `cbb.tools`) | las direcciones de las que vienen los paquetes cifrados y que van a tu hub, cuándo y de qué tamaño; no a qué grupo o dispositivo pertenecen | ejecutar el tuyo, o redirigir un puerto a tu hub y no usar ninguno |
+| El servicio de notificaciones push (el del proyecto en `cbb.tools`) | el token push de un teléfono y la dirección del miembro que le envía un aviso cuando sale uno; el aviso está sellado para el teléfono, así que no sabe qué dice | desactiva **Avisarme cuando la app esté cerrada** en los Ajustes de la app |
+| Apple, Google o tu servidor de UnifiedPush | que llegó una notificación push al teléfono y cuándo; nada de su contenido | el mismo ajuste |
 | Un relé ciego | cuáles de los dispositivos de un grupo están en línea ahora y se comunican entre sí, cuándo y cuánto; no guarda nada de ello | ejecutar el tuyo, o usar un hub |
 | La empresa que aloja un reenviador o un relé | las direcciones que se comunican con él, cuándo y cuánto | una VPN del sistema en el dispositivo |
 | GitHub, o `dl.cbb.tools` cuando GitHub no responde | tu dirección y que usas Connect Beyond Borders, en cada comprobación de actualizaciones y descarga; nada sobre el grupo | `sudo cbb update -auto off`, o un espejo propio (`-mirror`) |

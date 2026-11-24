@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" lang="ar" width="909" height="300" viewBox="0 0 909 300" role="img" aria-label="حين لا يستطيع الإنترنت الوصول إلى المحور، يسجّل نفسه لدى مُمرِّر">
+<svg xmlns="http://www.w3.org/2000/svg" lang="ar" width="946" height="300" viewBox="0 0 946 300" role="img" aria-label="حين لا يستطيع الإنترنت الوصول إلى المحور، يسجّل نفسه لدى مُمرِّر">
 <title>حين لا يستطيع الإنترنت الوصول إلى المحور، يسجّل نفسه لدى مُمرِّر</title>
 <style>
   .bg { fill: none; }
@@ -44,28 +44,28 @@
 </style>
 <rect class="zone" x="10" y="10" width="210" height="250" rx="14"/>
 <text class="zone-t" x="26" y="34" direction="rtl" text-anchor="end">خارج المنزل</text>
-<rect class="zone" x="654.6" y="10" width="244.39999999999998" height="250" rx="14"/>
+<rect class="zone" x="654.6" y="10" width="281.4" height="250" rx="14"/>
 <text class="zone-t" x="670.6" y="34" direction="rtl" text-anchor="end">في المنزل، خلف NAT المزوّد</text>
 <g class=""><rect class="card " x="30.0" y="64.0" width="170" height="52" rx="10"/><g transform="translate(42.0,76)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="80.0" y="95" direction="rtl" text-anchor="end">حاسوب محمول</text></g>
 <g class=""><rect class="card " x="30.0" y="164.0" width="170" height="52" rx="10"/><g transform="translate(42.0,176)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="195" direction="rtl" text-anchor="end">هاتف</text></g>
 <g class="srv"><rect class="card srv" x="295.0" y="108.0" width="170" height="64" rx="10"/><g transform="translate(307.0,126)" class="ic"><path d="M8 21h13a5 5 0 0 0 0 -10a7 7 0 0 0 -13.5 1.5A4.3 4.3 0 0 0 8 21z"/></g><text class="t" x="345.0" y="136" direction="rtl" text-anchor="end">المُمرِّر</text><text class="s" x="345.0" y="154" direction="rtl" text-anchor="end">لا يقرأ شيئًا</text></g>
-<g class="key"><rect class="card key" x="686.8" y="68.0" width="180" height="64" rx="10"/><g transform="translate(698.8,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="736.8" y="96" direction="rtl" text-anchor="end">المحور</text><text class="s" x="736.8" y="114" direction="rtl" text-anchor="end">حاسوب مشرف</text><rect class="badge" x="812.4" y="59.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="835.5999999999999" y="72.0" text-anchor="middle" direction="rtl">المحور</text></g>
-<g class=""><rect class="card " x="686.8" y="184.0" width="180" height="52" rx="10"/><g transform="translate(698.8,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="736.8" y="215" direction="rtl" text-anchor="end">حاسوب مكتبي</text></g>
+<g class="key"><rect class="card key" x="684.8499999999999" y="68.0" width="220.9" height="64" rx="10"/><g transform="translate(696.8499999999999,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="734.8499999999999" y="96" direction="rtl" text-anchor="end">المحور</text><text class="s" x="734.8499999999999" y="114" direction="rtl" text-anchor="end">دائم التشغيل، في المنزل</text><rect class="badge" x="851.3499999999999" y="59.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="874.5499999999998" y="72.0" text-anchor="middle" direction="rtl">المحور</text></g>
+<g class=""><rect class="card " x="684.8499999999999" y="184.0" width="220.9" height="52" rx="10"/><g transform="translate(696.8499999999999,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="734.8499999999999" y="215" direction="rtl" text-anchor="end">حاسوب مكتبي</text></g>
 <path class="e-tunnel" d="M200.0,90.0 L250,90 L250,130 L295.0,130"/>
 <path class="a-tunnel" d="M295.0,130 L285.0,124.5 L285.0,135.5z"/>
 <path class="e-tunnel" d="M200.0,190.0 L250,190 L250,150 L295.0,150"/>
 <path class="a-tunnel" d="M295.0,150 L285.0,144.5 L285.0,155.5z"/>
-<path class="e-tunnel" d="M465.0,140.0 L629.6,140 L629.6,100 L686.8,100.0"/>
-<path class="a-tunnel" d="M686.8,100.0 L676.8,94.5 L676.8,105.5z"/>
+<path class="e-tunnel" d="M465.0,140.0 L629.6,140 L629.6,100 L684.8499999999999,100.0"/>
+<path class="a-tunnel" d="M684.8499999999999,100.0 L674.8,94.5 L674.8,105.5z"/>
 <path class="a-tunnel" d="M465.0,140.0 L475.0,145.5 L475.0,134.5z"/>
-<path class="e-home" d="M776.8,132.0 L776.8,184.0"/>
-<path class="a-home" d="M776.8,184.0 L781.2,176.0 L772.4,176.0z"/>
-<path class="a-home" d="M776.8,132.0 L772.4,140.0 L781.2,140.0z"/>
-<text class="note" x="454.5" y="288" text-anchor="middle" direction="rtl">لا يحمل المُمرِّر أي مفاتيح: مُمرِّرك على أي خادم، أو مُمرِّر المشروع على cbb.tools.</text>
+<path class="e-home" d="M795.3,132.0 L795.3,184.0"/>
+<path class="a-home" d="M795.3,184.0 L799.7,176.0 L790.9,176.0z"/>
+<path class="a-home" d="M795.3,132.0 L790.9,140.0 L799.7,140.0z"/>
+<text class="note" x="473.0" y="288" text-anchor="middle" direction="rtl">لا يحمل المُمرِّر أي مفاتيح: مُمرِّرك على أي خادم، أو مُمرِّر المشروع على cbb.tools.</text>
 <rect class="lbl-bg" x="231.5" y="129.0" width="37.0" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="250" y="144.0" text-anchor="middle" direction="rtl">نفق</text>
 <rect class="lbl-bg" x="477.0" y="129.0" width="140.6" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="547.3" y="144.0" text-anchor="middle" direction="rtl">المحور يتصل للخارج</text>
-<rect class="lbl-bg" x="747.8" y="144.0" width="58.0" height="22" rx="11.0"/>
-<text class="lbl home" x="776.8" y="159.0" text-anchor="middle" direction="rtl">المنزل</text>
+<rect class="lbl-bg" x="766.3" y="144.0" width="58.0" height="22" rx="11.0"/>
+<text class="lbl home" x="795.3" y="159.0" text-anchor="middle" direction="rtl">المنزل</text>
 </svg>

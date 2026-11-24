@@ -1293,7 +1293,7 @@ impl Service {
 /// halves of the recovery key, in hex, separated by colons (relayd's
 /// Listed::parse reads it back).
 fn relay_group(set: &cbb_core::records::RecordSet) -> String {
-    let hex = crate::certs::hex;
+    let hex = cbb_core::bytes::hex;
     let r = set.recovery();
     format!("{}:{}:{}", hex(set.root().public()), hex(r.k1.public()), hex(r.k2.public()))
 }
@@ -1500,7 +1500,7 @@ fn live_conflicts(st: &cbb_core::records::State) -> Vec<control::Conflict> {
                         .or_else(|| {
                             (st.roots.last() == Some(k)).then(|| st.root_device.and_then(|r| st.device(&r))).flatten()
                         })
-                        .map_or_else(|| crate::certs::hex(&k.0[..4]), |d| d.name.clone())
+                        .map_or_else(|| cbb_core::bytes::hex(&k.0[..4]), |d| d.name.clone())
                 })
                 .collect(),
         })

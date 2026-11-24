@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use cbb_core::certs::sha256;
+use cbb_core::bytes::sha256;
 use cbb_core::identity::ExternalKey;
 use cbb_core::records::body::{
     AdminKind, Device, Head, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Removal, Seen,

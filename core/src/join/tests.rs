@@ -15,7 +15,7 @@ use super::intro::{self, Intro};
 use super::invitation::{self, Invitation, Network, Open, Path, PathKind, Profile};
 use super::welcome::{self, Joining, Way, Welcome};
 use super::*;
-use crate::certs::sha256;
+use crate::bytes::sha256;
 use crate::format::{self, Alg};
 use crate::records::body::*;
 use crate::records::set::RecordSet;
@@ -447,7 +447,7 @@ fn the_codes_match_their_vectors() {
     assert!(channel.len() >= 3);
     for c in channel {
         let ci = channel_id(&KeyHash(arr(&c["member"])), &KeyHash(arr(&c["joiner"])), &id(&c["invitation"]));
-        assert_eq!(crate::certs::hex(&ci), c["ci"].as_str().unwrap(), "{}", c["name"]);
+        assert_eq!(crate::bytes::hex(&ci), c["ci"].as_str().unwrap(), "{}", c["name"]);
     }
 }
 
@@ -472,7 +472,7 @@ fn the_welcome_digest_and_tag_match_their_vectors() {
         let set: [u8; 32] = hex(&c["set_digest"]).try_into().unwrap();
         let lists: Vec<Vec<u8>> = c["lists"].as_array().unwrap().iter().map(hex).collect();
         let got = welcome::digest_from(&set, lists.iter().map(Vec::as_slice));
-        assert_eq!(crate::certs::hex(&got), c["digest"].as_str().unwrap(), "{}", c["name"]);
+        assert_eq!(crate::bytes::hex(&got), c["digest"].as_str().unwrap(), "{}", c["name"]);
     }
     let tags = w["tag"].as_array().unwrap();
     assert!(tags.len() >= 6);
@@ -1616,7 +1616,7 @@ fn redigest(w: &mut Welcome, root: &Key, recovery: &crate::records::Recovery) {
 /// message 67 sealed with the session's ISK and opened, each part as a
 /// `records` message into the assembly, the whole Welcome back.
 fn carried(w: &Welcome, parts: &[crate::records::sync::Part<'_>]) -> Welcome {
-    let isk: [u8; 64] = core::array::from_fn(|i| crate::certs::sha256(b"isk")[i % 32]);
+    let isk: [u8; 64] = core::array::from_fn(|i| crate::bytes::sha256(b"isk")[i % 32]);
     let frame = welcome::frame(&[0x7b; 64], &w.encode(), &isk).unwrap();
     let opened = welcome::open(&frame[4..], &isk).unwrap();
     let mut a = welcome::Assembly::new(Welcome::decode(opened).unwrap(), 1_000).unwrap();
@@ -1701,8 +1701,8 @@ fn the_welcome_tag_binds_every_byte() {
     // A small budget, so that the set comes in parts and field 13 is there.
     let (w, parts) = Welcome::build_within(&set, &st, &k("phone c").hash, &slate.hash, 1, 1024).unwrap();
     assert!(w.parts >= 1);
-    let isk: [u8; 64] = core::array::from_fn(|i| crate::certs::sha256(b"isk")[i % 32]);
-    let other: [u8; 64] = core::array::from_fn(|i| crate::certs::sha256(b"another isk")[i % 32]);
+    let isk: [u8; 64] = core::array::from_fn(|i| crate::bytes::sha256(b"isk")[i % 32]);
+    let other: [u8; 64] = core::array::from_fn(|i| crate::bytes::sha256(b"another isk")[i % 32]);
     let bytes = w.encode();
     let good = welcome::frame(&[0x7b; 64], &bytes, &isk).unwrap();
     assert_eq!(welcome::open(&good[4..], &isk), Ok(&bytes[..]));
@@ -2252,13 +2252,13 @@ fn a_window_link_reads_back() {
     };
     let text = link.text();
     assert!(text.starts_with("cbb://pair?addr=192.168.1.20:7000&addr=[fe80::1%25en0]:7000&fp="));
-    assert!(text.ends_with(&alloc::format!("&i={}&c={digits}", crate::certs::hex(&window.id))));
+    assert!(text.ends_with(&alloc::format!("&i={}&c={digits}", crate::bytes::hex(&window.id))));
     let back = invitation::WindowLink::parse(&text).unwrap();
     assert_eq!(back, link);
     assert_eq!(back.invitation().unwrap(), window);
     assert!(!alloc::format!("{link:?}").contains(&digits));
-    let fp = crate::certs::hex(&link.fp.0);
-    let id = crate::certs::hex(&window.id);
+    let fp = crate::bytes::hex(&link.fp.0);
+    let id = crate::bytes::hex(&window.id);
     for bad in [
         alloc::format!("cbb://pair?fp={fp}&i={id}&c={digits}"),
         alloc::format!("cbb://pair?addr=a:1&i={id}&c={digits}"),

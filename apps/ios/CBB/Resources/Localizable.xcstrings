@@ -150,7 +150,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ahora es admin."
+            "value": "%@ ahora es administrador."
           }
         },
         "he": {
@@ -266,7 +266,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ amejiunga na kikundi."
+            "value": "%@ kimejiunga na kikundi."
           }
         },
         "zh-Hans": {
@@ -288,19 +288,19 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ se pasó el grupo: ahora es el dispositivo principal del grupo."
+            "value": "%@ movió el grupo a sí mismo: ahora es el dispositivo principal del grupo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ העביר אליו את הקבוצה: עכשיו הוא המכשיר הראשי של הקבוצה."
+            "value": "%@ העביר את הקבוצה לעצמו: עכשיו הוא המכשיר הראשי של הקבוצה."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ने समूह अपने पास ले लिया: अब यह समूह का मुख्य डिवाइस है।"
+            "value": "%@ समूह को अपने पास ले आया: अब यह समूह का मुख्य डिवाइस है।"
           }
         },
         "ru": {
@@ -380,7 +380,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ fue congelado: los demás lo rechazan hasta que un admin lo descongele."
+            "value": "%@ fue congelado: los demás lo rechazan hasta que un administrador lo descongele."
           }
         },
         "he": {
@@ -404,7 +404,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ imegandishwa: vingine vinakikataa hadi msimamizi akiyeyushe."
+            "value": "%@ kimegandishwa: vingine vinakikataa hadi msimamizi akiyeyushe."
           }
         },
         "zh-Hans": {
@@ -444,7 +444,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ было удалено до смены главного устройства и теперь снова считается: удалите его снова, если ему не место в группе."
+            "value": "%@ был удалён до смены главного устройства и теперь снова считается: удалите его снова, если ему не место в группе."
           }
         },
         "sw": {
@@ -496,7 +496,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ameondolewa kwenye kikundi."
+            "value": "%@ kimeondolewa kwenye kikundi."
           }
         },
         "zh-Hans": {
@@ -542,7 +542,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ imeyeyushwa."
+            "value": "%@ kimeyeyushwa."
           }
         },
         "zh-Hans": {
@@ -570,7 +570,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld מתוך %lld מכשירים מחוברים עכשיו. האחרים יידעו על השינוי כשיתחברו. מכשיר שלא מסומן מוסר, וחוזר רק כמכשיר חדש."
+            "value": "%lld מתוך %lld מכשירים מחוברים עכשיו. האחרים יידעו על השינוי כשיתחברו. מכשיר שלא מסומן מוסר, ומצטרף שוב רק כמכשיר חדש."
           }
         },
         "hi": {
@@ -702,13 +702,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; escribe encima solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo."
+            "value": "Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; sobrescríbelo solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; כתבו מעליו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד."
+            "value": "שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; דרסו אותו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד."
           }
         },
         "hi": {
@@ -720,7 +720,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например потому что телефон, который её сделал, потерян."
+            "value": "Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например, потому что телефон, который её сделал, потерян."
           }
         },
         "sw": {
@@ -846,7 +846,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "עותק ממתין עד שהמכשיר הזה יידע איזה מכשיר שלח אותו."
+            "value": "העתקה ממתינה עד שהמכשיר הזה יידע איזה מכשיר שלח אותה."
           }
         },
         "hi": {
@@ -898,7 +898,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "एक डिवाइस (%@) ने आमंत्रण का उपयोग किया। उसे तभी शामिल करें जब डिवाइस वही फ़िंगरप्रिंट दिखाए:\n\n%@"
+            "value": "एक डिवाइस (%@) ने निमंत्रण का उपयोग किया। उसे तभी शामिल करें जब डिवाइस वही फ़िंगरप्रिंट दिखाए:\n\n%@"
           }
         },
         "ru": {
@@ -1030,7 +1030,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מכשיר הוקפא או שוחרר מהקפאה"
+            "value": "מכשיר הוקפא או הופשר"
           }
         },
         "hi": {
@@ -1048,7 +1048,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kifaa kimegandishwa au kimeachiliwa"
+            "value": "Kifaa kimegandishwa au kimeyeyushwa"
           }
         },
         "zh-Hans": {
@@ -1174,7 +1174,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "पेस्ट ज़्यादातर ऐप के लिए ठीक है; टाइप करना उन ऐप के लिए जो पेस्ट नहीं लेते, और केवल 4 KB तक। Enter टर्मिनल में कमांड चला देता है, इसलिए कंप्यूटर इसे तभी लेता है जब उसके उपयोगकर्ता ने अनुमति दी हो। गोपनीय टेक्स्ट कंप्यूटर के लॉग या क्लिपबोर्ड में कोई निशान नहीं छोड़ता।"
+            "value": "पेस्ट ज़्यादातर ऐप के लिए ठीक है; टाइप करना उन ऐप के लिए जो पेस्ट नहीं लेते, और केवल 4 KB तक। Enter टर्मिनल में कमांड चला देता है, इसलिए कंप्यूटर इसे तभी लेता है जब उसके उपयोगकर्ता ने अनुमति दी हो। सीक्रेट कंप्यूटर के लॉग या क्लिपबोर्ड में कोई निशान नहीं छोड़ता।"
           }
         },
         "ru": {
@@ -1186,7 +1186,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kubandika kunafaa programu nyingi; kuandika kunafaa zile zisizokubali kubandika, na hadi KB 4 tu. Enter huendesha amri kwenye kituo, kwa hiyo kompyuta huikubali tu ikiwa mtumiaji wake aliruhusu. Siri haiachi alama kwenye kumbukumbu au ubao wa kunakili wa kompyuta."
+            "value": "Kubandika kunafaa programu nyingi; kuandika kunafaa zile zisizokubali kubandika, na hadi KB 4 tu. Enter huendesha amri kwenye terminal, kwa hiyo kompyuta huikubali tu ikiwa mtumiaji wake aliruhusu. Siri haiachi alama kwenye kumbukumbu au ubao wa kunakili wa kompyuta."
           }
         },
         "zh-Hans": {
@@ -1202,7 +1202,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Cmd+V أو Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة."
+            "value": "تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الحاسوب حيث يكون التركيز، كما يفعل Cmd+V أو Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة."
           }
         },
         "es": {
@@ -1220,7 +1220,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Cmd+V या Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।"
+            "value": "तस्वीर या फ़ाइलें समूह में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Cmd+V या Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।"
           }
         },
         "ru": {
@@ -1238,7 +1238,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "图片或文件作为一份拷贝发送到群组，电脑会像按 Cmd+V 或 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。"
+            "value": "图片或文件作为一份副本发送到群组，电脑会像按 Cmd+V 或 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。"
           }
         }
       }
@@ -1306,7 +1306,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הודעה חתומה עוברת דרך שירות ההתראות של Apple; רק הטלפון הזה פותח אותה, ולא Apple ולא השירות של CBB רואים את ההעתקות שלך."
+            "value": "הודעה מוצפנת עוברת דרך שירות ההתראות של Apple; רק הטלפון הזה פותח אותה, ולא Apple ולא השירות של CBB רואים את ההעתקות שלכם."
           }
         },
         "hi": {
@@ -1324,13 +1324,13 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Arifa iliyofungwa hupita kupitia huduma ya arifa ya Apple; ni simu hii tu inayoifungua, na wala Apple wala huduma ya CBB haioni nakala zako."
+            "value": "Arifa iliyofungwa hupitia huduma ya arifa ya Apple; ni simu hii tu inayoifungua, na wala Apple wala huduma ya CBB haioni nakala zako."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "一则加密封装的通知经由 Apple 的推送服务送达；只有这部手机能打开它，Apple 和 CBB 的服务都看不到你的复制内容。"
+            "value": "一则加密封装的通知经由 Apple 的推送服务送达；只有这部手机能打开它，Apple 和 CBB 的服务都看不到你的副本。"
           }
         }
       }
@@ -1358,7 +1358,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "एक गोपनीय टेक्स्ट"
+            "value": "एक सीक्रेट"
           }
         },
         "ru": {
@@ -2238,7 +2238,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Администратор заглушил этот телефон: его копии остаются на нём, пока администратор не включит его."
+            "value": "Администратор заглушил этот телефон: его копии остаются на нём, пока администратор не снимет заглушение."
           }
         },
         "sw": {
@@ -2318,7 +2318,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מנהל אחר הקפיא את המחשב הזה, כמו שעושים עם מחשב גנוב: הוא לא משנה דבר והאחרים דוחים אותו. שחררו אותו רק אם הוא בידיים בטוחות; אחרת הסירו אותו."
+            "value": "מנהל אחר הקפיא את המחשב הזה, כמו שעושים עם מחשב גנוב: הוא לא משנה דבר והאחרים דוחים אותו. הפשירו אותו רק אם הוא בידיים בטוחות; אחרת הסירו אותו."
           }
         },
         "hi": {
@@ -2336,7 +2336,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Msimamizi mwingine amegandisha kompyuta hii, kama inavyofanywa kwa iliyoibiwa: haibadilishi chochote na wengine huikataa. Iachilie tu ikiwa iko mikononi salama; vinginevyo iondoe."
+            "value": "Msimamizi mwingine amegandisha kompyuta hii, kama inavyofanywa kwa iliyoibiwa: haibadilishi chochote na vingine huikataa. Iyeyushe tu ikiwa iko mikononi salama; vinginevyo iondoe."
           }
         },
         "zh-Hans": {
@@ -2646,7 +2646,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समूह के स्वामी से इसके अधिकार लौटाने को कहें।"
+            "value": "समूह के मालिक से इसके अधिकार लौटाने को कहें।"
           }
         },
         "ru": {
@@ -3339,7 +3339,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "आमंत्रण रद्द करें"
+            "value": "निमंत्रण रद्द करें"
           }
         },
         "ru": {
@@ -3563,7 +3563,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "לשנות כמה זמן נשמרים עותקים וסודות"
+            "value": "שינוי משך השמירה של העתקות וסודות"
           }
         },
         "hi": {
@@ -3587,7 +3587,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "更改副本和秘密的有效期"
+            "value": "更改副本和机密的有效期"
           }
         }
       }
@@ -3741,7 +3741,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Comprueba la conexión a internet; CBB lo intenta de nuevo solo."
+            "value": "Comprueba la conexión a internet; CBB vuelve a intentarlo por sí solo."
           }
         },
         "he": {
@@ -3873,7 +3873,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسم المجموعة الفرعية"
+            "value": "اسم التجميعة"
           }
         },
         "es": {
@@ -3909,7 +3909,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收藏夹名称"
+            "value": "合集名称"
           }
         }
       }
@@ -4063,7 +4063,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conecta este teléfono al Wi-Fi de casa y vuelve a intentarlo."
+            "value": "Conecta este teléfono a la Wi-Fi de casa y vuelve a intentarlo."
           }
         },
         "he": {
@@ -4139,7 +4139,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已通过隧道连接到中枢 %@。"
+            "value": "已通过隧道连接到中心节点 %@。"
           }
         }
       }
@@ -4167,7 +4167,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "टनल के ज़रिए हब से जुड़ा।"
+            "value": "सुरंग के ज़रिए हब से जुड़ा।"
           }
         },
         "ru": {
@@ -4397,7 +4397,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "टनल के ज़रिए हब से जुड़ रहा है…"
+            "value": "सुरंग के ज़रिए हब से जुड़ रहा है…"
           }
         },
         "ru": {
@@ -4455,7 +4455,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inaunganisha na kipitishi…"
+            "value": "Inaunganisha na relei…"
           }
         },
         "zh-Hans": {
@@ -4719,7 +4719,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "कंप्यूटरों से चित्र नहीं मिल सका। उसे वहाँ फिर से कॉपी करें, फिर दोबारा कोशिश करें।"
+            "value": "कंप्यूटरों से छवि नहीं मिल सकी। उसे वहाँ फिर से कॉपी करें, फिर दोबारा कोशिश करें।"
           }
         },
         "ru": {
@@ -4817,7 +4817,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не удалось связаться с компьютером. Он в той же сети, что и телефон, и пропускает ли его файрвол CBB?"
+            "value": "Не удалось связаться с компьютером. Находится ли он в той же сети, что и телефон, и пропускает ли его файрвол CBB?"
           }
         },
         "sw": {
@@ -5259,7 +5259,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los dispositivos fuera de casa podrían no alcanzarlo; CBB lo intenta de nuevo solo."
+            "value": "Los dispositivos fuera de casa podrían no alcanzarlo; CBB vuelve a intentarlo por sí solo."
           }
         },
         "he": {
@@ -5529,7 +5529,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسحب الأجهزة إلى هنا، أو أضفها بـ«نقل إلى مجموعة فرعية» في قائمة الجهاز."
+            "value": "اسحب الأجهزة إلى هنا، أو أضفها بـ«نقل إلى تجميعة» في قائمة الجهاز."
           }
         },
         "es": {
@@ -5565,7 +5565,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "把设备拖到这里，或在设备菜单中用“移到收藏夹”添加。"
+            "value": "把设备拖到这里，或在设备菜单中用“移到合集”添加。"
           }
         }
       }
@@ -5575,7 +5575,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسحب للترتيب. أفلت جهازًا على مجموعة فرعية لوضعه فيها."
+            "value": "اسحب للترتيب. أفلت جهازًا على تجميعة لوضعه فيها."
           }
         },
         "es": {
@@ -5611,7 +5611,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "拖动以整理。把设备放到收藏夹上即可放入其中。"
+            "value": "拖动以整理。把设备放到合集上即可放入其中。"
           }
         }
       }
@@ -5633,7 +5633,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הודעות שגיאה מציגות את השגיאה מתחתן, כדי לברר מה נכשל. הקישו על הגרסה שבע פעמים כדי לראות את המתג הזה."
+            "value": "הודעות שגיאה מציגות את השגיאה מתחתיהן, כדי לברר מה נכשל. הקישו על הגרסה שבע פעמים כדי לראות את המתג הזה."
           }
         },
         "hi": {
@@ -6035,13 +6035,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يجلب ما نسخه جهاز آخر في الدقيقة الأخيرة، أو يرسل النص، كما من «الحصول على الحافظة»، إلى أجهزتك."
+            "value": "يجلب ما نسخه جهاز آخر في الدقيقة الأخيرة، أو يرسل إلى أجهزتك النص، كالذي يأتي من «الحصول على الحافظة»."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Obtiene lo que otro dispositivo copió en el último minuto, o envía el texto, como de Obtener portapapeles, a tus dispositivos."
+            "value": "Obtiene lo que otro dispositivo copió en el último minuto, o envía a tus dispositivos el texto, por ejemplo el de Obtener portapapeles."
           }
         },
         "he": {
@@ -6185,19 +6185,19 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "למכשיר שאינו ברשת שלכם, כמו המחשב של ההורים: שתפו את קובץ ההזמנה עם בעליו, שמצטרף עם cbb pair -invite. היא עובדת פעם אחת, למשך שעה, כל עוד היישום הזה פתוח."
+            "value": "למכשיר שאינו ברשת שלכם, כמו המחשב של ההורים: שתפו את קובץ ההזמנה עם בעליו, שמצטרף עם cbb pair -invite. היא עובדת פעם אחת, למשך שעה, כל עוד האפליקציה הזו פתוחה."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "उस डिवाइस के लिए जो आपके नेटवर्क पर नहीं है, जैसे माता-पिता का कंप्यूटर: आमंत्रण फ़ाइल उसके मालिक से साझा करें, जो cbb pair -invite से जुड़ता है। यह एक बार, एक घंटे तक, इस ऐप के खुले रहने तक काम करता है।"
+            "value": "उस डिवाइस के लिए जो आपके नेटवर्क पर नहीं है, जैसे माता-पिता का कंप्यूटर: निमंत्रण फ़ाइल उसके मालिक से साझा करें, जो cbb pair -invite से जुड़ता है। यह एक बार, एक घंटे तक, इस ऐप के खुले रहने तक काम करता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Для устройства не из вашей сети, например компьютера родителей: отправьте файл приглашения его владельцу, он подключится командой cbb pair -invite. Приглашение работает один раз, в течение часа, пока приложение открыто."
+            "value": "Для устройства не из вашей сети, например компьютера родителей: отправьте файл приглашения его владельцу, он вступит в группу командой cbb pair -invite. Приглашение работает один раз, в течение часа, пока приложение открыто."
           }
         },
         "sw": {
@@ -6231,7 +6231,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "לקבוצה בלי רכזת משלה: המכשירים נפגשים בממסר, כמו כזה שהוקם עם cbb relay, כל עוד היישום הזה פתוח. הלוח נשאר מוצפן בין המכשירים, אבל הממסר יודע אילו מהם מחוברים ואת הכתובות שלהם, ואילו מדברים זה עם זה, מתי וכמה. השאירו את שני השדות ריקים כדי להפסיק."
+            "value": "לקבוצה בלי רכזת משלה: המכשירים נפגשים בממסר, כמו כזה שהוקם עם cbb relay, כל עוד האפליקציה הזו פתוחה. הלוח נשאר מוצפן בין המכשירים, אבל הממסר יודע אילו מהם מחוברים ואת הכתובות שלהם, ואילו מדברים זה עם זה, מתי וכמה. השאירו את שני השדות ריקים כדי להפסיק."
           }
         },
         "hi": {
@@ -6249,7 +6249,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye kipitishi, kama kile kilichowekwa kwa cbb relay, wakati programu hii iko wazi. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini kipitishi hujua vipi viko mtandaoni na anwani zake, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha."
+            "value": "Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye relei, kama ile iliyowekwa kwa cbb relay, wakati programu hii iko wazi. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini relei hujua vipi viko mtandaoni na anwani zao, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha."
           }
         },
         "zh-Hans": {
@@ -6295,7 +6295,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kwa kikundi kisicho na kitovu: vifaa hukutana kwenye kipitishi. Hakiwezi kusoma ubao wa kunakili, lakini huona vifaa vipi viko mtandaoni na vinazungumza."
+            "value": "Kwa kikundi kisicho na kitovu: vifaa hukutana kwenye relei. Haiwezi kusoma ubao wa kunakili, lakini huona vifaa vipi viko mtandaoni na vinazungumza."
           }
         },
         "zh-Hans": {
@@ -6341,7 +6341,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kwa kompyuta ya msimamizi iliyoibiwa: haibadilishi chochote tena na vingine huikataa hadi kifaa kikuu kiifungue au kiiondoe."
+            "value": "Kwa kompyuta ya msimamizi iliyoibiwa: haibadilishi chochote tena na vingine huikataa hadi kifaa kikuu kiiyeyushe au kiiondoe."
           }
         },
         "zh-Hans": {
@@ -6663,7 +6663,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Weka anwani ya kipitishi pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu."
+            "value": "Weka anwani ya relei pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu."
           }
         },
         "zh-Hans": {
@@ -6801,7 +6801,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kifaa"
+            "value": "Maunzi"
           }
         },
         "zh-Hans": {
@@ -7013,7 +7013,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "כמה זמן העותק האחרון מוצג כהתקבל, לכל הקבוצה. סוד גם יוצא מהלוח כשנגמר הזמן שלו."
+            "value": "כמה זמן ההעתקה האחרונה מוצגת כהעתקה שהתקבלה, לכל הקבוצה. גם סוד יוצא מהלוח כשהזמן שלו נגמר."
           }
         },
         "hi": {
@@ -7037,7 +7037,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "最新副本显示为已收到的时长，对整个群组生效。秘密到期后还会从剪贴板中移除。"
+            "value": "最新副本显示为已收到的时长，对整个群组生效。机密到期后还会从剪贴板中移除。"
           }
         }
       }
@@ -7651,13 +7651,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Así podrá añadir y quitar dispositivos, y pasarse el grupo si se pierde este teléfono."
+            "value": "Así podrá añadir y quitar dispositivos, y mover el grupo a sí mismo si se pierde este teléfono."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "אז הוא יוכל להוסיף ולהסיר מכשירים, ולהעביר אליו את הקבוצה אם הטלפון הזה יאבד."
+            "value": "אז הוא יוכל להוסיף ולהסיר מכשירים, ולהעביר את הקבוצה לעצמו אם הטלפון הזה יאבד."
           }
         },
         "hi": {
@@ -7691,7 +7691,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يذهب إلى حيث تركيز لوحة مفاتيح %@، بعد أن يشغّل مستخدمه اللصق عن بُعد هناك. إذا تُرك فارغًا، يرسل لصق ما في الحافظة."
+            "value": "يذهب إلى حيث تركيز لوحة مفاتيح %@، بعد أن يشغّل مستخدمه اللصق عن بُعد هناك. إذا تُرك فارغًا، يرسل «لصق» ما في الحافظة."
           }
         },
         "es": {
@@ -7749,7 +7749,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "זה יקרה בעוד דקה; עד אז, ״ביטול ההפעלה מחדש או הכיבוי״ עוצר זאת."
+            "value": "זה יקרה בעוד דקה; עד אז, ״ביטול האתחול או הכיבוי״ עוצר זאת."
           }
         },
         "hi": {
@@ -7951,7 +7951,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kimetengeneza ufunguo wake wa siri, ambao hauondoki kamwe na huwezesha vifaa vyako kutambua simu hii. Sasa unganisha kifaa: gusa Unganisha kifaa kipya na uchanganue msimbo wa QR kinachoonyesha."
+            "value": "Imetengeneza ufunguo wake wa siri, ambao hauondoki kamwe na huwezesha vifaa vyako kutambua simu hii. Sasa unganisha kifaa: gusa Unganisha kifaa kipya na uchanganue msimbo wa QR kinaoonyesha."
           }
         },
         "zh-Hans": {
@@ -7973,13 +7973,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Creó el grupo. Este teléfono se pasa el grupo con una clave nueva, y los demás dispositivos lo siguen."
+            "value": "Creó el grupo. Este teléfono mueve el grupo a sí mismo con una clave nueva, y los demás dispositivos lo siguen."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הוא יצר את הקבוצה. הטלפון הזה מעביר אליו את הקבוצה עם מפתח חדש, והמכשירים האחרים הולכים אחריו."
+            "value": "הוא יצר את הקבוצה. הטלפון הזה מעביר את הקבוצה לעצמו עם מפתח חדש, והמכשירים האחרים הולכים אחריו."
           }
         },
         "hi": {
@@ -7991,7 +7991,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот телефон создал группу. Ваш телефон переносит группу на себя с новым ключом, остальные устройства переходят за ним."
+            "value": "Группу создал он. Этот телефон переносит группу на себя с новым ключом, а остальные устройства переходят за ним."
           }
         },
         "sw": {
@@ -8255,7 +8255,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הבעלים שלו מצטרף עם cbb pair -invite. היא עובדת פעם אחת, למשך שעה, כל עוד היישום הזה פתוח."
+            "value": "הבעלים שלו מצטרף עם cbb pair -invite. היא עובדת פעם אחת, למשך שעה, כל עוד האפליקציה הזו פתוחה."
           }
         },
         "hi": {
@@ -8267,7 +8267,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Владелец входит командой cbb pair -invite. Оно действует один раз, час, пока приложение открыто."
+            "value": "Владелец вступает в группу командой cbb pair -invite. Приглашение действует один раз, в течение часа, пока приложение открыто."
           }
         },
         "sw": {
@@ -8439,7 +8439,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מאשר את הטלפון כשהוא רואה את המילים שהוא מציג."
+            "value": "הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מקבל את הטלפון הזה ברגע שהוא רואה את המילים שהטלפון מציג."
           }
         },
         "hi": {
@@ -8571,13 +8571,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede pasar tu grupo a ese dispositivo."
+            "value": "Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede mover tu grupo a ese dispositivo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להעביר את הקבוצה שלך למכשיר הזה."
+            "value": "שמרו את הדף הזה במקום בטוח, הרחק מהטלפונים שלכם. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להעביר את הקבוצה שלכם לאותו מכשיר."
           }
         },
         "hi": {
@@ -9055,7 +9055,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ondoka kwenye kipitishi"
+            "value": "Ondoka kwenye relei"
           }
         },
         "zh-Hans": {
@@ -9635,7 +9635,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה."
+            "value": "נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צרו קבוצה חדשה."
           }
         },
         "hi": {
@@ -9883,7 +9883,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fanya kompyuta ya nyumbani kuwa kituo, kwenye mipangilio yake ya hali ya juu."
+            "value": "Fanya kompyuta ya nyumbani kuwa kituo, kwenye mipangilio yake ya kina."
           }
         },
         "zh-Hans": {
@@ -9969,7 +9969,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Создайте новую группу и подключите к ней свои устройства."
+            "value": "Создайте новую группу и добавьте в неё свои устройства."
           }
         },
         "sw": {
@@ -10101,7 +10101,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "आमंत्रण बनाएँ"
+            "value": "निमंत्रण बनाएँ"
           }
         },
         "ru": {
@@ -10389,7 +10389,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kutana kwenye kipitishi hiki"
+            "value": "Kutana kwenye relei hii"
           }
         },
         "zh-Hans": {
@@ -10435,7 +10435,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mkutane kwenye kipitishi hiki?"
+            "value": "Mkutane kwenye relei hii?"
           }
         },
         "zh-Hans": {
@@ -10515,25 +10515,25 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "सदस्य, बिना रूट"
+            "value": "सदस्य, बिना मुख्य डिवाइस"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Участник, rootless"
+            "value": "Участник, без прав root"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mwanachama, bila root"
+            "value": "Mwanachama, bila kifaa kikuu"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "成员，无 root"
+            "value": "成员，无 root 权限"
           }
         }
       }
@@ -10757,7 +10757,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hamisha kikundi kwenda kifaa kikuu kipya kwa ufunguo wa kurejesha wa kikundi."
+            "value": "Hamishia kikundi kwenye kifaa kikuu kipya kwa ufunguo wa urejeshaji wa kikundi."
           }
         },
         "zh-Hans": {
@@ -10779,7 +10779,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pasar el grupo a este teléfono"
+            "value": "Mover el grupo a este teléfono"
           }
         },
         "he": {
@@ -10819,7 +10819,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نقل إلى مجموعة عرض"
+            "value": "نقل إلى تجميعة"
           }
         },
         "es": {
@@ -11119,13 +11119,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Заглушено, пока администратор не включит"
+            "value": "Заглушено, пока администратор не снимет заглушение"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kimenyamazishwa hadi msimamizi akiondolee"
+            "value": "Kimenyamazishwa hadi msimamizi akiondolee unyamazishaji"
           }
         },
         "zh-Hans": {
@@ -11325,7 +11325,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مجموعة عرض جديدة"
+            "value": "تجميعة جديدة"
           }
         },
         "es": {
@@ -11371,7 +11371,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مجموعة عرض جديدة…"
+            "value": "تجميعة جديدة…"
           }
         },
         "es": {
@@ -11429,7 +11429,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "יש משהו חדש בקבוצה שלך. פתחו את האפליקציה."
+            "value": "יש משהו חדש בקבוצה שלכם. פתחו את האפליקציה."
           }
         },
         "hi": {
@@ -11533,7 +11533,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey не поднесли к телефону и не вставили. Попробуйте снова."
+            "value": "YubiKey не поднесли к телефону и не подключили. Попробуйте снова."
           }
         },
         "sw": {
@@ -11585,7 +11585,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hakuna msimamizi anayeweza kuviendesha huko hadi mtumiaji wake avirudishe kwenye kifaa chenyewe."
+            "value": "Hakuna msimamizi anayeweza kuviendesha huko hadi mtumiaji wake aviwashe tena kwenye kifaa chenyewe."
           }
         },
         "zh-Hans": {
@@ -12413,7 +12413,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kimezimwa: simu hii haikutani na yeyote kwenye kipitishi."
+            "value": "Kimezimwa: simu hii haikutani na yeyote kwenye relei."
           }
         },
         "zh-Hans": {
@@ -12729,7 +12729,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На новом телефоне откройте CBB, нажмите «Присоединиться к группе» и отсканируйте этот код. Устройство без камеры, например компьютер, попросит ввести эти шесть цифр. Не закрывайте этот экран."
+            "value": "На новом телефоне откройте CBB, нажмите «Вступить в группу» и отсканируйте этот код. Устройство без камеры, например компьютер, попросит ввести эти шесть цифр. Не закрывайте этот экран."
           }
         },
         "sw": {
@@ -13051,7 +13051,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Только ключ восстановления меняет главное устройство, и ничто это не отменяет. Выйдите из группы на каждом своём устройстве, затем создайте новую группу и подключите их к ней."
+            "value": "Только ключ восстановления меняет главное устройство, и ничто это не отменяет. Выйдите из группы на каждом своём устройстве, затем создайте новую группу и добавьте их в неё."
           }
         },
         "sw": {
@@ -13425,7 +13425,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Huzipitisha, haisomi hata moja"
+            "value": "Huzipitisha, hakisomi hata moja"
           }
         },
         "zh-Hans": {
@@ -13717,7 +13717,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يرسل لصق ما نسخته إلى الأجهزة الأخرى. تدخل النسخة من جهاز آخر حافظة هذا الهاتف تلقائيًا."
+            "value": "يرسل «لصق» ما نسخته إلى الأجهزة الأخرى. تدخل النسخة من جهاز آخر حافظة هذا الهاتف تلقائيًا."
           }
         },
         "es": {
@@ -13867,7 +13867,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "יישום הטלפון"
+            "value": "אפליקציית הטלפון"
           }
         },
         "hi": {
@@ -14167,7 +14167,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "现在打印此单据或存为 PDF。它只显示这一次。"
+            "value": "现在打印这张纸或存为 PDF。它只显示这一次。"
           }
         }
       }
@@ -14183,7 +14183,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo hardware probado"
+            "value": "Solo hardware verificado"
           }
         },
         "he": {
@@ -14293,7 +14293,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "QR-код для входа в группу"
+            "value": "QR-код для вступления в группу"
           }
         },
         "sw": {
@@ -14499,13 +14499,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جاهز للصق: “%@” من %@."
+            "value": "جاهز للصق: «%@» من %@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Listo para pegar: “%@” de %@."
+            "value": "Listo para pegar: «%@» de %@."
           }
         },
         "he": {
@@ -14713,7 +14713,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anwani ya kipitishi, kama 198.51.100.9:8764"
+            "value": "Anwani ya relei, kama 198.51.100.9:8764"
           }
         },
         "zh-Hans": {
@@ -14759,7 +14759,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ufunguo wa kipitishi, herufi 44"
+            "value": "Ufunguo wa relei, herufi 44"
           }
         },
         "zh-Hans": {
@@ -14793,7 +14793,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "एडमिन का इंतज़ार करते हटाने मुख्य डिवाइस की रिकॉर्ड जगह का %@ भरते हैं: उन एडमिन को ऑनलाइन लाएँ।"
+            "value": "एडमिन की प्रतीक्षा में रुके हटाने के अनुरोध मुख्य डिवाइस की रिकॉर्ड की जगह का %@ भर रहे हैं: उन एडमिन को ऑनलाइन लाएँ।"
           }
         },
         "ru": {
@@ -15109,7 +15109,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מוסר"
+            "value": "הוסר"
           }
         },
         "hi": {
@@ -15127,7 +15127,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kinaondolewa"
+            "value": "Kimeondolewa"
           }
         },
         "zh-Hans": {
@@ -15173,7 +15173,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Liliondolewa awali"
+            "value": "Kiliondolewa awali"
           }
         },
         "zh-Hans": {
@@ -15373,7 +15373,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إعادة تسمية مجموعة العرض"
+            "value": "إعادة تسمية التجميعة"
           }
         },
         "es": {
@@ -15419,7 +15419,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إعادة تسمية مجموعة العرض…"
+            "value": "إعادة تسمية التجميعة…"
           }
         },
         "es": {
@@ -15511,7 +15511,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تجديد مفاتيح المجموعة للمزامنة بعيدًا عن المنزل"
+            "value": "تجديد مفاتيح المجموعة للمزامنة خارج المنزل"
           }
         },
         "es": {
@@ -15529,7 +15529,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "घर से दूर सिंक के लिए समूह की कुंजियाँ नवीनीकृत करें"
+            "value": "घर से बाहर सिंक के लिए समूह की कुंजियाँ नवीनीकृत करें"
           }
         },
         "ru": {
@@ -15547,7 +15547,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "续订群组用于离家同步的密钥"
+            "value": "续期群组用于离家同步的密钥"
           }
         }
       }
@@ -15569,7 +15569,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "חידוש האישור של הטלפון הזה"
+            "value": "חידוש התעודה של הטלפון הזה"
           }
         },
         "hi": {
@@ -15593,7 +15593,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "续订这部手机的证书"
+            "value": "续期这部手机的证书"
           }
         }
       }
@@ -16007,7 +16007,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将它保存在纸上、YubiKey 上，或两者都保存。只有凭它，才能在这部手机丢失时把群组转到另一台主设备。它只在此时显示。"
+            "value": "将它保存在纸上、YubiKey 上，或两者都保存。只有凭它，才能在这部手机丢失时把群组移到另一台主设备。它只在此时显示。"
           }
         }
       }
@@ -16421,7 +16421,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "秘密的有效期"
+            "value": "机密的有效期"
           }
         }
       }
@@ -16621,13 +16621,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviar solo lo que copias"
+            "value": "Enviar automáticamente lo que copias"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שליחת מה שאתם מעתיקים מעצמו"
+            "value": "שליחה אוטומטית של מה שאתם מעתיקים"
           }
         },
         "hi": {
@@ -17001,7 +17001,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "आमंत्रण साझा करें"
+            "value": "निमंत्रण शेयर करें"
           }
         },
         "ru": {
@@ -17139,7 +17139,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "बंद करें"
+            "value": "शटडाउन करें"
           }
         },
         "ru": {
@@ -17455,7 +17455,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלך. הדוח אנונימי."
+            "value": "סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלכם. הדוח אנונימי."
           }
         },
         "hi": {
@@ -17467,7 +17467,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только что сломалось, версия CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный."
+            "value": "Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только то, что сломалось, версии CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный."
           }
         },
         "sw": {
@@ -17777,7 +17777,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "נעצר. היישום אומר למה."
+            "value": "נעצר. האפליקציה אומרת למה."
           }
         },
         "hi": {
@@ -17995,7 +17995,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المزامنة بعيدًا عن المنزل"
+            "value": "المزامنة خارج المنزل"
           }
         },
         "es": {
@@ -18013,7 +18013,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "घर से दूर सिंक"
+            "value": "घर से बाहर सिंक"
           }
         },
         "ru": {
@@ -18191,7 +18191,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הסנכרון כבוי ב: %@."
+            "value": "הסנכרון כבוי במכשירים: %@."
           }
         },
         "hi": {
@@ -18731,7 +18731,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إخراج من مجموعة العرض"
+            "value": "إخراج من التجميعة"
           }
         },
         "es": {
@@ -18915,7 +18915,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط لعدم تلقي نسخ من المجموعة، أو لتلقيها مرة أخرى؛ اضغط مطولًا لمدة محددة"
+            "value": "اضغط لعدم تلقي نسخ من المجموعة، أو لتلقيها مرة أخرى؛ اضغط مطولًا لاختيار مدة"
           }
         },
         "es": {
@@ -18945,7 +18945,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gusa ili usipokee nakala kutoka kwa kikundi, au uzipokee tena; gusa na ushikilie kwa muda fulani"
+            "value": "Gusa ili usipokee nakala kutoka kwa kikundi, au uzipokee tena; gusa na ushikilie ili kuchagua muda"
           }
         },
         "zh-Hans": {
@@ -18961,7 +18961,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط لإيقاف المزامنة أو تشغيلها؛ اضغط مطولًا لمدة محددة"
+            "value": "اضغط لإيقاف المزامنة أو تشغيلها؛ اضغط مطولًا لاختيار مدة"
           }
         },
         "es": {
@@ -18991,7 +18991,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gusa ili kuzima au kuwasha usawazishaji; gusa na ushikilie kwa muda fulani"
+            "value": "Gusa ili kuzima au kuwasha usawazishaji; gusa na ushikilie ili kuchagua muda"
           }
         },
         "zh-Hans": {
@@ -19283,7 +19283,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الرقم السري لـ YubiKey محظور. ألغِ حظره بالـ PUK الخاص به في Yubico Authenticator، ثم حاول مرة أخرى."
+            "value": "رمز PIN لـ YubiKey محظور. ألغِ حظره بالـ PUK الخاص به في Yubico Authenticator، ثم حاول مرة أخرى."
           }
         },
         "es": {
@@ -19341,7 +19341,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "האפליקציה לא יכולה להשתמש במפתח הניהול של ה-YubiKey הזה. השתמש בדף המודפס במקום."
+            "value": "האפליקציה לא יכולה להשתמש במפתח הניהול של ה-YubiKey הזה. השתמשו בדף המודפס במקום זאת."
           }
         },
         "hi": {
@@ -19375,7 +19375,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُشعرك التطبيق بهذه أثناء عمله، وتعرضها ساعة Apple المقترنة أيضًا. يعلم بالحدث عند مزامنته التالية مع المجموعة."
+            "value": "يُشعرك التطبيق بهذه أثناء عمله، وتعرضها Apple Watch المقترنة أيضًا. يعلم بالحدث عند مزامنته التالية مع المجموعة."
           }
         },
         "es": {
@@ -19387,7 +19387,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "היישום מתריע על אלה בזמן שהוא פועל, ו-Apple Watch מצומד מציג אותם גם כן. הוא שומע על אירוע בסנכרון הבא שלו עם הקבוצה."
+            "value": "האפליקציה מתריעה על אלה בזמן שהיא פועלת, ו-Apple Watch מצומד מציג אותם גם כן. היא שומעת על אירוע בסנכרון הבא שלה עם הקבוצה."
           }
         },
         "hi": {
@@ -19433,7 +19433,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "היישום מתריע על אלה בזמן שהוא פועל. הוא שומע על אירוע בסנכרון הבא שלו עם הקבוצה."
+            "value": "האפליקציה מתריעה על אלה בזמן שהיא פועלת. היא שומעת על אירוע בסנכרון הבא שלה עם הקבוצה."
           }
         },
         "hi": {
@@ -19497,7 +19497,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seva mbadala haijibu."
+            "value": "Seva ya akiba haijibu."
           }
         },
         "zh-Hans": {
@@ -19635,7 +19635,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ubao wa kunakili unabaki umesimbwa mwisho hadi mwisho kati ya vifaa: kipitishi hakiwezi kuusoma wala kujifanya kifaa. Lakini, wakati vifaa vinakitumia, hujua vifaa vipi vya kikundi viko mtandaoni na anwani zao za intaneti, na vipi vinazungumza, lini na kiasi gani vinatuma. Kitovu cha kikundi chenyewe hakivujishi chochote kati ya haya. Tumia kipitishi unachoendesha mwenyewe, au ambacho unamwamini mwendeshaji wake kwa hili."
+            "value": "Ubao wa kunakili unabaki umesimbwa mwisho hadi mwisho kati ya vifaa: relei haiwezi kuusoma wala kujifanya kifaa. Lakini, wakati vifaa vinaitumia, hujua vifaa vipi vya kikundi viko mtandaoni na anwani zao za intaneti, na vipi vinazungumza, lini na kiasi gani vinatuma. Kitovu cha kikundi chenyewe hakivujishi chochote kati ya haya. Tumia relei unayoiendesha mwenyewe, au ambayo unamwamini mwendeshaji wake kwa hili."
           }
         },
         "zh-Hans": {
@@ -19951,7 +19951,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Компьютер присоединился, но не подтвердил это. Проверьте cbb status на нём."
+            "value": "Компьютер вступил в группу, но не подтвердил это. Проверьте cbb status на нём."
           }
         },
         "sw": {
@@ -20181,7 +20181,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Устройство включено: его копии снова доходят до группы."
+            "value": "Устройство больше не заглушено."
           }
         },
         "sw": {
@@ -20227,7 +20227,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Устройство присоединилось к группе."
+            "value": "Устройство вступило в группу."
           }
         },
         "sw": {
@@ -20353,7 +20353,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "המכשיר שיוצר את הקבוצה שומר את המפתח הראשי שלה: עדיף מכשיר שתמיד איתך, כמו הטלפון."
+            "value": "המכשיר שיוצר את הקבוצה שומר את המפתח הראשי שלה: עדיף מכשיר שתמיד איתכם, כמו הטלפון."
           }
         },
         "hi": {
@@ -20537,7 +20537,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקבוצה מחזיקה %lld רשומות מגרסה מאוחרת יותר: עדכנו את היישום כדי לקרוא אותן."
+            "value": "הקבוצה מחזיקה %lld רשומות מגרסה מאוחרת יותר: עדכנו את האפליקציה כדי לקרוא אותן."
           }
         },
         "hi": {
@@ -20727,7 +20727,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "जब तक स्वामी निर्णय न ले, समूह कोई रहस्य नहीं भेजता।"
+            "value": "जब तक इसका मालिक निर्णय न ले, समूह कोई सीक्रेट नहीं भेजता।"
           }
         },
         "ru": {
@@ -20745,7 +20745,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在所有者做出决定之前，群组不会发送任何秘密。"
+            "value": "在所有者做出决定之前，群组不会发送任何机密。"
           }
         }
       }
@@ -21123,7 +21123,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجهاز الرئيسي."
+            "value": "انتهت صلاحية مفاتيح المجموعة للمزامنة خارج المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجهاز الرئيسي."
           }
         },
         "es": {
@@ -21141,7 +21141,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "घर से दूर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन मुख्य डिवाइस की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।"
+            "value": "घर से बाहर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन मुख्य डिवाइस की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।"
           }
         },
         "ru": {
@@ -21319,19 +21319,19 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הבעלים של הקבוצה מחליטים בהתראות שלהם."
+            "value": "הבעלים של הקבוצה מחליטים דרך ההתראות שלהם."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समूह का स्वामी अपनी चेतावनियों में फ़ैसला करता है।"
+            "value": "समूह का मालिक अपनी सूचनाओं में निर्णय लेता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Владелец группы решает это в своих предупреждениях."
+            "value": "Владелец группы решает это в своих оповещениях."
           }
         },
         "sw": {
@@ -21365,7 +21365,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הרשומות של הקבוצה עצרו את ההחלפה."
+            "value": "הרשומות של הקבוצה עוצרות את ההחלפה."
           }
         },
         "hi": {
@@ -21389,7 +21389,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "群组的记录已停止交换。"
+            "value": "交换因群组的记录而停止。"
           }
         }
       }
@@ -21423,7 +21423,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ключ восстановления группы ещё не сохранён: без него потеря этого телефона означает создавать группу заново."
+            "value": "Ключ восстановления группы ещё не сохранён: без него при потере этого телефона группу придётся создавать заново."
           }
         },
         "sw": {
@@ -21475,7 +21475,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ufunguo wa kurejesha wa kikundi ulitumika mara mbili, kwa hivyo kikundi kimesimama kabisa."
+            "value": "Ufunguo wa urejeshaji wa kikundi ulitumika mara mbili, kwa hivyo kikundi kimesimama kabisa."
           }
         },
         "zh-Hans": {
@@ -21491,7 +21491,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يُجيب المحور بعيدًا عن المنزل"
+            "value": "لا يُجيب المحور خارج المنزل"
           }
         },
         "es": {
@@ -21509,7 +21509,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "घर से दूर हब जवाब नहीं देता"
+            "value": "घर से बाहर हब जवाब नहीं देता"
           }
         },
         "ru": {
@@ -21555,7 +21555,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "हब टनल के ज़रिए जवाब नहीं देता।"
+            "value": "हब सुरंग के ज़रिए जवाब नहीं देता।"
           }
         },
         "ru": {
@@ -21595,7 +21595,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ה-iPhone לא מחובר למכשיר הזה. פתחו את CBB ב-iPhone ונסו שוב."
+            "value": "ה-iPhone לא מחובר לאותו מכשיר. פתחו את CBB ב-iPhone ונסו שוב."
           }
         },
         "hi": {
@@ -21647,13 +21647,13 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "आमंत्रण %@ तक खुला है। इसकी फ़ाइल केवल उसी व्यक्ति से साझा करें जो जुड़ रहा है।"
+            "value": "निमंत्रण %@ तक खुला है। इसकी फ़ाइल केवल उसी व्यक्ति से साझा करें जो जुड़ रहा है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Приглашение открыто до %@. Отправьте его файл только тому, кто входит."
+            "value": "Приглашение действует до %@. Отправьте его файл только тому, кто вступает."
           }
         },
         "sw": {
@@ -21693,13 +21693,13 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "आमंत्रण %@ तक खुला है। इसकी फ़ाइल केवल उसी व्यक्ति से साझा करें जो जुड़ रहा है: जिसके पास भी यह हो, वह जुड़ने के लिए कह सकता है।"
+            "value": "निमंत्रण %@ तक खुला है। इसकी फ़ाइल केवल उसी व्यक्ति से साझा करें जो जुड़ रहा है: जिसके पास भी यह हो, वह जुड़ने के लिए कह सकता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Приглашение действует до %@. Отправьте файл только тому, кто подключается: любой, у кого он есть, может попросить доступ."
+            "value": "Приглашение действует до %@. Отправьте файл только тому, кто вступает: любой, у кого он есть, может попросить о вступлении."
           }
         },
         "sw": {
@@ -21843,7 +21843,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Orodha ya vituo vya kuingia vya seva za muunganisho imepitwa na wakati."
+            "value": "Orodha ya milango ya kuingilia ya seva za muunganisho imepitwa na wakati."
           }
         },
         "zh-Hans": {
@@ -21957,7 +21957,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo unir al grupo del otro teléfono. Vuelve a intentarlo."
+            "value": "No fue posible unirse al grupo del otro teléfono. Vuelve a intentarlo."
           }
         },
         "he": {
@@ -22193,7 +22193,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמור את שניהם, במקומות שונים."
+            "value": "מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמרו את שניהם, במקומות שונים."
           }
         },
         "hi": {
@@ -22303,7 +22303,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kipitishi hakiikubali simu hii. Kagua anwani na ufunguo wake."
+            "value": "Relei haiikubali simu hii. Kagua anwani na ufunguo wake."
           }
         },
         "zh-Hans": {
@@ -22417,7 +22417,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El túnel a la base %@ no pasa."
+            "value": "El túnel a la base %@ no consigue pasar."
           }
         },
         "he": {
@@ -22527,7 +22527,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Теперь часы администратор. Они могут заморозить компьютер-администратор, удалить устройство, которое не администратор, и выключать функции."
+            "value": "Теперь часы — администратор. Они могут заморозить компьютер-администратор, удалить устройство, которое не администратор, и выключать функции."
           }
         },
         "sw": {
@@ -22561,7 +22561,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "השעון צריך קוד גישה וזיהוי פרק יד, וחייב להיות על פרק היד שלכם. הפעילו אותם ביישום Watch ב-iPhone הזה."
+            "value": "השעון צריך קוד גישה וזיהוי פרק יד, וחייב להיות על פרק היד שלכם. הפעילו אותם באפליקציית Watch ב-iPhone הזה."
           }
         },
         "hi": {
@@ -22791,7 +22791,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקושחה של ה-YubiKey הזה ישנה מ-5.3, שמפתח השחזור צריך. השתמש בדף המודפס במקום."
+            "value": "הקושחה של ה-YubiKey הזה ישנה מ-5.3, שמפתח השחזור צריך. השתמשו בדף המודפס במקום זאת."
           }
         },
         "hi": {
@@ -22849,7 +22849,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Это нельзя отменить. Face ID подтверждает, и устройства группы переходят к этому телефону, как только подключатся."
+            "value": "Это нельзя отменить. Face ID подтверждает это, и устройства группы переходят к этому телефону, как только подключатся."
           }
         },
         "sw": {
@@ -22917,7 +22917,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ثُبّت هذا الحاسوب دون root، لذا يمكن لأي من برامجه قراءة مفاتيحه. لا يمكن أن يكون مشرفًا أبدًا."
+            "value": "ثُبّت CBB على هذا الحاسوب دون root، لذا يمكن لأي من برامجه قراءة مفاتيحه. لا يمكن أن يكون مشرفًا أبدًا."
           }
         },
         "es": {
@@ -23021,7 +23021,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ההעתקה הזו לא נחתמה עבור הטלפון הזה, ולכן אי אפשר לקרוא אותה כאן. העתיקו אותה שוב במכשיר ההוא."
+            "value": "ההעתקה הזו לא הוצפנה עבור הטלפון הזה, ולכן אי אפשר לקרוא אותה כאן. העתיקו אותה שוב במכשיר ההוא."
           }
         },
         "hi": {
@@ -23085,7 +23085,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kifaa hiki na kikundi hawakubaliani kuhusu kifaa kipi ni kikuu."
+            "value": "Kifaa hiki na kikundi havikubaliani kuhusu kifaa kipi ni kikuu."
           }
         },
         "zh-Hans": {
@@ -23183,7 +23183,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此设备已静音至 %@：它的复制内容不会到达群组。"
+            "value": "此设备已静音至 %@：它的副本不会到达群组。"
           }
         }
       }
@@ -23229,7 +23229,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此设备已静音：它的复制内容不会到达群组。"
+            "value": "此设备已静音：它的副本不会到达群组。"
           }
         }
       }
@@ -23435,13 +23435,13 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "התמונה הזו גדולה מ-100MB, ולכן היא נשארת במחשב."
+            "value": "התמונה הזו גדולה מ-100 MB, ולכן היא נשארת במחשב."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "यह चित्र 100 MB से बड़ा है, इसलिए कंप्यूटर पर ही रहता है।"
+            "value": "यह छवि 100 MB से बड़ी है, इसलिए कंप्यूटर पर ही रहती है।"
           }
         },
         "ru": {
@@ -23561,7 +23561,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا ليس رمز QR لنافذة إقران ولا أرقامها الستة. على هاتف من المجموعة، اضغط + لعرضها."
+            "value": "هذا ليس رمز QR لنافذة اقتران ولا أرقامها الستة. على هاتف من المجموعة، اضغط + لعرضها."
           }
         },
         "es": {
@@ -23769,7 +23769,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Эта сеть может резать туннели: включите «Строгие сети» на базе."
+            "value": "Эта сеть может блокировать туннели: включите «Строгие сети» на базе."
           }
         },
         "sw": {
@@ -23941,7 +23941,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "לטלפון הזה עדיין אין את רשימת המכשירים של הקבוצה, ולכן הוא לא יכול לחתום או לקרוא העתקות. נסו שוב כשמחשב יהיה מחובר."
+            "value": "לטלפון הזה עדיין אין את רשימת המכשירים של הקבוצה, ולכן הוא לא יכול להצפין או לקרוא העתקות. נסו שוב כשמחשב יהיה מחובר."
           }
         },
         "hi": {
@@ -24125,7 +24125,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הטלפון הזה נמצא בקבוצה שנוצרה לפני 0.6, וגרסה זו כבר לא מריצה אותה. צא ממנה בטלפון הזה, ואז צור קבוצה חדשה או הצטרף לאחת. שום דבר לא נמחק עד שתצא."
+            "value": "הטלפון הזה נמצא בקבוצה שנוצרה לפני 0.6, וגרסה זו כבר לא מריצה אותה. צאו ממנה בטלפון הזה, ואז צרו קבוצה חדשה או הצטרפו לאחת. שום דבר לא נמחק עד שתצאו."
           }
         },
         "hi": {
@@ -24143,7 +24143,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Simu hii iko katika kikundi kilichoundwa kabla ya 0.6, ambacho toleo hili halikiendeshi tena. Kiondoke kwenye simu hii, kisha unda kikundi kipya au ujiunge na kimoja. Hakuna kinachofutwa hadi uondoke."
+            "value": "Simu hii iko katika kikundi kilichoundwa kabla ya 0.6, ambacho toleo hili halikiendeshi tena. Ondoka kwenye kikundi hicho kwenye simu hii, kisha unda kikundi kipya au ujiunge na kimoja. Hakuna kinachofutwa hadi uondoke."
           }
         },
         "zh-Hans": {
@@ -24171,7 +24171,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הטלפון הזה לא בשום קבוצה, ולכן אין ממה לעזוב."
+            "value": "הטלפון הזה לא בשום קבוצה, ולכן אין ממה לצאת."
           }
         },
         "hi": {
@@ -24223,7 +24223,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "यह फ़ोन समूह में है। घर से दूर यह समूह के हब के ज़रिए सिंक करता है।"
+            "value": "यह फ़ोन समूह में है। घर से बाहर यह समूह के हब के ज़रिए सिंक करता है।"
           }
         },
         "ru": {
@@ -24349,13 +24349,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este teléfono es el dispositivo principal del grupo, y el grupo tiene otros dispositivos: %@. Quítalos antes, o deja que un teléfono administrador se pase el grupo."
+            "value": "Este teléfono es el dispositivo principal del grupo, y el grupo tiene otros dispositivos: %@. Quítalos antes, o deja que un teléfono administrador mueva el grupo a sí mismo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הטלפון הזה הוא המכשיר הראשי של הקבוצה, ולקבוצה יש מכשירים אחרים: %@. הסירו אותם קודם, או תנו לטלפון מנהל להעביר אליו את הקבוצה."
+            "value": "הטלפון הזה הוא המכשיר הראשי של הקבוצה, ולקבוצה יש מכשירים אחרים: %@. הסירו אותם קודם, או תנו לטלפון מנהל להעביר את הקבוצה לעצמו."
           }
         },
         "hi": {
@@ -24625,7 +24625,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La clave propia de este teléfono no está probada, así que el grupo aún no puede exigir claves probadas."
+            "value": "La clave propia de este teléfono no está verificada, así que el grupo aún no puede exigir claves verificadas."
           }
         },
         "he": {
@@ -24643,7 +24643,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ключ этого телефона не доказан, поэтому группа пока не может требовать доказанных ключей."
+            "value": "Ключ этого телефона не проверен, поэтому группа пока не может требовать проверенных ключей."
           }
         },
         "sw": {
@@ -24677,7 +24677,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "זה לא הייתי אני"
+            "value": "לא אני עשיתי את זה"
           }
         },
         "hi": {
@@ -24849,7 +24849,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لنقل المجموعة إلى جهاز آخر منها: على الهاتف، اختر «نقل المجموعة إلى هذا الهاتف» في إعداداته وامسح الرمز؛ وعلى الكمبيوتر، شغّل cbb recovery واكتب المفتاح."
+            "value": "لنقل المجموعة إلى جهاز آخر منها: على الهاتف، اختر «نقل المجموعة إلى هذا الهاتف» في إعداداته وامسح الرمز؛ وعلى الحاسوب، شغّل cbb recovery واكتب المفتاح."
           }
         },
         "es": {
@@ -24861,13 +24861,13 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "כדי להעביר את הקבוצה למכשיר אחר שלה: בטלפון, בחר בהגדרות שלו 'העבר את הקבוצה לטלפון הזה' וסרוק את הקוד; במחשב, הרץ cbb recovery והקלד את המפתח."
+            "value": "כדי להעביר את הקבוצה למכשיר אחר שלה: בטלפון, בחרו בהגדרות שלו ״להעביר את הקבוצה לטלפון הזה״ וסרקו את הקוד; במחשב, הריצו cbb recovery והקלידו את המפתח."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समूह को उसके किसी दूसरे डिवाइस पर ले जाने के लिए: फ़ोन पर, उसकी सेटिंग में 'समूह को इस फ़ोन पर ले जाएँ' चुनें और कोड स्कैन करें; कंप्यूटर पर, cbb recovery चलाएँ और कुंजी लिखें।"
+            "value": "समूह को उसके किसी दूसरे डिवाइस पर ले जाने के लिए: फ़ोन पर, उसकी सेटिंग्स में “समूह को इस फ़ोन पर ले आएँ” चुनें और कोड स्कैन करें; कंप्यूटर पर, cbb recovery चलाएँ और कुंजी लिखें।"
           }
         },
         "ru": {
@@ -24879,7 +24879,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kuhamisha kikundi kwenda kifaa kingine chake: kwenye simu, chagua Hamisha kikundi kwenda simu hii katika mipangilio yake na uchanganue msimbo; kwenye kompyuta, endesha cbb recovery na uandike ufunguo."
+            "value": "Kuhamishia kikundi kwenye kifaa kingine chake: kwenye simu, chagua Hamishia kikundi kwenye simu hii katika mipangilio yake na uchanganue msimbo; kwenye kompyuta, endesha cbb recovery na uandike ufunguo."
           }
         },
         "zh-Hans": {
@@ -25551,7 +25551,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקלד את קוד ה-PIN של ה-YubiKey, ואז החזק את ה-YubiKey צמוד לטלפון או מחובר ליציאת ה-USB-C עד לסיום."
+            "value": "הקלידו את קוד ה-PIN של ה-YubiKey, ואז החזיקו את ה-YubiKey צמוד לטלפון או מחובר ליציאת ה-USB-C עד לסיום."
           }
         },
         "hi": {
@@ -25563,7 +25563,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Введите PIN-код YubiKey, затем поднесите YubiKey к телефону или подключите его к порту USB-C и держите, пока всё не закончится."
+            "value": "Введите PIN YubiKey, затем поднесите YubiKey к телефону или подключите его к порту USB-C и держите, пока всё не закончится."
           }
         },
         "sw": {
@@ -25661,7 +25661,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fungua ugandishaji"
+            "value": "Yeyusha"
           }
         },
         "zh-Hans": {
@@ -25707,7 +25707,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ufungue ugandishaji wa %@?"
+            "value": "Uyeyushe %@?"
           }
         },
         "zh-Hans": {
@@ -25753,7 +25753,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fungua ugandishaji wa kompyuta ya msimamizi"
+            "value": "Yeyusha kompyuta ya msimamizi"
           }
         },
         "zh-Hans": {
@@ -25781,13 +25781,13 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "פירוק קבוצה"
+            "value": "פירוק אוסף"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समूह से अलग करें"
+            "value": "संग्रह हटाएँ"
           }
         },
         "ru": {
@@ -25839,7 +25839,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Включить"
+            "value": "Снять заглушение"
           }
         },
         "sw": {
@@ -25885,7 +25885,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Включить устройство"
+            "value": "Снять заглушение с устройства"
           }
         },
         "sw": {
@@ -26023,7 +26023,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Пока администратор не включит"
+            "value": "Пока администратор не снимет заглушение"
           }
         },
         "sw": {
@@ -26241,13 +26241,13 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "השתמש ב-YubiKey עם מפתח השחזור"
+            "value": "שימוש ב-YubiKey עם מפתח השחזור"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "रिकवरी कुंजी वाला YubiKey उपयोग करें"
+            "value": "रिकवरी कुंजी वाली YubiKey इस्तेमाल करें"
           }
         },
         "ru": {
@@ -26333,7 +26333,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "גרסה %@ מתקנת את זה: יש לעדכן את CBB."
+            "value": "גרסה %@ מתקנת את זה: עדכנו את CBB."
           }
         },
         "hi": {
@@ -26471,7 +26471,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ממתין ליישום: הממסר עובד כל עוד היישום פתוח."
+            "value": "ממתין לאפליקציה: הממסר עובד כל עוד האפליקציה פתוחה."
           }
         },
         "hi": {
@@ -26489,7 +26489,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inasubiri programu: kipitishi hufanya kazi wakati programu iko wazi."
+            "value": "Inasubiri programu: relei hufanya kazi wakati programu iko wazi."
           }
         },
         "zh-Hans": {
@@ -26517,7 +26517,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ממתין לרכזת: פתחו את היישום בבית פעם אחת, ליד מחשב של הקבוצה."
+            "value": "ממתין לרכזת: פתחו את האפליקציה בבית פעם אחת, ליד מחשב של הקבוצה."
           }
         },
         "hi": {
@@ -26655,13 +26655,13 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "כשהטלפון לא ברשת הביתית, הוא מסנכרן דרך מנהרת ה-WireGuard של הרכזת שלכם, מחשב של הקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם המפתחות של הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי שוכח את מפתח המנהרה של הטלפון הזה."
+            "value": "כשהטלפון לא ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלכם, מחשב של הקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם המפתחות של הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. הכיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "जब फ़ोन घर के नेटवर्क पर नहीं होता, तो यह आपके अपने हब की WireGuard टनल से सिंक करता है, जो cbb global hub से सेट किया गया समूह का कंप्यूटर है; उसका पोर्ट इंटरनेट से पहुँच में है, पर केवल समूह की कुंजियों वाले WireGuard से। हब इस फ़ोन को अगली बार घर पर जुड़ने पर जवाब देता है। कुछ और कहीं नहीं जाता, और टनल के बिना कोई कनेक्शन नहीं है। इसे बंद करने पर इस फ़ोन की टनल कुंजी भूल जाती है।"
+            "value": "जब फ़ोन घर के नेटवर्क पर नहीं होता, तो यह आपके अपने हब की WireGuard सुरंग से सिंक करता है, जो cbb global hub से सेट किया गया समूह का कंप्यूटर है; उसका पोर्ट इंटरनेट से पहुँच में है, पर केवल समूह की कुंजियों वाले WireGuard से। हब इस फ़ोन को अगली बार घर पर जुड़ने पर जवाब देता है। कुछ और कहीं नहीं जाता, और सुरंग के बिना कोई कनेक्शन नहीं है। इसे बंद करने पर इस फ़ोन की सुरंग कुंजी भूल जाती है।"
           }
         },
         "ru": {
@@ -26707,7 +26707,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "जब फ़ोन घर के नेटवर्क पर नहीं होता, तो यह आपके अपने हब की WireGuard टनल से एंड-टू-एंड एन्क्रिप्टेड सिंक करता है। कुछ और कहीं नहीं जाता।"
+            "value": "जब फ़ोन घर के नेटवर्क पर नहीं होता, तो यह आपके अपने हब की WireGuard सुरंग से एंड-टू-एंड एन्क्रिप्टेड सिंक करता है। कुछ और कहीं नहीं जाता।"
           }
         },
         "ru": {
@@ -26885,7 +26885,7 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומאשר את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח."
+            "value": "מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומקבל את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח."
           }
         },
         "hi": {
@@ -26965,7 +26965,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بمفتاح خاص بها، يمكن للساعة تجميد حاسوب مشرف، وإزالة جهاز ليس مشرفًا، وإيقاف اللصق عن بُعد والإجراءات السريعة والمزامنة بعيدًا عن المنزل. تحتاج إلى رمز دخول واكتشاف المعصم. افتح CBB على الساعة أولًا."
+            "value": "بمفتاح خاص بها، يمكن للساعة تجميد حاسوب مشرف، وإزالة جهاز ليس مشرفًا، وإيقاف اللصق عن بُعد والإجراءات السريعة والمزامنة خارج المنزل. تحتاج إلى رمز دخول واكتشاف المعصم. افتح CBB على الساعة أولًا."
           }
         },
         "es": {
@@ -26983,7 +26983,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "अपनी कुंजी के साथ, घड़ी किसी एडमिन कंप्यूटर को फ़्रीज़ कर सकती है, गैर-एडमिन डिवाइस हटा सकती है, और रिमोट पेस्ट, त्वरित क्रियाएँ व घर से दूर सिंक बंद कर सकती है। उसे पासकोड और कलाई पहचान चाहिए। पहले घड़ी पर CBB खोलें।"
+            "value": "अपनी कुंजी के साथ, घड़ी किसी एडमिन कंप्यूटर को फ़्रीज़ कर सकती है, गैर-एडमिन डिवाइस हटा सकती है, और रिमोट पेस्ट, त्वरित क्रियाएँ व घर से बाहर सिंक बंद कर सकती है। उसे पासकोड और कलाई पहचान चाहिए। पहले घड़ी पर CBB खोलें।"
           }
         },
         "ru": {
@@ -27081,7 +27081,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Без него потеря этого телефона означает, что придётся создать новую группу и заново подключить к ней все устройства."
+            "value": "Без него потеря этого телефона означает, что придётся создать новую группу и заново добавить в неё все устройства."
           }
         },
         "sw": {
@@ -27109,13 +27109,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir un cambio nuevo encima"
+            "value": "Sobrescribir con un cambio nuevo"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "לכתוב מעליו שינוי חדש"
+            "value": "לדרוס אותו בשינוי חדש"
           }
         },
         "hi": {
@@ -27287,7 +27287,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رقم سري خاطئ. المحاولات المتبقية قبل أن يحظره YubiKey: %lld."
+            "value": "رمز PIN خاطئ. المحاولات المتبقية قبل أن يحظره YubiKey: %lld."
           }
         },
         "es": {
@@ -27379,7 +27379,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عندها تصل أجهزتك إلى المجموعة عبره عندما تكون بعيدة عن المنزل، عبر مُعيد توجيه المشروع على cbb.tools. يجب أن تكون المزامنة بعيدًا عن المنزل مفعّلة هناك مسبقًا؛ ولا يشغّلها إلا مستخدمه."
+            "value": "عندها تصل أجهزتك إلى المجموعة عبره عندما تكون خارج المنزل، عبر مُعيد توجيه المشروع على cbb.tools. يجب أن تكون المزامنة خارج المنزل مفعّلة هناك مسبقًا؛ ولا يشغّلها إلا مستخدمه."
           }
         },
         "es": {
@@ -27397,7 +27397,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "तब घर से दूर होने पर आपके डिवाइस cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए, इसके माध्यम से समूह तक पहुँचते हैं। वहाँ घर से दूर सिंक पहले से चालू होना चाहिए; केवल उसका अपना उपयोगकर्ता इसे चालू करता है।"
+            "value": "तब घर से बाहर होने पर आपके डिवाइस cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए, इसके माध्यम से समूह तक पहुँचते हैं। वहाँ घर से बाहर सिंक पहले से चालू होना चाहिए; केवल उसका अपना उपयोगकर्ता इसे चालू करता है।"
           }
         },
         "ru": {
@@ -27425,7 +27425,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الرقم السري لـ YubiKey"
+            "value": "رمز PIN لـ YubiKey"
           }
         },
         "es": {
@@ -27517,7 +27517,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مجموعة عرض، %lld من %lld متصل"
+            "value": "تجميعة، %lld من %lld متصل"
           }
         },
         "es": {
@@ -27563,7 +27563,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مجموعة عرض، %lld من %lld متصل، يحتاج إلى انتباه"
+            "value": "تجميعة، %lld من %lld متصل، تحتاج إلى انتباه"
           }
         },
         "es": {
@@ -27593,7 +27593,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "mkusanyiko, %lld kati ya %lld mtandaoni, inahitaji uangalifu"
+            "value": "mkusanyiko, %lld kati ya %lld mtandaoni, unahitaji uangalifu"
           }
         },
         "zh-Hans": {

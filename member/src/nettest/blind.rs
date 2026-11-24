@@ -36,7 +36,7 @@ pub struct Blind {
 
 fn random_key() -> ServerKey {
     loop {
-        if let Ok(k) = ServerKey::from_scalar(&cbb_core::certs::random_bytes()) {
+        if let Ok(k) = ServerKey::from_scalar(&cbb_core::bytes::random_bytes()) {
             return k;
         }
     }
@@ -69,7 +69,7 @@ fn blank(kind: u64, group: [u8; 16], version: u64) -> Credential {
 impl Blind {
     pub fn new(n: usize) -> Blind {
         let root = random_key();
-        let (k1, k2) = pq::recovery_keys(&cbb_core::certs::random_bytes()).unwrap();
+        let (k1, k2) = pq::recovery_keys(&cbb_core::bytes::random_bytes()).unwrap();
         let k1 = SigningKey::from(&k1).verifying_key().to_sec1_point(false).as_bytes().to_vec();
         let rec = Recovery::new(Key::es256(k1.clone()), Key::new(ALG_SLH_DSA, k2.public())).unwrap();
         let gid = group_id(&Key::es256(root.public()), &rec).0;
@@ -80,7 +80,7 @@ impl Blind {
             recovery: k1,
             recovery2: k2.public(),
             gid,
-            tag: cbb_core::certs::random_bytes(),
+            tag: cbb_core::bytes::random_bytes(),
             period_key: random_key(),
             servers,
             ids: (0..n).map(|_| cbb_core::certs::random_id()).collect(),

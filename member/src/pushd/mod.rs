@@ -981,7 +981,7 @@ impl Service {
         let tls = cbb_core::tls::registration_server(&cfg.cert, &cfg.key, push::ALPN, &clock)?;
         let loaded = match &cfg.state {
             Some(path) => saved::load(path, cfg.new_state)?,
-            None => saved::Loaded { secret: cbb_core::certs::random_bytes(), ver: 0, bindings: HashMap::new() },
+            None => saved::Loaded { secret: cbb_core::bytes::random_bytes(), ver: 0, bindings: HashMap::new() },
         };
         let tcp = TcpListener::bind(cfg.listen).context(format!("cannot listen on {}", cfg.listen))?;
         let addr = tcp.local_addr().context("cannot listen")?;

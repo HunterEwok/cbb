@@ -93,10 +93,10 @@ impl Service {
                 let (paste_kind, text) = match what {
                     What::Text(t) => ("text".into(), t),
                     What::Secret(t) => ("secret".into(), t),
-                    What::Media(id) => ("media".into(), crate::certs::hex(&id)),
+                    What::Media(id) => ("media".into(), cbb_core::bytes::hex(&id)),
                 };
                 let body = crate::records::Command {
-                    id: crate::certs::hex(&t.id),
+                    id: cbb_core::bytes::hex(&t.id),
                     by: by.id.clone(),
                     mode: if way == Way::Type { "type" } else { "paste" }.into(),
                     enter,
@@ -104,7 +104,7 @@ impl Service {
                     text,
                     ..Default::default()
                 };
-                let from = Sender { key: crate::certs::hex(&t.signer.0), verified: true, name: by.name.clone() };
+                let from = Sender { key: cbb_core::bytes::hex(&t.signer.0), verified: true, name: by.name.clone() };
                 let secrets_stopped = st.stop != cbb_core::records::eval::Stop::None;
                 let res = self.paste_from(
                     &from,
@@ -117,12 +117,12 @@ impl Service {
             }
             Order::Action(name) => {
                 let body = crate::records::Command {
-                    id: crate::certs::hex(&t.id),
+                    id: cbb_core::bytes::hex(&t.id),
                     by: by.id.clone(),
                     action: name,
                     ..Default::default()
                 };
-                let from = Sender { key: crate::certs::hex(&t.signer.0), verified: true, name: by.name.clone() };
+                let from = Sender { key: cbb_core::bytes::hex(&t.signer.0), verified: true, name: by.name.clone() };
                 let res = self.act_from(&from, &body, || actions::Signer {
                     root: by.root,
                     role: by.role.clone(),
@@ -338,7 +338,7 @@ impl Service {
         let res = wire::CommandResult { id: body.id.clone(), status: "refused".into(), ..Default::default() };
         let until = Instant::now() + COPY_WAIT;
         let c = loop {
-            if let Some(c) = live.board.current().filter(|c| crate::certs::hex(&c.id) == body.text) {
+            if let Some(c) = live.board.current().filter(|c| cbb_core::bytes::hex(&c.id) == body.text) {
                 break c;
             }
             if Instant::now() >= until {

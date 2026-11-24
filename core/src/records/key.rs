@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use p256::ecdsa::Signature;
 
 use super::Rule;
-use crate::certs::sha256;
+use crate::bytes::sha256;
 use crate::format::cbor::Value;
 use crate::format::key::{self as fkey, Alg};
 use crate::format::sig;
@@ -317,7 +317,7 @@ mod hash_tests {
             Key::es256(es.public().to_vec()),
         ];
         for k in keys.iter().chain(keys.clone().iter()) {
-            assert_eq!(k.hash(), KeyHash(crate::certs::sha256(&k.encode())));
+            assert_eq!(k.hash(), KeyHash(crate::bytes::sha256(&k.encode())));
             assert_eq!(k.hash(), k.format().hash());
         }
         assert_eq!(keys[0], keys[4]);

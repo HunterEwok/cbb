@@ -80,7 +80,7 @@ impl Live {
         let (mut order, rest): (Vec<_>, Vec<_>) =
             self.mesh.hub_order().into_iter().partition(|id| connected.contains(id));
         order.extend(rest);
-        let order: Vec<String> = order.iter().map(|id| cbb_core::certs::hex(&id.0)).collect();
+        let order: Vec<String> = order.iter().map(|id| cbb_core::bytes::hex(&id.0)).collect();
         let mut a = away.live_status_as(standby, &order)?;
         let entries_held = self.mesh.entries().and_then(|e| e.current(crate::uptime::wall_ms())).is_some();
         a.forwarder = away.live_forwarder(entries_held);
@@ -115,7 +115,7 @@ impl Live {
     /// through or tries first in the group's order of hubs; None without
     /// sync away from home or without VLESS.
     pub fn update_way(&self) -> Option<serde_json::Value> {
-        let order: Vec<String> = self.mesh.hub_order().iter().map(|d| cbb_core::certs::hex(&d.0)).collect();
+        let order: Vec<String> = self.mesh.hub_order().iter().map(|d| cbb_core::bytes::hex(&d.0)).collect();
         self.away.get()?.update_way_in(&order)
     }
 
@@ -157,7 +157,7 @@ impl Live {
         let held: Vec<String> = away.hubs_kept().into_iter().map(|h| h.device).collect();
         for peer in connected {
             let due = self.toward.lock().unwrap().get(&peer).is_none_or(|t| t.elapsed() >= RETUNNEL);
-            if due && !held.contains(&cbb_core::certs::hex(&peer.0)) {
+            if due && !held.contains(&cbb_core::bytes::hex(&peer.0)) {
                 self.toward.lock().unwrap().insert(peer, Instant::now());
                 self.tunnel_toward(&peer);
             }
@@ -380,7 +380,7 @@ impl Live {
     }
 
     fn own_tunnel_addr(&self) -> std::net::Ipv6Addr {
-        crate::tunnel::addr(&cbb_core::certs::hex(&self.me.0)).unwrap_or(std::net::Ipv6Addr::UNSPECIFIED)
+        crate::tunnel::addr(&cbb_core::bytes::hex(&self.me.0)).unwrap_or(std::net::Ipv6Addr::UNSPECIFIED)
     }
 
     /// A `result` with a hub's offer came from peer.
@@ -732,7 +732,7 @@ impl Live {
         });
         let pins: Vec<[u8; 32]> = away.hub_forwarder_pins().unwrap_or_default().into_iter().chain(project).collect();
         let faces = self.mesh.faces();
-        pins.iter().find_map(|p| faces.kept(p).tag()).map(|t| cbb_core::certs::hex(&t)).unwrap_or_default()
+        pins.iter().find_map(|p| faces.kept(p).tag()).map(|t| cbb_core::bytes::hex(&t)).unwrap_or_default()
     }
 
     /// On the root, the forwarder its own hub serves with gets a face of its
@@ -771,7 +771,7 @@ impl Live {
         let start = |ip: std::net::IpAddr| {
             crate::hub::Hub::start(
                 &key,
-                &cbb_core::certs::hex(&self.me.0),
+                &cbb_core::bytes::hex(&self.me.0),
                 obfuscation.as_ref(),
                 peers.clone(),
                 std::net::SocketAddr::from((ip, port)),

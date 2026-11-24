@@ -1,18 +1,17 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The hardware test bench
 
-The plan for testing Connect Beyond Borders on real devices before each release, starting with 0.4,
+The plan for testing Connect Beyond Borders on real devices before each release,
 and how the bench that runs it is built. The bench lives in `tools/bench` (being built, see
 "Order of work" at the end); this document is its specification. CI and its jobs are in
 [maintaining.md](maintaining.md#ci).
 
 ## 1. Goal
 
-Before 0.4 is released, an automated bench of the maintainer's real devices runs every case that
+Before each release, an automated bench of the maintainer's real devices runs every case that
 matters to users and reports pass or fail with logs, with no person copying text by hand.
-The same bench then runs before every later release.
 
-CI already covers a lot in containers and on hosted runners (unit tests with `-race`, the
+CI covers a lot in containers and on hosted runners (unit tests with `-race`, the
 Docker e2e of three members, Wayland and X11 under headless compositors, the Windows
 installer on windows-latest, the cross tests between Go, Swift and Kotlin, cbb without its helper
 among other members). The bench covers what CI cannot:
@@ -43,9 +42,8 @@ In scope for 0.4:
 | Security | section 9 (top priority for everything off the home network) |
 | Debug/release error details | each tested error shows the user message; with `CBB_DEBUG=1` the underlying error too; the log always has it |
 
-Out of scope for 0.4: the iPhone app (paused until the Apple developer
-account; the Swift kit stays covered by CI), the ESP32 firmware, the ZX Spectrum Next and
-the Arduino, app store and TestFlight builds, performance beyond the limits in section 10.
+Out of scope for 0.4: the iPhone app (the Swift kit stays covered by CI), the ESP32 firmware,
+the ZX Spectrum Next and the Arduino, app store and TestFlight builds, performance beyond the limits in section 10.
 
 ## 3. Devices under test
 
@@ -265,7 +263,7 @@ one F-case every hour. Pass when every text arrived, memory and file descriptors
 service stay flat (sampled every 5 minutes), and no service restarted except by a test. The fleet's
 `E10-soak` scenario runs it in containers (`-soak-for 24h`): four members, a cut, a frozen
 member or a killed service each hour. The long run is not a condition of a release in 0.6; it
-becomes one in 0.7 ([roadmap](../roadmap.md), item 70).
+becomes one in 0.7 ([roadmap](../roadmap.md), item 71).
 
 ## 11. Automation
 

@@ -201,7 +201,7 @@ impl Store {
         }
         // Then the blob: the parts' bytes one after another, sealed a
         // segment at a time.
-        let tmp = self.dir.join(format!("{}.new", hex(&cbb_core::certs::random_bytes::<8>())));
+        let tmp = self.dir.join(format!("{}.new", hex(&cbb_core::bytes::random_bytes::<8>())));
         let res = (|| -> Result<Blob> {
             let mut out = io::BufWriter::new(File::create(&tmp).context("write the blob")?);
             let segments = total.div_ceil(SEGMENT as u64);
@@ -447,7 +447,7 @@ mod tests {
     use super::{BlobKey, KEEP, Source, Store};
 
     fn new_key() -> [u8; 32] {
-        cbb_core::certs::random_bytes()
+        cbb_core::bytes::random_bytes()
     }
 
     /// The cache keeps the KEEP newest blobs and drops the rest, and drops

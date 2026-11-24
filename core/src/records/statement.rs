@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use super::Rule;
 use super::eval::State;
 use super::key::{self, ALG_XWING, DeviceId, GroupId, Key, KeyHash, RecordId, XWING_PUBLIC};
-use crate::certs::sha256;
+use crate::bytes::sha256;
 use crate::format::cbor::Value;
 use crate::identity::ExternalKey;
 

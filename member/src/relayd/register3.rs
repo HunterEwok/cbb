@@ -19,7 +19,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 use cbb_core::blind::credential::{Credential, TYPE_HUBS, TYPE_MEMBERS, TYPE_PERIOD};
-use cbb_core::certs::{self, Cert};
+use cbb_core::certs::Cert;
 use gotatun::x25519;
 
 use super::period::Shown;
@@ -151,7 +151,7 @@ impl Inner {
         // A device is known by its pseudonym, the hash of its server key as
         // the members' credential lists it.
         let leaf = cbb_core::records::key::Key::es256(cert.public_key().to_vec()).hash().0;
-        let eph = x25519::StaticSecret::from(certs::random_bytes::<32>());
+        let eph = x25519::StaticSecret::from(cbb_core::bytes::random_bytes::<32>());
         let e = x25519::PublicKey::from(&eph);
         s.write_all(&wire3::challenge(e.as_bytes(), !self.cfg.open))
             .and_then(|()| s.flush())
@@ -186,13 +186,13 @@ impl Inner {
         };
         // The period's tag names the group here, as the list of refused
         // groups names it.
-        let tag = format!("period {}", certs::hex(&shows.hubs.group));
+        let tag = format!("period {}", cbb_core::bytes::hex(&shows.hubs.group));
         let shown = Shown {
             signer: shows.hubs.signer_hash().0,
             hubs: shows.hubs.version,
             members: Some((shows.members.version, shows.members.members.clone())),
         };
-        let psk = certs::random_bytes::<32>();
+        let psk = cbb_core::bytes::random_bytes::<32>();
         let raw_clone = raw.try_clone().map_err(|e| Error::msg(format!("relay: {e}")))?;
         let mut st = self.lock();
         let id = st.next_id();

@@ -1046,7 +1046,7 @@ pub fn list_hash(bytes: &[u8]) -> [u8; 32] {
     m.extend_from_slice(LABEL_LIST.as_bytes());
     m.push(0);
     m.extend_from_slice(bytes);
-    crate::certs::sha256(&m)
+    crate::bytes::sha256(&m)
 }
 
 /// The list a recovery record names by its hash (rule 33): the IDs of the

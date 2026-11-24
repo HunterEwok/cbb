@@ -214,24 +214,37 @@ extension Optional where Wrapped == DeviceFilter {
 struct GroupHeader: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var textSize
 
     var body: some View {
         let online = model.devices.filter { $0.online || $0.isSelf }.count
         VStack(alignment: .leading, spacing: 2) {
-            // The count above the switches when the two do not fit in a
-            // line: a narrow sidebar, the largest text sizes.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: Tokens.spacingMedium) {
-                    Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
-                        // Wraps instead of standing on one clipped line.
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    SyncSwitches()
-                }
+            // The count above the switches at the accessibility text sizes
+            // always, and otherwise when the two do not fit in a line (a
+            // narrow sidebar). Not left to the fit at those sizes: the
+            // accessibility audit steps through them itself and caught the
+            // count mid-way from one layout to the other, as clipped text
+            // (the tiles' DeviceSubtitle does the same).
+            if textSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
                     Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
                     SyncSwitches()
+                }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Tokens.spacingMedium) {
+                        Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
+                            // Wraps instead of standing on one clipped line.
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        SyncSwitches()
+                    }
+                    VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+                        Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        SyncSwitches()
+                    }
                 }
             }
             // An admin's mute of this phone, which an admin ends.

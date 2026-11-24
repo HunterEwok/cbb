@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use cbb_core::certs::b64;
+use cbb_core::bytes::b64;
 use cbb_core::release::{self, File, Seen};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

@@ -18,7 +18,7 @@
 
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
-use cbb_core::certs::b64;
+use cbb_core::bytes::b64;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
@@ -412,7 +412,7 @@ mod enclave {
             };
             let public = public_of(&key)?;
             let k = Key { key, blob: blob.to_vec(), public };
-            let digest = cbb_core::certs::sha256(b"sekey: the key loads");
+            let digest = cbb_core::bytes::sha256(b"sekey: the key loads");
             k.sign_digest(&digest).map_err(|e| e.context("the Secure Enclave's key does not open"))?;
             Ok(k)
         }
@@ -587,7 +587,7 @@ mod tests {
         }
         assert!(available());
         let k = Key::new().unwrap();
-        let digest = cbb_core::certs::sha256(b"a record");
+        let digest = cbb_core::bytes::sha256(b"a record");
         k.sign_digest(&digest).unwrap();
         let again = Key::load(&k.blob()).unwrap();
         assert_eq!(again.public(), k.public());

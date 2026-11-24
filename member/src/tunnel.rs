@@ -29,11 +29,12 @@ use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
 use smoltcp::socket::tcp;
 use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr};
 
-use crate::certs::{DeviceId, b64};
+use crate::certs::DeviceId;
 use crate::error::{Context, Error, Result};
 use crate::files;
 use crate::sys;
 use crate::wire::TunnelOffer;
+use cbb_core::bytes::b64;
 
 /// The tunnel state's file in the state directory.
 pub const FILE_NAME: &str = "tunnel.json";
@@ -1203,7 +1204,7 @@ impl Link {
         me: &cbb_core::records::DeviceId,
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Result<Link> {
-        let own = crate::tunnel_addr(&cbb_core::certs::hex(&me.0))
+        let own = crate::tunnel_addr(&cbb_core::bytes::hex(&me.0))
             .ok_or_else(|| Error::msg("this device's ID gives no tunnel address"))?;
         let peer = addr(&hub.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", hub.device)))?;
         let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;

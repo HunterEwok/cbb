@@ -38,7 +38,7 @@ names; the exact size.
 
 ## Exceptions
 
-Both are your choice:
+Each is your choice:
 
 - A **Roku** added with `cbb remote add -roku -consent` gets its text as plain HTTP on your
   home network ([keyboards and TVs](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
@@ -58,6 +58,8 @@ Both are your choice:
 | Others on your home network | that devices there run Connect Beyond Borders, their random device IDs and your group's tag in mDNS, and which of them talk and how much; never device names or contents | nothing to do; a computer publishes only on the home networks it knows |
 | Others on a network away from home (a café, a hotel) | that the device talks WireGuard, or with VLESS that it opens a TLS connection to your hub or forwarder, when and how much | a system VPN hides even that |
 | The forwarder (yours, or the project's at `cbb.tools`) | the addresses that encrypted packets come from and go to your hub, when, and how large they are; not which group or device they belong to | run your own, or forward a port to your hub and use none |
+| The push service (the project's at `cbb.tools`) | a phone's push token and the address of the member that sends to it, when a notice goes; the notice is sealed to the phone, so not what it says | turn off **Notify me when the app is closed** in the app's Settings |
+| Apple, Google, or your UnifiedPush server | that a push went to the phone, and when; nothing in it | the same setting |
 | A blind relay | which devices of a group are online now and talk to each other, when and how much; it keeps none of it | run your own, or use a hub |
 | The company that hosts a forwarder or relay | the addresses that talk to it, when and how much | a system VPN on the device |
 | GitHub, or `dl.cbb.tools` when GitHub does not answer | your address and that you use Connect Beyond Borders, at each update check and download; nothing about the group | `sudo cbb update -auto off`, or a mirror of your own (`-mirror`) |

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::{Code, Refusal, bad_args, json, refuse};
-use crate::certs::b64;
+use crate::bytes::b64;
 use crate::error::{Error, Result};
 
 /// The arguments of `parse_body`.

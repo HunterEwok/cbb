@@ -225,7 +225,7 @@ pub fn container(tag: &str, card: &[u8], object: &[u8; LEN]) -> crate::error::Re
         return Err(crate::error::Error::msg(Reason::CardKey.message()));
     }
     let ext = crate::certs::seq(&[&oid(&extension_oid()), &tagged(0x04, &tagged(0x04, object))]);
-    let throwaway = p256::ecdsa::SigningKey::from_bytes(&crate::certs::random_bytes::<32>().into())
+    let throwaway = p256::ecdsa::SigningKey::from_bytes(&crate::bytes::random_bytes::<32>().into())
         .map_err(|_| crate::error::Error::msg("no throwaway key"))?;
     let cn = alloc::format!("{CN_PREFIX}{tag}");
     crate::certs::self_signed_cert(&cn, card, &ext, &mut |tbs| {

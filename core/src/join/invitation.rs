@@ -170,8 +170,8 @@ impl Invitation {
     /// bytes, which readers refuse (`invite/shape`).
     pub fn new(paths: Vec<Path>, profile: Profile) -> Invitation {
         Invitation {
-            id: not_zero(crate::certs::random_bytes),
-            secret: not_zero(crate::certs::random_bytes),
+            id: not_zero(crate::bytes::random_bytes),
+            secret: not_zero(crate::bytes::random_bytes),
             paths,
             profile,
         }
@@ -184,11 +184,11 @@ impl Invitation {
     /// joiner derives the same secret ([`Invitation::typed`]). Gives the
     /// invitation and its digits.
     pub fn home() -> (Invitation, String) {
-        let id = not_zero(crate::certs::random_bytes);
+        let id = not_zero(crate::bytes::random_bytes);
         let digits = loop {
             // 10^6 divides 2^32 unevenly: draws from the top are taken
             // again, so every code is as likely.
-            let n = u32::from_be_bytes(crate::certs::random_bytes::<4>());
+            let n = u32::from_be_bytes(crate::bytes::random_bytes::<4>());
             if n < u32::MAX - u32::MAX % 1_000_000 {
                 break alloc::format!("{:06}", n % 1_000_000);
             }
@@ -742,8 +742,8 @@ impl WindowLink {
         }
         t.push_str(&alloc::format!(
             "fp={}&i={}&c={}",
-            crate::certs::hex(&self.fp.0),
-            crate::certs::hex(&self.id),
+            crate::bytes::hex(&self.fp.0),
+            crate::bytes::hex(&self.id),
             self.digits
         ));
         t

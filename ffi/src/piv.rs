@@ -8,7 +8,6 @@
 //! YubiKey on USB-C, only moves the bytes of the card's CCID interface and
 //! the core frames them (cbb_member::piv::ccid).
 
-use cbb_core::certs;
 use cbb_core::error::{Error, Result};
 use cbb_core::secret::Zeroizing;
 use cbb_member::piv::{Card, recovery};
@@ -100,7 +99,7 @@ struct Args {
     group: String,
     /// With seal: the card's management key, when it is not the
     /// factory one and not PIN-protected.
-    #[serde(with = "certs::b64", default)]
+    #[serde(with = "cbb_core::bytes::b64", default)]
     management: Vec<u8>,
     /// How the app reaches the card: `apdu` (the default) or `ccid_bulk`.
     #[serde(default)]
@@ -109,7 +108,7 @@ struct Args {
 
 fn b64(b: &[u8]) -> Value {
     #[derive(Serialize)]
-    struct B<'a>(#[serde(with = "certs::b64")] &'a [u8]);
+    struct B<'a>(#[serde(with = "cbb_core::bytes::b64")] &'a [u8]);
     serde_json::to_value(B(b)).unwrap_or(Value::Null)
 }
 

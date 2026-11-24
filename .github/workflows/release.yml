@@ -9,7 +9,8 @@
 # certificate in the secrets, the signed Windows programs, and with the
 # feed's key, the OpenWrt apk feed.
 # It makes a draft release, only after the iPhone app's CodeQL analysis
-# (codeql-swift.yml) passes on the tag, which takes about half an hour. The
+# (codeql-swift.yml) passed for the tagged commit: on main after the merge, or
+# here when main's run did not analyze that commit (about half an hour). The
 # maintainer signs and publishes it with release-sign publish; published.yml
 # then updates the Homebrew tap.
 name: release
@@ -521,10 +522,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+  swift-analyzed:
+    # Whether CodeQL's analysis of the iPhone app already passed for the tagged
+    # commit on main: codeql-swift.yml runs after a merge that changed the app,
+    # and a tag goes on main's commit, so the release need not analyze it again
+    # (half an hour of a macOS runner). Any doubt, an answer GitHub cannot
+    # give included, runs it.
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: read
+    outputs:
+      done: ${{ steps.find.outputs.done }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          n=$(gh api "repos/$GITHUB_REPOSITORY/code-scanning/analyses?ref=refs/heads/main&tool_name=CodeQL&per_page=100" \
+            --jq "[.[] | select(.commit_sha == \"$SHA\" and .category == \"/language:swift\" and .error == \"\")] | length" 2>/dev/null) || n=0
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "main's CodeQL analysis of the iPhone app passed for $SHA: not run again"
+            echo done=true >>"$GITHUB_OUTPUT"
+          else
+            echo "no passed analysis of the iPhone app for $SHA on main: the release runs it"
+            echo done=false >>"$GITHUB_OUTPUT"
+          fi
+
   codeql-swift:
     # The iPhone app's CodeQL analysis must pass before a release; it runs on
-    # pull requests only when the app changes.
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    # pull requests only when the app changes, and here only when main's run
+    # did not analyze the tagged commit (swift-analyzed).
+    needs: swift-analyzed
+    if: github.event_name == 'push' && github.ref_type == 'tag' && needs.swift-analyzed.outputs.done != 'true'
     uses: ./.github/workflows/codeql-swift.yml # zizmor: ignore[self-repository]
     permissions:
       actions: read
@@ -692,8 +725,13 @@ jobs:
   release:
     # Only a tag pushed makes the draft, whatever else ran: the positive
     # condition, not "not a rehearsal".
-    if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [release-files, codeql-swift]
+    # The analysis passed here, or on main for the same commit (swift-analyzed).
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref_type == 'tag'
+      && needs.release-files.result == 'success'
+      && (needs.codeql-swift.result == 'success'
+      || (needs.codeql-swift.result == 'skipped' && needs.swift-analyzed.outputs.done == 'true')) }}
+    needs: [release-files, codeql-swift, swift-analyzed]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

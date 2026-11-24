@@ -144,7 +144,7 @@ fn encode(tag: &Option<Vec<u8>>, salt: &[u8], chain: &[Vec<u8>], tpm: Option<&[V
 pub(super) fn to_json(format: u64, v: &Value<'_>) -> Option<Json> {
     let b = |n: u16| v.get(n).and_then(Value::as_bytes).map(b64_value);
     let mut e = json!({"key": "member"});
-    let tag = v.get(1).and_then(Value::as_bytes).map(cbb_core::certs::hex);
+    let tag = v.get(1).and_then(Value::as_bytes).map(cbb_core::bytes::hex);
     let chain = |n: u16| -> Option<Json> {
         Some(Json::Array(v.get(n)?.as_array()?.iter().filter_map(Value::as_bytes).map(b64_value).collect()))
     };

@@ -77,12 +77,4 @@ object Discovery {
         }
         return "cbb://pair?addr=$addr&fp=$fingerprint&i=$id&c=$digits"
     }
-
-    /**
-     * The members to dial: those browsing found, and the devices of the
-     * group with a known address that it did not find, as a member in
-     * another subnet, which mDNS does not reach (docs/protocol.md, section 9).
-     */
-    fun withKnown(found: Set<FoundMember>, known: Set<String>, group: String): Set<FoundMember> =
-        found + known.filter { d -> found.none { it.device == d } }.map { FoundMember(it, group) }
 }

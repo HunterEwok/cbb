@@ -57,22 +57,59 @@ func roundTrip(t *testing.T, l tunnel.VLESS) bool {
 	return back
 }
 
-// roundTrips runs roundTrip for each client at once: a packet that does
-// not come back is waited for five seconds.
-func roundTrips(t *testing.T, ls ...tunnel.VLESS) []bool {
+// watches holds the Watch of each test's web server, by its address.
+var watches sync.Map
+
+// refused tells whether the forwarder's side refused a client that start
+// runs and whose local UDP port it returns: start runs after the mark, so
+// only the client's own requests count. A packet that comes back is let
+// through; a refusal is what the web server shows (vlesstest.Watch), not
+// a time without an answer.
+func refused(t *testing.T, l tunnel.VLESS, start func() netip.AddrPort) bool {
 	t.Helper()
-	back, errs := make([]bool, len(ls)), make([]error, len(ls))
-	var wg sync.WaitGroup
-	for i, l := range ls {
-		wg.Go(func() { back[i], errs[i] = tryRoundTrip(l) })
+	v, ok := watches.Load(l.Endpoint)
+	if !ok {
+		t.Fatal("no watch of the web server")
 	}
-	wg.Wait()
-	for _, err := range errs {
-		if err != nil {
+	w := v.(*vlesstest.Watch)
+	mark := w.Mark()
+	to := start()
+	conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(to))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	back := make(chan bool, 1)
+	go func() {
+		b := make([]byte, 64)
+		n, err := conn.Read(b)
+		back <- err == nil && string(b[:n]) == "a packet"
+	}()
+	conn.Write([]byte("a packet"))
+	select {
+	case <-back:
+		return false
+	case <-w.Refused(mark):
+		return true
+	}
+}
+
+// refusedClient is refused for a client of l.
+func refusedClient(t *testing.T, l tunnel.VLESS) bool {
+	t.Helper()
+	var c *Client
+	defer func() {
+		if c != nil {
+			c.Close()
+		}
+	}()
+	return refused(t, l, func() netip.AddrPort {
+		var err error
+		if c, err = Dial(l); err != nil {
 			t.Fatal(err)
 		}
-	}
-	return back
+		return c.Addr()
+	})
 }
 
 func tryRoundTrip(l tunnel.VLESS) (bool, error) {
@@ -191,7 +228,8 @@ func behindWebServerNaming(t *testing.T, cfg ServerConfig, id string, client net
 	}
 	t.Cleanup(func() { s.Close() })
 	back := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(s.Port())))
-	web, cert := vlesstest.WebServerNaming(t, path, func() string { return back }, client)
+	web, cert, w := vlesstest.WebServerWatched(t, path, func() string { return back }, client)
+	watches.Store(web, w)
 	TrustForTests(cert)
 	// A group's packets come under its own path.
 	const group = "a-group-of-its-own"
@@ -211,7 +249,7 @@ func TestThroughXHTTP(t *testing.T) {
 	if err := l.Check(); err != nil {
 		t.Fatal(err)
 	}
-	if roundTrip(t, l) {
+	if !refusedClient(t, l) {
 		t.Fatal("a group that was not let in got through")
 	}
 	if err := s.AddUser(id); err != nil {
@@ -224,20 +262,19 @@ func TestThroughXHTTP(t *testing.T) {
 	other.Path = path + "x"
 	otherID.ID, _ = tunnel.NewVLESSID()
 	wrongName.ServerName = "www.example.org"
-	back := roundTrips(t, other, otherID, wrongName)
-	if back[0] {
+	if !refusedClient(t, other) {
 		t.Fatal("another path got through")
 	}
-	if back[1] {
+	if !refusedClient(t, otherID) {
 		t.Fatal("another group's ID got through")
 	}
-	if back[2] {
+	if !refusedClient(t, wrongName) {
 		t.Fatal("a site whose certificate does not carry the name got through")
 	}
 	if err := s.RemoveUser(id); err != nil {
 		t.Fatal(err)
 	}
-	if roundTrip(t, l) {
+	if !refusedClient(t, l) {
 		t.Fatal("a group that was shut out got through")
 	}
 }
@@ -441,7 +478,7 @@ func TestRegistrationStream(t *testing.T) {
 	if throughMirror(t, l) {
 		t.Error("the registrations' user ID reached the mirror")
 	}
-	if roundTrip(t, l) {
+	if !refusedClient(t, l) {
 		t.Error("the registrations' user ID reached the forwarder's UDP port")
 	}
 }
@@ -461,15 +498,14 @@ func TestGroupPaths(t *testing.T) {
 	base, other := l, l
 	base.Path = path
 	other.Path = path + "/not-a-group-path-at-all"
-	back := roundTrips(t, base, other)
-	if back[0] {
+	if !refusedClient(t, base) {
 		t.Error("a group's packets passed under the registrations' path")
 	}
-	if back[1] {
+	if !refusedClient(t, other) {
 		t.Error("a group's packets passed under a path that is not let in")
 	}
 	s.RemovePath("a-group-of-its-own")
-	if roundTrip(t, l) {
+	if !refusedClient(t, l) {
 		t.Error("a group's packets passed under its path once it was taken back")
 	}
 	if err := s.AddPath("short"); err == nil {

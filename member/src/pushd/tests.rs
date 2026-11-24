@@ -37,14 +37,47 @@ struct Got {
 struct Fake {
     got: Mutex<Vec<Got>>,
     answer: Mutex<Option<Outcome>>,
-    /// How long it takes to answer.
+    /// How long it takes to answer: for the tests of a wall clock's
+    /// second, whose rule is about the time itself.
     delay: Mutex<Duration>,
+    /// Sends held with the platform until the test lets them go: a send
+    /// that is "on its way" for as long as the test needs, told by an
+    /// event rather than by a time.
+    gate: Mutex<Gate>,
+    gate_changed: std::sync::Condvar,
     /// Its send panics, as a platform's code might.
     panics: std::sync::atomic::AtomicBool,
 }
 
+/// What the fake platform's gate holds.
+#[derive(Default)]
+struct Gate {
+    /// The sends that reached the platform so far.
+    entered: usize,
+    /// How many of the next sends to hold.
+    hold: usize,
+    /// Tickets of the sends held so far, and how many were let go.
+    held: usize,
+    released: usize,
+}
+
 impl Platform for Fake {
     fn send(&self, d: &Delivery<'_>) -> Outcome {
+        {
+            let mut g = self.gate.lock().unwrap();
+            g.entered += 1;
+            if g.hold > 0 {
+                g.hold -= 1;
+                let ticket = g.held;
+                g.held += 1;
+                self.gate_changed.notify_all();
+                while g.released <= ticket {
+                    g = self.gate_changed.wait(g).unwrap();
+                }
+            } else {
+                self.gate_changed.notify_all();
+            }
+        }
         let delay = *self.delay.lock().unwrap();
         std::thread::sleep(delay);
         assert!(!self.panics.load(Ordering::SeqCst), "the platform's send failed");
@@ -60,6 +93,30 @@ impl Platform for Fake {
 }
 
 impl Fake {
+    /// Holds the next n sends with the platform until release lets each
+    /// go; returns how many sends had reached it before them.
+    fn hold(&self, n: usize) -> usize {
+        let mut g = self.gate.lock().unwrap();
+        g.hold += n;
+        g.entered
+    }
+
+    /// Waits until the platform has been reached by n sends in all: the
+    /// event that a send is on its way.
+    fn wait_entered(&self, n: usize) {
+        let mut g = self.gate.lock().unwrap();
+        while g.entered < n {
+            g = self.gate_changed.wait(g).unwrap();
+        }
+    }
+
+    /// Lets every held send go on.
+    fn release(&self) {
+        let mut g = self.gate.lock().unwrap();
+        g.released = g.held;
+        self.gate_changed.notify_all();
+    }
+
     /// The bodies it was handed (challenges alone left out).
     fn bodies(&self) -> usize {
         self.got.lock().unwrap().iter().filter(|g| g.body.is_some()).count()
@@ -72,7 +129,7 @@ impl Fake {
 }
 
 fn period(name: &str) -> SigningKey {
-    SigningKey::from_slice(&cbb_core::certs::sha256(name.as_bytes())).unwrap()
+    SigningKey::from_slice(&cbb_core::bytes::sha256(name.as_bytes())).unwrap()
 }
 
 fn point(k: &SigningKey) -> Vec<u8> {
@@ -416,7 +473,6 @@ fn a_send_that_does_not_hold_is_refused_and_too_many_close_the_connection() {
 #[test]
 fn a_body_on_its_way_is_never_made_a_repeat() {
     let w = world(Budgets { unconfirmed: (3600.0, 100.0), unconfirmed_token: (3600.0, 100.0), ..Budgets::default() });
-    *w.fake.delay.lock().unwrap() = Duration::from_millis(1500);
     let phone = send_key(3);
     let token = [7u8; 32];
     let t0 = now_seq(0);
@@ -424,20 +480,21 @@ fn a_body_on_its_way_is_never_made_a_repeat() {
     let (k2, c2) = member([5; 16], 2, "period", 1, true);
     let addr = w.service.addr();
     let pin = w.pin;
+    let before = w.fake.hold(1);
     let first = std::thread::spawn(move || {
         let mut c = Client::connect(addr, pin, k1, &refs(&c1)).unwrap();
         send(&mut c, &send_key(3), push::ENV_APNS, &[7u8; 32], t0, &body(1))
     });
-    std::thread::sleep(Duration::from_millis(500));
+    w.fake.wait_entered(before + 1);
     let mut c = Client::connect(addr, pin, k2, &refs(&c2)).unwrap();
     // While the first is with the platform: try again shortly.
     let r = send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(1));
     assert_eq!((r.status, r.retry_ms), (push::SENT_FAILED, Some(IN_FLIGHT_WAIT_MS)));
+    w.fake.release();
     assert_eq!(first.join().unwrap().status, push::SENT);
     // Taken: now it is a repeat.
     assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(1)).status, push::SENT_REPEAT);
     // A platform that said later: the next try is sent, not a repeat.
-    *w.fake.delay.lock().unwrap() = Duration::ZERO;
     *w.fake.answer.lock().unwrap() = Some(Outcome::Later(Duration::from_secs(1)));
     assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(2)).status, push::SENT_FAILED);
     *w.fake.answer.lock().unwrap() = None;
@@ -751,7 +808,7 @@ fn live_push_to_a_phone() {
     let frame = STANDARD.decode(env("CBB_PUSH_LIVE_REG")).unwrap();
     let r = push::Registration::read(&frame::read(&frame, 1 << 16).unwrap().map).unwrap();
     let on = r.on.as_ref().expect("the registration has push off");
-    let id: [u8; 16] = cbb_core::certs::random_bytes();
+    let id: [u8; 16] = cbb_core::bytes::random_bytes();
     let body = match std::env::var("CBB_PUSH_LIVE_KIND").as_deref() {
         Ok("waits") => push::Body::Waits { id, origin: [1; 16] },
         _ => push::Body::Event { id, event: push::EVENT_JOINED, device: None, time_ms: Some(now_ms()) },
@@ -876,10 +933,10 @@ fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
     let g0 = w.fake.got.lock().unwrap()[0].clone();
     assert_eq!((g0.env, g0.token, g0.body), (push::ENV_APNS, vec![5; 32], Some(push::MAX_BODY)));
     // A hub received the same copy and made the same body: the service
-    // drops the repeat.
+    // drops the repeat (its answer read, nothing reached the platform).
+    let done = s.handled();
     s.copy(&g, Role::Hub, &[phone], None, &waits);
-    assert!(wait_for(|| s.waiting() == 0));
-    std::thread::sleep(Duration::from_millis(200));
+    s.wait_handled(done + 1);
     assert_eq!(w.fake.bodies(), 1);
     // The phone's app is open: nothing goes, and a body queued before it
     // connected is dropped.
@@ -979,11 +1036,12 @@ fn the_sender_drops_a_send_the_service_finds_stale() {
         }),
     };
     s.registration(&g, &phone, PHONE, &read_reg(&r.write().unwrap()));
+    let done = s.handled();
     s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
     assert_eq!(s.waiting(), 1);
     // The service answered (its tag is held) and the job did not come back.
-    assert!(wait_for(|| w.service.stats().0 == 1 && s.waiting() == 0));
-    std::thread::sleep(Duration::from_secs(1));
+    s.wait_handled(done + 1);
+    assert_eq!(w.service.stats().0, 1);
     assert_eq!(s.waiting(), 0);
     assert!(w.fake.got.lock().unwrap().is_empty());
     assert_eq!(s.held(), 1, "the registration is kept");
@@ -1228,14 +1286,16 @@ fn two_sends_at_once_keep_the_higher_number() {
     let t0 = now_seq(0);
     send(&mut a, &phone, push::ENV_APNS, &token, t0, &body(1));
     confirm(&w, &mut a, &phone, &token, t0 + 1, 2);
-    *w.fake.delay.lock().unwrap() = Duration::from_millis(400);
+    // Both with the platform at once: a first, then b while a is held.
+    let before = w.fake.hold(2);
     let (ra, rb) = std::thread::scope(|sc| {
         let ha = sc.spawn(|| S { slot: slot_a, ..s(&phone, push::ENV_APNS, &token, t0 + 10) }.send(&mut a, &body(3)));
-        std::thread::sleep(Duration::from_millis(100));
+        w.fake.wait_entered(before + 1);
         let hb = sc.spawn(|| S { slot: slot_b, ..s(&phone, push::ENV_APNS, &token, t0 + 20) }.send(&mut b, &body(4)));
+        w.fake.wait_entered(before + 2);
+        w.fake.release();
         (ha.join().unwrap(), hb.join().unwrap())
     });
-    *w.fake.delay.lock().unwrap() = Duration::ZERO;
     assert_eq!((ra.status, rb.status), (push::SENT, push::SENT));
     let tok = w.service.inner.keyed(b"token", &push::ENV_APNS.to_be_bytes(), &token);
     let mut seqs: Vec<(u8, u64)> =
@@ -1288,10 +1348,11 @@ fn after_ahead_the_sender_takes_the_phones_next_registration_once() {
     let ahead = t0 + 3 * push::MAX_SEQ_AHEAD_MS;
     s.registration(&g, &phone, PHONE, &read_reg(&registration(55, ahead, push::KIND_COPIES, [8; 32])));
     s.registration(&g, &other, PHONE, &read_reg(&registration(55, ahead, push::KIND_COPIES, [8; 32])));
+    let done = s.handled();
     s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
-    assert!(wait_for(|| w.service.stats().0 == 1 && s.waiting() == 0));
-    // The answer is read after the job leaves the queue.
-    std::thread::sleep(Duration::from_secs(1));
+    // The answer is read after the job leaves the queue: done with it.
+    s.wait_handled(done + 1);
+    assert_eq!((w.service.stats().0, s.waiting()), (1, 0));
     assert!(w.fake.got.lock().unwrap().is_empty());
     // Before the renewal is given, a lower number is not taken.
     s.registration(&g, &phone, PHONE, &read_reg(&registration(55, t0, push::KIND_COPIES, [9; 32])));
@@ -1375,9 +1436,12 @@ fn the_previous_face_serves_push_only_until_the_phone_registers_again() {
     let late = DeviceId([4; 16]);
     s.registration(&g, &late, PHONE, &read_reg(&registration_in([3; 16], [60; 16], t0, push::KIND_EVENTS, [6; 32])));
     *faces.previous_expires.lock().unwrap() = 1;
+    let done = s.handled();
     s.event(&g, None, &[3; 16], push::EVENT_JOINED, None, true, Some(7));
-    assert!(wait_for(|| s.waiting() == 0));
-    std::thread::sleep(Duration::from_millis(300));
+    // A body for each phone: the one on the current face sent, the late
+    // one's dropped for its face.
+    s.wait_handled(done + 2);
+    assert_eq!(s.waiting(), 0);
     assert_eq!(w.fake.bodies(), 3, "only the phone on the current face got the event");
     let renew = s.renewals(&late);
     assert_eq!(renew.len(), 1);
@@ -1458,14 +1522,14 @@ fn a_binding_made_again_while_a_first_send_is_away_takes_no_challenge_of_its_ear
     let (phone, token) = (send_key(3), [71u8; 32]);
     let t0 = now_seq(0);
     let mut b = conn(&w, 2, 2);
-    *w.fake.delay.lock().unwrap() = Duration::from_millis(2700);
+    // The first send stays with the platform until the end.
+    let before = w.fake.hold(1);
     let held = {
         let mut a = conn(&w, 1, 1);
         let k = send_key(3);
         std::thread::spawn(move || send(&mut a, &k, push::ENV_APNS, &token, t0, &body(1)).status)
     };
-    std::thread::sleep(Duration::from_millis(300));
-    *w.fake.delay.lock().unwrap() = Duration::ZERO;
+    w.fake.wait_entered(before + 1);
     let other = [2u8; 16];
     // Another first send files the binding; the phone confirms over its challenge.
     assert_eq!(S { slot: other, ..s(&phone, push::ENV_APNS, &token, t0) }.send(&mut b, &body(2)).status, push::SENT);
@@ -1486,6 +1550,7 @@ fn a_binding_made_again_while_a_first_send_is_away_takes_no_challenge_of_its_ear
     let _ =
         S { slot: other, challenge: Some(spent), ..s(&phone, push::ENV_APNS, &token, t0 + 4) }.send(&mut b, &body(6));
     assert_ne!(confirmed(&w, &token), Some(true), "a challenge of the earlier life confirmed the binding made again");
+    w.fake.release();
     let _ = held.join().unwrap();
     assert!(w.service.inner.lock().first_born.is_empty());
     w.service.stop();

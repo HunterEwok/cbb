@@ -22,9 +22,10 @@ use der::asn1::{GeneralizedTime, ObjectIdentifier, UtcTime};
 use der::{DateTime, Encode};
 use sha2::{Digest, Sha256};
 
+use crate::bytes::random_bytes;
 use crate::certs::{
     Cert, DeviceId, OID_CLIENT_AUTH, OID_COMMON_NAME, OID_EC_PUBLIC_KEY, OID_ECDSA_SHA256, OID_P256, OID_SERVER_AUTH,
-    bit_string, bit_string_bits, check_admin_ca, check_root, oid, random_bytes, seq, set, tagged,
+    bit_string, bit_string_bits, check_admin_ca, check_root, oid, seq, set, tagged,
 };
 use crate::error::{Error, Result};
 

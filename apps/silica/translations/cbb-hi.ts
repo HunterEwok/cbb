@@ -77,11 +77,11 @@
     <name>BleKeyboard</name>
     <message>
         <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
-        <translation>ब्लूटूथ बंद है। फ़ोन की सेटिंग में उसे चालू करें, फिर कीबोर्ड दोबारा चालू करें।</translation>
+        <translation>ब्लूटूथ बंद है। फ़ोन की सेटिंग्स में उसे चालू करें, फिर कीबोर्ड दोबारा चालू करें।</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
-        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग से इस फ़ोन से कनेक्ट करें।</translation>
+        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग्स से इस फ़ोन से कनेक्ट करें।</translation>
     </message>
     <message>
         <source>The clipboard holds no text.</source>
@@ -242,7 +242,7 @@
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
-        <translation>इसे पूर्ववत नहीं किया जा सकता। व्यवस्थापक PIN इसकी पुष्टि करता है, और समूह के डिवाइस जुड़ते ही इस फ़ोन का अनुसरण करते हैं।</translation>
+        <translation>इसे पलटा नहीं जा सकता। एडमिन PIN इसकी पुष्टि करता है, और समूह के डिवाइस जुड़ते ही इस फ़ोन का अनुसरण करते हैं।</translation>
     </message>
     <message>
         <source>Use a YubiKey instead</source>
@@ -534,7 +534,7 @@
     </message>
     <message>
         <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
-        <translation>YubiKey ने उम्मीद के मुताबिक जवाब नहीं दिया। उसे फिर से लगाएँ और दोबारा कोशिश करें।</translation>
+        <translation>YubiKey ने अपेक्षित जवाब नहीं दिया। उसे फिर से लगाएँ और दोबारा कोशिश करें।</translation>
     </message>
     <message>
         <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
@@ -693,7 +693,7 @@
     </message>
     <message>
         <source>%1 moved the group to itself: it is the group's main device now.</source>
-        <translation>%1 ने समूह अपने पास ले लिया: अब यह समूह का मुख्य डिवाइस है।</translation>
+        <translation>%1 समूह को अपने पास ले आया: अब यह समूह का मुख्य डिवाइस है।</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -748,7 +748,7 @@
     </message>
     <message>
         <source>Removals that wait for admins fill %1 of the main device's room for records: bring those admins online.</source>
-        <translation>एडमिन का इंतज़ार करते हटाने मुख्य डिवाइस की रिकॉर्ड जगह का %1 भरते हैं: उन एडमिन को ऑनलाइन लाएँ।</translation>
+        <translation>एडमिन की प्रतीक्षा में रुके हटाने के अनुरोध मुख्य डिवाइस की रिकॉर्ड की जगह का %1 भर रहे हैं: उन एडमिन को ऑनलाइन लाएँ।</translation>
     </message>
     <message>
         <source>Removals wait until every admin has seen them.</source>
@@ -811,7 +811,7 @@
     </message>
     <message>
         <source>Or paste the invitation's text, cbb://join…</source>
-        <translation>या निमंत्रण का पाठ चिपकाएँ, cbb://join…</translation>
+        <translation>या निमंत्रण का पाठ पेस्ट करें, cbb://join…</translation>
     </message>
     <message>
         <source>Point the camera at the invitation's QR code.</source>
@@ -935,7 +935,7 @@
     </message>
     <message>
         <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
-        <translation>जब तक यह दिखता है, नया डिवाइस इसे अपनी ब्लूटूथ सेटिंग में “CBB keyboard” नाम से ढूँढ लेता है।</translation>
+        <translation>जब तक यह दिखता है, नया डिवाइस इसे अपनी ब्लूटूथ सेटिंग्स में “CBB keyboard” नाम से ढूँढ लेता है।</translation>
     </message>
     <message>
         <source>Act as a Bluetooth keyboard</source>
@@ -963,7 +963,7 @@
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
-        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग से इस फ़ोन से कनेक्ट करें।</translation>
+        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग्स से इस फ़ोन से कनेक्ट करें।</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1182,7 +1182,7 @@
     </message>
     <message>
         <source>the keyboard's device</source>
-        <translation>कीबोर्ड वाले डिवाइस</translation>
+        <translation>कीबोर्ड वाला डिवाइस</translation>
     </message>
 </context>
 <context>
@@ -1197,7 +1197,7 @@
     </message>
     <message>
         <source>A secret</source>
-        <translation>एक रहस्य</translation>
+        <translation>एक सीक्रेट</translation>
     </message>
     <message>
         <source>A video</source>
@@ -1213,7 +1213,7 @@
     </message>
     <message>
         <source>The files are too large: up to 50 MB go together.</source>
-        <translation>फ़ाइलें बहुत बड़ी हैं: एक साथ 50 MB तक भेजे जा सकते हैं।</translation>
+        <translation>फ़ाइलें बहुत बड़ी हैं: एक साथ 50 MB तक की फ़ाइलें भेजी जा सकती हैं।</translation>
     </message>
     <message>
         <source>There is nothing to send: no file could be read.</source>
@@ -1301,15 +1301,15 @@
     <name>PastePage</name>
     <message>
         <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
-        <translation>पेस्ट ज़्यादातर ऐप के लिए ठीक है; टाइप करना उन ऐप के लिए जो पेस्ट नहीं लेते, और केवल 4 KB तक। Enter टर्मिनल में कमांड चला देता है, इसलिए कंप्यूटर इसे तभी लेता है जब उसके उपयोगकर्ता ने अनुमति दी हो। गोपनीय टेक्स्ट कंप्यूटर के लॉग या क्लिपबोर्ड में कोई निशान नहीं छोड़ता।</translation>
+        <translation>पेस्ट ज़्यादातर ऐप के लिए ठीक है; टाइप करना उन ऐप के लिए जो पेस्ट नहीं लेते, और केवल 4 KB तक। Enter टर्मिनल में कमांड चला देता है, इसलिए कंप्यूटर इसे तभी लेता है जब उसके उपयोगकर्ता ने अनुमति दी हो। सीक्रेट कंप्यूटर के लॉग या क्लिपबोर्ड में कोई निशान नहीं छोड़ता।</translation>
     </message>
     <message>
         <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
-        <translation>तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</translation>
+        <translation>तस्वीर या फ़ाइलें समूह में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</translation>
     </message>
     <message>
         <source>A secret</source>
-        <translation>एक गोपनीय टेक्स्ट</translation>
+        <translation>एक सीक्रेट</translation>
     </message>
     <message>
         <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
@@ -1439,7 +1439,7 @@
     </message>
     <message>
         <source>Recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी</translation>
+        <translation>रिकवरी कुंजी</translation>
     </message>
     <message>
         <source>Save as PDF</source>
@@ -1553,11 +1553,11 @@
     </message>
     <message>
         <source>Renew the group's keys for sync away from home</source>
-        <translation>घर से दूर सिंक के लिए समूह की कुंजियाँ नवीनीकृत करें</translation>
+        <translation>घर से बाहर सिंक के लिए समूह की कुंजियाँ नवीनीकृत करें</translation>
     </message>
     <message>
         <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
-        <translation>घर से दूर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन मुख्य डिवाइस की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।</translation>
+        <translation>घर से बाहर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन मुख्य डिवाइस की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।</translation>
     </message>
     <message>
         <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
@@ -1595,7 +1595,7 @@
     </message>
     <message>
         <source>%1 s</source>
-        <translation>%1 से</translation>
+        <translation>%1 सेकंड</translation>
     </message>
     <message>
         <source>A device becomes an admin</source>
@@ -1751,7 +1751,7 @@
     </message>
     <message>
         <source>Recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी</translation>
+        <translation>रिकवरी कुंजी</translation>
     </message>
     <message>
         <source>Secret lifetime</source>
@@ -1771,7 +1771,7 @@
     </message>
     <message>
         <source>Some admins keep weaker keys; they stay until removed</source>
-        <translation>कुछ व्यवस्थापकों की कुंजियाँ कमज़ोर हैं; हटाए जाने तक वे बने रहते हैं</translation>
+        <translation>कुछ एडमिन की कुंजियाँ कमज़ोर हैं; हटाए जाने तक वे बने रहते हैं</translation>
     </message>
     <message>
         <source>System</source>
@@ -1822,7 +1822,7 @@
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
-        <translation>समूह के स्वामी से इसके अधिकार लौटाने को कहें।</translation>
+        <translation>समूह के मालिक से इसके अधिकार लौटाने को कहें।</translation>
     </message>
     <message>
         <source>CBB %1 is available.</source>
@@ -1942,7 +1942,7 @@
     </message>
     <message>
         <source>The group sends no secrets until its owner decides.</source>
-        <translation>जब तक स्वामी निर्णय न ले, समूह कोई रहस्य नहीं भेजता।</translation>
+        <translation>जब तक इसका मालिक निर्णय न ले, समूह कोई सीक्रेट नहीं भेजता।</translation>
     </message>
     <message>
         <source>The group sends nothing to this device.</source>
@@ -1950,7 +1950,7 @@
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
-        <translation>समूह का स्वामी अपनी चेतावनियों में फ़ैसला करता है।</translation>
+        <translation>समूह का मालिक अपनी सूचनाओं में निर्णय लेता है।</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>

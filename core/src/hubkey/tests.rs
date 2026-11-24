@@ -227,7 +227,7 @@ fn the_offers_id_follows_from_the_tag() {
     // SHA-256("cbb offer id v1\0" ‖ 0x01 × 32), its first 16 bytes.
     let mut m = b"cbb offer id v1\0".to_vec();
     m.extend_from_slice(&a);
-    assert_eq!(offer_id(&a)[..], crate::certs::sha256(&m)[..16]);
+    assert_eq!(offer_id(&a)[..], crate::bytes::sha256(&m)[..16]);
 }
 
 /// `hubs` says exactly one of stopped and serving, each the flag 1, and

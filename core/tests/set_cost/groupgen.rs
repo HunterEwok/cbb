@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
-use cbb_core::certs::sha256;
+use cbb_core::bytes::sha256;
 use cbb_core::identity::ExternalKey;
 use cbb_core::records::body::*;
 use cbb_core::records::eval::{Input, State, evaluate};

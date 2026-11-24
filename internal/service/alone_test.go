@@ -794,14 +794,14 @@ func adminPhone(t *testing.T, bin string, h *hub) (pi *testService, next func(pr
 // the app's "Add a device" does, and starts a service named name that
 // joins by the window's QR code; it returns that service once the window
 // says it joined.
-func joinPhoneWindow(t *testing.T, h *hub, next func(prefix string) string, in io.Writer, name string) *testService {
+func joinPhoneWindow(t *testing.T, h *hub, next func(prefix string) string, in io.Writer, name string, env ...string) *testService {
 	t.Helper()
 	fmt.Fprintln(in, "WINDOW")
 	link := next("WINDOW ")
 	if !strings.HasPrefix(link, "cbb://pair?") {
 		t.Fatalf("the phone's window: %q", link)
 	}
-	s := startService(t, h, name)
+	s := startEnv(t, h, name, env...)
 	if _, err := s.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
 		t.Fatalf("%s joining the phone's window: %v; the phone: %s", name, err, next("WINDOW FAILED "))
 	}
@@ -1202,7 +1202,9 @@ func TestAloneRemotePaste(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	dir := joinAlone(t, bin, pi)
 	pa := pi.addr()
-	small := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
+	// The small device's clock, for its limit of one a second.
+	clock := newTestClock(t, 0)
+	small := startAloneEnv(t, bin, dir, []string{clock.env()}, "-no-mdns", "-no-listen", "-peer", pa)
 	waitFor(t, "the small device connected", func() bool {
 		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(m.Status.Peers) == 1
@@ -1220,7 +1222,7 @@ func TestAloneRemotePaste(t *testing.T) {
 		if err := paste(text, h); err == nil || !strings.Contains(err.Error(), reason) {
 			t.Errorf("%s: %v, want %q", what, err, reason)
 		}
-		time.Sleep(time.Second) // one paste a second from one sender
+		clock.nextSecond(t) // one paste a second from one sender
 	}
 	wantRefused("off", "ls", control.Header{}, "remote paste is off on this device")
 	if m, err := small.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil || m.Status == nil || m.Status.Paste == nil || !m.Status.Paste.On {
@@ -1267,7 +1269,7 @@ func TestAloneRemotePaste(t *testing.T) {
 	if m := <-got; string(m.Payload) != "echo hi" || m.Method != "type" || m.Enter || m.Name != "pi" {
 		t.Errorf("tmux got %q %+v", m.Payload, m.Header)
 	}
-	time.Sleep(time.Second)
+	clock.nextSecond(t)
 	wantRefused("a line break", "two\nlines", control.Header{}, "the text has a line break")
 	wantRefused("enter", "ls", control.Header{Enter: true}, "without Enter only")
 	wantRefused("locked", "locked", control.Header{}, "the tmux client is locked")
@@ -1395,7 +1397,9 @@ func TestAloneQuickActions(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	dir := joinAlone(t, bin, pi)
 	pa := pi.addr()
-	small := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
+	// The small device's clock, for its limit of one a second.
+	clock := newTestClock(t, 0)
+	small := startAloneEnv(t, bin, dir, []string{clock.env()}, "-no-mdns", "-no-listen", "-peer", pa)
 	waitFor(t, "the small device connected", func() bool {
 		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(m.Status.Peers) == 1
@@ -1404,7 +1408,7 @@ func TestAloneQuickActions(t *testing.T) {
 	// qemu it can come a moment after the small device's side.
 	waitFor(t, "pi has the small device", func() bool { return len(pi.status(t).Peers) == 1 })
 	run := func(name string) error {
-		time.Sleep(time.Second) // one action a second from one sender
+		clock.nextSecond(t) // one action a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "small", Name: name}, "")
 		return err
 	}
@@ -1667,11 +1671,12 @@ func TestFFIPhoneRemoves(t *testing.T) {
 		t.Fatalf("the phone's group: %q", made)
 	}
 	var h hub
-	admit := func(name string) (*testService, string) {
-		s := joinPhoneWindow(t, &h, next, in, name)
+	admit := func(name string, env ...string) (*testService, string) {
+		s := joinPhoneWindow(t, &h, next, in, name, env...)
 		return s, s.status(t).Device
 	}
-	pc, pcID := admit("pc")
+	clock := newTestClock(t, 0) // pc's, for its limit of one paste a second
+	pc, pcID := admit("pc", clock.env())
 	second, id := admit("second")
 	call := func(req string) string {
 		fmt.Fprintln(in, "CALL "+req)
@@ -1697,7 +1702,7 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	if m, err := pc.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil || m.Status == nil || m.Status.Paste == nil || !m.Status.Paste.On {
 		t.Fatalf("paste-receive on: %+v, %v", m, err)
 	}
-	time.Sleep(time.Second)
+	clock.nextSecond(t)
 	if got := manage(`{"action":"paste","device":"` + pcID + `","text":"\u001b[2J"}`); !strings.Contains(got, "nothing to paste") {
 		t.Fatalf("a paste of only control characters: %s", got)
 	}

@@ -49,7 +49,7 @@ fn endpoint(v: &Value<'_>) -> Result<SocketAddr> {
 
 /// A VLESS user ID as text, as the tunnel's settings carry it.
 fn user_id(b: &[u8; 16]) -> String {
-    let h = cbb_core::certs::hex(b);
+    let h = cbb_core::bytes::hex(b);
     format!("{}-{}-{}-{}-{}", &h[..8], &h[8..12], &h[12..16], &h[16..20], &h[20..])
 }
 
@@ -102,7 +102,7 @@ pub fn read(hub: &DeviceId, v: &Value<'_>) -> Result<Offer> {
     let next_vless = v.get(11).map(|x| vless(forwarder_at()?, x)).transpose()?;
     let confirm = v.get(8).and_then(Value::as_bytes).and_then(|b| <[u8; 32]>::try_from(b).ok());
     let hub = Hub {
-        device: cbb_core::certs::hex(&hub.0),
+        device: cbb_core::bytes::hex(&hub.0),
         key,
         psk: Vec::new(),
         endpoints,
@@ -155,7 +155,7 @@ impl Away {
         {
             (self.log)(&format!(
                 "cbb: the offer of hub {} confirms no key this device sent it",
-                cbb_core::certs::hex(&hub.0[..4])
+                cbb_core::bytes::hex(&hub.0[..4])
             ));
         }
         let mut cur = self.st.lock().unwrap();

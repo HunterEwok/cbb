@@ -226,7 +226,7 @@ const WINDOWS_TASK: &str = "cbb update";
 /// A time of day of this device's own for a timer without a random delay:
 /// between 1:00 and 6:59.
 fn at() -> (u8, u8) {
-    let r = cbb_core::certs::random_bytes::<2>();
+    let r = cbb_core::bytes::random_bytes::<2>();
     (1 + r[0] % 6, r[1] % 60)
 }
 

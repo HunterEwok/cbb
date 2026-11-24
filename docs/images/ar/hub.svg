@@ -48,21 +48,21 @@
 <text class="zone-t" x="386" y="34" direction="rtl" text-anchor="end">الشبكة المنزلية</text>
 <g class=""><rect class="card " x="30.0" y="64.0" width="170" height="52" rx="10"/><g transform="translate(42.0,76)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="80.0" y="95" direction="rtl" text-anchor="end">حاسوب محمول</text></g>
 <g class=""><rect class="card " x="30.0" y="164.0" width="170" height="52" rx="10"/><g transform="translate(42.0,176)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="195" direction="rtl" text-anchor="end">هاتف</text></g>
-<g class="key"><rect class="card key" x="390.0" y="108.0" width="180" height="64" rx="10"/><g transform="translate(402.0,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="440.0" y="136" direction="rtl" text-anchor="end">المحور</text><text class="s" x="440.0" y="154" direction="rtl" text-anchor="end">حاسوب مشرف</text><rect class="badge" x="515.6" y="99.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="538.8" y="112.0" text-anchor="middle" direction="rtl">المحور</text></g>
+<g class="key"><rect class="card key" x="369.55" y="108.0" width="220.9" height="64" rx="10"/><g transform="translate(381.55,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="419.55" y="136" direction="rtl" text-anchor="end">المحور</text><text class="s" x="419.55" y="154" direction="rtl" text-anchor="end">دائم التشغيل، في المنزل</text><rect class="badge" x="536.0500000000001" y="99.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="559.25" y="112.0" text-anchor="middle" direction="rtl">المحور</text></g>
 <g class=""><rect class="card " x="626.3125" y="64.0" width="157.375" height="52" rx="10"/><g transform="translate(638.3125,76)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="676.3125" y="95" direction="rtl" text-anchor="end">حاسوب مكتبي</text></g>
 <g class=""><rect class="card " x="626.75" y="164.0" width="156.5" height="52" rx="10"/><g transform="translate(638.75,176)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="676.75" y="195" direction="rtl" text-anchor="end">Raspberry Pi</text></g>
-<path class="e-tunnel" d="M200.0,90.0 L290,90 L290,130 L390.0,130"/>
-<path class="a-tunnel" d="M390.0,130 L380.0,124.5 L380.0,135.5z"/>
-<path class="e-tunnel" d="M200.0,190.0 L290,190 L290,150 L390.0,150"/>
-<path class="a-tunnel" d="M390.0,150 L380.0,144.5 L380.0,155.5z"/>
-<path class="e-home" d="M570.0,140.0 L598.15625,140"/>
-<path class="a-home" d="M570.0,140.0 L578.0,144.4 L578.0,135.6z"/>
-<path class="e-home" d="M598.15625,90 L598.15625,190"/>
-<path class="e-home" d="M598.15625,90 L626.3125,90.0"/>
+<path class="e-tunnel" d="M200.0,90.0 L290,90 L290,130 L369.55,130"/>
+<path class="a-tunnel" d="M369.55,130 L359.6,124.5 L359.6,135.5z"/>
+<path class="e-tunnel" d="M200.0,190.0 L290,190 L290,150 L369.55,150"/>
+<path class="a-tunnel" d="M369.55,150 L359.6,144.5 L359.6,155.5z"/>
+<path class="e-home" d="M590.45,140.0 L608.38125,140"/>
+<path class="a-home" d="M590.45,140.0 L598.5,144.4 L598.5,135.6z"/>
+<path class="e-home" d="M608.38125,90 L608.38125,190"/>
+<path class="e-home" d="M608.38125,90 L626.3125,90.0"/>
 <path class="a-home" d="M626.3125,90.0 L618.3,85.6 L618.3,94.4z"/>
-<path class="e-home" d="M598.15625,190 L626.75,190.0"/>
+<path class="e-home" d="M608.38125,190 L626.75,190.0"/>
 <path class="a-home" d="M626.75,190.0 L618.8,185.6 L618.8,194.4z"/>
-<text class="note" x="400" y="288" text-anchor="middle" direction="rtl">يحوّل الراوتر المنفذ UDP 8764 إلى المحور. المحور يقرأ الحافظة: إنه حاسوبك أنت.</text>
+<text class="note" x="400" y="288" text-anchor="middle" direction="rtl">يحوّل الراوتر المنفذ UDP 8764 إلى المحور، وهو حاسوب أو راوتر لك في المنزل.</text>
 <rect class="lbl-bg" x="250.0" y="129.0" width="100.0" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="300" y="144.0" text-anchor="middle" direction="rtl">نفق WireGuard</text>
 </svg>

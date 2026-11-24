@@ -50,12 +50,13 @@ func (r *fakeRunner) took() []string {
 func TestQuickActions(t *testing.T) {
 	var h hub
 	runner := newFakeRunner(t, map[string]string{actions.Sleep: "the session is locked"})
+	clock := newTestClock(t, 0) // deck's, for its limit of one action a second
 	pi := startService(t, &h, "pi")
-	deck := startEnv(t, &h, "deck", runner.env())
+	deck := startEnv(t, &h, "deck", runner.env(), clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	run := func(name string) error {
-		time.Sleep(time.Second) // one action a second from one sender
+		clock.nextSecond(t) // one action a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "deck", Name: name}, "")
 		return err
 	}
@@ -139,8 +140,9 @@ func TestQuickActions(t *testing.T) {
 // agent, with the program and arguments its user gave and nothing else.
 func TestOwnActions(t *testing.T) {
 	var h hub
+	clock := newTestClock(t, 0) // deck's, for its limit of one action a second
 	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	deck := startEnv(t, &h, "deck", clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	set := func(a control.Action) error {
@@ -216,7 +218,7 @@ func TestOwnActions(t *testing.T) {
 	if _, err := deck.do(t, control.Header{Op: control.OpActionDel, Name: "backup"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(time.Second) // one action a second from one sender
+	clock.nextSecond(t) // one action a second from one sender
 	if _, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "deck", Name: "backup"}, ""); err == nil || !strings.Contains(err.Error(), "has no action") {
 		t.Errorf("a removed action: %v", err)
 	}

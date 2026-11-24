@@ -198,7 +198,7 @@ pub type Target = Arc<dyn Fn(Ipv6Addr) -> Option<u16> + Send + Sync>;
 /// The tunnel address of a guest with the public key `key`: the guest prefix
 /// followed by the first 96 bits of its SHA-256.
 pub fn guest_addr(key: &[u8; 32]) -> Ipv6Addr {
-    let sum = crate::certs::sha256(key);
+    let sum = cbb_core::bytes::sha256(key);
     let mut a = [0u8; 16];
     let (prefix, rest) = a.split_at_mut(4);
     prefix.copy_from_slice(&GUEST_PREFIX);
@@ -1140,7 +1140,7 @@ mod tests {
         let a = guest_addr(&[7; 32]);
         assert!(is_guest(&a));
         assert!(!is_guest(&crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap()));
-        assert_eq!(a.octets()[4..], crate::certs::sha256(&[7; 32])[..12]);
+        assert_eq!(a.octets()[4..], cbb_core::bytes::sha256(&[7; 32])[..12]);
     }
 
     #[test]
@@ -1194,14 +1194,14 @@ mod tests {
         port: u16,
         limits: Limits,
     ) -> (Hub, PublicKey, Vec<crate::tunnel::Link>) {
-        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_key = cbb_core::bytes::random_bytes::<32>();
         let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
         let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
         let mut peers = Vec::new();
         let mut clients = Vec::new();
         for (i, source) in sources.iter().enumerate() {
-            let k = crate::certs::random_bytes::<32>();
-            let psk = crate::certs::random_bytes::<32>();
+            let k = cbb_core::bytes::random_bytes::<32>();
+            let psk = cbb_core::bytes::random_bytes::<32>();
             let addr = crate::tunnel::addr(&format!("{:02x}112233445566778899aabbccddee00", i + 0x10)).unwrap();
             peers.push(Peer {
                 key: *PublicKey::from(&StaticSecret::from(k)).as_bytes(),
@@ -1259,11 +1259,11 @@ mod tests {
     #[test]
     fn a_guest_reaches_the_hub_at_its_guest_address() {
         let (port, _) = target();
-        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_key = cbb_core::bytes::random_bytes::<32>();
         let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
         let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
-        let (guest_key, member_key) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
-        let psk = crate::certs::random_bytes::<32>();
+        let (guest_key, member_key) = (cbb_core::bytes::random_bytes::<32>(), cbb_core::bytes::random_bytes::<32>());
+        let psk = cbb_core::bytes::random_bytes::<32>();
         let guest_pub = *PublicKey::from(&StaticSecret::from(guest_key)).as_bytes();
         let guest = Peer {
             key: guest_pub,
@@ -1321,7 +1321,7 @@ mod tests {
         let mut packets: Vec<Vec<u8>> = (0..32)
             .map(|_| {
                 let mut t = Tunn::new(
-                    StaticSecret::from(crate::certs::random_bytes::<32>()),
+                    StaticSecret::from(cbb_core::bytes::random_bytes::<32>()),
                     hub_pub,
                     None,
                     None,
@@ -1366,7 +1366,13 @@ mod tests {
                 })
             })
             .collect();
-        std::thread::sleep(Duration::from_millis(500));
+        // Under load once the hub asks a stranger for a cookie and the
+        // flood is past the size the test asks of it: then the client tries.
+        let under = Instant::now() + Duration::from_secs(20);
+        while cookies.load(Ordering::Relaxed) == 0 || sent.load(Ordering::Relaxed) <= 10_000 {
+            assert!(Instant::now() < under, "the flood put the hub under no load");
+            std::thread::sleep(Duration::from_millis(10));
+        }
         let start = Instant::now();
         let r = reach(&links[0], Duration::from_secs(25));
         let took = start.elapsed();
@@ -1449,11 +1455,11 @@ mod tests {
     #[test]
     fn half_open_connections_hold_a_client_s_share_only() {
         let (port, _) = target();
-        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_key = cbb_core::bytes::random_bytes::<32>();
         let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
         let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
-        let (ka, kb) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
-        let (pa, pb) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+        let (ka, kb) = (cbb_core::bytes::random_bytes::<32>(), cbb_core::bytes::random_bytes::<32>());
+        let (pa, pb) = (cbb_core::bytes::random_bytes::<32>(), cbb_core::bytes::random_bytes::<32>());
         let a = crate::tunnel::addr("21112233445566778899aabbccddee01").unwrap();
         let b = crate::tunnel::addr("22112233445566778899aabbccddee02").unwrap();
         let pubkey = |k: [u8; 32]| *PublicKey::from(&StaticSecret::from(k)).as_bytes();
@@ -1606,7 +1612,12 @@ mod tests {
                 }
             })
         };
-        std::thread::sleep(Duration::from_millis(500));
+        // The client tries once the garbage is on its way.
+        let flowing = Instant::now() + Duration::from_secs(20);
+        while sent.load(Ordering::Relaxed) < 1_000 {
+            assert!(Instant::now() < flowing, "the flood did not start");
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let start = Instant::now();
         let r = reach(&links[0], Duration::from_secs(20));
         let took = start.elapsed();
@@ -1650,20 +1661,20 @@ mod tests {
     #[test]
     fn a_full_hub_still_takes_each_client_s_few() {
         let (port, _) = target();
-        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_key = cbb_core::bytes::random_bytes::<32>();
         let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
         let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
         let pubkey = |k: [u8; 32]| *PublicKey::from(&StaticSecret::from(k)).as_bytes();
         let mut peers = Vec::new();
         let mut many = Vec::new();
         for i in 0..6u16 {
-            let (k, psk) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+            let (k, psk) = (cbb_core::bytes::random_bytes::<32>(), cbb_core::bytes::random_bytes::<32>());
             let addr = crate::tunnel::addr(&format!("{:02x}112233445566778899aabbccddee00", i + 0x30)).unwrap();
             let source = Some(std::net::IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 1, i, 0, 0, 0, 1)));
             peers.push(Peer { key: pubkey(k), psk, older_psks: Vec::new(), addr, until: None, source });
             many.push((k, psk, addr));
         }
-        let (kb, pb) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+        let (kb, pb) = (cbb_core::bytes::random_bytes::<32>(), cbb_core::bytes::random_bytes::<32>());
         let b = crate::tunnel::addr("22112233445566778899aabbccddee02").unwrap();
         let source = Some(std::net::IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 2, 0, 0, 0, 0, 1)));
         peers.push(Peer { key: pubkey(kb), psk: pb, older_psks: Vec::new(), addr: b, until: None, source });
@@ -1830,10 +1841,10 @@ mod tests {
         let (tcp_port, udp_port) = (host_tcp.local_addr().unwrap().port(), host_udp.local_addr().unwrap().port());
 
         let (port, _) = target();
-        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_key = cbb_core::bytes::random_bytes::<32>();
         let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
         let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
-        let (key, psk) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+        let (key, psk) = (cbb_core::bytes::random_bytes::<32>(), cbb_core::bytes::random_bytes::<32>());
         let a = crate::tunnel::addr("21112233445566778899aabbccddee01").unwrap();
         let secret = StaticSecret::from(key);
         let peer = Peer {

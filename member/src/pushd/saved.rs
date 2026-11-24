@@ -269,7 +269,7 @@ pub(super) fn load(path: &Path, new: bool) -> Result<Loaded> {
     let mut l = match std::fs::read(path) {
         Ok(b) => read_snapshot(&b).ok_or_else(|| Error::msg(format!("{} is not cbb-push's state", path.display())))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound && new => {
-            Loaded { secret: cbb_core::certs::random_bytes(), ver: 0, bindings: HashMap::new() }
+            Loaded { secret: cbb_core::bytes::random_bytes(), ver: 0, bindings: HashMap::new() }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return Err(Error::msg(format!(

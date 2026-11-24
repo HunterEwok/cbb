@@ -212,8 +212,8 @@ func onlyCBB(t *testing.T, s *Server, l tunnel.VLESS, o *outside) {
 	reg := l
 	reg.ID = RegistrationID
 	reg.Path = tunnel.RegistrationPath(l.Path)
-	if got := packetBack(t, hostile(t, reg, xnet.Network_UDP, o.udp.Addr().String(), o.udp.Port())); got != "" {
-		t.Errorf("the registrations' user ID sent a packet somewhere: %q", got)
+	if !refused(t, reg, func() netip.AddrPort { return hostile(t, reg, xnet.Network_UDP, o.udp.Addr().String(), o.udp.Port()) }) {
+		t.Error("the registrations' user ID sent a packet somewhere")
 	}
 	if got := lineBack(t, hostile(t, reg, xnet.Network_TCP, o.tcp.Addr().String(), o.tcp.Port())); got != "" {
 		t.Errorf("the registrations' user ID reached a stream: %q", got)

@@ -48,6 +48,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     identifiers start with `tools.cbb`.
 - **63.** Copies sealed end to end, in 0.6 (D-84; [protocol.md](protocol.md), section 4,
     "Sealing").
+- **65.** "Why it does not sync": one list of reasons from the core (`cbb_core::why`), in
+    `cbb status` and in every app, in 0.6 ([apps](apps.md#why-it-does-not-sync)).
+- **61.** The ways out (the forwarder, VLESS with the mirror, the relay, the hub's tunnel) carry
+    only cbb and never lead to the internet, in 0.6 ([maintaining](maintainers/maintaining.md#ways-out-carry-only-cbb)).
 
 ### Partly done
 
@@ -453,7 +457,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     as they are. To check on a device: whether the extension may put the text in the
     clipboard without a tap, and whether Back Tap's 5 seconds are enough away from home
     over VLESS (iOS allows about 30).
-- **58.** **Planned for 0.6 (the owner, 2026-11-04).** Sync away from home by consent (D-82):
+- **58.** **Planned for 0.7 (the owner, 2026-11-24).** Sync away from home by consent (D-82):
     the device's user consents once, at install, at pairing or in the app, and the root or an
     admin then turns it on and makes hubs from the app, without a command on each computer
     (see [Consent to sync away from home](#consent-to-sync-away-from-home)).
@@ -537,22 +541,6 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       `CKM_EDDSA` needs a `CK_EDDSA_PARAMS`, since `libckteec` crashes on a null parameter.
     - Removing the app removes its token and key: a reinstalled app finds its slot
       uninitialized again, initializes it through QCA and joins as a new device.
-- **61.** **Planned for 0.6, before rc.1 (the owner, 2026-11-06).** Make sure the ways out
-    carry only cbb and never lead to the internet: the forwarder, VLESS with the mirror, the relay and the hub's tunnel, on every member and both phones. This
-    rests on the code (the forwarder only passes WireGuard packets between a group's hub
-    and its clients, VLESS's one outbound goes to the forwarder, its registrations or the
-    mirror whatever the client asked for, the hub's in-process stack opens only the member
-    port and forwards nothing), with no route, NAT or firewall rule needed on the server.
-    Done: tests in which a client that is not ours asks for other addresses, TCP and UDP,
-    IPv4, IPv6 and names, the server's own loopback services among them, and reaches
-    nothing: VLESS over XHTTP (`internal/vless/onlycbb_test.go`: packets reach
-    only the forwarder's port, streams only the mirror, the registrations' ID neither), the
-    hub's tunnel (`internal/tunnel/onlycbb_test.go`), the Rust hub, the phones' too
-    (`member/src/hub.rs`, `a_client_reaches_only_the_member_listener`), the relay (`member/src/nettest/relayd.rs`, `a_dial_reaches_no_address`) and
-    `cbb`'s tunnel, whose end a fake hub on GotaTun sends to (`member/src/tunnel.rs`,
-    `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
-    packet only to an endpoint it knows. The check of cbb.tools is written down in
-    docs/maintainers/maintaining.md, "Ways out carry only cbb", and was run on 2026-11-07.
 - **62.** **Planned for 0.7 (the owner, 2026-11-08).** Sound and files on the ZX Spectrum Next,
     after the group's images (`.cbb show`, 0.6):
     - `.cbb play`: the group's latest sound. The Pi decodes it (MP3, AAC, WAV) and plays it
@@ -563,14 +551,6 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       `.sna` or `.z80` at once, so a game sent from the phone runs on the Next.
     - `.cbb snap`: the Next's screen (ULA or Layer 2) to the group as a PNG, which the Pi
       makes.
-- **65.** **Planned for 0.6 (the owner, 2026-11-09).** "Why it does not sync": one screen in
-    the advanced settings of every app (iPhone, Android, Aurora, the Mac app, the tray app) and
-    the same reason in `cbb status`, which names one cause and what to do about it: the device
-    is not on the group's network, sync is off, no hub away from home, "Everywhere" not
-    allowed, the forwarder or the relay does not answer, the network blocks the tunnel, a key
-    or certificate has expired, the device was removed or frozen, or a newer version is
-    needed (`newer`). The causes come from the Rust core's state, so every device reads them
-    alike; the texts are in all eight languages.
 - **66.** **Planned for 0.7 (the owner, 2026-11-09).** Sending to one device ("Share → the
     laptop"): the copy is sealed for the chosen device alone and written only to its
     clipboard; the other devices of the group never get it.
@@ -615,7 +595,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       side with the command line's output, a showcase for each state, pseudo-localization,
       and a checklist for reviewing a new screen or command; then a heuristic review and a
       walk through each task, with the taps each takes as a measure.
-- **70.** **Planned for 0.7 (the owner, 2026-11-23).** Long runs as a condition of a release:
+- **71.** **Planned for 0.7 (the owner, 2026-11-23).** Long runs as a condition of a release:
     seven days of `tools/soak` on a release candidate's build on the bench's Raspberry Pi 4,
     the calm and the load stand side by side, going on to thirty, with the count of days
     starting again at any change to the code ([testing](testing.md), "Soak"); and the test
@@ -1134,7 +1114,7 @@ counters on the bench; then the keys; then the shell and copying.
 
 ## Consent to sync away from home
 
-Planned for 0.6 (item 58, D-82). Today a computer turns sync away from home on only with
+Planned for 0.7 (item 58, D-82). Today a computer turns sync away from home on only with
 `cbb global on` typed on it, so the root phone's "Make it a hub" is refused on a computer
 where nobody did that yet (D-45). The owner asked for one consent per device instead, given
 when the device is installed or joins, after which the group's root and admins switch it

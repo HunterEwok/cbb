@@ -10,7 +10,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use cbb_core::certs::b64;
+use cbb_core::bytes::b64;
 use serde::{Deserialize, Serialize};
 
 use crate::control::Header;

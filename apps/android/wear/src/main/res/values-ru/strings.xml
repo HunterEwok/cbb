@@ -10,7 +10,7 @@
     <string name="ask_action">Запустить %1$s на %2$s?</string>
     <string name="ask_actions_off">Выключить все быстрые действия на %1$s?</string>
     <string name="ask_away_off">Выключить синхронизацию вне дома на %1$s?</string>
-    <string name="ask_freeze">Заморозить %1$s? Он останется администратором по имени, но ничего из подписанного им не будет действовать, пока главное устройство его не разморозит.</string>
+    <string name="ask_freeze">Заморозить %1$s? Он формально останется администратором, но ничего из подписанного им не будет действовать, пока главное устройство его не разморозит.</string>
     <string name="ask_paste_off">Выключить удалённую вставку на %1$s?</string>
     <string name="ask_remove">Удалить %1$s из группы?</string>
     <string name="away">Везде</string>
@@ -33,7 +33,7 @@
     <string name="online_count">%1$d из %2$d в сети</string>
     <string name="stale">По последним данным с телефона.</string>
     <string name="sync">Синхронизация</string>
-    <string name="watch_admin">Эти часы администратор группы.</string>
+    <string name="watch_admin">Эти часы — администратор группы.</string>
     <string name="watch_later">В этой группе часы только показывают устройства: экстренные действия с часов появятся в CBB 0.7.</string>
     <string name="watch_phone">Телефон этих часов</string>
 </resources>

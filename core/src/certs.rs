@@ -19,11 +19,11 @@ use der::asn1::ObjectIdentifier;
 use der::{Decode, Encode, Tagged};
 use p256::ecdsa::signature::{Signer, Verifier};
 use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
-use sha2::{Digest, Sha256};
 use x509_cert::certificate::{CertificateInner, Raw};
 use x509_cert::ext::pkix::name::GeneralName;
 use x509_cert::ext::pkix::{BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAltName};
 
+use crate::bytes::{hex, random_bytes, sha256};
 use crate::error::{Error, Result};
 
 /// A device ID: 128 random bits as 32 lowercase hex characters.
@@ -68,15 +68,6 @@ pub fn random_id() -> String {
     hex(&random_bytes::<16>())
 }
 
-/// Random bytes from the platform. A platform without randomness cannot
-/// make keys or IDs at all, so that stops the program instead of going on.
-#[allow(clippy::expect_used, reason = "no randomness means no keys; there is nothing to go on with")]
-pub fn random_bytes<const N: usize>() -> [u8; N] {
-    let mut b = [0u8; N];
-    getrandom::fill(&mut b).expect("the system has no randomness");
-    b
-}
-
 /// The SubjectPublicKeyInfo of a P-256 key up to its point, which follows
 /// uncompressed (`0x04`, X, Y), as Go's x509 and the phone kits take it.
 const P256_SPKI_PREFIX: [u8; 27] = [
@@ -98,14 +89,6 @@ pub fn p256_spki(spki: &[u8]) -> Option<VerifyingKey> {
         return None;
     }
     VerifyingKey::from_sec1_bytes(spki.get(26..)?).ok()
-}
-
-pub fn hex(b: &[u8]) -> String {
-    b.iter().map(|c| format!("{c:02x}")).collect()
-}
-
-pub fn sha256(b: &[u8]) -> [u8; 32] {
-    Sha256::digest(b).into()
 }
 
 /// The hash that names a key in records: SHA-256 over its
@@ -310,18 +293,11 @@ fn tlv(b: &[u8]) -> Option<(usize, &[u8])> {
 /// the pairing exchange binds it.
 pub fn self_signed(id: &DeviceId, key: &SigningKey) -> Result<Vec<u8>> {
     let point = VerifyingKey::from(key).to_sec1_point(false);
-    self_signed_by(id, point.as_bytes(), &mut |tbs| {
+    let basic = seq(&[&oid(&ObjectIdentifier::new_unwrap("2.5.29.19")), &[0x01, 0x01, 0xff], &tagged(0x04, &seq(&[]))]);
+    self_signed_cert(id.as_str(), point.as_bytes(), &basic, &mut |tbs| {
         let sig: Signature = key.sign(tbs);
         Ok(sig.to_der().as_bytes().to_vec())
     })
-}
-
-/// The self-signed certificate of self_signed for the public key point
-/// (SEC1, uncompressed), signed by sign: ECDSA P-256 with SHA-256 over the
-/// bytes it gets, DER. A key kept outside the core signs it this way.
-pub fn self_signed_by(id: &DeviceId, point: &[u8], sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8>>) -> Result<Vec<u8>> {
-    let basic = seq(&[&oid(&ObjectIdentifier::new_unwrap("2.5.29.19")), &[0x01, 0x01, 0xff], &tagged(0x04, &seq(&[]))]);
-    self_signed_cert(id.as_str(), point, &basic, sign)
 }
 
 /// The common name of a server certificate.
@@ -332,7 +308,8 @@ pub const SERVER_CERT_NAME: &str = "cbb server";
 /// 18), as Go's group.ServerCertificate makes it: self-signed, `cbb
 /// server` as its CN, no SAN, valid from 1970 to 9999, key usage digital
 /// signature and extended key usage client authentication. It names
-/// neither a device nor a group. sign signs as for self_signed_by.
+/// neither a device nor a group. sign signs the bytes it gets: ECDSA P-256
+/// with SHA-256, DER. A key kept outside the core signs it this way.
 pub fn server_cert_by(point: &[u8], sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8>>) -> Result<Vec<u8>> {
     let client_auth = ObjectIdentifier::new_unwrap("1.3.6.1.5.5.7.3.2");
     let eku = seq(&[&oid(&ObjectIdentifier::new_unwrap("2.5.29.37")), &tagged(0x04, &seq(&[&oid(&client_auth)]))]);
@@ -517,150 +494,4 @@ pub fn verify_member_chain(
         }
     };
     Ok((device_of(leaf)?, issuer))
-}
-
-/// Checks a peer's member chain at time t (verify_member_chain) and returns
-/// its device with the certificates the records judge: the leaf and the
-/// admin CA that issued it, if one did, wherever the peer put it.
-pub fn member_chain(chain: Vec<Cert>, trusted: &[Cert], t: i64, usage: Usage) -> Result<(DeviceId, Vec<Cert>)> {
-    let (dev, issuer) = verify_member_chain(&chain, trusted, t, usage)?;
-    let mut used = Vec::new();
-    for (i, c) in chain.into_iter().enumerate() {
-        if i == 0 || Some(i) == issuer {
-            used.push(c);
-        }
-    }
-    Ok((dev, used))
-}
-
-/// Serde helpers for byte strings as standard base64, Go's encoding of
-/// []byte in JSON.
-pub mod b64 {
-    use alloc::string::String;
-    use alloc::vec::Vec;
-    use base64::Engine as _;
-    use base64::engine::general_purpose::STANDARD;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S: Serializer>(b: &[u8], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&STANDARD.encode(b))
-    }
-
-    /// Standard base64 with padding.
-    pub fn encode(b: &[u8]) -> String {
-        STANDARD.encode(b)
-    }
-
-    /// The bytes of standard base64 with padding.
-    pub fn decode_str(s: &str) -> Option<Vec<u8>> {
-        STANDARD.decode(s).ok()
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
-        let s = Option::<String>::deserialize(d)?.unwrap_or_default();
-        STANDARD.decode(s).map_err(serde::de::Error::custom)
-    }
-
-    pub mod opt {
-        use super::*;
-
-        pub fn serialize<S: Serializer>(b: &Option<Vec<u8>>, s: S) -> Result<S::Ok, S::Error> {
-            match b {
-                Some(b) => s.serialize_str(&STANDARD.encode(b)),
-                None => s.serialize_none(),
-            }
-        }
-
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<u8>>, D::Error> {
-            match Option::<String>::deserialize(d)? {
-                Some(s) => STANDARD.decode(s).map(Some).map_err(serde::de::Error::custom),
-                None => Ok(None),
-            }
-        }
-    }
-
-    /// A secret in base64, read into a buffer wiped when dropped; the
-    /// base64 text is wiped as well.
-    pub mod secret {
-        use super::*;
-        use zeroize::{Zeroize, Zeroizing};
-
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Zeroizing<Vec<u8>>, D::Error> {
-            let mut s = Option::<String>::deserialize(d)?.unwrap_or_default();
-            let b = STANDARD.decode(&s).map(Zeroizing::new).map_err(serde::de::Error::custom);
-            s.zeroize();
-            b
-        }
-
-        /// The same for an optional secret.
-        pub mod opt {
-            use super::*;
-
-            pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Zeroizing<Vec<u8>>>, D::Error> {
-                match Option::<String>::deserialize(d)? {
-                    Some(mut s) => {
-                        let b = STANDARD.decode(&s).map(|b| Some(Zeroizing::new(b))).map_err(serde::de::Error::custom);
-                        s.zeroize();
-                        b
-                    }
-                    None => Ok(None),
-                }
-            }
-        }
-    }
-
-    pub mod list {
-        use super::*;
-        use serde::ser::SerializeSeq;
-
-        pub fn serialize<S: Serializer>(v: &[Vec<u8>], s: S) -> Result<S::Ok, S::Error> {
-            let mut seq = s.serialize_seq(Some(v.len()))?;
-            for b in v {
-                seq.serialize_element(&STANDARD.encode(b))?;
-            }
-            seq.end()
-        }
-
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Vec<u8>>, D::Error> {
-            let v = Option::<Vec<String>>::deserialize(d)?.unwrap_or_default();
-            v.into_iter().map(|s| STANDARD.decode(s).map_err(serde::de::Error::custom)).collect()
-        }
-    }
-
-    pub mod hashes {
-        use super::*;
-        use serde::ser::SerializeSeq;
-
-        pub fn serialize<S: Serializer>(v: &[[u8; 32]], s: S) -> Result<S::Ok, S::Error> {
-            let mut seq = s.serialize_seq(Some(v.len()))?;
-            for b in v {
-                seq.serialize_element(&STANDARD.encode(b))?;
-            }
-            seq.end()
-        }
-
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<[u8; 32]>, D::Error> {
-            let v = Option::<Vec<String>>::deserialize(d)?.unwrap_or_default();
-            v.into_iter()
-                .map(|s| {
-                    let raw = STANDARD.decode(s).map_err(serde::de::Error::custom)?;
-                    raw.try_into().map_err(|_| serde::de::Error::custom("a key hash is not 32 bytes"))
-                })
-                .collect()
-        }
-    }
-
-    pub mod opt_hash {
-        use super::*;
-
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<[u8; 32]>, D::Error> {
-            match Option::<String>::deserialize(d)? {
-                Some(s) => {
-                    let raw = STANDARD.decode(s).map_err(serde::de::Error::custom)?;
-                    raw.try_into().map(Some).map_err(|_| serde::de::Error::custom("a key hash is not 32 bytes"))
-                }
-                None => Ok(None),
-            }
-        }
-    }
 }

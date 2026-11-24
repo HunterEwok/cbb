@@ -94,13 +94,45 @@ jobs:
         with:
           category: /language:${{ matrix.language }}${{ matrix.os && format('/{0}', matrix.os) || '' }}
 
+  macos-changed:
+    # Whether a push to main changed what only macOS builds of the Go code compile:
+    # the files for darwin (and the BSDs, which macOS is built as), the module's
+    # dependencies, or this workflow. Only then does the push take a macOS runner
+    # for analyze-macos: the pull request had the same code analyzed in ci.yml's
+    # macOS job already, and macOS runners are few. The weekly run and a run by
+    # hand always analyze, and keep main's alerts for macOS current.
+    name: macOS's own Go changed
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.files.outputs.changed }}
+    steps:
+      - id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # A first push, or a comparison GitHub cannot give: analyze.
+          if ! files=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$AFTER" --jq '.files[].filename' 2>/dev/null) || [ -z "$files" ]; then
+            echo changed=true >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if echo "$files" | grep -qE '_(darwin|bsd)(_test)?\.go$|^internal/third_party/amneziawg-go/tun/operateonfd\.go$|^internal/pasteboard/[a-z_]*_test\.go$|^go\.(mod|sum)$|^\.github/workflows/codeql\.yml$'; then
+            echo changed=true >>"$GITHUB_OUTPUT"
+          else
+            echo changed=false >>"$GITHUB_OUTPUT"
+          fi
+
   analyze-macos:
     # The Go files for macOS alone, as the matrix above analyzes Windows's. On pull
     # requests ci.yml's job "test and build (macOS), homebrew, Mac app" runs these
     # same steps under the same category, so a pull request takes no macOS runner
-    # of its own for them.
+    # of its own for them; on a push to main, only when macos-changed says so.
     name: analyze (go, macos)
-    if: github.event_name != 'pull_request'
+    needs: macos-changed
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && (github.event_name != 'push' || needs.macos-changed.outputs.changed == 'true') }}
     runs-on: macos-latest
     timeout-minutes: 60
     permissions:

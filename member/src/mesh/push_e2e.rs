@@ -210,7 +210,7 @@ fn a_registered_device_gets_its_copies_and_events_by_push() {
     connect(&a, &b);
     connect(&a, &c);
     connect(&c, &b);
-    let pin = cbb_core::certs::sha256(&spki);
+    let pin = cbb_core::bytes::sha256(&spki);
     let face = |m: &Mesh| m.faces().kept(&pin).tag();
     until("a face toward the push service on every member", 20, || {
         face(&a).is_some() && face(&b) == face(&a) && face(&c) == face(&a)

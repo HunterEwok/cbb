@@ -616,16 +616,23 @@ pub fn is_forward_only(rights: u64) -> bool {
 /// copies on, as the root alone may: its record keeps the right to be a hub
 /// and loses those to read, send and paste secrets, and the hubs record
 /// names it after the hubs it names already. A device that is no member
-/// computer with the cap hub, or that is an admin or the root, is refused.
+/// computer with the cap hub, that is an admin or the root, or that is
+/// installed without root (D-79) is refused.
 pub fn set_forward_only(
     set: &mut RecordSet,
     signer: &dyn ExternalKey,
     target: &str,
     now_ms: u64,
 ) -> Result<Vec<Record>> {
-    use cbb_core::records::body::{MAX_HUBS, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
+    use cbb_core::records::body::{MAX_HUBS, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, STORE_ROOTLESS};
     let st = set.state();
     let d = find(&st, target)?.clone();
+    if d.store == STORE_ROOTLESS {
+        return Err(Error::msg(format!(
+            "{} is installed without root, so every program of its user can read its keys; such a device is never a hub (D-79)",
+            d.name
+        )));
+    }
     if d.role != ROLE_MEMBER || d.caps & CAP_HUB == 0 || d.admin.is_some() || st.root_device == Some(d.id) {
         return Err(Error::msg(format!(
             "{} may not be a hub that only passes copies on: that takes a computer that is neither an admin nor the root",

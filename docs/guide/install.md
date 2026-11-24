@@ -153,7 +153,7 @@ Diagnostics > Services, and its firewall rules (in pf's anchor `cbb`) follow
 every filter reload. Turn off the mDNS repeater (Services > mDNS Repeater) while it runs:
 both need UDP port 5353, and the service answers mDNS on each home interface itself.
 pfSense is not supported: the installer runs there too, but it prints the firewall rules
-for Firewall > Rules instead of adding them, and an update of pfSense may remove Copy
+for Firewall > Rules instead of adding them, and an update of pfSense may remove Connect
 Beyond Borders.
 
 On a FreeBSD desktop (X11, or Wayland with the data control protocol, as in KDE, sway and

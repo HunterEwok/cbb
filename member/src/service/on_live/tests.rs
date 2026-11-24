@@ -56,7 +56,7 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
         let e = ask(&a, "dismiss", |h| h.value = bad.into()).unwrap_err();
         assert!(e.message().contains("a notice's id"), "{}", e.message());
     }
-    let id = cbb_core::certs::b64::encode(&[9; 32]);
+    let id = cbb_core::bytes::b64::encode(&[9; 32]);
     assert!(ask(&a, "dismiss", |h| h.value = id.clone()).unwrap().header.done);
     let rid = crate::notices::record_id(&id).unwrap();
     assert!(la.mesh.set().lock().unwrap().dismissed().any(|d| *d == rid));
@@ -219,7 +219,7 @@ fn a_computer_pairs_with_the_window_of_a_new_group() {
     if !opened.header.invite.is_empty() {
         let link = cbb_core::join::invitation::WindowLink::parse(&opened.header.invite).unwrap();
         assert_eq!(
-            (cbb_core::certs::hex(&link.id), &link.digits, link.fp),
+            (cbb_core::bytes::hex(&link.id), &link.digits, link.fp),
             (id.clone(), &digits, la.mesh.own().hash())
         );
     }

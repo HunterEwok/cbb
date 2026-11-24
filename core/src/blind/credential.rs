@@ -257,7 +257,7 @@ pub fn pad(real: &[[u8; 32]], lengths: &[usize]) -> Option<Vec<[u8; 32]>> {
     let n = *lengths.iter().find(|n| **n >= real.len())?;
     let mut out = real.to_vec();
     while out.len() < n {
-        out.push(crate::certs::random_bytes());
+        out.push(crate::bytes::random_bytes());
     }
     Some(out)
 }

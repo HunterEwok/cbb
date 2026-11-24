@@ -78,11 +78,4 @@ public enum Discovery {
         }
         return "cbb://pair?addr=\(addr)&fp=\(fingerprint)&i=\(id)&c=\(digits)"
     }
-
-    /// The members to dial: those browsing found, and the devices of the
-    /// group with a known address that it did not find, as a member in
-    /// another subnet, which mDNS does not reach (docs/protocol.md, section 9).
-    public static func withKnown(_ found: Set<FoundMember>, known: Set<String>, group: String) -> Set<FoundMember> {
-        found.union(known.filter { d in !found.contains { $0.device == d } }.map { FoundMember(device: $0, group: group) })
-    }
 }

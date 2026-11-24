@@ -162,6 +162,9 @@ struct State {
     /// One connection per group and face.
     clients: HashMap<(GroupId, [u8; 16]), Client>,
     stop: bool,
+    /// The bodies the thread is done with, sent or not: what a test waits
+    /// for to know a body's answer was read.
+    handled: usize,
 }
 
 struct Inner {
@@ -383,6 +386,22 @@ impl Sender {
         self.lock().jobs.len()
     }
 
+    /// The bodies the thread is done with so far.
+    #[cfg(test)]
+    pub fn handled(&self) -> usize {
+        self.lock().handled
+    }
+
+    /// Waits until the thread is done with n bodies in all: their answers
+    /// read and acted on.
+    #[cfg(test)]
+    pub fn wait_handled(&self, n: usize) {
+        let mut st = self.lock();
+        while st.handled < n {
+            st = self.inner.wake.wait(st).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+
     pub fn stop(&self) {
         self.lock().stop = true;
         self.inner.wake.notify_all();
@@ -408,7 +427,14 @@ fn push_capped<T>(items: &mut Vec<T>, item: T, made: impl Fn(&T) -> Instant, max
 impl Inner {
     fn run(self: Arc<Self>) {
         let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut took = false;
         loop {
+            // The body taken last time round is done with.
+            if took {
+                st.handled += 1;
+                self.wake.notify_all();
+                took = false;
+            }
             if st.stop {
                 return;
             }
@@ -421,6 +447,7 @@ impl Inner {
                 continue;
             };
             let mut job = st.jobs.swap_remove(i);
+            took = true;
             if st.connected.contains_key(&job.phone) || job.made.elapsed() > job.life {
                 continue;
             }

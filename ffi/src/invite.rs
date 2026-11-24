@@ -18,7 +18,6 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use cbb_core::certs;
 use cbb_core::error::{Error, Result};
 use cbb_core::identity::ExternalKey;
 use cbb_core::records::Key;
@@ -32,7 +31,7 @@ struct NewArgs {
     /// The public point of the key the phone issues with, SEC1
     /// uncompressed: its admin key, or the root's key when it holds the
     /// root.
-    #[serde(with = "certs::b64")]
+    #[serde(with = "cbb_core::bytes::b64")]
     public: Vec<u8>,
     /// How long the invitation is valid, in seconds: an hour when 0, a day
     /// at most.

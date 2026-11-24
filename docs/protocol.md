@@ -824,8 +824,8 @@ whatever its size (`pair/early-welcome`).
 | 68 `pair/done` | joiner to member | none: the joiner kept its identity |
 | 69 `pair/error` | either | 2 `code`: 1 wrong-code, 2 closed, 3 busy, 4 expired, 5 too-many, 6 refused, 7 declined, 8 taken |
 
-Every field is needed. An error code this version does not know is taken as `refused`. The short
-code's commitment and nonces of earlier drafts are retired and never given again: message 64
+Every field is needed. An error code this version does not know is taken as `refused`. The fields of a short
+code's commitment and nonces are retired and never given again: message 64
 with field 4, 65 with field 4 or 66 with field 3 is refused (`pair/start/retired`,
 `pair/reply/retired`, `pair/confirm/retired`). Code 7, `declined`, stays for an app's own
 refusal.
@@ -847,7 +847,7 @@ that the joiner holds it. The joiner takes message 67 only once the member's `Tb
 shows the member holds it too. One approval makes one message 67. The vectors are
 `testdata/format/messages3.json`, `codes`.
 
-**A home window** (owner, 11-20) is how a computer, a phone or a watch at home joins without a
+**A home window** is how a computer, a phone or a watch at home joins without a
 camera between them: an invitation that lives only at the member that opened it, never written
 as text. Its ID is 16 random bytes, never all zero; its code is six random digits, each code as
 likely; its secret is SHA-256(`cbb pair home code v1` 0x00 ‖ the six ASCII digits); its profile
@@ -1378,7 +1378,7 @@ the order in which they came, and no rule reads a clock.
 | 13 | `recovery`: a change of root | the group's recovery key |
 | 14 | `ack`: the heads an admin holds (`seen`, field 10, not empty), so that a removal may be settled ("Checkpoints"), and optionally a spare admin key (`spare`, field 11, ES256) its device made and signs nothing with, which a change of root names ("Re-issue") | an admin |
 
-Types 5, 11 and 12 of earlier drafts are refused (`records/retired`): the root changes only by
+Types 5, 11 and 12 are retired and refused (`records/retired`): the root changes only by
 the recovery key.
 
 A `settings` record's field 15, `servers`, is the group's own servers, which the root signs so
@@ -3117,8 +3117,8 @@ the project, where it is reached now (section 14, "The project's relay").
 Where a device keeps its keys decides what a thief with the device gets: a key in a file can
 be copied and used elsewhere until an admin removes the device, a key in hardware (the
 Secure Enclave, the Android Keystore with StrongBox or the TEE, a TPM) signs only on that
-device. The roadmap's key levels (item 31) build on this; this section is what 0.6 has so
-far.
+device. The roadmap's key levels (item 31) build on this; this section is what 0.6
+has.
 
 - A **hello** says where the sender's keys live in `key_store` (section 4); a receiver MUST
   NOT trust it for anything but what the root records, below: the phones send

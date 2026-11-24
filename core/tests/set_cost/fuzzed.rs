@@ -41,7 +41,7 @@ impl ExternalKey for K {
 }
 
 fn k(name: &str) -> K {
-    let sk = SigningKey::from_slice(&cbb_core::certs::sha256(name.as_bytes())).unwrap();
+    let sk = SigningKey::from_slice(&cbb_core::bytes::sha256(name.as_bytes())).unwrap();
     let key = Key::es256(sk.verifying_key().to_sec1_point(false).as_bytes().to_vec());
     let hash = key.hash();
     K { sk, key, hash }
@@ -252,7 +252,7 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
                     3 => {
                         // IDs nobody holds, and some of the group's.
                         let mut v: Vec<RecordId> = (0..1 + arg % 4)
-                            .map(|i| RecordId(cbb_core::certs::sha256(&[i, arg, x, n as u8])))
+                            .map(|i| RecordId(cbb_core::bytes::sha256(&[i, arg, x, n as u8])))
                             .collect();
                         v.extend(g.recs.iter().filter(|r| r.id().0[1] & 1 == 1).map(Record::id));
                         v
@@ -284,7 +284,7 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
                     .find(|r| r.body().signer == new_root.hash && matches!(r.body().kind, Kind::Checkpoint { .. }));
                 let first = match (cp, arg >> 6) {
                     (Some(c), 0..=2) => c.id(),
-                    (_, 3) | (None, 0) => RecordId(cbb_core::certs::sha256(&[arg, x, n as u8, 13])),
+                    (_, 3) | (None, 0) => RecordId(cbb_core::bytes::sha256(&[arg, x, n as u8, 13])),
                     _ => g.recs.get(usize::from(x) % g.recs.len().max(1)).map_or(RecordId([7; 32]), Record::id),
                 };
                 let mut body = g.body(
@@ -331,7 +331,7 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
                     // IDs nobody holds, about 2100 to 2600 of them.
                     let more = 2100 + usize::from(arg) * 2;
                     keep.extend(
-                        (0..more).map(|i| RecordId(cbb_core::certs::sha256(&[(i >> 8) as u8, i as u8, arg, n as u8]))),
+                        (0..more).map(|i| RecordId(cbb_core::bytes::sha256(&[(i >> 8) as u8, i as u8, arg, n as u8]))),
                     );
                 }
                 keep.sort();

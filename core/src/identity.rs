@@ -21,7 +21,8 @@ use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-use crate::certs::{self, Cert, DeviceId, b64};
+use crate::bytes::b64;
+use crate::certs::{self, Cert, DeviceId};
 use crate::error::{Context, Error, Result, Wrap};
 
 const FILE_VERSION: u32 = 1;
@@ -96,7 +97,7 @@ pub trait ExternalKey: Send + Sync {
     /// key whose holder must see what it signs, such as a watch's admin key
     /// (docs/protocol.md, section 10, "Watches"), takes the data itself.
     fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        self.sign_digest(&certs::sha256(data))
+        self.sign_digest(&crate::bytes::sha256(data))
     }
     /// Where the identity file keeps the key, for a key that the machine's
     /// hardware holds; None for a key the file cannot name, such as a
@@ -148,7 +149,7 @@ pub type OpenHeld<'a> = &'a dyn Fn(&HeldKey) -> Result<Arc<dyn ExternalKey>>;
 /// signature it gave, so that a broken key fails here and not in the peer.
 pub fn sign_external(key: &dyn ExternalKey, data: &[u8]) -> Result<Vec<u8>> {
     use p256::ecdsa::signature::hazmat::PrehashVerifier as _;
-    let digest = certs::sha256(data);
+    let digest = crate::bytes::sha256(data);
     let sig = key.sign_data(data)?;
     let public = p256::ecdsa::VerifyingKey::from_sec1_bytes(&key.public())
         .map_err(|_| Error::msg("the device key is not a P-256 key"))?;

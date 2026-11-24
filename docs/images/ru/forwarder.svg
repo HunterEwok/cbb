@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" lang="ru" width="920" height="300" viewBox="0 0 920 300" role="img" aria-label="Если хаб недоступен из интернета, он регистрируется на форвардере">
+<svg xmlns="http://www.w3.org/2000/svg" lang="ru" width="940" height="300" viewBox="0 0 940 300" role="img" aria-label="Если хаб недоступен из интернета, он регистрируется на форвардере">
 <title>Если хаб недоступен из интернета, он регистрируется на форвардере</title>
 <style>
   .bg { fill: none; }
@@ -44,28 +44,28 @@
 </style>
 <rect class="zone" x="10" y="10" width="210" height="250" rx="14"/>
 <text class="zone-t" x="26" y="34">Вне дома</text>
-<rect class="zone" x="669.9" y="10" width="240.10000000000002" height="250" rx="14"/>
+<rect class="zone" x="669.9" y="10" width="260.1" height="250" rx="14"/>
 <text class="zone-t" x="685.9" y="34">Дома, за NAT провайдера</text>
 <g class=""><rect class="card " x="30.0" y="64.0" width="170" height="52" rx="10"/><g transform="translate(42.0,76)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="80.0" y="95">Ноутбук</text></g>
 <g class=""><rect class="card " x="30.0" y="164.0" width="170" height="52" rx="10"/><g transform="translate(42.0,176)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="195">Телефон</text></g>
 <g class="srv"><rect class="card srv" x="293.7" y="108.0" width="172.6" height="64" rx="10"/><g transform="translate(305.7,126)" class="ic"><path d="M8 21h13a5 5 0 0 0 0 -10a7 7 0 0 0 -13.5 1.5A4.3 4.3 0 0 0 8 21z"/></g><text class="t" x="343.7" y="136">Форвардер</text><text class="s" x="343.7" y="154">ничего не читает</text></g>
-<g class="key"><rect class="card key" x="699.95" y="68.0" width="180" height="64" rx="10"/><g transform="translate(711.95,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="749.95" y="96">Хаб</text><text class="s" x="749.95" y="114">админ-компьютер</text><rect class="badge" x="844.75" y="59.0" width="27.200000000000003" height="18" rx="9"/><text class="badge-t" x="858.35" y="72.0" text-anchor="middle">ХАБ</text></g>
-<g class=""><rect class="card " x="699.95" y="184.0" width="180" height="52" rx="10"/><g transform="translate(711.95,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="749.95" y="215">Настольный ПК</text></g>
+<g class="key"><rect class="card key" x="700.0" y="68.0" width="199.9" height="64" rx="10"/><g transform="translate(712.0,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="750.0" y="96">Хаб</text><text class="s" x="750.0" y="114">всегда включён, дома</text><rect class="badge" x="864.6999999999999" y="59.0" width="27.200000000000003" height="18" rx="9"/><text class="badge-t" x="878.3" y="72.0" text-anchor="middle">ХАБ</text></g>
+<g class=""><rect class="card " x="700.0" y="184.0" width="199.9" height="52" rx="10"/><g transform="translate(712.0,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="750.0" y="215">Настольный ПК</text></g>
 <path class="e-tunnel" d="M200.0,90.0 L250,90 L250,130 L293.7,130"/>
 <path class="a-tunnel" d="M293.7,130 L283.7,124.5 L283.7,135.5z"/>
 <path class="e-tunnel" d="M200.0,190.0 L250,190 L250,150 L293.7,150"/>
 <path class="a-tunnel" d="M293.7,150 L283.7,144.5 L283.7,155.5z"/>
-<path class="e-tunnel" d="M466.29999999999995,140.0 L644.9,140 L644.9,100 L699.95,100.0"/>
-<path class="a-tunnel" d="M699.95,100.0 L690.0,94.5 L690.0,105.5z"/>
+<path class="e-tunnel" d="M466.29999999999995,140.0 L644.9,140 L644.9,100 L700.0,100.0"/>
+<path class="a-tunnel" d="M700.0,100.0 L690.0,94.5 L690.0,105.5z"/>
 <path class="a-tunnel" d="M466.29999999999995,140.0 L476.3,145.5 L476.3,134.5z"/>
-<path class="e-home" d="M789.95,132.0 L789.95,184.0"/>
-<path class="a-home" d="M789.95,184.0 L794.4,176.0 L785.6,176.0z"/>
-<path class="a-home" d="M789.95,132.0 L785.6,140.0 L794.4,140.0z"/>
-<text class="note" x="460.0" y="288" text-anchor="middle">У форвардера нет ключей: ваш собственный на любом сервере или проектный на cbb.tools.</text>
+<path class="e-home" d="M799.95,132.0 L799.95,184.0"/>
+<path class="a-home" d="M799.95,184.0 L804.4,176.0 L795.6,176.0z"/>
+<path class="a-home" d="M799.95,132.0 L795.6,140.0 L804.4,140.0z"/>
+<text class="note" x="470.0" y="288" text-anchor="middle">У форвардера нет ключей: ваш собственный на любом сервере или проектный на cbb.tools.</text>
 <rect class="lbl-bg" x="217.5" y="129.0" width="65.0" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="250" y="144.0" text-anchor="middle">туннель</text>
 <rect class="lbl-bg" x="478.3" y="129.0" width="154.6" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="555.6" y="144.0" text-anchor="middle">хаб подключается сам</text>
-<rect class="lbl-bg" x="768.0" y="144.0" width="44.0" height="22" rx="11.0"/>
-<text class="lbl home" x="789.95" y="159.0" text-anchor="middle">дома</text>
+<rect class="lbl-bg" x="778.0" y="144.0" width="44.0" height="22" rx="11.0"/>
+<text class="lbl home" x="799.95" y="159.0" text-anchor="middle">дома</text>
 </svg>

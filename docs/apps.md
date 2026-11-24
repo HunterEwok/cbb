@@ -484,7 +484,9 @@ in Settings, all on by default: a device joined or was removed, became an admin,
 or unfrozen, the group was taken over, and the hub does not answer through the tunnel for
 two minutes while away from home. The app compares the devices with what it saw last time
 (`GroupEvent`, `Notifier`), so it hears of an event while it runs and syncs. An iPhone app
-has no background sync: until it has push notifications (not built yet), it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
+has no background sync. With "Notify me when the app is closed" on (the default), a member
+of the group wakes it with a sealed push (design.md, "Watches", step 5); without it, or until
+the push arrives, it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
 few seconds now and then, at times it picks from how the phone is used. It then waits up to
 20 seconds for a computer, takes the records and notifies of what changed; it leaves the
 clipboard alone, which only the app in front may read. So an event may come within the
@@ -812,8 +814,8 @@ F-Droid or Google Play skips it. Google Play allows the service only with its ac
 declaration; the GitHub and F-Droid builds have it from the start.
 
 A phone takes no remote paste in 0.6: the member answers a `paste` command that this does
-not work on a phone yet (docs/protocol.md, section 15), and the phones' switches for it come
-back with 0.7.
+not work on a phone yet (docs/protocol.md, section 15), and the phones get their switches for it
+with 0.7.
 
 **Sending with one tap, without the service** (and always as well):
 
@@ -969,7 +971,7 @@ computer, never a member: it holds no key of the group.
   RTI archive in a binary property list, with no key presses. The TV pairs only while
   Settings, AirPlay and HomeKit, Allow Access is "Everyone on the Same Network" (or
   "Everyone"). The protocol is not documented; `internal/tvremote/appletv` follows what
-  pyatv found, and the spike of 2026-11-01 checked it with pyatv on a real Apple TV.
+  pyatv found, and a spike checked it with pyatv on a real Apple TV.
 - **Roku** takes keys through its External Control Protocol, one HTTP request a character
   on port 8060. It has no pairing and no encryption, so a Roku is added only with the
   user's consent, and since Roku OS 14.1 it needs "Control by mobile apps" on.
@@ -989,7 +991,7 @@ and LG follow (roadmap item 25).
 Aurora OS 5.1.5 gives a regular app no way to have the user confirm an action: its
 authentication service (authd) is outside the app's sandbox, the phone's unlock code is not
 offered, and the fingerprint has no API (a probe on the R570E, and Open Mobile Platform's
-answer of 2026-11-09). So the Aurora app asks for a PIN of its own wherever the iPhone asks
+answer). So the Aurora app asks for a PIN of its own wherever the iPhone asks
 for Face ID (D-94, docs/protocol.md section 3):
 
 - **The keys.** The member key stays in the token QCA initializes for the app (label "CBB",
@@ -1432,7 +1434,7 @@ A new concept goes into the termbase with its word in each language that has one
   default, the look of the website: chalk on slate over felt in the dark, graphite on pale
   slate over sand-coloured cloth in the light, walnut lines, a faint grid), **Blueprint** (a
   drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
-  **Precise**, **Glass** (the look of the first versions: a deep background, a glow of the
+  **Precise**, **Glass** (a deep background, a glow of the
   accent, glass tiles), **Soft**, **Swiss**, **Hardware**, **Art Deco**, **Liquid Glass**,
   **Terminal** and **Retro**.
 - A theme is its style (the faces, the corners of buttons, cards, tiles and chips, the width

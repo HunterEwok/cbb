@@ -449,11 +449,14 @@ func public(args []string) error {
 }
 
 // verify checks a directory that holds keys.json, the channel file,
-// release.json and the files, as a device would.
+// release.json and the files, as a device would. With -pinned it checks a
+// release asked for by name, without a channel file, as a device takes a
+// pre-release, which no channel names.
 func verify(args []string) error {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
 	rootsFlag := fs.String("roots", "", "the root keys' PEM files, comma-separated; the pinned roots by default")
 	ch := fs.String("channel", "stable", "the channel")
+	pinned := fs.Bool("pinned", false, "check the release by name, without a channel file: a pre-release")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
 		return errors.New("verify needs the directory")
@@ -466,15 +469,27 @@ func verify(args []string) error {
 			return err
 		}
 	}
-	var files [3]release.File
-	for i, name := range []string{"keys.json", *ch + ".json", "release.json"} {
+	names := []string{"keys.json", "release.json"}
+	if !*pinned {
+		names = append(names, *ch+".json")
+	}
+	files := map[string]release.File{}
+	for _, name := range names {
 		f, err := readFile(filepath.Join(dir, name))
 		if err != nil {
 			return err
 		}
-		files[i] = f
+		files[name] = f
 	}
-	r, _, err := release.Check(files[0], files[1], files[2], roots, *ch, now(), release.Seen{})
+	var r release.Release
+	var err error
+	checked := "keys.json, release.json"
+	if *pinned {
+		r, _, err = release.CheckPinned(files["keys.json"], files["release.json"], roots, now(), release.Seen{})
+	} else {
+		r, _, err = release.Check(files["keys.json"], files[*ch+".json"], files["release.json"], roots, *ch, now(), release.Seen{})
+		checked = "keys.json, " + *ch + ".json, release.json"
+	}
 	if err != nil {
 		return err
 	}
@@ -490,7 +505,7 @@ func verify(args []string) error {
 	if err := checkSums(dir, r); err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "%s %s: keys.json, %s.json, release.json and %d files check out\n", r.Version, r.Channel, *ch, len(r.Files))
+	fmt.Fprintf(stdout, "%s %s: %s and %d files check out\n", r.Version, r.Channel, checked, len(r.Files))
 	if r.Docker != nil {
 		// The release workflow compares it with the image ghcr.io serves.
 		fmt.Fprintf(stdout, "docker %s@%s\n", r.Docker.Image, r.Docker.Digest)

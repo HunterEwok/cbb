@@ -214,7 +214,7 @@ fn lock_path(sock: &str) -> PathBuf {
         _ => Path::new(sock).parent().map(Path::to_path_buf).unwrap_or_default(),
     };
     // Named as the Go helper names it, so that the two see one lock.
-    let sum = cbb_core::certs::sha256(sock.as_bytes());
+    let sum = cbb_core::bytes::sha256(sock.as_bytes());
     dir.join(format!("cbb-tmux-{}.lock", hex8(&sum)))
 }
 
@@ -579,7 +579,7 @@ mod tests {
     #[test]
     fn helper_files_match_go() {
         // The lock is named as cmd/cbb's lockHelper names it.
-        assert_eq!(hex8(&cbb_core::certs::sha256(b"/tmp/tmux-1000/default")), "7cbd633a2afc14ea");
+        assert_eq!(hex8(&cbb_core::bytes::sha256(b"/tmp/tmux-1000/default")), "7cbd633a2afc14ea");
         // The log is the user's alone and starts again past MAX_LOG.
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("cbb-helper-log-{}", std::process::id()));

@@ -730,7 +730,7 @@ fn the_member_messages_are_the_vectors() {
 fn the_member_messages_hold_at_their_bounds() {
     use crate::format::cbor::Encoder;
     let have = |n: usize| {
-        let mut ids: Vec<[u8; 32]> = (0..n as u32).map(|i| crate::certs::sha256(&i.to_be_bytes())).collect();
+        let mut ids: Vec<[u8; 32]> = (0..n as u32).map(|i| crate::bytes::sha256(&i.to_be_bytes())).collect();
         ids.sort_unstable();
         let mut e = Encoder::new();
         e.map(2).uint(0).uint(member::T_HAVE).uint(2).array(n);

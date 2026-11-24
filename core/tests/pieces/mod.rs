@@ -36,7 +36,7 @@ impl ExternalKey for K {
 }
 
 pub fn k(name: &str) -> K {
-    let sk = SigningKey::from_slice(&cbb_core::certs::sha256(name.as_bytes())).unwrap();
+    let sk = SigningKey::from_slice(&cbb_core::bytes::sha256(name.as_bytes())).unwrap();
     let key = Key::es256(sk.verifying_key().to_sec1_point(false).as_bytes().to_vec());
     let hash = key.hash();
     K { sk, key, hash }

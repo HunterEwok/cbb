@@ -70,7 +70,7 @@
     </message>
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
+        <translation>手机不在家庭网络中时，它通过你自己的中心节点的 WireGuard 隧道同步；中心节点是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中心节点会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
     </message>
 </context>
 <context>
@@ -1038,15 +1038,15 @@
     </message>
     <message>
         <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>已通过隧道连接到中枢 %1。</translation>
+        <translation>已通过隧道连接到中心节点 %1。</translation>
     </message>
     <message>
         <source>Connected to the hub through the tunnel.</source>
-        <translation>已通过隧道连接到中枢。</translation>
+        <translation>已通过隧道连上中心节点。</translation>
     </message>
     <message>
         <source>Connecting to the hub through the tunnel…</source>
-        <translation>正在通过隧道连接中枢…</translation>
+        <translation>正在通过隧道连接到中心节点…</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -1178,7 +1178,7 @@
     </message>
     <message>
         <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>正在等待中枢：在家里、在群组的一台电脑附近打开一次应用。</translation>
+        <translation>正在等待中心节点：在家里、在群组的一台电脑附近打开一次应用。</translation>
     </message>
     <message>
         <source>the keyboard's device</source>
@@ -1197,7 +1197,7 @@
     </message>
     <message>
         <source>A secret</source>
-        <translation>一条秘密</translation>
+        <translation>一条机密</translation>
     </message>
     <message>
         <source>A video</source>
@@ -1305,7 +1305,7 @@
     </message>
     <message>
         <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
-        <translation>图片或文件作为一份拷贝发送到群组，电脑会像按 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。</translation>
+        <translation>图片或文件作为一份副本发送到群组，电脑会像按 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。</translation>
     </message>
     <message>
         <source>A secret</source>
@@ -1447,7 +1447,7 @@
     </message>
     <message>
         <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
-        <translation>将它保存在纸上、YubiKey 上，或两者都保存。只有凭它，才能在这部手机丢失时把群组转到另一台主设备。它只在此时显示。</translation>
+        <translation>将它保存在纸上、YubiKey 上，或两者都保存。只有凭它，才能在这部手机丢失时把群组移到另一台主设备。它只在此时显示。</translation>
     </message>
     <message>
         <source>Save the group's recovery key</source>
@@ -1553,7 +1553,7 @@
     </message>
     <message>
         <source>Renew the group's keys for sync away from home</source>
-        <translation>续订群组用于离家同步的密钥</translation>
+        <translation>续期群组用于离家同步的密钥</translation>
     </message>
     <message>
         <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
@@ -1755,7 +1755,7 @@
     </message>
     <message>
         <source>Secret lifetime</source>
-        <translation>秘密的有效期</translation>
+        <translation>机密的有效期</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1942,7 +1942,7 @@
     </message>
     <message>
         <source>The group sends no secrets until its owner decides.</source>
-        <translation>在所有者做出决定之前，群组不会发送任何秘密。</translation>
+        <translation>在所有者做出决定之前，群组不会发送任何机密。</translation>
     </message>
     <message>
         <source>The group sends nothing to this device.</source>
@@ -1954,7 +1954,7 @@
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
-        <translation>群组的记录已停止交换。</translation>
+        <translation>交换因群组的记录而停止。</translation>
     </message>
     <message>
         <source>The group's recovery key was used twice, so the group stopped for good.</source>
@@ -1990,11 +1990,11 @@
     </message>
     <message>
         <source>This device is muted until %1: its copies do not reach the group.</source>
-        <translation>此设备已静音至 %1：它的复制内容不会到达群组。</translation>
+        <translation>此设备已静音至 %1：它的副本不会到达群组。</translation>
     </message>
     <message>
         <source>This device is muted: its copies do not reach the group.</source>
-        <translation>此设备已静音：它的复制内容不会到达群组。</translation>
+        <translation>此设备已静音：它的副本不会到达群组。</translation>
     </message>
     <message>
         <source>This device is the base, and no device has connected yet.</source>

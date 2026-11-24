@@ -247,7 +247,7 @@ def draw():
     d.zone(370, 10, 420, 250, 'Home network')
     lp = d.card(115, 90, 'laptop', 'Laptop', w=170)
     ph = d.card(115, 190, 'phone', 'Phone', w=170)
-    hub = d.card(480, 140, 'desktop', 'Hub', 'an admin computer', w=180, cls='key', badge='HUB')
+    hub = d.card(480, 140, 'desktop', 'Hub', 'always on, at home', w=180, cls='key', badge='HUB')
     dk = d.card(705, 90, 'desktop', 'Desktop', w=150)
     pi = d.card(705, 190, 'board', 'Raspberry Pi', w=150)
     d.edge([right(lp), (290, 90), (290, 130), left(hub)[:1] + (130,)], 'tunnel')
@@ -258,13 +258,13 @@ def draw():
     d.edge([(tx, 90), (tx, 190)], 'home', end=False)
     d.edge([(tx, 90), left(dk)], 'home')
     d.edge([(tx, 190), left(pi)], 'home')
-    d.note(400, 288, 'The router forwards UDP port 8764 to the hub. The hub reads the clipboard: it is your own computer.')
+    d.note(400, 288, 'The router forwards UDP port 8764 to the hub, a computer or router of yours at home.')
     d.save('hub')
 
     # 4. A forwarder.
     fw_w = D.cardw('Forwarder', 'reads nothing', 170)
     fwr = 380 + fw_w / 2
-    cw = max(D.cardw('Hub', 'an admin computer', 180), D.cardw('Desktop', None, 180))
+    cw = max(D.cardw('Hub', 'always on, at home', 180), D.cardw('Desktop', None, 180))
     vx = fwr + tw(tr('hub dials out')) + 16 + 24  # the elbow of the hub's line, past its label
     zlabel = "Home, behind the provider's NAT"
     zw = max(cw + 60, tw(tr(zlabel)) * 1.2 + 32)
@@ -277,7 +277,7 @@ def draw():
     lp = d.card(115, 90, 'laptop', 'Laptop', w=170)
     ph = d.card(115, 190, 'phone', 'Phone', w=170)
     fw = d.card(380, 140, 'cloud', 'Forwarder', 'reads nothing', w=170, cls='srv')
-    hub = d.card(hx, 100, 'desktop', 'Hub', 'an admin computer', w=cw, cls='key', badge='HUB')
+    hub = d.card(hx, 100, 'desktop', 'Hub', 'always on, at home', w=cw, cls='key', badge='HUB')
     dk = d.card(hx, 210, 'desktop', 'Desktop', w=cw)
     d.edge([right(lp), (250, 90), (250, 130), (left(fw)[0], 130)], 'tunnel')
     d.edge([right(ph), (250, 190), (250, 150), (left(fw)[0], 150)], 'tunnel')
@@ -296,7 +296,7 @@ def draw():
     d.edge([right(lp), left(rl)], 'tunnel', label='tunnel')
     d.edge([left(mc), right(rl)], 'tunnel', label='tunnel')
     d.edge([(110, 102), (110, 160), (650, 160), (650, 102)], 'e2e', start=True, label='end-to-end encryption: the relay cannot read it', at=(380, 160))
-    d.note(380, 212, 'It sees which of your devices talk, and when. Today: your own server; in 0.5, also cbb.tools.')
+    d.note(380, 212, 'It sees which of your devices talk, and when: your own server, or cbb.tools.')
     d.save('relay')
 
     # 6. Without the app.

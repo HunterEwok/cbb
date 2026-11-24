@@ -33,8 +33,13 @@ a checked box means the setting is in place.
 - [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
   setup) scan GitHub Actions, Go, Rust and Kotlin on every pull request, and
   `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes (on a pull
-  request called from `ci.yml` beside the other jobs), weekly, by hand and
-  before each release. GitHub rejects their results while the default setup is on.
+  request called from `ci.yml` beside the other jobs, and on `main` after the merge, a newer
+  push cancelling an older run), weekly, by hand and before each release, where `release.yml`
+  takes `main`'s passed analysis of the tagged commit when there is one rather than running
+  it again. The Go files only macOS builds compile are analyzed on a pull request in `ci.yml`'s
+  macOS job, and on `main` (`codeql.yml`'s `analyze (go, macos)`) only when a push changed
+  them, weekly and by hand: macOS runners are few. GitHub rejects their results while the
+  default setup is on.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
   OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
   weekly and on each push to `main`, and publishes the score for the README's badge.
@@ -206,7 +211,8 @@ Rules for workflows:
 - Built by CI from a tag, never on a laptop: push a tag `vX.Y.Z` on main
   (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`), and
   `.github/workflows/release.yml` builds the archives, `SHA256SUMS` and the attestations and,
-  once the iPhone app's CodeQL analysis passes on the tag (about half an hour),
+  once the iPhone app's CodeQL analysis has passed for the tagged commit (on `main` after the
+  merge, or on the tag in about half an hour when `main`'s run did not analyze it),
   makes a draft release, with notes generated from the merged pull requests. The maintainer
   signs and publishes it on their Mac with `release-sign publish` ("Signed releases" below).
   A tag `vX.Y.Z-rc.N` makes a pre-release, which `releases/latest` and so `get.sh` skip;
@@ -276,7 +282,7 @@ own, with the tag from `TAG` (the pushed tag, or the rehearsal's), whose charact
 `roots` job checks first (0-9, a-z, `.` and `-`, in the form above). When the pinned roots lack
 a half, a rehearsal does not stop at `TestPinnedRootsComplete`: it writes a warning with what
 failed and the test's output in the run's summary and goes on, so it can run before the
-ceremony's roots are in the tree; a tag pushed and the keys check stop there as before.
+ceremony's roots are in the tree; a tag pushed and the keys check stop there.
 
 ## Signed releases
 
@@ -333,7 +339,8 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   publishes it and commits `keys.json` and `stable.json` to the branch. `-no-publish` stops
   before publishing, `-docker none` signs a release without the image; a pre-release
   changes no `stable.json`. `published.yml` then checks what GitHub serves, tags the signed
-  image and updates the Homebrew tap. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
+  image and updates the Homebrew tap; a pre-release, which no channel names, it checks by
+  name with `release-sign verify -pinned`. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
   `verify` (the comment in `tools/release-sign/main.go`).
 - **The entry points** (docs/protocol.md, section 16, "Entry points"): the ways in to the
   project's servers that are not built in. On the Mac, in a checkout of the branch `channel`,
@@ -484,7 +491,7 @@ and `-drop` with the pin of either half of a signing key drops both halves.
   copy in iCloud. Without `pq` the hardware's P-256 half signs nothing devices take. A lost
   YubiKey takes its post-quantum halves with it, since they are sealed to its own slot and
   no backup opens them: the other YubiKey's root signs a new `keys.json`, and the next
-  release pins a new second root, both halves, as before. A lost half is replaced like a
+  release pins a new second root, both halves. A lost half is replaced like a
   lost key (a new key, certified by a root, or for a root a new root in the next release).
 
 ## Watching cbb.tools
@@ -525,7 +532,7 @@ echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-relay/refuse
 ```
 
 A line that is not a tag keeps the list as it was and is logged
-(`journalctl -u cbb-forward`, `journalctl -u cbb-relay`); taking the line out lets the group back. Answer the reporter that the group is refused; the servers have nothing else to
+(`journalctl -u cbb-forward`, `journalctl -u cbb-relay`); taking the line out lets the group back in. Answer the reporter that the group is refused; the servers have nothing else to
 give, no logs, addresses or content. A report without a tag gets that answer too, with a
 request for the tag. A report about a source that loads the servers on purpose is the
 firewall's, at the level of its network or provider, as the terms say. A vulnerability is
@@ -535,8 +542,18 @@ not an abuse report: SECURITY.md.
 
 The forwarder, VLESS, the relay and the mirror on cbb.tools must never take a user anywhere
 but cbb (docs/roadmap.md, item 61). The code holds this without any rule on the server;
-the server must not add a way around it. After each change on the server, run this check,
-reading only, and keep its result in the private runbook:
+the server must not add a way around it: the forwarder only passes WireGuard packets
+between a group's hub and its clients, VLESS's one outbound goes to the forwarder, its
+registrations or the mirror whatever the client asked for, and the hub's in-process stack
+opens only the member port and forwards nothing. Tests hold it, in which a client that is
+not ours asks for other addresses (TCP and UDP, IPv4, IPv6 and names, the server's own
+loopback services among them) and reaches nothing: VLESS over XHTTP
+(`internal/vless/onlycbb_test.go`), the hub's tunnel (`internal/tunnel/onlycbb_test.go`), the
+Rust hub and the phones' (`member/src/hub.rs`, `a_client_reaches_only_the_member_listener`),
+the relay (`member/src/nettest/relayd.rs`, `a_dial_reaches_no_address`) and `cbb`'s tunnel
+(`member/src/tunnel.rs`, `link_reaches_nothing_from_the_tunnel`); the forwarder's
+`FuzzForwardWire` sends a packet only to an endpoint it knows. After each change on the
+server, run this check, reading only, and keep its result in the private runbook:
 
 - `sysctl net.ipv4.ip_forward net.ipv6.conf.all.forwarding` both 0; `iptables -S` and
   `ip6tables -S` with `FORWARD DROP`, `iptables -t nat -S` and `ip6tables -t nat -S` with no
@@ -616,7 +633,8 @@ site's `openwrt/` directory on cbb.tools (routers read
 `https://cbb.tools/openwrt/<arch>/packages.adb`). The feed's key is in CI, so a feed counts
 only as a file of a release the offline release key signed: take it from the published
 release, check that release with `release-sign verify` (under the pinned roots, with the
-branch `channel`'s `keys.json` and `stable.json`, as `published.yml` does), and unpack only
+branch `channel`'s `keys.json` and `stable.json`, or for a pre-release `keys.json` and
+`-pinned`, as `published.yml` does), and unpack only
 the `openwrt-feed.tar.gz` it checked; never one from a draft. Without the secret the release
 still succeeds and warns that there is no feed.
 
@@ -728,7 +746,7 @@ The release workflow signs `cbb` and `cbb-helper` (identifier `tools.cbb.helper`
 certificate and the hardened runtime (`packaging/macos/sign.sh`) and has Apple's notary
 service check each (`packaging/macos/notarize.sh`, `notarytool` signed in with the App Store
 Connect API key), so that Gatekeeper opens it without a warning. Without the secrets the
-program is signed ad hoc, as before. The certificates live in a keychain of the run's own
+program is signed ad hoc. The certificates live in a keychain of the run's own
 (`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
 request's build ad hoc with the same flags and runs `cbb version`
 under the hardened runtime. No program carries an entitlement, since none compiles code at
@@ -781,8 +799,8 @@ and notarize `cbb`.
 
 ## Updates of the Mac app (Sparkle)
 
-The Mac app is not yet in the releases; once the Apple developer account exists and the app
-is signed with a Developer ID and notarized, it updates with [Sparkle](https://sparkle-project.org):
+The Mac app comes in the release's `.pkg`, signed with a Developer ID and notarized, but it does
+not update itself yet. It is to update with [Sparkle](https://sparkle-project.org):
 
 - [ ] Sparkle's own Ed25519 key, made with Sparkle's `generate_keys` on the maintainer's Mac
   and kept in its keychain; the public key goes into the app's `Info.plist`

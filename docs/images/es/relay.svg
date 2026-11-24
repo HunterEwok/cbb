@@ -52,7 +52,7 @@
 <path class="e-e2e" d="M110,102 L110,160 L650,160 L650,102"/>
 <path class="a-e2e" d="M650,102 L645.6,110.0 L654.4,110.0z"/>
 <path class="a-e2e" d="M110,102 L105.6,110.0 L114.4,110.0z"/>
-<text class="note" x="380" y="212" text-anchor="middle">Ve cuáles de tus dispositivos se comunican y cuándo. Hoy: tu propio servidor; en la 0.5, también cbb.tools.</text>
+<text class="note" x="380" y="212" text-anchor="middle">Ve cuáles de tus dispositivos se comunican y cuándo: tu propio servidor o cbb.tools.</text>
 <rect class="lbl-bg" x="216.2" y="59.0" width="47.5" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="240.0" y="74.0" text-anchor="middle">túnel</text>
 <rect class="lbl-bg" x="496.2" y="59.0" width="47.5" height="22" rx="11.0"/>
