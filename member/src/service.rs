@@ -2254,8 +2254,12 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("control.sock");
         let ln = UnixListener::bind(&path).unwrap();
+        // Each connection the socket takes reaches its handler, in a thread
+        // of its own, which marks it and then holds it open.
+        let (taken, marks) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            accept_control(ln, |mut c| {
+            accept_control(ln, move |mut c| {
+                let _ = taken.send(());
                 let _ = c.read(&mut [0u8; 1]);
             })
         });
@@ -2263,16 +2267,13 @@ mod tests {
         let mut past = UnixStream::connect(&path).unwrap();
         past.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         assert_eq!(past.read(&mut [0u8; 1]).unwrap(), 0, "the connection past the limit stays open");
-        // The connection past the limit was handled (its end read above),
-        // so the earlier ones were too, in the order they came: one that
-        // is open has nothing to read yet, one that was closed reads its end.
-        let mut first = &open[0];
-        first.set_nonblocking(true).unwrap();
-        let read = first.read(&mut [0u8; 1]);
-        assert!(
-            read.as_ref().is_err_and(|e| e.kind() == std::io::ErrorKind::WouldBlock),
-            "a connection within the limit was closed: {read:?}"
-        );
+        // The ones within the limit were taken: each reached the handler.
+        for i in 0..MAX_CONTROL_PER_USER {
+            marks
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|_| panic!("connection {i} within the limit was not taken"));
+        }
+        assert!(marks.try_recv().is_err(), "the connection past the limit reached the handler");
         drop(open);
         let _ = std::fs::remove_dir_all(&dir);
     }
