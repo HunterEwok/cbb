@@ -2264,6 +2264,9 @@ with 0.5 is set up again once. The details follow.
 - `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
   that line ended it without its clean stop.
 - The Bluetooth keyboard stops being visible at the end of its time, not just after.
+- The FreeBSD job measures SHA-256 on the runner and in the machine every 30 s, to tell a
+  runner held back from a slow virtual machine, and a failed test run no longer keeps the
+  machine's session open until the job's limit.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.

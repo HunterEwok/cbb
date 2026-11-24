@@ -727,6 +727,9 @@ jobs:
         # The machine's processor can stand still under the runner's KVM
         # (steal, or the host's exits), which the guest counts as user time;
         # the runner sees it: its steal time and KVM's exits, every 30 s.
+        # And what SHA-256 runs at on the runner itself over two seconds,
+        # beside the machine's own measure at the same times: when both
+        # fall, the runner is held back; when only the machine's does, KVM.
         run: |
           (
             sudo dmesg | grep -i 'split.lock' || echo "no split lock in dmesg"
@@ -734,6 +737,7 @@ jobs:
               date -u +%T
               grep -E '^cpu ' /proc/stat
               sudo cat /sys/kernel/debug/kvm/exits 2>/dev/null || true
+              openssl speed -seconds 2 -bytes 8192 sha256 2>/dev/null | tail -n 1
             done
           ) >"$RUNNER_TEMP/runner-load.log" 2>&1 &
       - name: go test in a FreeBSD 15.1 virtual machine
@@ -768,15 +772,22 @@ jobs:
             # still now and then. The same hashes over 10 s each, and where
             # the release test spends its time.
             go test -run '^$' -bench 'Hash8K$|Hash1K$' -benchtime 10s crypto/sha256 || true
+            # The test reads testdata beside its package: it runs there.
             go test -c -o /tmp/release.test ./internal/release
-            /usr/bin/time /tmp/release.test -test.run 'TestCheckErrors$' -test.timeout 4m -test.cpuprofile /tmp/cpu.out </dev/null || true
+            (cd internal/release && /usr/bin/time /tmp/release.test -test.run 'TestCheckErrors$' -test.timeout 4m -test.cpuprofile /tmp/cpu.out </dev/null) || true
             go tool pprof -top -nodecount 25 /tmp/release.test /tmp/cpu.out || true
             # What uses the processors while the suite runs, every five
-            # minutes, so a slow run shows what it waited behind.
+            # minutes, so a slow run shows what it waited behind; and SHA-256
+            # over two seconds every 30 s, as the runner measures its own.
+            # Both end with the script, however it ends, or they hold the
+            # machine's session open until the job's limit.
             (while sleep 300; do date; top -b -d1 -o cpu 12 | tail -n 16; done) &
             top_pid=$!
+            (while sleep 30; do date -u +%T; openssl speed -seconds 2 -bytes 8192 sha256 2>/dev/null | tail -n 1; done) >/tmp/guest-sha.log 2>&1 &
+            sha_pid=$!
+            trap 'kill "$top_pid" "$sha_pid" 2>/dev/null; cat /tmp/guest-sha.log' EXIT
             go test -timeout 25m ./... </dev/null
-            kill "$top_pid" 2>/dev/null || true
+            kill "$top_pid" "$sha_pid" 2>/dev/null || true
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
             Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
