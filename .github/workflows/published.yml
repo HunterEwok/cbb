@@ -131,7 +131,7 @@ jobs:
           rel="$RUNNER_TEMP/release"
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
           sh .github/channel-files.sh "$rel"
-          go run ./tools/release-sign verify $PINNED "$rel" | tee "$RUNNER_TEMP/verify.txt"
+          go run ./tools/release-sign verify ${PINNED:+"$PINNED"} "$rel" | tee "$RUNNER_TEMP/verify.txt"
           version=${GITHUB_REF_NAME#v}
           # The signed manifest is of this tag's version, not another release's.
           signed=$(head -n 1 "$RUNNER_TEMP/verify.txt" | cut -d ' ' -f 1)
@@ -213,7 +213,7 @@ jobs:
           rel="$RUNNER_TEMP/release"
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
           sh .github/channel-files.sh "$rel"
-          go run ./tools/release-sign verify $PINNED "$rel" | tee "$RUNNER_TEMP/verify.txt"
+          go run ./tools/release-sign verify ${PINNED:+"$PINNED"} "$rel" | tee "$RUNNER_TEMP/verify.txt"
           while read -r _ name; do
             gh attestation verify "$rel/${name#\*}" --repo "$GITHUB_REPOSITORY" >/dev/null
             echo "attested: ${name#\*}"
