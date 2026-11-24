@@ -3258,6 +3258,8 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The VLESS client makes one Xray instance at a time: each sets Xray's process-wide system
+  dialer, and two dialed together wrote it at once.
 - The iPad's UI tests in CI fail less by chance: the sidebar test finds the next tile before
   the arrow key rather than after it, when the search could outlast its wait on CI's small
   machine, and a test whose app XCTest never saw start is run again like the other launch
