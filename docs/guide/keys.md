@@ -14,22 +14,22 @@ keys determines what an attacker can extract if the device is stolen.
 ## Where each device keeps its keys
 
 The device list in the apps and the `KEYS` column of `cbb status` show each device's key storage
-tier: **proven** (`proven`), **hardware** (`hardware`), **file** (`file`), or **rootless**
-(`rootless`).
+tier: **proven** (`proven hardware`), **hardware** (`hardware`), **file** (`in a file`), or
+**rootless** (`in a file, rootless`).
 
 | Device | Where member, admin, and main keys live | Confirmation before main/admin signing | Storage tier shown | What a thief can take |
 |---|---|---|---|---|
 | **iPhone and iPad** | Secure Enclave (hardware) | Face ID, Touch ID, or passcode | `hardware` | Nothing to copy; keys sign only on that device after unlock |
-| **Android phone or tablet** (locked bootloader, verified OS) | Android Keystore (StrongBox or TEE, hardware) | Fingerprint, face, or screen lock (enforced by Keystore) | `proven` | Nothing to copy; the group also verifies hardware proof offline |
+| **Android phone or tablet** (locked bootloader, verified OS) | Android Keystore (StrongBox or TEE, hardware) | Fingerprint, face, or screen lock (enforced by Keystore) | `proven hardware` | Nothing to copy; the group also verifies hardware proof offline |
 | **Android phone or tablet** (unlocked bootloader or custom-signed OS such as GrapheneOS) | Android Keystore (StrongBox or TEE, hardware) | Fingerprint, face, or screen lock | `hardware` | Nothing to copy; OS verification cannot be vouched for by Google's roots |
 | **Aurora OS 5 phone** | OP-TEE secure element (hardware) | App's own admin PIN (at least 6 digits when created; 7 wrong tries lock the admin key permanently) | `hardware` | Nothing to copy; member key syncs without PIN, admin/main key requires PIN |
-| **Aurora OS 4 and Sailfish OS phone** | App file on the phone | None from hardware | `file` | A copy of the key file, usable anywhere until removed |
+| **Aurora OS 4 and Sailfish OS phone** | App file on the phone | None from hardware | `in a file` | A copy of the key file, usable anywhere until removed |
 | **HarmonyOS 5+ phone or tablet** | HUKS (TEE, hardware) | Face, fingerprint, or PIN (User Authentication Kit) | `hardware` | Nothing to copy; keys sign only on that device after authentication |
 | **Mac with Apple silicon or T2 chip** | Secure Enclave (hardware); local and tunnel secrets sealed by Secure Enclave | macOS Touch ID or administrator password via system prompt | `hardware` | Nothing to copy; keys sign only on that Mac |
-| **Intel Mac without T2 chip** | Service state files (`/Library/Application Support/cbb/state`) | macOS administrator password | `file` | A copy of the key files if disk is readable; encrypt with FileVault |
-| **Linux or Windows PC with TPM 2.0 and `cbb-helper`** | TPM 2.0 (hardware); local and tunnel secrets sealed by TPM | Linux polkit or Windows Hello / administrator prompt | `proven` (with on-chip EK certificate) or `hardware` | Nothing to copy; keys sign only on that PC |
-| **Linux or Windows PC without TPM, FreeBSD, OpenWrt, OPNsense, small devices without `cbb-helper`, Docker** | Service state files (readable only by the service account) | Administrator privileges (`sudo` or administrator terminal) | `file` | A copy of the key files if disk or volume is readable; encrypt the disk (LUKS, BitLocker) |
-| **Linux rootless install (`--rootless`)** | User files in `~/.local/state/cbb` | None (any program of your user can read them) | `rootless` | Any program running under your account can copy the key files; never main device, admin, or hub |
+| **Intel Mac without T2 chip** | Service state files (`/Library/Application Support/cbb/state`) | macOS administrator password | `in a file` | A copy of the key files if disk is readable; encrypt with FileVault |
+| **Linux or Windows PC with TPM 2.0 and `cbb-helper`** | TPM 2.0 (hardware); local and tunnel secrets sealed by TPM | Linux polkit or Windows Hello / administrator prompt | `proven hardware` (with on-chip EK certificate) or `hardware` | Nothing to copy; keys sign only on that PC |
+| **Linux or Windows PC without TPM, FreeBSD, OpenWrt, OPNsense, small devices without `cbb-helper`, Docker** | Service state files (readable only by the service account) | Administrator privileges (`sudo` or administrator terminal) | `in a file` | A copy of the key files if disk or volume is readable; encrypt the disk (LUKS, BitLocker) |
+| **Linux rootless install (`--rootless`)** | User files in `~/.local/state/cbb` | None (any program of your user can read them) | `in a file, rootless` | Any program running under your account can copy the key files; never main device, admin, or hub |
 
 Setting `CBB_TPM=off` on a computer keeps newly generated keys in files instead of hardware. A
 Docker container refuses to hold main or admin keys unless you set `CBB_KEYS_IN_FILE=yes` in its

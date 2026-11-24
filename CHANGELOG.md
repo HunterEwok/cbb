@@ -3357,6 +3357,11 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `cbb takeover`, `cbb takeover -delay` and `cbb handover` print only the service's answer,
+  which points to the recovery key, and no longer a claim that waits; a recovery the service
+  did not finish says so. `cbb`'s help shows that `cbb remote code` reads the TV's code from
+  standard input, and the container's README joins a group with `cbb pair -code` and names the
+  forwarding-only hub.
 - The privacy page says the apps send no bug reports in this version: the key that seals
   them is not in the build yet.
 - The release builds the iPhone app for TestFlight with Xcode 27.2 and the iOS 27 SDK, as

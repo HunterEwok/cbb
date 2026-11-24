@@ -82,8 +82,9 @@ Where a device keeps its keys determines what a thief can take if the device is 
   passcode, or (on Aurora OS) the app's own PIN; everyday syncing works without asking.
 - **Computers** keep their member and admin keys in hardware when available: the Secure Enclave
   on Macs with Apple silicon or a T2 chip, and the hardware security chip (TPM) on Linux and
-  Windows PCs. Computers without that hardware, small devices, and a computer acting as the
-  main device keep keys in files that only Connect Beyond Borders can read.
+  Windows PCs; a computer that is the main device keeps its main key there too. Computers
+  without that hardware and small devices keep keys in files that only Connect Beyond Borders
+  can read.
 
 For full details on key storage and verification, see [Keys and attestation](keys.md).
 

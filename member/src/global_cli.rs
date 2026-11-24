@@ -96,8 +96,8 @@ fn usage_text() -> String {
        cbb global relay default|address:port -key KEY [address:port -key KEY...] [-yes]
                                       meet the group's other devices at a blind relay, for a group
                                       without a hub: the project's ({PROJECT_RELAY}) or these, up to
-                                      16; in a group of 0.6 on the root, which signs them for the group
-       cbb global relay off           in a group of 0.6, on the root: the group meets at no relay
+                                      16; on the root, which signs them for the group
+       cbb global relay off           on the root: the group meets at no relay
        cbb global hubs DEVICE...      on the root, or an admin that may be a hub: the group's main
                                       hubs, in the order they serve, before the others
        cbb global allow               let this computer's service reach the group's servers as they
