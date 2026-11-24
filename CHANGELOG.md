@@ -3247,6 +3247,8 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone app no longer asks the system for its Live Activities on the main thread at every
+  refresh: it reads them once, off the main thread, and keeps the list itself.
 - The preview of who stays after a change of root with the recovery key works in the iPhone,
   Android and Aurora apps: the member took that step, which signs nothing, only with a key, as
   HarmonyOS's app sent an empty one; ffi's manage now takes a step without `public`.
