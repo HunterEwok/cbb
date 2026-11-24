@@ -140,7 +140,7 @@
     </message>
     <message>
         <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
-        <translation>Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только что сломалось, версия CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный.</translation>
+        <translation>Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только то, что сломалось, версии CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный.</translation>
     </message>
     <message>
         <source>Technical details</source>
@@ -182,7 +182,7 @@
     <name>ChangeRootPage</name>
     <message>
         <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
-        <translation>Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например потому что телефон, который её сделал, потерян.</translation>
+        <translation>Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например, потому что телефон, который её сделал, потерян.</translation>
     </message>
     <message>
         <source>Continue</source>
@@ -206,7 +206,7 @@
     </message>
     <message>
         <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Подключите YubiKey к порту USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
+        <translation>Подключите YubiKey к порту USB-C, введите его PIN и коснитесь ключа, когда он замигает.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -242,7 +242,7 @@
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
-        <translation>Это нельзя отменить. PIN-код администратора подтверждает это, и устройства группы переходят к этому телефону, как только подключатся.</translation>
+        <translation>Это нельзя отменить. PIN администратора подтверждает это, и устройства группы переходят к этому телефону, как только подключатся.</translation>
     </message>
     <message>
         <source>Use a YubiKey instead</source>
@@ -326,7 +326,7 @@
     </message>
     <message>
         <source>Muted</source>
-        <translation>Заглушён</translation>
+        <translation>Заглушено</translation>
     </message>
     <message>
         <source>Not in a group</source>
@@ -437,7 +437,7 @@
     </message>
     <message>
         <source>Unmute</source>
-        <translation>Включить</translation>
+        <translation>Снять заглушение</translation>
     </message>
 </context>
 <context>
@@ -534,7 +534,7 @@
     </message>
     <message>
         <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
-        <translation>YubiKey ответил не так, как ожидалось. Вставьте его заново и попробуйте снова.</translation>
+        <translation>YubiKey ответил не так, как ожидалось. Подключите его заново и попробуйте снова.</translation>
     </message>
     <message>
         <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
@@ -622,7 +622,7 @@
     </message>
     <message>
         <source>The phone's secure element did not take the PIN.</source>
-        <translation>Защищённый модуль телефона не принял PIN.</translation>
+        <translation>Защищённый элемент телефона не принял PIN.</translation>
     </message>
     <message>
         <source>The phone's secure element holds a broken key.</source>
@@ -670,11 +670,11 @@
     </message>
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
-        <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова.</translation>
+        <translation>Ключ администратора на этом телефоне старше PIN администратора. Выйдите из группы и вступите в неё снова.</translation>
     </message>
     <message>
         <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
-        <translation>Вставлено два YubiKey. Оставьте только один и попробуйте снова.</translation>
+        <translation>Подключено два YubiKey. Оставьте только один и попробуйте снова.</translation>
     </message>
     <message>
         <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
@@ -716,7 +716,7 @@
     </message>
     <message>
         <source>%1 was removed before the main device changed, and counts again now: remove it again if it should not be in the group.</source>
-        <translation>%1 было удалено до смены главного устройства и теперь снова считается: удалите его снова, если ему не место в группе.</translation>
+        <translation>%1 был удалён до смены главного устройства и теперь снова считается: удалите его снова, если ему не место в группе.</translation>
     </message>
     <message>
         <source>A change of the group's main device is on its way.</source>
@@ -744,7 +744,7 @@
     </message>
     <message>
         <source>Only the recovery key changes the main device, and nothing undoes it. Leave the group on each of your devices, then make a new group and join them to it.</source>
-        <translation>Только ключ восстановления меняет главное устройство, и ничто это не отменяет. Выйдите из группы на каждом своём устройстве, затем создайте новую группу и подключите их к ней.</translation>
+        <translation>Только ключ восстановления меняет главное устройство, и ничто это не отменяет. Выйдите из группы на каждом своём устройстве, затем создайте новую группу и добавьте их в неё.</translation>
     </message>
     <message>
         <source>Removals that wait for admins fill %1 of the main device's room for records: bring those admins online.</source>
@@ -772,7 +772,7 @@
     </message>
     <message>
         <source>The group's recovery key is not saved yet: without it, losing this phone means making the group again.</source>
-        <translation>Ключ восстановления группы ещё не сохранён: без него потеря этого телефона означает создавать группу заново.</translation>
+        <translation>Ключ восстановления группы ещё не сохранён: без него при потере этого телефона группу придётся создавать заново.</translation>
     </message>
     <message>
         <source>The main device's records wait for records no device has passed on.</source>
@@ -866,7 +866,7 @@
     </message>
     <message>
         <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
-        <translation>Показывайте или отправляйте код только тому, кто вступает: любой, у кого он есть, может попросить доступ.</translation>
+        <translation>Показывайте или отправляйте код только тому, кто вступает: любой, у кого он есть, может попросить о вступлении.</translation>
     </message>
     <message>
         <source>Try again</source>
@@ -1022,7 +1022,7 @@
     </message>
     <message>
         <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>Администратор заглушил этот телефон: его копии не доходят до группы, пока администратор не включит его.</translation>
+        <translation>Администратор заглушил этот телефон: его копии не доходят до группы, пока администратор не снимет заглушение.</translation>
     </message>
     <message>
         <source>At home: syncing directly.</source>
@@ -1244,7 +1244,7 @@
     </message>
     <message>
         <source>Until an admin unmutes it</source>
-        <translation>Пока администратор не включит</translation>
+        <translation>Пока администратор не снимет заглушение</translation>
     </message>
 </context>
 <context>
@@ -1259,7 +1259,7 @@
     </message>
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>Вскоре сделайте администратором ещё один телефон: если этот телефон потеряется, телефон-администратор перенесёт группу на себя.</translation>
+        <translation>Не откладывая, сделайте администратором ещё один телефон: если этот телефон потеряется, телефон-администратор перенесёт группу на себя.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1352,7 +1352,7 @@
     </message>
     <message>
         <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>Собственный PIN CBB, не короче шести цифр и не простой вроде 123456. Не используйте код разблокировки телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
+        <translation>Собственный PIN CBB, не короче шести цифр и не простой вроде 123456. Не используйте код разблокировки телефона. Защищённый элемент телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1376,7 +1376,7 @@
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
-        <translation>PIN проверяет защищённый модуль телефона; семь неверных PIN навсегда блокируют ключ администратора.</translation>
+        <translation>PIN проверяет защищённый элемент телефона; семь неверных PIN навсегда блокируют ключ администратора.</translation>
     </message>
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
@@ -1467,11 +1467,11 @@
     </message>
     <message>
         <source>The sheet is saved in Documents.</source>
-        <translation>Лист сохранён в «Документы».</translation>
+        <translation>Лист сохранён в «Документах».</translation>
     </message>
     <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
-        <translation>Без него потеря этого телефона означает, что придётся создать новую группу и заново подключить к ней все устройства.</translation>
+        <translation>Без него потеря этого телефона означает, что придётся создать новую группу и заново добавить в неё все устройства.</translation>
     </message>
     <message>
         <source>Write on a sheet</source>
@@ -1525,7 +1525,7 @@
     </message>
     <message>
         <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
-        <translation>Для группы без собственного хаба: устройства встречаются на ретрансляторе, например запущенном командой cbb relay, пока приложение синхронизирует. Буфер обмена остаётся зашифрованным между устройствами, но ретранслятор узнаёт, какие из них в сети, их адреса, и какие из них общаются друг с другом, когда и сколько. Чтобы перестать, оставьте оба поля пустыми.</translation>
+        <translation>Для группы без собственного хаба: устройства встречаются на ретрансляторе, например запущенном командой cbb relay, пока идёт синхронизация. Буфер обмена остаётся зашифрованным между устройствами, но ретранслятор узнаёт, какие из них в сети, их адреса, и какие из них общаются друг с другом, когда и сколько. Чтобы перестать, оставьте оба поля пустыми.</translation>
     </message>
     <message>
         <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
@@ -1565,7 +1565,7 @@
     </message>
     <message>
         <source>Waiting: the relay works while the app syncs.</source>
-        <translation>Ожидание: ретранслятор работает, пока приложение синхронизирует.</translation>
+        <translation>Ожидание: ретранслятор работает, пока идёт синхронизация.</translation>
     </message>
 </context>
 <context>
@@ -1882,7 +1882,7 @@
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
-        <translation>Создайте новую группу и подключите к ней свои устройства.</translation>
+        <translation>Создайте новую группу и добавьте в неё свои устройства.</translation>
     </message>
     <message>
         <source>Move the group to a new main device with the group's recovery key.</source>
@@ -1950,7 +1950,7 @@
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
-        <translation>Владелец группы решает это в своих предупреждениях.</translation>
+        <translation>Владелец группы решает это в своих оповещениях.</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
@@ -2014,7 +2014,7 @@
     </message>
     <message>
         <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>Эта сеть может резать туннели: включите «Строгие сети» на базе.</translation>
+        <translation>Эта сеть может блокировать туннели: включите «Строгие сети» на базе.</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>
@@ -2069,7 +2069,7 @@
     </message>
     <message>
         <source>On the new phone, open CBB, tap Join a group and scan this code. A device without a camera, such as a computer, asks for these six digits. Keep this screen open.</source>
-        <translation>На новом телефоне откройте CBB, нажмите «Присоединиться к группе» и отсканируйте этот код. Устройство без камеры, например компьютер, попросит ввести эти шесть цифр. Не закрывайте этот экран.</translation>
+        <translation>На новом телефоне откройте CBB, нажмите «Вступить в группу» и отсканируйте этот код. Устройство без камеры, например компьютер, попросит ввести эти шесть цифр. Не закрывайте этот экран.</translation>
     </message>
     <message>
         <source>The time to add a device is up.</source>

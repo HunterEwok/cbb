@@ -66,7 +66,7 @@ anything else, and does not alter `ufw`.
 
 ### Out of scope
 
-The iPhone app (paused until TestFlight), the ESP32
+The iPhone app, the ESP32
 firmware, the ZX Spectrum Next and the Arduino, and any device not listed above. Denial of
 service against the production forwarder beyond brief, bounded probing is out of scope: the aim
 is to measure resistance to reading and joining, not to take the service down.

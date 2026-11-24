@@ -135,7 +135,7 @@ line here with every new function, and a case for it in the catalogue.
 | G.53 | `cbb takeover` | G26 |
 | G.54 | A takeover undone | G27 |
 | G.55 | A phone takes the group over (`root` records) | G28 |
-| G.56 | An old group's records refused (`cbb upgrade` gone) | G29 |
+| G.56 | An old group's records refused (no `cbb upgrade`) | G29 |
 | G.57 | `cbb rename` and the phones' rename | G30, A1 |
 | G.58 | Name lengths and Unicode names | G30 |
 | G.59 | Records converge in any order | G31 |

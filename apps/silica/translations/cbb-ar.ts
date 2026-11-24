@@ -234,7 +234,7 @@
     </message>
     <message>
         <source>The YubiKey's PIN</source>
-        <translation>الرقم السري لـ YubiKey</translation>
+        <translation>رمز PIN لـ YubiKey</translation>
     </message>
     <message>
         <source>The recovery key's text, as on the sheet</source>
@@ -242,7 +242,7 @@
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
-        <translation>لا يمكن التراجع عن ذلك. يؤكده رمز PIN للمسؤول، وتتبع أجهزة المجموعة هذا الهاتف فور اتصالها.</translation>
+        <translation>لا يمكن التراجع عن ذلك. يؤكده رمز PIN للمشرف، وتتبع أجهزة المجموعة هذا الهاتف فور اتصالها.</translation>
     </message>
     <message>
         <source>Use a YubiKey instead</source>
@@ -538,7 +538,7 @@
     </message>
     <message>
         <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
-        <translation>الرقم السري لـ YubiKey محظور. ألغِ حظره بالـ PUK الخاص به في Yubico Authenticator، ثم حاول مرة أخرى.</translation>
+        <translation>رمز PIN لـ YubiKey محظور. ألغِ حظره بالـ PUK الخاص به في Yubico Authenticator، ثم حاول مرة أخرى.</translation>
     </message>
     <message>
         <source>The admin PIN is needed first.</source>
@@ -678,7 +678,7 @@
     </message>
     <message>
         <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
-        <translation>رقم سري خاطئ. بعد ثلاث محاولات خاطئة يحظر YubiKey رقمه السري.</translation>
+        <translation>رمز PIN خاطئ. بعد ثلاث محاولات خاطئة يحظر YubiKey رمز PIN الخاص به.</translation>
     </message>
 </context>
 <context>
@@ -935,7 +935,7 @@
     </message>
     <message>
         <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
-        <translation>أثناء ظهوره، يجد الجهاز الجديد هذا الهاتف باسم “CBB keyboard” في إعدادات البلوتوث.</translation>
+        <translation>أثناء ظهوره، يجد الجهاز الجديد هذا الهاتف باسم «CBB keyboard» في إعدادات البلوتوث.</translation>
     </message>
     <message>
         <source>Act as a Bluetooth keyboard</source>
@@ -1305,7 +1305,7 @@
     </message>
     <message>
         <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
-        <translation>تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة.</translation>
+        <translation>تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الحاسوب حيث يكون التركيز، كما يفعل Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة.</translation>
     </message>
     <message>
         <source>A secret</source>
@@ -1313,7 +1313,7 @@
     </message>
     <message>
         <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
-        <translation>يذهب إلى حيث تركيز لوحة مفاتيح %1، بعد أن يشغّل مستخدمه اللصق عن بُعد هناك. إذا تُرك فارغًا، يرسل لصق ما في الحافظة.</translation>
+        <translation>يذهب إلى حيث تركيز لوحة مفاتيح %1، بعد أن يشغّل مستخدمه اللصق عن بُعد هناك. إذا تُرك فارغًا، يرسل «لصق» ما في الحافظة.</translation>
     </message>
     <message>
         <source>Paste</source>
@@ -1459,7 +1459,7 @@
     </message>
     <message>
         <source>The YubiKey's PIN</source>
-        <translation>الرقم السري لـ YubiKey</translation>
+        <translation>رمز PIN لـ YubiKey</translation>
     </message>
     <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
@@ -1479,7 +1479,7 @@
     </message>
     <message>
         <source>Write the key down or save this page, and keep it safe.</source>
-        <translation>انسخ المفتاح أو احفظ هذه الصفحة، واحتفظ بها في مكان آمن.</translation>
+        <translation>دوّن المفتاح أو احفظ هذه الصفحة، واحتفظ بها في مكان آمن.</translation>
     </message>
     <message>
         <source>Write to YubiKey</source>
@@ -1553,11 +1553,11 @@
     </message>
     <message>
         <source>Renew the group's keys for sync away from home</source>
-        <translation>تجديد مفاتيح المجموعة للمزامنة بعيدًا عن المنزل</translation>
+        <translation>تجديد مفاتيح المجموعة للمزامنة خارج المنزل</translation>
     </message>
     <message>
         <source>The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.</source>
-        <translation>انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجهاز الرئيسي.</translation>
+        <translation>انتهت صلاحية مفاتيح المجموعة للمزامنة خارج المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجهاز الرئيسي.</translation>
     </message>
     <message>
         <source>The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.</source>
@@ -1763,7 +1763,7 @@
     </message>
     <message>
         <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
-        <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا. يبقى الهاتف في المجموعة عضوًا؛ لتصبح مشرفًا مرة أخرى، أعد تثبيت CBB وانضم كجهاز جديد.</translation>
+        <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا. يبقى الهاتف في المجموعة عضوًا؛ ليصبح مشرفًا مرة أخرى، أعد تثبيت CBB وانضم كجهاز جديد.</translation>
     </message>
     <message>
         <source>Show error details</source>

@@ -70,18 +70,18 @@
     </message>
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
+        <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלכם, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
     </message>
 </context>
 <context>
     <name>BleKeyboard</name>
     <message>
         <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
-        <translation>הבלוטות' כבוי. הפעילו אותו בהגדרות הטלפון, ואז הפעילו שוב את המקלדת.</translation>
+        <translation>ה-Bluetooth כבוי. הפעילו אותו בהגדרות הטלפון, ואז הפעילו שוב את המקלדת.</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
-        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
+        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות ה-Bluetooth שלו.</translation>
     </message>
     <message>
         <source>The clipboard holds no text.</source>
@@ -105,11 +105,11 @@
     </message>
     <message>
         <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
-        <translation>הבלוטות' של הטלפון לא ענה. ייתכן ש-CBB לא מורשה להשתמש בו.</translation>
+        <translation>ה-Bluetooth של הטלפון לא ענה. ייתכן ש-CBB לא מורשה להשתמש בו.</translation>
     </message>
     <message>
         <source>The phone's Bluetooth did not take the keyboard.</source>
-        <translation>הבלוטות' של הטלפון לא קיבל את המקלדת.</translation>
+        <translation>ה-Bluetooth של הטלפון לא קיבל את המקלדת.</translation>
     </message>
     <message>
         <source>The text has more than %1 characters, more than a keyboard types.</source>
@@ -117,7 +117,7 @@
     </message>
     <message>
         <source>This phone's Bluetooth cannot act as a keyboard.</source>
-        <translation>הבלוטות' של הטלפון הזה לא יכול לשמש כמקלדת.</translation>
+        <translation>ה-Bluetooth של הטלפון הזה לא יכול לשמש כמקלדת.</translation>
     </message>
 </context>
 <context>
@@ -140,7 +140,7 @@
     </message>
     <message>
         <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
-        <translation>סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלך. הדוח אנונימי.</translation>
+        <translation>סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלכם. הדוח אנונימי.</translation>
     </message>
     <message>
         <source>Technical details</source>
@@ -148,7 +148,7 @@
     </message>
     <message>
         <source>Version %1 fixes this: update CBB.</source>
-        <translation>גרסה %1 מתקנת את זה: יש לעדכן את CBB.</translation>
+        <translation>גרסה %1 מתקנת את זה: עדכנו את CBB.</translation>
     </message>
 </context>
 <context>
@@ -182,7 +182,7 @@
     <name>ChangeRootPage</name>
     <message>
         <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
-        <translation>שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; כתבו מעליו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד.</translation>
+        <translation>שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; דרסו אותו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד.</translation>
     </message>
     <message>
         <source>Continue</source>
@@ -210,7 +210,7 @@
     </message>
     <message>
         <source>Removed</source>
-        <translation>מוסר</translation>
+        <translation>הוסר</translation>
     </message>
     <message>
         <source>Stays</source>
@@ -258,7 +258,7 @@
     </message>
     <message>
         <source>Write a new change over it</source>
-        <translation>לכתוב מעליו שינוי חדש</translation>
+        <translation>לדרוס אותו בשינוי חדש</translation>
     </message>
 </context>
 <context>
@@ -546,7 +546,7 @@
     </message>
     <message>
         <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
-        <translation>האפליקציה לא יכולה להשתמש במפתח הניהול של ה-YubiKey הזה. השתמש בדף המודפס במקום.</translation>
+        <translation>האפליקציה לא יכולה להשתמש במפתח הניהול של ה-YubiKey הזה. השתמשו בדף המודפס במקום זאת.</translation>
     </message>
     <message>
         <source>The device did not paste.</source>
@@ -642,7 +642,7 @@
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
-        <translation>הקושחה של ה-YubiKey הזה ישנה מ-5.3, שמפתח השחזור צריך. השתמש בדף המודפס במקום.</translation>
+        <translation>הקושחה של ה-YubiKey הזה ישנה מ-5.3, שמפתח השחזור צריך. השתמשו בדף המודפס במקום זאת.</translation>
     </message>
     <message>
         <source>This build of CBB is broken.</source>
@@ -693,7 +693,7 @@
     </message>
     <message>
         <source>%1 moved the group to itself: it is the group's main device now.</source>
-        <translation>%1 העביר אליו את הקבוצה: עכשיו הוא המכשיר הראשי של הקבוצה.</translation>
+        <translation>%1 העביר את הקבוצה לעצמו: עכשיו הוא המכשיר הראשי של הקבוצה.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -788,7 +788,7 @@
     </message>
     <message>
         <source>This wasn't me</source>
-        <translation>זה לא הייתי אני</translation>
+        <translation>לא אני עשיתי את זה</translation>
     </message>
 </context>
 <context>
@@ -803,7 +803,7 @@
     </message>
     <message>
         <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
-        <translation>הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מאשר את הטלפון כשהוא רואה את המילים שהוא מציג.</translation>
+        <translation>הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מקבל את הטלפון הזה ברגע שהוא רואה את המילים שהטלפון מציג.</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -838,7 +838,7 @@
     </message>
     <message>
         <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
-        <translation>לאשר את %1 (%2)? אשרו רק אם המכשיר מציג את אותן מילים:</translation>
+        <translation>לקבל את %1 (%2)? קבלו אותו רק אם המכשיר מציג את אותן מילים:</translation>
     </message>
     <message>
         <source>Copy the invitation's text</source>
@@ -889,11 +889,11 @@
     </message>
     <message>
         <source>Try again</source>
-        <translation>נסה שוב</translation>
+        <translation>נסו שוב</translation>
     </message>
     <message>
         <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
-        <translation>מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומאשר את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח.</translation>
+        <translation>מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומקבל את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח.</translation>
     </message>
 </context>
 <context>
@@ -935,15 +935,15 @@
     </message>
     <message>
         <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
-        <translation>כל עוד הטלפון גלוי, מכשיר חדש מוצא אותו בהגדרות הבלוטות' שלו בשם “CBB keyboard”.</translation>
+        <translation>כל עוד הטלפון גלוי, מכשיר חדש מוצא אותו בהגדרות ה-Bluetooth שלו בשם “CBB keyboard”.</translation>
     </message>
     <message>
         <source>Act as a Bluetooth keyboard</source>
-        <translation>שימוש כמקלדת בלוטות'</translation>
+        <translation>שימוש כמקלדת Bluetooth</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
-        <translation>מקלדת בלוטות'</translation>
+        <translation>מקלדת Bluetooth</translation>
     </message>
     <message>
         <source>Connected to %1.</source>
@@ -963,7 +963,7 @@
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
-        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
+        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות ה-Bluetooth שלו.</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -979,7 +979,7 @@
     </message>
     <message>
         <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
-        <translation>הטלפון הזה מקליד בטלוויזיה, בטאבלט, בקונסולה או במחשב שהוא מותאם אליהם, בלי להתקין שם דבר: את הלוח, בהקשה שלכם.</translation>
+        <translation>הטלפון הזה מקליד בטלוויזיה, בטאבלט, בקונסולה או במחשב שמצומדים אליו, שלא צריכים שום דבר מותקן: את הלוח, בהקשה שלכם.</translation>
     </message>
     <message>
         <source>Try again</source>
@@ -995,7 +995,7 @@
     </message>
     <message>
         <source>Visible for %1 s</source>
-        <translation>גלוי עוד %1 שנ'</translation>
+        <translation>גלוי עוד %1 שנ׳</translation>
     </message>
 </context>
 <context>
@@ -1018,11 +1018,11 @@
     </message>
     <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>מנהל השתיק את הטלפון הזה עד %1: העותקים שלו לא מגיעים לקבוצה.</translation>
+        <translation>מנהל השתיק את הטלפון הזה עד %1: ההעתקות שלו לא מגיעות לקבוצה.</translation>
     </message>
     <message>
         <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>מנהל השתיק את הטלפון הזה: העותקים שלו לא מגיעים לקבוצה עד שמנהל יבטל את ההשתקה.</translation>
+        <translation>מנהל השתיק את הטלפון הזה: ההעתקות שלו לא מגיעות לקבוצה עד שמנהל יבטל את ההשתקה.</translation>
     </message>
     <message>
         <source>At home: syncing directly.</source>
@@ -1154,7 +1154,7 @@
     </message>
     <message>
         <source>This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.</source>
-        <translation>הטלפון הזה נמצא בקבוצה שנוצרה לפני 0.6, וגרסה זו כבר לא מריצה אותה. צא ממנה בטלפון הזה, ואז צור קבוצה חדשה או הצטרף לאחת. שום דבר לא נמחק עד שתצא.</translation>
+        <translation>הטלפון הזה נמצא בקבוצה שנוצרה לפני 0.6, וגרסה זו כבר לא מריצה אותה. צאו ממנה בטלפון הזה, ואז צרו קבוצה חדשה או הצטרפו לאחת. שום דבר לא נמחק עד שתצאו.</translation>
     </message>
     <message>
         <source>Turn Everywhere off</source>
@@ -1178,7 +1178,7 @@
     </message>
     <message>
         <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>ממתין לרכזת: פתח את האפליקציה פעם אחת בבית, ליד מחשב של הקבוצה.</translation>
+        <translation>ממתין לרכזת: פתחו את האפליקציה פעם אחת בבית, ליד מחשב של הקבוצה.</translation>
     </message>
     <message>
         <source>the keyboard's device</source>
@@ -1213,7 +1213,7 @@
     </message>
     <message>
         <source>The files are too large: up to 50 MB go together.</source>
-        <translation>הקבצים גדולים מדי: עד 50MB יחד.</translation>
+        <translation>הקבצים גדולים מדי: עד 50 MB יחד.</translation>
     </message>
     <message>
         <source>There is nothing to send: no file could be read.</source>
@@ -1259,7 +1259,7 @@
     </message>
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל יעביר אליו את הקבוצה.</translation>
+        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל יעביר את הקבוצה לעצמו.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1423,7 +1423,7 @@
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
-        <translation>שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להעביר את הקבוצה שלך למכשיר הזה.</translation>
+        <translation>שמרו את הדף הזה במקום בטוח, הרחק מהטלפונים שלכם. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להעביר את הקבוצה שלכם לאותו מכשיר.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1435,7 +1435,7 @@
     </message>
     <message>
         <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
-        <translation>נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה.</translation>
+        <translation>נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צרו קבוצה חדשה.</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1463,7 +1463,7 @@
     </message>
     <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
-        <translation>מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמור את שניהם, במקומות שונים.</translation>
+        <translation>מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמרו את שניהם, במקומות שונים.</translation>
     </message>
     <message>
         <source>The sheet is saved in Documents.</source>
@@ -1479,7 +1479,7 @@
     </message>
     <message>
         <source>Write the key down or save this page, and keep it safe.</source>
-        <translation>העתיקו את המפתח או שמרו את הדף הזה, ושמרו עליו במקום בטוח.</translation>
+        <translation>רשמו את המפתח או שמרו את הדף הזה, ושמרו אותו במקום בטוח.</translation>
     </message>
     <message>
         <source>Write to YubiKey</source>
@@ -1525,7 +1525,7 @@
     </message>
     <message>
         <source>For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</source>
-        <translation>לקבוצה בלי רכזת משלה: המכשירים נפגשים בממסר, כמו כזה שהוקם עם cbb relay, בזמן שהיישום מסנכרן. הלוח נשאר מוצפן בין המכשירים, אבל הממסר יודע אילו מהם מחוברים ואת הכתובות שלהם, ואילו מדברים זה עם זה, מתי וכמה. השאירו את שני השדות ריקים כדי להפסיק.</translation>
+        <translation>לקבוצה בלי רכזת משלה: המכשירים נפגשים בממסר, כמו כזה שהוקם עם cbb relay, בזמן שהאפליקציה מסנכרנת. הלוח נשאר מוצפן בין המכשירים, אבל הממסר יודע אילו מהם מחוברים ואת הכתובות שלהם, ואילו מדברים זה עם זה, מתי וכמה. השאירו את שני השדות ריקים כדי להפסיק.</translation>
     </message>
     <message>
         <source>Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.</source>
@@ -1565,7 +1565,7 @@
     </message>
     <message>
         <source>Waiting: the relay works while the app syncs.</source>
-        <translation>ממתין: הממסר עובד בזמן שהיישום מסנכרן.</translation>
+        <translation>ממתין: הממסר עובד בזמן שהאפליקציה מסנכרנת.</translation>
     </message>
 </context>
 <context>
@@ -1611,7 +1611,7 @@
     </message>
     <message>
         <source>Act as a Bluetooth keyboard</source>
-        <translation>שימוש כמקלדת בלוטות'</translation>
+        <translation>שימוש כמקלדת Bluetooth</translation>
     </message>
     <message>
         <source>Admin keys</source>
@@ -1623,11 +1623,11 @@
     </message>
     <message>
         <source>Another phone moves the group to itself</source>
-        <translation>טלפון אחר מעביר אליו את הקבוצה</translation>
+        <translation>טלפון אחר מעביר את הקבוצה לעצמו</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
-        <translation>ייכנס לתוקף כשהיישום יופעל מחדש</translation>
+        <translation>ייכנס לתוקף כשהאפליקציה תופעל מחדש</translation>
     </message>
     <message>
         <source>As the phone</source>
@@ -1806,7 +1806,7 @@
     </message>
     <message>
         <source>A copy waits until this device learns which device sent it.</source>
-        <translation>עותק ממתין עד שהמכשיר הזה יידע איזה מכשיר שלח אותו.</translation>
+        <translation>העתקה ממתינה עד שהמכשיר הזה יידע איזה מכשיר שלח אותה.</translation>
     </message>
     <message>
         <source>Add a phone or a computer.</source>
@@ -1918,7 +1918,7 @@
     </message>
     <message>
         <source>Sync is off on: %1.</source>
-        <translation>הסנכרון כבוי ב: %1.</translation>
+        <translation>הסנכרון כבוי במכשירים: %1.</translation>
     </message>
     <message>
         <source>The backup server does not answer.</source>
@@ -1950,11 +1950,11 @@
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
-        <translation>הבעלים של הקבוצה מחליטים בהתראות שלהם.</translation>
+        <translation>הבעלים של הקבוצה מחליטים דרך ההתראות שלהם.</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
-        <translation>הרשומות של הקבוצה עצרו את ההחלפה.</translation>
+        <translation>הרשומות של הקבוצה עוצרות את ההחלפה.</translation>
     </message>
     <message>
         <source>The group's recovery key was used twice, so the group stopped for good.</source>

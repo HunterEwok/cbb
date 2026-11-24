@@ -16,8 +16,9 @@ import (
 
 func TestRemotePaste(t *testing.T) {
 	var h hub
+	clock := newTestClock(t, 0) // deck's, for its limit of one paste a second
 	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	deck := startEnv(t, &h, "deck", clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	paste := func(text string, h control.Header) error {
@@ -68,7 +69,7 @@ func TestRemotePaste(t *testing.T) {
 		p := deck.status(t).Paste
 		return p != nil && len(p.Targets) == 1 && p.Targets[0] == targetDesktop
 	})
-	time.Sleep(time.Second) // the paste without a target counted
+	clock.nextSecond(t) // the paste without a target counted
 	if err := paste("echo \x1b[31mhi\x1b[0m", control.Header{Method: "type"}); err != nil {
 		t.Fatal(err)
 	}
@@ -76,9 +77,9 @@ func TestRemotePaste(t *testing.T) {
 	if string(m.Payload) != "echo hi" || m.Method != "type" || m.Enter || m.NoLockCheck || m.Name != "pi" {
 		t.Errorf("the desktop got %q %+v", m.Payload, m.Header)
 	}
-	time.Sleep(time.Second) // one paste a second from one sender
+	clock.nextSecond(t) // one paste a second from one sender
 	wantRefused("enter", "ls", control.Header{Enter: true}, "without Enter only")
-	time.Sleep(time.Second)
+	clock.nextSecond(t)
 	// The next paste goes as soon as the desktop has this one, not when
 	// its refusal is back, which may take longer than the second it must
 	// come within on a busy machine.
@@ -96,7 +97,7 @@ func TestRemotePaste(t *testing.T) {
 	if err := <-locked; err == nil || !strings.Contains(err.Error(), "the session is locked") {
 		t.Errorf("locked: %v, want %q", err, "the session is locked")
 	}
-	time.Sleep(time.Second)
+	clock.nextSecond(t)
 	if err := paste("hunter2", control.Header{Kind: control.KindSecret}); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestRemotePaste(t *testing.T) {
 	if m, err := deck.do(t, control.Header{Op: control.OpReceive, Name: "on", NoLockCheck: true}, ""); err != nil || m.Status.Paste == nil || !m.Status.Paste.NoLockCheck {
 		t.Fatalf("paste-receive on -no-lock-check: %+v, %v", m, err)
 	}
-	time.Sleep(time.Second)
+	clock.nextSecond(t)
 	if err := paste("ls", control.Header{}); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +142,7 @@ func TestRemotePaste(t *testing.T) {
 	if p := deck.status(t).Paste; p == nil || p.On {
 		t.Errorf("after paste-off: %+v", p)
 	}
-	time.Sleep(time.Second)
+	clock.nextSecond(t)
 	wantRefused("off again", "ls", control.Header{}, "remote paste is off")
 	// A member that is not an admin sends none.
 	if _, err := deck.do(t, control.Header{Op: control.OpPasteOn, Device: "pi"}, "ls"); err == nil || !strings.Contains(err.Error(), "only an admin") {
@@ -205,8 +206,9 @@ func TestPasteTargetHasNoClipboard(t *testing.T) {
 // so everywhere it needs the user's leave for Enter.
 func TestPasteLineBreaks(t *testing.T) {
 	var h hub
+	clock := newTestClock(t, 0) // deck's, for its limit of one paste a second
 	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	deck := startEnv(t, &h, "deck", clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	if _, err := deck.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
@@ -234,7 +236,7 @@ func TestPasteLineBreaks(t *testing.T) {
 		}()
 	}
 	paste := func(text, method string) error {
-		time.Sleep(time.Second) // one paste a second from one sender
+		clock.nextSecond(t) // one paste a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "deck", Method: method}, text)
 		return err
 	}

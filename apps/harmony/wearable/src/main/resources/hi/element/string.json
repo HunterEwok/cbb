@@ -1,12 +1,12 @@
 {
   "string": [
     {"name": "act_actions_off", "value": "त्वरित क्रियाएँ बंद करें"},
-    {"name": "act_away_off", "value": "घर से दूर सिंक बंद करें"},
+    {"name": "act_away_off", "value": "घर से बाहर सिंक बंद करें"},
     {"name": "act_freeze", "value": "इस एडमिन को फ़्रीज़ करें"},
     {"name": "act_paste_off", "value": "रिमोट पेस्ट बंद करें"},
     {"name": "act_remove", "value": "समूह से हटाएँ"},
     {"name": "ask_actions_off", "value": "%1$s पर हर त्वरित क्रिया बंद करें?"},
-    {"name": "ask_away_off", "value": "%1$s पर घर से दूर सिंक बंद करें?"},
+    {"name": "ask_away_off", "value": "%1$s पर घर से बाहर सिंक बंद करें?"},
     {"name": "ask_freeze", "value": "%1$s को फ़्रीज़ करें? वह नाम के लिए एडमिन रहता है, पर मुख्य डिवाइस के अनफ़्रीज़ करने तक उसके किसी हस्ताक्षर की गिनती नहीं होती।"},
     {"name": "ask_paste_off", "value": "%1$s पर रिमोट पेस्ट बंद करें?"},
     {"name": "ask_remove", "value": "%1$s को समूह से हटाएँ?"},

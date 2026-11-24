@@ -282,7 +282,7 @@ own, with the tag from `TAG` (the pushed tag, or the rehearsal's), whose charact
 `roots` job checks first (0-9, a-z, `.` and `-`, in the form above). When the pinned roots lack
 a half, a rehearsal does not stop at `TestPinnedRootsComplete`: it writes a warning with what
 failed and the test's output in the run's summary and goes on, so it can run before the
-ceremony's roots are in the tree; a tag pushed and the keys check stop there as before.
+ceremony's roots are in the tree; a tag pushed and the keys check stop there.
 
 ## Signed releases
 
@@ -490,7 +490,7 @@ and `-drop` with the pin of either half of a signing key drops both halves.
   copy in iCloud. Without `pq` the hardware's P-256 half signs nothing devices take. A lost
   YubiKey takes its post-quantum halves with it, since they are sealed to its own slot and
   no backup opens them: the other YubiKey's root signs a new `keys.json`, and the next
-  release pins a new second root, both halves, as before. A lost half is replaced like a
+  release pins a new second root, both halves. A lost half is replaced like a
   lost key (a new key, certified by a root, or for a root a new root in the next release).
 
 ## Watching cbb.tools
@@ -531,7 +531,7 @@ echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-relay/refuse
 ```
 
 A line that is not a tag keeps the list as it was and is logged
-(`journalctl -u cbb-forward`, `journalctl -u cbb-relay`); taking the line out lets the group back. Answer the reporter that the group is refused; the servers have nothing else to
+(`journalctl -u cbb-forward`, `journalctl -u cbb-relay`); taking the line out lets the group back in. Answer the reporter that the group is refused; the servers have nothing else to
 give, no logs, addresses or content. A report without a tag gets that answer too, with a
 request for the tag. A report about a source that loads the servers on purpose is the
 firewall's, at the level of its network or provider, as the terms say. A vulnerability is
@@ -734,7 +734,7 @@ The release workflow signs `cbb` and `cbb-helper` (identifier `tools.cbb.helper`
 certificate and the hardened runtime (`packaging/macos/sign.sh`) and has Apple's notary
 service check each (`packaging/macos/notarize.sh`, `notarytool` signed in with the App Store
 Connect API key), so that Gatekeeper opens it without a warning. Without the secrets the
-program is signed ad hoc, as before. The certificates live in a keychain of the run's own
+program is signed ad hoc. The certificates live in a keychain of the run's own
 (`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
 request's build ad hoc with the same flags and runs `cbb version`
 under the hardened runtime. No program carries an entitlement, since none compiles code at
@@ -787,8 +787,8 @@ and notarize `cbb`.
 
 ## Updates of the Mac app (Sparkle)
 
-The Mac app is not yet in the releases; once the Apple developer account exists and the app
-is signed with a Developer ID and notarized, it updates with [Sparkle](https://sparkle-project.org):
+The Mac app comes in the release's `.pkg`, signed with a Developer ID and notarized, but it does
+not update itself yet. It is to update with [Sparkle](https://sparkle-project.org):
 
 - [ ] Sparkle's own Ed25519 key, made with Sparkle's `generate_keys` on the maintainer's Mac
   and kept in its keychain; the public key goes into the app's `Info.plist`

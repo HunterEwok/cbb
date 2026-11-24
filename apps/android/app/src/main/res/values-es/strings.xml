@@ -63,7 +63,7 @@
     <string name="camera_denied">La cámara no está permitida. Permítela en los ajustes de la app para escanear, o pega el texto del código QR de cbb pair.</string>
     <string name="camera_failed">La cámara no se inició. Pega en su lugar el texto del código QR de cbb pair.</string>
     <string name="cancel">Cancelar</string>
-    <string name="change_root">Pasar el grupo a este teléfono</string>
+    <string name="change_root">Mover el grupo a este teléfono</string>
     <string name="change_root_admin_kept">Se queda, y sigue siendo administrador</string>
     <string name="change_root_admin_lost">Se queda, ya sin ser administrador: hazlo administrador de nuevo más tarde</string>
     <string name="change_root_cannot_undo">Esto no se puede deshacer. La huella o el bloqueo de pantalla lo confirman, y los dispositivos del grupo siguen a este teléfono en cuanto se conectan.</string>
@@ -74,11 +74,11 @@
     <string name="change_root_next">Siguiente</string>
     <string name="change_root_online">Ahora hay %1$d de %2$d dispositivos conectados. Los demás sabrán del cambio cuando se conecten. Un dispositivo sin marcar se quita y solo vuelve a unirse como dispositivo nuevo.</string>
     <string name="change_root_out">Quitado</string>
-    <string name="change_root_over_waiting">Escribir un cambio nuevo encima</string>
+    <string name="change_root_over_waiting">Sobrescribir con un cambio nuevo</string>
     <string name="change_root_removed_earlier">Quitado antes</string>
     <string name="change_root_stays">Se queda</string>
     <string name="change_root_tip">Con la clave de recuperación del grupo, este teléfono pasa a ser el dispositivo principal, por ejemplo cuando se pierde el anterior.</string>
-    <string name="change_root_waiting_body">Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; escribe encima solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo.</string>
+    <string name="change_root_waiting_body">Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; sobrescríbelo solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo.</string>
     <string name="change_root_who_stays">Quién se queda en el grupo</string>
     <string name="channel_events">Eventos del grupo</string>
     <string name="channel_push">Con la app cerrada</string>
@@ -121,7 +121,7 @@
     <string name="error_nfc_off">El NFC está desactivado. Actívalo en los ajustes del teléfono y vuelve a intentarlo.</string>
     <string name="error_no_answer">El ordenador no respondió. Puede estar desconectado o tener una versión antigua de CBB.</string>
     <string name="error_no_biometric">Primero añade una huella o una cara en este teléfono: en Android 10 las claves del grupo lo necesitan.</string>
-    <string name="error_no_network">Conecta este teléfono al Wi-Fi de casa y vuelve a intentarlo.</string>
+    <string name="error_no_network">Conecta este teléfono a la Wi-Fi de casa y vuelve a intentarlo.</string>
     <string name="error_no_nfc">Este teléfono no tiene NFC ni un puerto USB que admita una YubiKey.</string>
     <string name="error_no_screen">CBB no estaba en pantalla, así que no pudo pedir tu huella, tu cara o el bloqueo de pantalla. Abre CBB y vuelve a intentarlo.</string>
     <string name="error_no_screen_lock">Primero pon un bloqueo de pantalla en este teléfono: las claves del grupo lo necesitan.</string>
@@ -133,7 +133,7 @@
     <string name="error_old_key">La clave de grupo de este teléfono la creó una versión anterior de la app. Abandona el grupo en este teléfono y vuelve a configurarlo.</string>
     <string name="error_paste_refused">El dispositivo no pegó.</string>
     <string name="error_refused">El ordenador lo rechazó. Vuelve a ejecutar cbb pair en él.</string>
-    <string name="error_root_leaves">Este teléfono es el dispositivo principal del grupo, y el grupo tiene otros dispositivos. Quítalos antes, o deja que un teléfono administrador se pase el grupo.</string>
+    <string name="error_root_leaves">Este teléfono es el dispositivo principal del grupo, y el grupo tiene otros dispositivos. Quítalos antes, o deja que un teléfono administrador mueva el grupo a sí mismo.</string>
     <string name="error_rootless">Este ordenador está instalado sin root, así que cualquiera de sus programas puede leer sus claves. Nunca puede ser administrador.</string>
     <string name="error_timed_out">Ningún teléfono escaneó el código en cinco minutos. Vuelve a intentarlo.</string>
     <string name="error_too_many_codes">Demasiados códigos incorrectos. Vuelve a intentarlo con un código nuevo.</string>
@@ -152,10 +152,10 @@
     <string name="error_yubikey_usb_denied">No se permitió al teléfono usar la YubiKey por USB. Vuelve a conectarla y permítelo.</string>
     <string name="error_yubikey_wrong_pin">PIN incorrecto. Tras tres intentos fallidos la YubiKey bloquea su PIN.</string>
     <string name="event_added">%1$s se unió al grupo.</string>
-    <string name="event_frozen">%1$s fue congelado: los demás lo rechazan hasta que un admin lo descongele.</string>
-    <string name="event_made_admin">%1$s ahora es admin.</string>
+    <string name="event_frozen">%1$s fue congelado: los demás lo rechazan hasta que un administrador lo descongele.</string>
+    <string name="event_made_admin">%1$s ahora es administrador.</string>
     <string name="event_removed">%1$s se quitó del grupo.</string>
-    <string name="event_taken_over">%1$s se pasó el grupo: ahora es el dispositivo principal del grupo.</string>
+    <string name="event_taken_over">%1$s movió el grupo a sí mismo: ahora es el dispositivo principal del grupo.</string>
     <string name="event_unfrozen">%1$s fue descongelado.</string>
     <string name="fetched">Obtenido de los ordenadores.</string>
     <string name="files_saved">Guardado en Descargas, en la carpeta CBB.</string>
@@ -208,13 +208,13 @@
     <string name="join_scan_hint">En un teléfono del grupo, toca + y escanea el código que muestra, o escribe los seis dígitos que hay debajo. Mantén ambos teléfonos en la misma red.</string>
     <string name="join_title">Unirse a un grupo</string>
     <string name="join_tv">Unirse al grupo de un teléfono</string>
-    <string name="join_tv_hint">En un dispositivo del grupo, abra una ventana de emparejamiento: toque + allí. Luego escriba los seis dígitos que muestra.</string>
+    <string name="join_tv_hint">En un dispositivo del grupo, abre una ventana de emparejamiento: toca + allí. Luego escribe los seis dígitos que muestra.</string>
     <string name="key_guard_weak">Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</string>
     <string name="key_level_body">Qué dispositivos pueden ser administradores y hubs del grupo. Las claves en hardware nunca salen del dispositivo; quien consiga una clave en un archivo puede copiarla. Los administradores que ya están en el grupo siguen hasta que los quites.</string>
     <string name="key_level_files">Claves también en archivos</string>
     <string name="key_level_hardware">Claves en hardware</string>
-    <string name="key_level_own_key">La clave propia de este teléfono no está probada, así que el grupo aún no puede exigir claves probadas.</string>
-    <string name="key_level_proven">Solo hardware probado</string>
+    <string name="key_level_own_key">La clave propia de este teléfono no está verificada, así que el grupo aún no puede exigir claves verificadas.</string>
+    <string name="key_level_proven">Solo hardware verificado</string>
     <string name="key_level_saved">Guardado. Todos los dispositivos del grupo lo siguen.</string>
     <string name="key_level_title">Claves de administrador</string>
     <string name="keyboard">Teclado Bluetooth</string>
@@ -278,7 +278,7 @@
     <string name="make_admin_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en un archivo del ordenador: quien copie ese archivo puede actuar como administrador hasta que otro administrador lo quite. Hazlo solo con un ordenador que mantengas seguro.</string>
     <string name="make_admin_files_body">Entonces el grupo permite que las claves en archivos sean administradores y hubs (Ajustes, Claves de administrador).</string>
     <string name="make_admin_hardware_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en su hardware, que nunca las deja salir.</string>
-    <string name="make_admin_phone_body">Así podrá añadir y quitar dispositivos, y pasarse el grupo si se pierde este teléfono.</string>
+    <string name="make_admin_phone_body">Así podrá añadir y quitar dispositivos, y mover el grupo a sí mismo si se pierde este teléfono.</string>
     <string name="make_admin_title">¿Hacer administrador a %1$s?</string>
     <string name="make_hub">Convertirlo en hub</string>
     <string name="make_hub_body">Entonces tus dispositivos llegan al grupo a través de él cuando están fuera de casa, por el reenviador del proyecto en cbb.tools. La sincronización fuera de casa ya debe estar activada allí; solo su propio usuario la activa.</string>
@@ -390,7 +390,7 @@
     <string name="reason_unfreeze">Descongelar un ordenador de administrador</string>
     <string name="reason_unmute">Quitar el silencio a un dispositivo</string>
     <string name="recovery_06">Se creó con el grupo y su hoja se mostró una sola vez. Sin la hoja no se puede cambiar el dispositivo principal del grupo: si pierdes la hoja, crea un grupo nuevo.</string>
-    <string name="recovery_body">Una hoja para imprimir y guardar lejos de tus teléfonos. Si se pierde el teléfono principal del grupo, otro dispositivo del grupo se pasa el grupo con ella.</string>
+    <string name="recovery_body">Una hoja para imprimir y guardar lejos de tus teléfonos. Si se pierde el teléfono principal del grupo, otro dispositivo del grupo mueve el grupo a sí mismo con ella.</string>
     <string name="recovery_done">Hecho</string>
     <string name="recovery_done_body">Este teléfono olvida ahora la clave. Para obtener otra hoja, crea una clave de recuperación nueva.</string>
     <string name="recovery_done_title">¿Guardaste la hoja?</string>
@@ -399,7 +399,7 @@
     <string name="recovery_leave_unsaved">Salir sin guardar</string>
     <string name="recovery_made">Creada el %1$s.</string>
     <string name="recovery_page_how">Para mover el grupo a otro de sus dispositivos: en un teléfono, elige Mover el grupo a este teléfono en sus ajustes y escanea el código; en un ordenador, ejecuta cbb recovery y escribe la clave.</string>
-    <string name="recovery_page_keep">Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede pasar tu grupo a ese dispositivo.</string>
+    <string name="recovery_page_keep">Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede mover tu grupo a ese dispositivo.</string>
     <string name="recovery_page_title">Clave de recuperación de CBB</string>
     <string name="recovery_print">Imprimir o guardar como PDF</string>
     <string name="recovery_print_failed">No se pudo imprimir la hoja.</string>
@@ -429,7 +429,7 @@
     <string name="relay_with">En el relé; dispositivos del grupo allí: %1$d.</string>
     <string name="remove">Quitar</string>
     <string name="remove_body">Ya no se sincronizará con tus dispositivos. Para añadirlo de nuevo, vuelve a escanear su código QR.</string>
-    <string name="remove_root_body">Creó el grupo. Este teléfono se pasa el grupo con una clave nueva, y los demás dispositivos lo siguen.</string>
+    <string name="remove_root_body">Creó el grupo. Este teléfono mueve el grupo a sí mismo con una clave nueva, y los demás dispositivos lo siguen.</string>
     <string name="remove_title">¿Quitar %1$s?</string>
     <string name="removed">Quitado. Los demás dispositivos lo rechazan a partir de ahora.</string>
     <string name="removed_self_text">Los dispositivos del grupo lo rechazan ahora. Abandona el grupo para borrar sus claves aquí; después podrá unirse de nuevo a un grupo.</string>
@@ -505,7 +505,7 @@
     <string name="tile_label">Enviar portapapeles</string>
     <string name="tile_no_group">Sin grupo</string>
     <string name="tile_off">Desactivada</string>
-    <string name="tile_on">Activada</string>
+    <string name="tile_on">Activado</string>
     <string name="tile_sync_off">La sincronización está desactivada</string>
     <string name="tile_sync_on">La sincronización está activada</string>
     <string name="ttl_body">Cuánto tiempo se muestra la última copia como recibida, para todo el grupo. Un secreto además sale del portapapeles al acabarse su tiempo.</string>
@@ -561,7 +561,7 @@
     <string name="why_devices_sync_off_t">La sincronización está desactivada en: %1$s.</string>
     <string name="why_entries_stale_d">Actualiza CBB en un ordenador del grupo.</string>
     <string name="why_entries_stale_t">La lista de puntos de entrada de los servidores de conexión está desactualizada.</string>
-    <string name="why_forwarder_down_d">Los dispositivos fuera de casa podrían no alcanzarlo; CBB lo intenta de nuevo solo.</string>
+    <string name="why_forwarder_down_d">Los dispositivos fuera de casa podrían no alcanzarlo; CBB vuelve a intentarlo por sí solo.</string>
     <string name="why_forwarder_down_t">El servidor de conexión no acepta esta base.</string>
     <string name="why_frozen_d">Pide al propietario del grupo que le devuelva sus derechos.</string>
     <string name="why_frozen_t">Los derechos de este dispositivo como dispositivo de confianza están en pausa.</string>
@@ -591,7 +591,7 @@
     <string name="why_owner_disagrees_t">Este dispositivo y el grupo no coinciden sobre cuál es el dispositivo principal.</string>
     <string name="why_recovery_fork_d">Crea un grupo nuevo y une tus dispositivos a él.</string>
     <string name="why_recovery_fork_t">La clave de recuperación del grupo se usó dos veces, así que el grupo se detuvo para siempre.</string>
-    <string name="why_relay_down_d">Comprueba la conexión a internet; CBB lo intenta de nuevo solo.</string>
+    <string name="why_relay_down_d">Comprueba la conexión a internet; CBB vuelve a intentarlo por sí solo.</string>
     <string name="why_relay_down_t">El servidor de respaldo no responde.</string>
     <string name="why_removed_d">Sal del grupo en este dispositivo y vuelve a unirte.</string>
     <string name="why_removed_t">Este dispositivo se quitó del grupo.</string>
@@ -605,7 +605,7 @@
     <string name="why_sync_off_t">La sincronización está desactivada en este dispositivo.</string>
     <string name="why_sync_off_until_t">La sincronización está desactivada en este dispositivo hasta %1$s.</string>
     <string name="why_tunnel_blocked_d">Esta red puede bloquear túneles: activa Redes estrictas en la base.</string>
-    <string name="why_tunnel_blocked_t">El túnel a la base %1$s no pasa.</string>
+    <string name="why_tunnel_blocked_t">El túnel a la base %1$s no consigue pasar.</string>
     <string name="why_unreached_d">Permite CBB en el cortafuegos de este ordenador.</string>
     <string name="why_unreached_t">Los dispositivos de casa no pueden conectarse a este: %1$s.</string>
     <string name="why_update_t">CBB %1$s está disponible.</string>

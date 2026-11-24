@@ -182,7 +182,7 @@
     <name>ChangeRootPage</name>
     <message>
         <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
-        <translation>Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; escribe encima solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo.</translation>
+        <translation>Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; sobrescríbelo solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo.</translation>
     </message>
     <message>
         <source>Continue</source>
@@ -198,7 +198,7 @@
     </message>
     <message>
         <source>Move the group to this phone</source>
-        <translation>Pasar el grupo a este teléfono</translation>
+        <translation>Mover el grupo a este teléfono</translation>
     </message>
     <message>
         <source>Next</source>
@@ -258,7 +258,7 @@
     </message>
     <message>
         <source>Write a new change over it</source>
-        <translation>Escribir un cambio nuevo encima</translation>
+        <translation>Sobrescribir con un cambio nuevo</translation>
     </message>
 </context>
 <context>
@@ -369,7 +369,7 @@
     </message>
     <message>
         <source>Make an admin</source>
-        <translation>Hacer admin</translation>
+        <translation>Hacer administrador</translation>
     </message>
     <message>
         <source>Make it a hub</source>
@@ -381,7 +381,7 @@
     </message>
     <message>
         <source>Making %1 an admin</source>
-        <translation>Haciendo admin a %1</translation>
+        <translation>Haciendo administrador a %1</translation>
     </message>
     <message>
         <source>More</source>
@@ -518,11 +518,11 @@
     </message>
     <message>
         <source>Only an admin of the group adds devices.</source>
-        <translation>Solo un admin del grupo añade dispositivos.</translation>
+        <translation>Solo un administrador del grupo añade dispositivos.</translation>
     </message>
     <message>
         <source>Only an admin of the group changes its devices.</source>
-        <translation>Solo un admin del grupo cambia sus dispositivos.</translation>
+        <translation>Solo un administrador del grupo cambia sus dispositivos.</translation>
     </message>
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
@@ -685,7 +685,7 @@
     <name>Events</name>
     <message>
         <source>%1 is an admin now.</source>
-        <translation>%1 ahora es admin.</translation>
+        <translation>%1 ahora es administrador.</translation>
     </message>
     <message>
         <source>%1 joined the group.</source>
@@ -693,11 +693,11 @@
     </message>
     <message>
         <source>%1 moved the group to itself: it is the group's main device now.</source>
-        <translation>%1 se pasó el grupo: ahora es el dispositivo principal del grupo.</translation>
+        <translation>%1 movió el grupo a sí mismo: ahora es el dispositivo principal del grupo.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>%1 fue congelado: los demás lo rechazan hasta que un admin lo descongele.</translation>
+        <translation>%1 fue congelado: los demás lo rechazan hasta que un administrador lo descongele.</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
@@ -846,7 +846,7 @@
     </message>
     <message>
         <source>Invite another device</source>
-        <translation>Invitar otro dispositivo</translation>
+        <translation>Invitar a otro dispositivo</translation>
     </message>
     <message>
         <source>Not this one</source>
@@ -935,7 +935,7 @@
     </message>
     <message>
         <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
-        <translation>Mientras es visible, un dispositivo nuevo encuentra este teléfono como “CBB keyboard” en sus ajustes de Bluetooth.</translation>
+        <translation>Mientras es visible, un dispositivo nuevo encuentra este teléfono como «CBB keyboard» en sus ajustes de Bluetooth.</translation>
     </message>
     <message>
         <source>Act as a Bluetooth keyboard</source>
@@ -1094,7 +1094,7 @@
     </message>
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
-        <translation>Haz administrador a un segundo teléfono: añádelo al grupo, ábrelo aquí y toca Hacer admin. Toca para cerrar.</translation>
+        <translation>Haz administrador a un segundo teléfono: añádelo al grupo, ábrelo aquí y toca Hacer administrador. Toca para cerrar.</translation>
     </message>
     <message>
         <source>Needs attention</source>
@@ -1259,7 +1259,7 @@
     </message>
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>Haz administrador a otro teléfono pronto: si pierdes este, un teléfono administrador se pasa el grupo.</translation>
+        <translation>Haz administrador a otro teléfono pronto: si pierdes este, un teléfono administrador mueve el grupo a sí mismo.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1423,7 +1423,7 @@
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
-        <translation>Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede pasar tu grupo a ese dispositivo.</translation>
+        <translation>Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede mover tu grupo a ese dispositivo.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1479,7 +1479,7 @@
     </message>
     <message>
         <source>Write the key down or save this page, and keep it safe.</source>
-        <translation>Copia la clave o guarda esta página, y guárdala en un lugar seguro.</translation>
+        <translation>Anota la clave o guarda esta página, y consérvala en un lugar seguro.</translation>
     </message>
     <message>
         <source>Write to YubiKey</source>
@@ -1599,7 +1599,7 @@
     </message>
     <message>
         <source>A device becomes an admin</source>
-        <translation>Un dispositivo pasa a ser admin</translation>
+        <translation>Un dispositivo pasa a ser administrador</translation>
     </message>
     <message>
         <source>A device is frozen or unfrozen</source>
@@ -1623,7 +1623,7 @@
     </message>
     <message>
         <source>Another phone moves the group to itself</source>
-        <translation>Otro teléfono se pasa el grupo</translation>
+        <translation>Otro teléfono mueve el grupo a sí mismo</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1719,7 +1719,7 @@
     </message>
     <message>
         <source>Move the group to this phone</source>
-        <translation>Pasar el grupo a este teléfono</translation>
+        <translation>Mover el grupo a este teléfono</translation>
     </message>
     <message>
         <source>None yet</source>
@@ -1838,7 +1838,7 @@
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
-        <translation>Comprueba la conexión a internet; CBB lo intenta de nuevo solo.</translation>
+        <translation>Comprueba la conexión a internet; CBB vuelve a intentarlo por sí solo.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1850,7 +1850,7 @@
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
-        <translation>Los dispositivos fuera de casa podrían no alcanzarlo; CBB lo intenta de nuevo solo.</translation>
+        <translation>Los dispositivos fuera de casa podrían no alcanzarlo; CBB vuelve a intentarlo por sí solo.</translation>
     </message>
     <message>
         <source>Everything syncs.</source>
@@ -1974,7 +1974,7 @@
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
-        <translation>El túnel a la base %1 no pasa.</translation>
+        <translation>El túnel a la base %1 no consigue pasar.</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -2092,7 +2092,7 @@
     </message>
     <message>
         <source>Admin, frozen by another admin</source>
-        <translation>Admin, congelado por otro admin</translation>
+        <translation>Administrador, congelado por otro administrador</translation>
     </message>
     <message>
         <source>Board</source>

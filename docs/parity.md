@@ -56,13 +56,13 @@ on every platform of the class, on the roadmap).
 
 | Capability | Android | iPhone | Aurora OS | HarmonyOS | Notes |
 |---|---|---|---|---|---|
-| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE behind the app's own PIN, which the TEE checks (D-94): Aurora 5.1.5 gives a regular app neither its authentication service nor the fingerprint (a probe on the R570E and Open Mobile Platform's answer, 2026-11-09); making a group not yet tried on the phone | yes, the root key in HUKS behind the face, the fingerprint or the PIN (User Authentication Kit); not yet tried on a phone | StrongBox or TEE; Secure Enclave |
+| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE behind the app's own PIN, which the TEE checks (D-94): Aurora 5.1.5 gives a regular app neither its authentication service nor the fingerprint (a probe on the R570E and Open Mobile Platform's answer); making a group not yet tried on the phone | yes, the root key in HUKS behind the face, the fingerprint or the PIN (User Authentication Kit); not yet tried on a phone | StrongBox or TEE; Secure Enclave |
 | Add a computer or a small device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | yes, as an admin (the home window); not yet tried on a phone | the Aurora app reads the code with the core's reader |
 | Join another phone's group, as a member with one button | yes | yes | yes; the second button "Join as an admin" goes after the admin PIN (D-94) | yes; not yet tried on a phone | the root makes it an admin later (D-95) |
 | Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove, renew and take over from a lost root (its admin key in the TEE becomes the new root), as the root or an admin; not yet tried on the phone | remove and renew, as the root or an admin; not yet tried on a phone | the core's member signs (`cbb_member_manage`), the app's admin key in the TEE |
 | The root's settings: the takeover delay, the key level, handing the group over, the recovery key | yes | yes | yes, as the root, the recovery key as a sheet shown once (no YubiKey); on 0.6 a phone in the group changes the root with it (`change_root`), and restoring on a new phone comes with 0.7 (D-125); not yet tried on the phone | the key level, the copies' lifetimes and the recovery key as a sheet shown once, as the root; on 0.6 a phone in the group changes the root with it; not yet tried on a phone | built and signed in the core on every phone (`cbb_member_manage`, `CoreMember`) |
 | Change the root with the recovery key (0.6), and keep the key on a YubiKey | yes: the sheet, or a YubiKey over NFC or, on an iPhone with USB-C, plugged in when iOS shows it through CryptoTokenKit (else the app stays with NFC); sealing on the root phone; USB-C not yet tried with a real card | yes: the sheet or a YubiKey over NFC or USB-C (CCID through `UsbManager`); sealing on the root phone; USB-C not yet tried with a real card | the sheet, or a YubiKey plugged into USB-C through the system's pcscd (the core is its client, transport `pcsc`): the R570E sees the key, pcscd takes it and its socket is open inside the sandbox; the app's path not yet tried on the phone with a real card | the sheet, or a YubiKey over NFC (IsoDep) or USB-C (`usbManager`, transport `ccid_bulk`); not yet tried on a phone | `change_preview` and `change_root`; the core speaks PIV (`cbb_piv`): over NFC and on the iPhone's USB-C the app carries APDUs, on Android's and HarmonyOS's USB-C only the bytes of the CCID interface (transport `ccid_bulk`, the core frames them); HarmonyOS as Android, over IsoDep and `usbManager` (not built in CI) |
-| Make a phone or a computer an admin | yes | yes | yes, as the root, for a device connected; not yet tried on the phone | yes, as the root; not yet tried on a phone | a phone offers its admin key in its hellos once it is in the group; on Aurora after D-94 |
+| Make a phone or a computer an admin | yes | yes | yes, as the root, for a device connected; not yet tried on the phone | yes, as the root; not yet tried on a phone | a phone offers its admin key in its hellos once it is in the group; on Aurora after the admin PIN (D-94) |
 | Sync away from home | yes, in the background | while the app runs | yes, while the app runs, through `cbb`'s tunnel in the core (`TestFFIPhoneAway`), and the blind relay (Settings, "Blind relay"); not yet tried on the phone | while the member runs, as a continuous task where the system grants it, and the blind relay; not yet tried on a phone | **OS**: iOS stops a background app's network |
 | Receive copies without a tap | yes (foreground service) | **OS** | yes | while the app is in front | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
 | Send without a tap | yes (accessibility service) | **OS** | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |
@@ -70,8 +70,8 @@ on every platform of the class, on the roadmap).
 | One-tap control outside the app | the house as a Quick Settings tile, notification button | the house as a Control Center control (iOS 18) | none: the cover has no action | the app icon's menu and two intents (Intents Kit), each opening the app | the iPhone's control has no long press to open the app: **OS** |
 | Home-screen widget | yes | yes | **OS** (no widgets; the cover instead) | yes (Form Kit) | "Sync clipboard"; on the iPhone it opens the app for a moment, as the control does |
 | Rename a device | yes | yes | yes; not yet tried on the phone | yes; not yet tried on a phone | Devices, Rename on an admin phone; `cbb rename` on an admin computer; a signed device record |
-| The group's notices, and the cards for a removed phone and a changed main device | yes | yes | yes; not yet tried on the phone | yes; not yet tried on a phone | the member's `notices` and `root_changed`; the alerts card of 0.5 went with D-126 |
-| Error details switch without developer tools | yes | yes | yes | yes | seven taps on the version in Settings show it; `adb` and the Xcode launch argument still work |
+| The group's notices, and the cards for a removed phone and a changed main device | yes | yes | yes; not yet tried on the phone | yes; not yet tried on a phone | the member's `notices` and `root_changed` (D-126) |
+| Error details switch without developer tools | yes | yes | yes | yes | seven taps on the version in Settings show it; `adb` and the Xcode launch argument work too |
 | Wallpaper colours theme | yes | **OS** | the ambience | no | Material You exists only on Android |
 | Remote paste, images and files | yes | yes | images and files both ways, through the share menu, the clipboard's image and Downloads; remote paste on a computer, text or pictures and files, from the device's page; not yet tried on the phone | remote paste on a computer, text or pictures and files, from the device's page; Share → CBB sends images and files; not yet tried on a phone | no phone takes a remote paste in 0.6 (0.7); the iPhone cannot (**OS**: no app may type into another) |
 | Remote invitations | yes, through a hub of the group | yes, through a hub of the group | yes, through a hub of the group; not yet tried on the phone | yes, through a hub of the group; not yet tried on a phone | roadmap item 12; computers make them with `cbb invite` |
@@ -91,7 +91,7 @@ on every platform of the class, on the roadmap).
 | Update itself | yes (`cbb update`, Linux and OpenWrt) | planned (OTA, roadmap item 29) | through the Pi | |
 | Error details switch | yes (`-debug`, `CBB_DEBUG=1`) | not yet | yes (`.cbb -d`) | |
 
-The ESP32 and the Next are still being built, so "not yet" is progress, not a gap: each
+The ESP32 and the Next are being built, so "not yet" is progress, not a gap: each
 item is on its road to the set of `cbb` on Linux.
 
 ## Plan
@@ -109,21 +109,21 @@ One pull request each, in this order; anything under 100 lines rides in the open
 6. **P3**, done: a home-screen widget in both apps.
 7. **G4, G5**, done: a winget manifest from every release and `cbb install` after winget;
    Authenticode signing in the release, waiting for the owner's certificate.
-8. **G6**, decided by the owner: the firewall rules only with consent, the same on every
+8. **G6**, done: the firewall rules only with consent, the same on every
    computer. The installer finds the firewall itself (ufw, firewalld, nftables, iptables on
    Linux; Windows Firewall; the macOS application firewall), lists each rule it needs
    (protocol, port, source, purpose) and asks `Add these rules now? [y/N]`. Yes: `cbb`
    manages its rules from then on, the hub's UDP port at `cbb global hub` included (asked
    again, since it faces the internet), and removes them on uninstall. No: it prints the
    exact commands for that firewall and works while the rules are there. `--express` adds
-   them without a question and prints the same list as a report. Done: the installers,
-   `cbb global hub` and the check from home. A member at home dials
+   them without a question and prints the same list as a report. The installers,
+   `cbb global hub` and the check from home do this. A member at home dials
    the computer back, so `cbb status` says when an unknown firewall or a closed rule keeps
    the others out. Messages are formal English, one fact per line.
 9. **L1**, done: `.cbb copy -s` and `.cbb text -s`, a secret from the Next (`cbb next copy -secret`).
 10. Roadmap item 22, the Mac app: the system's limits on a Mac (in and out), removal
     from the system, the signed `.pkg`.
-11. **A1 to A7**, the owner's decision (2026-11-07): the Aurora app closes every gap of its column
+11. **A1 to A7**: the Aurora app closes every gap of its column
     before 0.6, so that the three phones move on together. A1: the devices as tiles or
     a list, a device's page, Settings with the language and the error details. Then adding a
     device by QR code, the admin's actions (after the core sends commands), the one button,

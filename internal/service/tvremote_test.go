@@ -26,7 +26,8 @@ func TestRemote(t *testing.T) {
 	tv := atvtest.New(t)
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	clock := newTestClock(t, 0) // deck's, for its limit of one paste a second
+	deck := startEnv(t, &h, "deck", clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -77,7 +78,7 @@ func TestRemote(t *testing.T) {
 		t.Errorf("the paste targets: %v", p.Targets)
 	}
 	paste := func(text string) error {
-		time.Sleep(time.Second) // one paste a second from one sender
+		clock.nextSecond(t) // one paste a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "deck"}, text)
 		return err
 	}
@@ -112,7 +113,8 @@ func TestRemoteAppleTV(t *testing.T) {
 	tv := appletvtest.New(t)
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	clock := newTestClock(t, 0) // deck's, for its limit of one paste a second
+	deck := startEnv(t, &h, "deck", clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -160,7 +162,7 @@ func TestRemoteAppleTV(t *testing.T) {
 		t.Fatal(err)
 	}
 	paste := func(text string) error {
-		time.Sleep(time.Second) // one paste a second from one sender
+		clock.nextSecond(t) // one paste a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "deck"}, text)
 		return err
 	}

@@ -2285,9 +2285,6 @@ with 0.5 is set up again once. The details follow.
 - `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
   that line ended it without its clean stop.
 - The Bluetooth keyboard stops being visible at the end of its time, not just after.
-- The FreeBSD job measures SHA-256 on the runner and in the machine every 30 s, to tell a
-  runner held back from a slow virtual machine, and a failed test run no longer keeps the
-  machine's session open until the job's limit.
 - More of cbb's tests wait for what they check rather than for a time: the push service's tests
   hold a send with the fake platform and wait for it to arrive there, and wait for the push
   sender to be done with a body (`Sender::wait_handled`); the remote commands' tests move the
@@ -2312,6 +2309,12 @@ with 0.5 is set up again once. The details follow.
   newer push to `main` cancels the app's analysis still running for an older one, and the Go
   files only macOS builds compile are analyzed after a merge only when the merge changed them
   (and weekly).
+- The VLESS tests tell a refused client from an accepted one by the web server's own events:
+  the stream it closed, the site it served for a wrong path or the TLS handshake it failed,
+  instead of a second without an answer for each refusal.
+- The service tests of remote paste, quick actions, peripherals, the keyboard and the TV remote
+  move the member's clock past its limit of one a second (`CBB_TEST_AHEAD_FILE`) instead of
+  sleeping a second.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
@@ -3335,10 +3338,13 @@ with 0.5 is set up again once. The details follow.
 - The FreeBSD job runs its Go tests without asynchronous preemption: in its machine on
   the runners' Intel processors Go's preemption signal slowed SHA-256's SHA-NI instructions
   100 times for the rest of each process, and the release tests took minutes instead of
-  seconds. The measurements of the runner and the machine kept while the cause was looked
-  for are gone.
-- The FreeBSD job no longer fails after its tests pass: its exit trap's `kill` of the
-  measuring loops, already stopped, ended the script with status 1 under `set -e`.
+  seconds.
+- The interface texts in Arabic, Chinese, Hebrew, Hindi, Russian, Spanish and Swahili, read
+  line by line in the apps, `cbb` and the website: one word for each term, mistranslations,
+  missing words and punctuation (900 strings).
+- The documentation describes how things are, without dates and notes of how they came to
+  be; the README's quick start pairs with the six-digit code, and the Mac app's Sparkle notes
+  say that the app is in the release's `.pkg`.
 - A release's draft is made again when its CHANGELOG section is long: GitHub refuses notes
   over 125,000 characters, so `packaging/release-notes.sh` gives a section over 60,000
   only its opening summary and a link to CHANGELOG.md, and CI checks the notes stay under
