@@ -2247,6 +2247,12 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- "How it works" explains first what happens to a copy, then the group, its keys and the
+  ways away from home, in the apps' terms and without the commands' flags, which the guides
+  and the reference keep. The pictures say a hub is a computer or router at home and that
+  a blind relay is your own or the project's; the privacy page lists what the push service
+  and the platforms' push services see, and the design and the apps' page describe the
+  prompt notifications as built.
 - The roadmap: sync away from home by consent (item 58) is planned for 0.7, the check that
   the ways out carry only cbb (item 61) is done, its tests listed in the maintainers' guide,
   and long runs as a condition of a release have their own number (item 71).
@@ -3136,6 +3142,8 @@ with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The phone kits' `Discovery.withKnown`, which no app called: the apps dial the members
+  that browsing finds.
 - The core's helpers for bytes (hex, SHA-256, base64 for JSON, random bytes) are in
   `core/src/bytes.rs`, no longer among the certificates' code, and two functions nothing
   called (`member_chain`, and `self_signed_by` apart from `self_signed`) are gone.
@@ -3341,6 +3349,9 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A device installed without root can no longer be made a hub that only passes copies on:
+  `cbb` refused it as a trusted hub only, while every program of its user can take its keys
+  (D-79).
 - `cbb-helper` stops at once while the service has taken its connection but not yet
   answered its watch request: stopping closes the connection from the moment it is open,
   not only after the answer.

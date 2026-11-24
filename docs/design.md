@@ -595,10 +595,10 @@ turns it off, as any admin turns remote paste off (D-59).
 
 On Android the foreground service receives the events by itself, so the watch hears of them
 at once. On the iPhone the app has no background sync and learns of events only when it
-syncs, so a notification may come late. To make it prompt, the hub could wake the phone with
-an Apple push whose content is encrypted to the phone's key and decrypted only on the phone
-(a Notification Service Extension); Apple would see that a push was sent, and when, but
-nothing in it. Decided (D-74): the push goes through a stateless sender at `cbb.tools`,
+syncs. To make it prompt, the hub wakes the phone with an Apple push whose content is sealed
+to the phone's key and opened only on the phone (a Notification Service Extension); Apple
+sees that a push was sent, and when, but nothing in it (D-74). The push goes through a
+stateless sender at `cbb.tools`,
 since only the app's developer holds the key for Apple's push service, and the user agrees
 to it first, after being told what Apple and `cbb.tools` learn (that a push was sent and
 when; the push token, the hub's address and the time). It uses the Apple developer
@@ -618,8 +618,10 @@ One pull request each, smaller ones together:
    Kotlin, the interop vectors, certifying a watch from the root phone; the signed command
    that turns sync away from home off on a member. Done; not yet tried on a real watch.
 4. Emergency actions on the watch, and the quick actions. Done.
-5. Prompt iPhone notifications through an encrypted Apple push (D-74). Not built yet; the
-   Apple developer account and its APNs keys are there.
+5. Prompt notifications through a sealed push (D-74): the push sender (`pusher.rs`, "Push"
+   above), the push service (`member/src/pushd`: Apple, Firebase and UnifiedPush) and the
+   phones' setting "Notify me when the app is closed". Done; members send to the project's
+   service once a `keys.json` they hold lists it (protocol.md, section 13).
 
 Not yet verified on a real watch: the Secure Enclave key on the watch, WatchConnectivity
 waking the phone app in the background long enough to send a record, the Data Layer
@@ -2622,8 +2624,8 @@ has lingering). So a rootless device:
 - says `rootless` in its hello's `key_store` and gets it as `store` in its device record
   (docs/protocol.md, section 17); a reader that does not know the value takes it as `file`;
 - is never the group's root, an admin or a trusted hub, not even after the warning that lets
-  a device with keys in a file be one (D-66): any program of the user can copy its keys; it
-  may be a hub that only passes copies on, whose keys open no copy;
+  a device with keys in a file be one (D-66), nor a hub that only passes copies on: any
+  program of the user can copy its keys;
 - has quick actions and remote paste off, as every device until its own user turns them on
   (D-71);
 - is shown as rootless in `cbb status` and on the phones' device pages.
