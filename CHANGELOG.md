@@ -2312,6 +2312,12 @@ with 0.5 is set up again once. The details follow.
   newer push to `main` cancels the app's analysis still running for an older one, and the Go
   files only macOS builds compile are analyzed after a merge only when the merge changed them
   (and weekly).
+- The VLESS tests tell a refused client from an accepted one by the web server's own events:
+  the stream it closed, the site it served for a wrong path or the TLS handshake it failed,
+  instead of a second without an answer for each refusal.
+- The service tests of remote paste, quick actions, peripherals, the keyboard and the TV remote
+  move the member's clock past its limit of one a second (`CBB_TEST_AHEAD_FILE`) instead of
+  sleeping a second.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
