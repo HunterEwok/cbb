@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: a9d8b94a0114 -->
+<!-- source: 5013aca345ad -->
 # ऐप के बिना
 
 कंप्यूटरों के समूह को फ़ोन के ऐप की ज़रूरत नहीं है: समूह को एक कंप्यूटर संभाल सकता है।
@@ -8,7 +8,7 @@
 
 ## 1. कंप्यूटर पर समूह बनाएँ
 
-ऐसे कंप्यूटर पर Copy Beyond Borders [इंस्टॉल करें](install.md) जो अक्सर चालू रहता हो: Linux, Windows, Mac या FreeBSD। वह समूह संभालता है। फिर:
+ऐसे कंप्यूटर पर Connect Beyond Borders [इंस्टॉल करें](install.md) जो अक्सर चालू रहता हो: Linux, Windows, Mac या FreeBSD। वह समूह संभालता है। फिर:
 
 ```sh
 sudo cbb new

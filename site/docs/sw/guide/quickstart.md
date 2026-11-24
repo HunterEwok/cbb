@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1de61d3165d2 -->
+<!-- source: f765e377bd6a -->
 # Kuanza haraka
 
-Copy Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
+Connect Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
 
 ![Kila kompyuta inajiunga na kikundi cha simu kwa tarakimu sita ambazo simu inaonyesha; kisha vifaa vinashiriki ubao mmoja wa kunakili](../images/group.svg)
 
-Ni hatua nne: sakinisha programu na uunde kikundi, sakinisha Copy Beyond Borders kwenye
+Ni hatua nne: sakinisha programu na uunde kikundi, sakinisha Connect Beyond Borders kwenye
 kompyuta, andika kwenye kompyuta tarakimu sita ambazo simu inaonyesha, kisha nakili.
 
 Kikundi kinaweza kuwa na kompyuta katikati yake au kuwa cha simu tu: vyote vinafanya kazi, na
@@ -25,7 +25,7 @@ ya kidole, uso au nambari ya siri) kisha inauliza jinsi ya kuhifadhi ufunguo wa 
 **Andika kwenye karatasi** au **Andika kwenye YubiKey**. Uweke mbali na vifaa vyako; unarudisha
 kikundi simu ikipotea ([funguo](keys.md)).
 
-## 2. Sakinisha Copy Beyond Borders kwenye kompyuta
+## 2. Sakinisha Connect Beyond Borders kwenye kompyuta
 
 Chagua kompyuta yoyote kwenye mtandao wako wa nyumbani: laptopu, kompyuta ya mezani, Raspberry Pi.
 
@@ -41,7 +41,7 @@ Kwenye **Windows** 10 au 11, kwenye PowerShell iliyofunguliwa kwa "Run as admini
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-Kisakinishi huangalia faili ulizopakua, huanzisha Copy Beyond Borders na kuuliza maswali mawili: kama kifungue ngome ya moto kwa ajili yake (jibu `y`) na kama kijisasishe chenyewe kiotomatiki (`y` pia ni jibu zuri). Kisha toka na uingie tena mara moja, au fungua terminal mpya kwenye Windows. Homebrew, Docker na maelezo yote yako katika [Kusakinisha](install.md).
+Kisakinishi huangalia faili ulizopakua, huanzisha Connect Beyond Borders na kuuliza maswali mawili: kama kifungue ngome ya moto kwa ajili yake (jibu `y`) na kama kijisasishe chenyewe kiotomatiki (`y` pia ni jibu zuri). Kisha toka na uingie tena mara moja, au fungua terminal mpya kwenye Windows. Homebrew, Docker na maelezo yote yako katika [Kusakinisha](install.md).
 
 ## 3. Ongeza kompyuta
 

@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1de61d3165d2 -->
+<!-- source: f765e377bd6a -->
 # 快速入门
 
-Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设备上复制，在另一台上粘贴。这些设备在你的家庭网络中组成一个**群组**。手机保管群组的密钥，并由它放行每台新设备，所以没有你的许可，谁也无法加入。
+Connect Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设备上复制，在另一台上粘贴。这些设备在你的家庭网络中组成一个**群组**。手机保管群组的密钥，并由它放行每台新设备，所以没有你的许可，谁也无法加入。
 
 ![每台电脑用手机显示的六位数字加入手机的群组；之后各设备共用一个剪贴板](../images/group.svg)
 
-只需四步：安装应用并创建群组，在电脑上安装 Copy Beyond Borders，在电脑上输入手机显示的六位数字，然后复制。
+只需四步：安装应用并创建群组，在电脑上安装 Connect Beyond Borders，在电脑上输入手机显示的六位数字，然后复制。
 
 群组的核心可以是一台电脑，也可以只由手机组成：两种都可以，我们推荐一台经常开着的电脑，它能让离家同步随时可用（[两种群组](how-it-works.md#two-kinds-of-group)）。
 如果只有手机，跳过第 2 和第 3 步：在第一部手机上点 **+**，然后在其他每部手机上点 **加入群组**，扫描第一部手机显示的二维码。
@@ -18,7 +18,7 @@ Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设
 
 打开应用，点 **创建群组**。应用会生成群组的密钥（需要你的指纹、面容或密码），然后询问如何保存恢复密钥：**写在纸上** 或 **写入 YubiKey**。请把它与设备分开保管；手机丢失时可以用它找回群组（[密钥](keys.md)）。
 
-## 2. 在电脑上安装 Copy Beyond Borders
+## 2. 在电脑上安装 Connect Beyond Borders
 
 在家庭网络中任选一台电脑：笔记本、台式机或树莓派都可以。
 
@@ -34,7 +34,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-安装程序会校验下载内容，启动 Copy Beyond Borders，并问两个问题：是否为它开放防火墙（回答 `y`），以及是否自动更新（回答 `y` 也很合适）。然后注销再登录一次；在 Windows 上则打开一个新终端。Homebrew、Docker 和更多细节见[安装](install.md)。
+安装程序会校验下载内容，启动 Connect Beyond Borders，并问两个问题：是否为它开放防火墙（回答 `y`），以及是否自动更新（回答 `y` 也很合适）。然后注销再登录一次；在 Windows 上则打开一个新终端。Homebrew、Docker 和更多细节见[安装](install.md)。
 
 ## 3. 添加电脑
 

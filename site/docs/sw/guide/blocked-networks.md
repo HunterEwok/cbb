@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5a06c8a1fa53 -->
+<!-- source: f9bd5319804d -->
 # Mitandao inayozuia VPN
 
-Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard la kikundi chenyewe. Baadhi ya mitandao huzuia WireGuard: Wi-Fi ya hoteli na ofisi, baadhi ya waendeshaji wa simu, na nchi nzima zinazochuja VPN. Copy Beyond Borders ina njia mbili za kukwepa hilo, na kitovu hutumia zote mbili usipozizima; vifaa hupokea badiliko wakati ujao vitakapokutana na kitovu nyumbani.
+Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard la kikundi chenyewe. Baadhi ya mitandao huzuia WireGuard: Wi-Fi ya hoteli na ofisi, baadhi ya waendeshaji wa simu, na nchi nzima zinazochuja VPN. Connect Beyond Borders ina njia mbili za kukwepa hilo, na kitovu hutumia zote mbili usipozizima; vifaa hupokea badiliko wakati ujao vitakapokutana na kitovu nyumbani.
 
 | Njia | Kinachoonwa na mtandao | Unachohitaji | Inafanya kazi kwenye |
 |---|---|---|---|

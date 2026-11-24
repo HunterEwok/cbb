@@ -1,6 +1,6 @@
 # Contributing
 
-Copy Beyond Borders is developed by one maintainer. Thank you for your interest. For help
+Connect Beyond Borders is developed by one maintainer. Thank you for your interest. For help
 with using CBB, see [SUPPORT.md](SUPPORT.md).
 
 ## Issues are welcome
@@ -105,7 +105,7 @@ The checks that CI runs, by part. CI also builds every target; see
 
 ### Go
 
-Copy Beyond Borders needs Go; `go.mod` names the exact toolchain, and the `go` command downloads
+Connect Beyond Borders needs Go; `go.mod` names the exact toolchain, and the `go` command downloads
 it when needed. From the repository root:
 
 ```sh

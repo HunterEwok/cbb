@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 7d035f243dba -->
+<!-- source: 0d34c8a9ae24 -->
 # Teclados y televisores
 
-Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Copy Beyond Borders. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
+Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Connect Beyond Borders. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
 
 ## Elige una forma
 

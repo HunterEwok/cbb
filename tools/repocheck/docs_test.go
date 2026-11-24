@@ -63,6 +63,7 @@ func TestCheckDocs(t *testing.T) {
 // the changelog and code included, and leaves the new name alone.
 func TestCheckOldName(t *testing.T) {
 	short, long := "clip"+"bridge", "Clip"+"board "+"Bridge"
+	full := "Copy" + " Beyond Borders"
 	for _, c := range []struct {
 		file, content string
 		want          int
@@ -74,7 +75,9 @@ func TestCheckOldName(t *testing.T) {
 		{"a.go", "import \"github.com/HunterEwok/" + strings.ToLower(strings.ReplaceAll(long, " ", "")) + "/x\"\n", 1},
 		{"a.swift", "import " + strings.ReplaceAll(long, " ", "") + "Kit\n", 1},
 		{"a.kt", strings.ToLower(strings.ReplaceAll(long, " ", "_")) + "\n", 1},
-		{"docs/a.md", "Copy Beyond Borders, `cbb`, cbb.local, CBBKit and a clipboard.\n", 0},
+		{"README.md", "# " + full + "\n", 1},
+		{"a.swift", "let name = \"" + strings.ReplaceAll(full, " ", "") + "\"\n", 1},
+		{"docs/a.md", "Connect Beyond Borders, `cbb`, cbb.local, CBBKit and a clipboard.\n", 0},
 	} {
 		got := checkOldName(c.file, []byte(c.content))
 		if len(got) != c.want {

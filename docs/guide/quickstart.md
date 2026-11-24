@@ -1,13 +1,13 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Quick start
 
-Copy Beyond Borders gives your phone and your computers one clipboard: copy on one, paste on
+Connect Beyond Borders gives your phone and your computers one clipboard: copy on one, paste on
 another. The devices form a **group** on your home network. The phone holds the group's key
 and lets each new device in, so nobody can join without you.
 
 ![Each computer joins the phone's group by the six digits the phone shows; then the devices share one clipboard](../images/group.svg)
 
-It takes four steps: install the app and create the group, install Copy Beyond Borders on a
+It takes four steps: install the app and create the group, install Connect Beyond Borders on a
 computer, type on the computer the six digits the phone shows, and copy.
 
 A group can have a computer at its heart or be made of phones only: both work, and we recommend
@@ -28,7 +28,7 @@ fingerprint, face or passcode) and then asks how to keep the recovery key: **Wri
 or **Write to YubiKey**. Keep it apart from your devices; it brings the group back if the
 phone is lost ([keys](keys.md)).
 
-## 2. Install Copy Beyond Borders on a computer
+## 2. Install Connect Beyond Borders on a computer
 
 Pick any computer on your home network: a laptop, a desktop, a Raspberry Pi.
 
@@ -44,7 +44,7 @@ On **Windows** 10 or 11, in a PowerShell opened with "Run as administrator":
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-The installer checks the download, starts Copy Beyond Borders and asks two questions: whether
+The installer checks the download, starts Connect Beyond Borders and asks two questions: whether
 to open the firewall for it (answer `y`) and whether to update itself automatically (`y`
 is a good answer too). Then log out and in again once, or open a new terminal on
 Windows. Homebrew, Docker and the details are in [Installing](install.md).

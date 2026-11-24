@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Testing
 
-For contributors and reviewers: how Copy Beyond Borders is tested, from a single function to
+For contributors and reviewers: how Connect Beyond Borders is tested, from a single function to
 real devices, and which level answers which question. The commands are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#development), the CI jobs one by one in
 [maintaining](maintainers/maintaining.md#ci), and the tests on real devices in the

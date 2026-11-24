@@ -1,11 +1,11 @@
-# Copy Beyond Borders
+# Connect Beyond Borders
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/HunterEwok/cbb/badge)](https://securityscorecards.dev/viewer/?uri=github.com/HunterEwok/cbb)
 [![REUSE status](https://api.reuse.software/badge/github.com/HunterEwok/cbb)](https://api.reuse.software/info/github.com/HunterEwok/cbb)
 
 **One encrypted clipboard for all your devices, with no cloud.**
 
-Copy on your phone, paste on your laptop: Copy Beyond Borders takes the borders between your
+Copy on your phone, paste on your laptop: Connect Beyond Borders takes the borders between your
 devices away. Android, iPhone, Linux, Windows and Mac share one clipboard, encrypted end to
 end, with no accounts and nothing kept in a cloud. Its short name is CBB and its command is
 `cbb`.
@@ -21,7 +21,7 @@ end, with no accounts and nothing kept in a cloud. Its short name is CBB and its
 1. Install the app on your phone (Android: the APK in the
    [latest release](https://github.com/HunterEwok/cbb/releases/latest); iPhone:
    TestFlight, coming).
-2. Install Copy Beyond Borders on a computer:
+2. Install Connect Beyond Borders on a computer:
 
    ```sh
    # Linux and Mac
@@ -65,7 +65,7 @@ The [quick start](docs/guide/quickstart.md) walks through it step by step;
 | Computer ↔ iPhone | One press of the Action button or a double tap on the back, then paste. |
 
 iOS does not let apps read the clipboard in the background, so the iPhone needs one
-gesture. Apple devices on one Apple Account already share a clipboard; Copy Beyond Borders
+gesture. Apple devices on one Apple Account already share a clipboard; Connect Beyond Borders
 connects them to everything else. On Linux it works with X11 and Wayland desktops, and without one
 through tmux and `cbb copy` and `cbb paste`.
 
@@ -132,16 +132,16 @@ the [threat model](docs/threat-model.md).
 
 - [KDE Connect](https://apps.kde.org/kdeconnect) shares the clipboard among Linux, Android,
   iOS, macOS and Windows, with much more besides (notifications, files, media control). It
-  pairs devices two by two; Copy Beyond Borders keeps one group with a root key in the
+  pairs devices two by two; Connect Beyond Borders keeps one group with a root key in the
   phone's security chip, syncs away from home through a computer of yours, and does only
   the clipboard and what goes with it.
 - [ClipCascade](https://github.com/Sathvik-Rao/ClipCascade) syncs the clipboard of Windows,
   macOS, Linux and Android, encrypted end to end, through a server you run or a community
-  server with an account, or peer to peer. Copy Beyond Borders needs no server and no
+  server with an account, or peer to peer. Connect Beyond Borders needs no server and no
   account at home, and has an iPhone app.
 - Apple's Universal Clipboard works between Apple devices on one Apple Account only.
 
-Where Copy Beyond Borders is weaker: the iPhone needs one gesture for each copy, since iOS
+Where Connect Beyond Borders is weaker: the iPhone needs one gesture for each copy, since iOS
 lets no app read the clipboard in the background; a device that joins the group reads
 copies from the next one on, not the copies made before it; it is early software, with
 Android and Windows not yet tried on real devices.
@@ -192,7 +192,7 @@ The order of what comes next is the [roadmap](docs/roadmap.md).
 
 ## License
 
-Copy Beyond Borders is free software, licensed under the
+Connect Beyond Borders is free software, licensed under the
 [GNU Affero General Public License v3.0 only](LICENSE).
 
 One author holds all the rights, so a commercial license without the AGPL's obligations is

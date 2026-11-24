@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1de61d3165d2 -->
+<!-- source: f765e377bd6a -->
 # Inicio rápido
 
-Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
+Connect Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
 
 ![Cada ordenador se une al grupo del teléfono con los seis dígitos que muestra el teléfono; después los dispositivos comparten un portapapeles](../images/group.svg)
 
-Son cuatro pasos: instalar la app y crear el grupo, instalar Copy Beyond Borders en un
+Son cuatro pasos: instalar la app y crear el grupo, instalar Connect Beyond Borders en un
 ordenador, escribir en el ordenador los seis dígitos que muestra el teléfono, y copiar.
 
 Un grupo puede tener un ordenador en su centro o estar hecho solo de teléfonos: ambos funcionan,
@@ -25,7 +25,7 @@ cara o el código) y luego pregunta cómo guardar la clave de recuperación: **E
 hoja** o **Escribir en una YubiKey**. Guárdala lejos de tus dispositivos; recupera el grupo si
 pierdes el teléfono ([claves](keys.md)).
 
-## 2. Instala Copy Beyond Borders en un ordenador
+## 2. Instala Connect Beyond Borders en un ordenador
 
 Elige cualquier ordenador de tu red doméstica: un portátil, un sobremesa, una Raspberry Pi.
 
@@ -41,7 +41,7 @@ En **Windows** 10 u 11, en un PowerShell abierto con «Ejecutar como administrad
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-El instalador comprueba la descarga, inicia Copy Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, Docker y los detalles están en [Instalación](install.md).
+El instalador comprueba la descarga, inicia Connect Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, Docker y los detalles están en [Instalación](install.md).
 
 ## 3. Añade el ordenador
 

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: a9d8b94a0114 -->
+<!-- source: 5013aca345ad -->
 # Bila programu
 
 Kikundi cha kompyuta hakihitaji programu ya simu: kompyuta inaweza kushikilia kikundi.
@@ -8,7 +8,7 @@ Kikundi cha kompyuta hakihitaji programu ya simu: kompyuta inaweza kushikilia ki
 
 ## 1. Tengeneza kikundi kwenye kompyuta
 
-[Sakinisha](install.md) Copy Beyond Borders kwenye kompyuta inayowashwa mara nyingi: Linux, Windows, Mac au FreeBSD. Inashikilia kikundi. Kisha:
+[Sakinisha](install.md) Connect Beyond Borders kwenye kompyuta inayowashwa mara nyingi: Linux, Windows, Mac au FreeBSD. Inashikilia kikundi. Kisha:
 
 ```sh
 sudo cbb new

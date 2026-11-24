@@ -41,7 +41,7 @@ const siteURL = "https://cbb.tools"
 // faq are the questions on the home page, in English, also given to search
 // engines as a FAQPage. An answer is plain text: no links.
 var faq = []struct{ Q, A string }{
-	{"Is it free?", "Yes. Copy Beyond Borders is free software: no price, no subscription, no ads."},
+	{"Is it free?", "Yes. Connect Beyond Borders is free software: no price, no subscription, no ads."},
 	{"Can anyone else read what I copy?", "No. Every copy is encrypted end to end on the device that makes it, for your own devices alone. Whatever passes it on, a base or a server, cannot read it."},
 	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on just makes sync away from home work at any time."},
 	{"Does it work away from home?", "Yes. Turn on Everywhere, and your devices reach each other through the group's base, a computer of yours or a phone while its app is open, or through a backup server that cannot read your copies. It works on hotel, office and campus Wi-Fi too."},
@@ -51,8 +51,8 @@ var faq = []struct{ Q, A string }{
 	{"Does it work on hotel or office Wi-Fi?", "Yes. Away from home it also works on strict networks, such as hotel, office and campus Wi-Fi, which let few apps through."},
 	{"Does it need the internet?", "No. At home your devices need only your own network, with or without the internet."},
 	{"What if I lose my phone?", "Remove it from the group on another device you trust. If the lost phone made the group, another phone of yours that you trust becomes the group's owner."},
-	{"Who makes it?", "One developer, HunterEwok, in the United Kingdom. There is no company, no investors and no ads, and Copy Beyond Borders will always be free and open source."},
-	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Copy Beyond Borders joins iPhone, Android, Aurora, Windows, Mac and Linux, at home and away, with no account."},
+	{"Who makes it?", "One developer, HunterEwok, in the United Kingdom. There is no company, no investors and no ads, and Connect Beyond Borders will always be free and open source."},
+	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Connect Beyond Borders joins iPhone, Android, Aurora, Windows, Mac and Linux, at home and away, with no account."},
 }
 
 // Language is one language of the site.
@@ -365,7 +365,7 @@ func render(root string) (map[string][]byte, []*translator, error) {
 		if line.Coming, err = tr.t("The website opens soon."); err != nil {
 			return nil, nil, err
 		}
-		if line.Meanwhile, err = tr.t("Meanwhile, Copy Beyond Borders is on %s.", link("https://github.com/HunterEwok/cbb", "GitHub")); err != nil {
+		if line.Meanwhile, err = tr.t("Meanwhile, Connect Beyond Borders is on %s.", link("https://github.com/HunterEwok/cbb", "GitHub")); err != nil {
 			return nil, nil, err
 		}
 		soon = append(soon, line)
@@ -413,7 +413,7 @@ func render(root string) (map[string][]byte, []*translator, error) {
 		}
 	}
 	// Without the language chooser, "/" falls back to English.
-	out["index.html"] = []byte(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=en/"><title>Copy Beyond Borders</title><a href="en/">Copy Beyond Borders</a>` + "\n")
+	out["index.html"] = []byte(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=en/"><title>Connect Beyond Borders</title><a href="en/">Connect Beyond Borders</a>` + "\n")
 	tmpl, err := template.New("soon.html").Funcs(asset).ParseFiles(filepath.Join(root, "templates", "soon.html"))
 	if err != nil {
 		return nil, nil, err
@@ -460,7 +460,7 @@ func securityTxt(r Release) []byte {
 // manifest describes the site to a phone that keeps it on its home screen.
 func manifest() ([]byte, error) {
 	return json.MarshalIndent(map[string]any{
-		"name":             "Copy Beyond Borders",
+		"name":             "Connect Beyond Borders",
 		"short_name":       "CBB",
 		"start_url":        "/",
 		"display":          "browser",

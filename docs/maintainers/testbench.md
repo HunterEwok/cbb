@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The hardware test bench
 
-The plan for testing Copy Beyond Borders on real devices before each release, starting with 0.4,
+The plan for testing Connect Beyond Borders on real devices before each release, starting with 0.4,
 and how the bench that runs it is built. The bench lives in `tools/bench` (being built, see
 "Order of work" at the end); this document is its specification. CI and its jobs are in
 [maintaining.md](maintaining.md#ci).
@@ -167,7 +167,7 @@ the same text is on every device at the end.
 
 ### Features and platforms
 
-Every other way Copy Beyond Borders works, so no path ships untested:
+Every other way Connect Beyond Borders works, so no path ships untested:
 
 | ID | Case | Expected |
 |---|---|---|
@@ -523,7 +523,7 @@ prints, and its service gets `-peer` to the hub's `address` for the run (a drop-
 removes after it).
 `tools/bench/inventory.example.toml` is a complete example. Each device needs the
 controller's SSH key for its desktop user; a Windows device also runs
-`tools/bench/setup-windows.ps1` once. Devices on the bench are test devices: the bench installs and wipes Copy Beyond Borders
+`tools/bench/setup-windows.ps1` once. Devices on the bench are test devices: the bench installs and wipes Connect Beyond Borders
 on them as it needs.
 
 ## 14. Order of work

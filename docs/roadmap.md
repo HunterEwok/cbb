@@ -2,7 +2,7 @@
 # Roadmap
 
 What comes next, the designs that are agreed but not built yet, and the questions to study
-before anything is planned. How Copy Beyond Borders works today is in [design.md](design.md),
+before anything is planned. How Connect Beyond Borders works today is in [design.md](design.md),
 the decisions in [decisions.md](decisions.md); what works on real devices is the
 [status table](../README.md#status).
 
@@ -43,7 +43,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     ([design](design.md#groups-without-a-computer)).
 - **32.** What the forwarder and the relay learn, cut to short server credentials, in 0.6
     ([design](design.md#what-the-servers-learn)).
-- **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
+- **48.** The name Connect Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
     CBB under the icons, the full name in the stores, the docs and the site; the apps'
     identifiers start with `tools.cbb`.
 - **63.** Copies sealed end to end, in 0.6 (D-84; [protocol.md](protocol.md), section 4,

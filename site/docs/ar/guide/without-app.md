@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: a9d8b94a0114 -->
+<!-- source: 5013aca345ad -->
 # بدون التطبيق
 
 لا تحتاج مجموعة من الحواسيب إلى تطبيق الهاتف: يمكن لحاسوب أن يحمل المجموعة.
@@ -8,7 +8,7 @@
 
 ## 1. أنشئ المجموعة على حاسوب
 
-[ثبّت](install.md) Copy Beyond Borders على حاسوب يكون مشغَّلًا في الغالب: Linux أو Windows أو Mac أو FreeBSD. يحمل هذا الحاسوب المجموعة. ثم:
+[ثبّت](install.md) Connect Beyond Borders على حاسوب يكون مشغَّلًا في الغالب: Linux أو Windows أو Mac أو FreeBSD. يحمل هذا الحاسوب المجموعة. ثم:
 
 ```sh
 sudo cbb new

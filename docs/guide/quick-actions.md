@@ -14,7 +14,7 @@ it only if its own user turned that action on there.
 | `reboot` | restarts the computer a minute later | computers, small devices |
 | `shutdown` | shuts the computer down a minute later | computers, small devices |
 | `cancel-shutdown` | cancels a pending reboot or shutdown | computers, small devices |
-| `restart` | restarts the Copy Beyond Borders service | computers, small devices |
+| `restart` | restarts the Connect Beyond Borders service | computers, small devices |
 | `keyboard-layout` | switches the layout its [Bluetooth keyboard](keyboards-and-tvs.md) types in to the next one, after you switch the device's own | Linux computers with the keyboard on |
 | your own | runs a program you chose, as the user signed in | computers; a small device with CBB's agent |
 

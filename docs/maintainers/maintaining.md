@@ -288,7 +288,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   into a free retired PIV slot (82 when `ykman piv keys info 82` finds no key), and nothing
   else on the key is reset or changed. `ykman piv keys generate --algorithm ECCP256
   --pin-policy ALWAYS --touch-policy ALWAYS 82 root-N.pem`, then `ykman piv certificates
-  generate --subject "CN=Copy Beyond Borders release signing root N (2026)" 82 root-N.pem` so
+  generate --subject "CN=Connect Beyond Borders release signing root N (2026)" 82 root-N.pem` so
   the key can be read from the slot, and `ykman piv keys attest 82` with the `f9`
   certificate as proof that the key was made on the YubiKey.
   Each root's post-quantum half is made beside it ("Two signatures" below). Both halves'

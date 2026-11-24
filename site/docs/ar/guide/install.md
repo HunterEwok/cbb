@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: cc5e08e8e93b -->
+<!-- source: 556711697ffe -->
 # التثبيت
 
-يعمل Copy Beyond Borders كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
+يعمل Connect Beyond Borders كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
 
 ## Linux
 
@@ -32,7 +32,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 ### SteamOS (Steam Deck)
 
-انتقل إلى وضع سطح المكتب، وافتح Konsole، وأعطِ المستخدم `deck` كلمة مرور مرة واحدة إن لم تكن له (`passwd`)، ثم شغّل الأمر نفسه. يستبدل SteamOS ملفات نظامه مع كل تحديث، لذلك يضع المثبّت Copy Beyond Borders في `/opt/cbb` بدلًا من `/usr/local`، ويخبر SteamOS بأي من ملفاته في `/etc` يجب الإبقاء عليها (`/etc/atomic-update.conf.d/cbb.conf`). يبقى مثبّتًا وفي مجموعته عبر تحديثات SteamOS.
+انتقل إلى وضع سطح المكتب، وافتح Konsole، وأعطِ المستخدم `deck` كلمة مرور مرة واحدة إن لم تكن له (`passwd`)، ثم شغّل الأمر نفسه. يستبدل SteamOS ملفات نظامه مع كل تحديث، لذلك يضع المثبّت Connect Beyond Borders في `/opt/cbb` بدلًا من `/usr/local`، ويخبر SteamOS بأي من ملفاته في `/etc` يجب الإبقاء عليها (`/etc/atomic-update.conf.d/cbb.conf`). يبقى مثبّتًا وفي مجموعته عبر تحديثات SteamOS.
 
 - يصبح `cbb` في مسار Konsole جديدة بعد أن تسجّل الخروج وتدخل من جديد. لا يبحث `sudo` هناك، لذلك تأخذ الأوامر التي تحتاج إليه المسار الكامل: `sudo /opt/cbb/bin/cbb pair`.
 - في وضع سطح المكتب تتزامن الحافظة كما على أي سطح مكتب KDE Plasma.
@@ -107,7 +107,7 @@ fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | 
 
 يثبّت `cbb` وسكربت rc.d يشغّل الخدمة عبر daemon(8)، ويضيف السطر `cbb_enable="YES"` إلى rc.conf. تقيم المفاتيح في `/var/db/cbb`.
 
-على OPNsense يضيف المثبّت نفسه أيضًا خطّاف إضافة: تظهر الخدمة تحت System > Diagnostics > Services، وتتبع قواعد جدار حمايتها (في مرساة pf المسماة `cbb`) كل إعادة تحميل للمرشّح. عطّل مكرّر mDNS (Services > mDNS Repeater) ما دامت الخدمة تعمل: فكلاهما يحتاج إلى المنفذ UDP 5353، والخدمة تجيب عن mDNS بنفسها على كل واجهة منزلية. pfSense غير مدعوم: يعمل المثبّت هناك أيضًا، لكنه يطبع قواعد جدار الحماية لتضعها في Firewall > Rules بدلًا من أن يضيفها، وقد يزيل تحديث pfSense برنامج Copy Beyond Borders.
+على OPNsense يضيف المثبّت نفسه أيضًا خطّاف إضافة: تظهر الخدمة تحت System > Diagnostics > Services، وتتبع قواعد جدار حمايتها (في مرساة pf المسماة `cbb`) كل إعادة تحميل للمرشّح. عطّل مكرّر mDNS (Services > mDNS Repeater) ما دامت الخدمة تعمل: فكلاهما يحتاج إلى المنفذ UDP 5353، والخدمة تجيب عن mDNS بنفسها على كل واجهة منزلية. pfSense غير مدعوم: يعمل المثبّت هناك أيضًا، لكنه يطبع قواعد جدار الحماية لتضعها في Firewall > Rules بدلًا من أن يضيفها، وقد يزيل تحديث pfSense برنامج Connect Beyond Borders.
 
 على سطح مكتب FreeBSD (X11، أو Wayland مع بروتوكول data control كما في KDE وsway وHyprland) تشغّل الجلسة `cbb agent` من البدء التلقائي في XDG وتنضم الحافظة إلى المجموعة؛ سجّل الدخول من جديد بعد التثبيت. ويكتب اللصق عن بُعد عبر XTEST على X11 وعبر لوحة المفاتيح الافتراضية على أسطح مكتب wlroots؛ ولا يقبل GNOME اللصق عن بُعد على FreeBSD، إذ لا يوجد من دون logind ما يدل على أن شاشته مقفلة.
 
@@ -123,7 +123,7 @@ docker compose -f compose.home.yaml exec cbb cbb pair
 
 ## جدار الحماية
 
-يحتاج Copy Beyond Borders إلى منفذ TCP واحد هو 8764، وإلى mDNS (UDP 5353)، وكلاهما من الشبكة المنزلية فقط. يجد المثبّت جدار الحماية (ufw أو firewalld أو nftables أو iptables على Linux، وpf أو ipfw على FreeBSD، وجدار حماية التطبيقات في Mac، وجدار حماية Windows)، ويعرض كل قاعدة، ويسأل `Add these rules now? [y/N]`:
+يحتاج Connect Beyond Borders إلى منفذ TCP واحد هو 8764، وإلى mDNS (UDP 5353)، وكلاهما من الشبكة المنزلية فقط. يجد المثبّت جدار الحماية (ufw أو firewalld أو nftables أو iptables على Linux، وpf أو ipfw على FreeBSD، وجدار حماية التطبيقات في Mac، وجدار حماية Windows)، ويعرض كل قاعدة، ويسأل `Add these rules now? [y/N]`:
 
 - **نعم**: يضيفها، ويُبقيها محدَّثة مع كل تحديث، ويزيلها حين تلغي التثبيت. ولا يمس القواعد الأخرى أبدًا.
 - **لا** (وهو الافتراضي، وهو ما يحدث حين لا توجد طرفية للسؤال): لا يضيف شيئًا ويطبع الأوامر بدقة لتشغّلها أنت.
@@ -145,7 +145,7 @@ docker compose -f compose.home.yaml exec cbb cbb pair
 
 أي الإصدارات تعمل معًا، وماذا يفعل جهاز أقدم بشيء أحدث: [الإصدارات والتوافق](../reference/compatibility.md).
 
-تسأل المثبّتات مرة واحدة عما إذا كان التحديث تلقائيًا (`--auto-update on|off`، أو `-AutoUpdate on|off` و`$env:CBB_AUTO_UPDATE` على Windows، لتجيب مسبقًا)؛ ويغيّره لاحقًا `sudo cbb update -auto on|off`. وعند تفعيله يفحص مؤقّت مرة في اليوم في وقت خاص به: مؤقّت systemd على Linux، ومهمة launchd على Mac، ومهمة مجدولة بصلاحية SYSTEM على Windows، وcron على OpenWrt وFreeBSD. ينزّل كل فحص الملفات الصغيرة نفسها من GitHub (أو من `dl.cbb.tools` حين لا يرد GitHub)، فيعرف GitHub عنوان هذا الجهاز وأنه يستخدم Copy Beyond Borders، كما في أي تنزيل؛ ولا يرسل شيئًا عن المجموعة. ويأخذ `sudo cbb update -mirror https://...` التحديثات من مرآة أخرى بدلًا من ذلك، ولا يتطلب ذلك أي ثقة لأن التواقيع تُفحص. وسجل المؤقّت هو `update.log` في `/var/lib/cbb-update` (Linux) أو `/etc/cbb-update` (OpenWrt) أو `/var/db/cbb-update` (FreeBSD) أو `/Library/Application Support/cbb-update` (Mac) أو `C:\Program Files\cbb-update` (Windows).
+تسأل المثبّتات مرة واحدة عما إذا كان التحديث تلقائيًا (`--auto-update on|off`، أو `-AutoUpdate on|off` و`$env:CBB_AUTO_UPDATE` على Windows، لتجيب مسبقًا)؛ ويغيّره لاحقًا `sudo cbb update -auto on|off`. وعند تفعيله يفحص مؤقّت مرة في اليوم في وقت خاص به: مؤقّت systemd على Linux، ومهمة launchd على Mac، ومهمة مجدولة بصلاحية SYSTEM على Windows، وcron على OpenWrt وFreeBSD. ينزّل كل فحص الملفات الصغيرة نفسها من GitHub (أو من `dl.cbb.tools` حين لا يرد GitHub)، فيعرف GitHub عنوان هذا الجهاز وأنه يستخدم Connect Beyond Borders، كما في أي تنزيل؛ ولا يرسل شيئًا عن المجموعة. ويأخذ `sudo cbb update -mirror https://...` التحديثات من مرآة أخرى بدلًا من ذلك، ولا يتطلب ذلك أي ثقة لأن التواقيع تُفحص. وسجل المؤقّت هو `update.log` في `/var/lib/cbb-update` (Linux) أو `/etc/cbb-update` (OpenWrt) أو `/var/db/cbb-update` (FreeBSD) أو `/Library/Application Support/cbb-update` (Mac) أو `C:\Program Files\cbb-update` (Windows).
 
 تخبر أجهزة المجموعة بعضها بأحدث إصدار موقَّع رآه أيٌّ منها، فيكفي فحص جهاز واحد ليقول `cbb status` وتطبيق شريط المهام على الأجهزة الأخرى إن إصدارًا أحدث قد صدر (يشغّل «Update to X» في تطبيق شريط المهام الأمر `cbb update` بصلاحية المسؤول). ويفحص كل جهاز التواقيع بنفسه وينزّل أرشيفه الخاص.
 

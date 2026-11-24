@@ -2246,6 +2246,8 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The project's full name is Connect Beyond Borders, everywhere it is written: the apps, the
+  stores, the website and the documentation. The short name CBB and the command `cbb` stay.
 - CI's Rust tests run their two longest tests, the power cut at every byte of every save and
   the record sets' differential check, in two different parts: the hash of their names had put
   both into the first part, which ran minutes after the others.
@@ -2451,7 +2453,7 @@ with 0.5 is set up again once. The details follow.
   clock (`CBB_RELEASE_ROOTS`, `CBB_HELPER`, `CBB_TEST_AHEAD_FILE`, `CBB_TEST_ATTEST_ROOTS`,
   `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`) are read only by a build with the test hooks, which
   says so in `cbb version` and its log; a release reads none of them.
-- The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
+- The README leads with what Connect Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
   a page of their own, [the lab](docs/guide/lab.md): experiments, not what 1.0 promises.
@@ -2749,9 +2751,9 @@ with 0.5 is set up again once. The details follow.
   app to open and asks there. A fingerprint or face added later keeps the keys; on Android 10
   they need one. Keys made by earlier builds are refused with a message to set the group up
   again.
-- The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
+- The project's name is now Connect Beyond Borders, short CBB: "CBB" under the icons, in the
   Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
-  installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers
+  installers; the full name in the docs and on the site, and "CBB: Connect Beyond Borders" in the stores. The apps' identifiers
   start with `tools.cbb` (the Android app and the watch `tools.cbb`, the iPhone app
   `tools.cbb`, the Mac app `tools.cbb.mac`), so the apps install anew. Every other technical
   name follows: the repository `HunterEwok/cbb` and its Go module, the service `cbb.service`
@@ -3597,7 +3599,7 @@ with 0.5 is set up again once. The details follow.
 - The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
   instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
   44 points tall and the screen's width to touch, in the other buttons' medium weight, at
-  which its Hindi line is no longer reported as clipped. "Copy Beyond Borders" under the name
+  which its Hindi line is no longer reported as clipped. "Connect Beyond Borders" under the name
   is bold at the title 3 size, large text, whose contrast over the background's glow is
   enough. Settings put as many colour swatches in a
   row as their names fit at the text size, so a long colour name breaks between words instead

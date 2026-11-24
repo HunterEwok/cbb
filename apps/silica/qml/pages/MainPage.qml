@@ -238,7 +238,7 @@ Page {
                 }
                 Label {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Copy Beyond Borders"
+                    text: "Connect Beyond Borders"
                     color: Theme.secondaryHighlightColor
                 }
                 Item { width: 1; height: Theme.paddingLarge }

@@ -7,7 +7,7 @@ A group of computers does not need the phone app: a computer can hold the group 
 
 ## 1. Make the group on a computer
 
-[Install](install.md) Copy Beyond Borders on a computer that is often on: Linux, Windows, a
+[Install](install.md) Connect Beyond Borders on a computer that is often on: Linux, Windows, a
 Mac or FreeBSD. It holds the group. Then:
 
 ```sh

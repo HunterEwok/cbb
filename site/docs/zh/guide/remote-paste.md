@@ -22,7 +22,7 @@
 
 在 GNOME 和 KDE 上，第一次粘贴会弹出系统的屏幕远程控制对话框；允许一次，之后就会记住。要跳过这个对话框，请安装 uinput 辅助程序：加上 `--uinput` 重新安装（`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`），它会添加一个虚拟键盘，只为屏幕前的用户按下 Shift+Insert 和 Enter。
 
-没有桌面时，tmux 和文本控制台需要它们各自的辅助程序。每次安装都会加入 Copy Beyond Borders 在 `/etc/tmux.conf` 中的那部分，它会随 tmux 一起启动 tmux 辅助程序；`install.sh --console` 会添加控制台辅助程序的服务。
+没有桌面时，tmux 和文本控制台需要它们各自的辅助程序。每次安装都会加入 Connect Beyond Borders 在 `/etc/tmux.conf` 中的那部分，它会随 tmux 一起启动 tmux 辅助程序；`install.sh --console` 会添加控制台辅助程序的服务。
 
 ## 由管理员粘贴
 

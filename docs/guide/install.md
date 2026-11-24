@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Installing
 
-Copy Beyond Borders runs as a small background service on each computer. Its command is `cbb`.
+Connect Beyond Borders runs as a small background service on each computer. Its command is `cbb`.
 Every way below installs the same program; pick the one you like.
 
 ## Linux
@@ -53,7 +53,7 @@ no `--console` or `--uinput`. To keep it running after you log out, an administr
 
 Switch to Desktop Mode, open Konsole, give the `deck` user a password once if it has none
 (`passwd`), and run the same command. SteamOS replaces its system files with each update, so
-the installer puts Copy Beyond Borders in `/opt/cbb` instead of `/usr/local`, and
+the installer puts Connect Beyond Borders in `/opt/cbb` instead of `/usr/local`, and
 tells SteamOS which of its files in `/etc` to keep (`/etc/atomic-update.conf.d/cbb.conf`).
 It stays installed and in its group across SteamOS updates.
 
@@ -176,7 +176,7 @@ docker compose -f compose.home.yaml exec cbb cbb pair
 
 ## The firewall
 
-Copy Beyond Borders needs one TCP port, 8764, and mDNS (UDP 5353), both from the home network
+Connect Beyond Borders needs one TCP port, 8764, and mDNS (UDP 5353), both from the home network
 only. The installer finds the firewall (ufw, firewalld, nftables or iptables on Linux, pf
 or ipfw on FreeBSD, the Mac's application firewall, Windows Firewall), lists each rule, and
 asks
@@ -222,7 +222,7 @@ The installers ask once whether to update automatically (`--auto-update on|off`,
 its own: a systemd timer on Linux, a launchd job on a Mac, a scheduled task as SYSTEM on
 Windows, cron on OpenWrt and FreeBSD. Each check downloads the same small files from GitHub
 (or from `dl.cbb.tools` when GitHub does not answer), so GitHub learns this device's address
-and that it uses Copy Beyond Borders, as with any download; it sends nothing about the group.
+and that it uses Connect Beyond Borders, as with any download; it sends nothing about the group.
 `sudo cbb update -mirror https://...` takes updates from another mirror instead, which
 needs no trust, since the signatures are checked. The timer's log is `update.log` in
 `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt),

@@ -2780,8 +2780,8 @@ void screen_open(void)
     SCR_CT = 255;
     // The name centred over the bars, 17 columns.
     colour(INK_BLUE);
-    at(0, PANEL + 3);
-    printf("COPY BEYOND");
+    at(0, PANEL + 1);
+    printf("CONNECT BEYOND");
     at(1, PANEL + 5);
     printf("BORDERS");
     colour(INK_WHITE);

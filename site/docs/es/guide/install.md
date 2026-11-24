@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: cc5e08e8e93b -->
+<!-- source: 556711697ffe -->
 # Instalación
 
-Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
+Connect Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
 
 ## Linux
 
@@ -32,7 +32,7 @@ Se ejecuta como tu propio servicio en segundo plano mientras tienes la sesión a
 
 ### SteamOS (Steam Deck)
 
-Cambia al Modo escritorio, abre Konsole, ponle una contraseña una vez al usuario `deck` si no tiene (`passwd`) y ejecuta el mismo comando. SteamOS sustituye sus archivos de sistema con cada actualización, así que el instalador coloca Copy Beyond Borders en `/opt/cbb` en lugar de `/usr/local`, y le indica a SteamOS cuáles de sus archivos de `/etc` debe conservar (`/etc/atomic-update.conf.d/cbb.conf`). Sigue instalado y en su grupo tras las actualizaciones de SteamOS.
+Cambia al Modo escritorio, abre Konsole, ponle una contraseña una vez al usuario `deck` si no tiene (`passwd`) y ejecuta el mismo comando. SteamOS sustituye sus archivos de sistema con cada actualización, así que el instalador coloca Connect Beyond Borders en `/opt/cbb` en lugar de `/usr/local`, y le indica a SteamOS cuáles de sus archivos de `/etc` debe conservar (`/etc/atomic-update.conf.d/cbb.conf`). Sigue instalado y en su grupo tras las actualizaciones de SteamOS.
 
 - `cbb` está en la ruta de un Konsole nuevo después de cerrar sesión y volver a entrar. `sudo` no busca ahí, así que los comandos que lo necesitan llevan la ruta completa: `sudo /opt/cbb/bin/cbb pair`.
 - En el Modo escritorio, el portapapeles se sincroniza como en cualquier escritorio KDE Plasma.
@@ -107,7 +107,7 @@ fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | 
 
 Instala `cbb`, un script rc.d que ejecuta el servicio mediante daemon(8), y añade la línea `cbb_enable="YES"` a rc.conf. Las claves están en `/var/db/cbb`.
 
-En OPNsense, el mismo instalador añade además un gancho de plugin: el servicio aparece en System > Diagnostics > Services, y sus reglas de cortafuegos (en el ancla `cbb` de pf) siguen cada recarga del filtro. Desactiva el repetidor de mDNS (Services > mDNS Repeater) mientras se ejecute: ambos necesitan el puerto UDP 5353, y el servicio responde él mismo a mDNS en cada interfaz doméstica. pfSense no está soportado: el instalador también se ejecuta allí, pero imprime las reglas de cortafuegos para Firewall > Rules en lugar de añadirlas, y una actualización de pfSense puede quitar Copy Beyond Borders.
+En OPNsense, el mismo instalador añade además un gancho de plugin: el servicio aparece en System > Diagnostics > Services, y sus reglas de cortafuegos (en el ancla `cbb` de pf) siguen cada recarga del filtro. Desactiva el repetidor de mDNS (Services > mDNS Repeater) mientras se ejecute: ambos necesitan el puerto UDP 5353, y el servicio responde él mismo a mDNS en cada interfaz doméstica. pfSense no está soportado: el instalador también se ejecuta allí, pero imprime las reglas de cortafuegos para Firewall > Rules en lugar de añadirlas, y una actualización de pfSense puede quitar Connect Beyond Borders.
 
 En un escritorio FreeBSD (X11, o Wayland con el protocolo data control, como en KDE, sway e Hyprland), la sesión inicia `cbb agent` desde el inicio automático de XDG y el portapapeles se une al grupo; vuelve a iniciar sesión después de la instalación. El pegado remoto escribe mediante XTEST en X11 y mediante el teclado virtual en los escritorios wlroots; GNOME no admite pegado remoto en FreeBSD, ya que sin logind nada indica si su pantalla está bloqueada.
 
@@ -123,7 +123,7 @@ docker compose -f compose.home.yaml exec cbb cbb pair
 
 ## El cortafuegos
 
-Copy Beyond Borders necesita un puerto TCP, el 8764, y mDNS (UDP 5353), ambos solo desde la red doméstica. El instalador localiza el cortafuegos (ufw, firewalld, nftables o iptables en Linux, pf o ipfw en FreeBSD, el cortafuegos de aplicaciones del Mac, el Firewall de Windows), enumera cada regla y pregunta `Add these rules now? [y/N]`:
+Connect Beyond Borders necesita un puerto TCP, el 8764, y mDNS (UDP 5353), ambos solo desde la red doméstica. El instalador localiza el cortafuegos (ufw, firewalld, nftables o iptables en Linux, pf o ipfw en FreeBSD, el cortafuegos de aplicaciones del Mac, el Firewall de Windows), enumera cada regla y pregunta `Add these rules now? [y/N]`:
 
 - **Sí**: las añade, las mantiene al día en cada actualización y las quita cuando desinstalas. Nunca toca otras reglas.
 - **No** (la opción por defecto, y la que se aplica cuando no hay terminal donde preguntar): no añade nada e imprime los comandos exactos para que los ejecutes tú.
@@ -145,7 +145,7 @@ Mantén todos los dispositivos de un grupo en la misma versión: la 0.6 no prome
 
 Qué versiones funcionan juntas y qué hace un dispositivo antiguo con algo más nuevo: [versiones y compatibilidad](../reference/compatibility.md).
 
-Los instaladores preguntan una vez si actualizar automáticamente (`--auto-update on|off`, o `-AutoUpdate on|off` y `$env:CBB_AUTO_UPDATE` en Windows, para responder de antemano); `sudo cbb update -auto on|off` lo cambia después. Activado, un temporizador comprueba una vez al día a una hora propia: un temporizador de systemd en Linux, una tarea de launchd en un Mac, una tarea programada como SYSTEM en Windows, cron en OpenWrt y FreeBSD. Cada comprobación descarga los mismos archivos pequeños de GitHub (o de `dl.cbb.tools` cuando GitHub no responde), así que GitHub conoce la dirección de este dispositivo y que usa Copy Beyond Borders, como con cualquier descarga; no envía nada sobre el grupo. `sudo cbb update -mirror https://...` toma las actualizaciones de otro espejo, lo que no requiere confianza, ya que las firmas se comprueban. El registro del temporizador es `update.log` en `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt), `/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update` (Mac) o `C:\Program Files\cbb-update` (Windows).
+Los instaladores preguntan una vez si actualizar automáticamente (`--auto-update on|off`, o `-AutoUpdate on|off` y `$env:CBB_AUTO_UPDATE` en Windows, para responder de antemano); `sudo cbb update -auto on|off` lo cambia después. Activado, un temporizador comprueba una vez al día a una hora propia: un temporizador de systemd en Linux, una tarea de launchd en un Mac, una tarea programada como SYSTEM en Windows, cron en OpenWrt y FreeBSD. Cada comprobación descarga los mismos archivos pequeños de GitHub (o de `dl.cbb.tools` cuando GitHub no responde), así que GitHub conoce la dirección de este dispositivo y que usa Connect Beyond Borders, como con cualquier descarga; no envía nada sobre el grupo. `sudo cbb update -mirror https://...` toma las actualizaciones de otro espejo, lo que no requiere confianza, ya que las firmas se comprueban. El registro del temporizador es `update.log` en `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt), `/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update` (Mac) o `C:\Program Files\cbb-update` (Windows).
 
 Los dispositivos de un grupo se comunican entre sí la versión firmada más reciente que alguno de ellos haya visto, así que la comprobación de un solo dispositivo basta para que `cbb status` y la app de bandeja de los demás indiquen que hay una versión más nueva («Update to X» en la app de bandeja ejecuta `cbb update` como administrador). Cada dispositivo sigue comprobando las firmas por sí mismo y descargando su propio archivo.
 

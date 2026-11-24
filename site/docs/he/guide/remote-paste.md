@@ -22,7 +22,7 @@
 
 ב-GNOME וב-KDE ההדבקה הראשונה פותחת את חלון המערכת לשליטה מרחוק במסך; אשרו פעם אחת וזה יזכר. כדי לדלג על החלון, התקינו את העוזר uinput: התקינו שוב עם `--uinput` (‏`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`), שמוסיף מקלדת וירטואלית שלוחצת רק על Shift+Insert ועל Enter עבור המשתמש שליד המסך.
 
-בלי שולחן עבודה, tmux וקונסולת הטקסט צריכים את העוזרים שלהם. כל התקנה מוסיפה את החלק של Copy Beyond Borders ב-`/etc/tmux.conf`, שמפעיל את העוזר של tmux יחד עם tmux; ‏`install.sh --console` מוסיף את שירות העוזר של הקונסולה.
+בלי שולחן עבודה, tmux וקונסולת הטקסט צריכים את העוזרים שלהם. כל התקנה מוסיפה את החלק של Connect Beyond Borders ב-`/etc/tmux.conf`, שמפעיל את העוזר של tmux יחד עם tmux; ‏`install.sh --console` מוסיף את שירות העוזר של הקונסולה.
 
 ## הדבקה ממנהל
 

@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: cc5e08e8e93b -->
+<!-- source: 556711697ffe -->
 # Установка
 
-Copy Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —
+Connect Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —
 `cbb`. Все способы ниже ставят одну и ту же программу; выберите тот, что нравится.
 
 ## Linux
@@ -57,7 +57,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 Переключитесь в режим рабочего стола, откройте Konsole, один раз задайте пользователю `deck`
 пароль, если его нет (`passwd`), и выполните ту же команду. SteamOS заменяет свои системные
-файлы при каждом обновлении, поэтому установщик кладёт Copy Beyond Borders в
+файлы при каждом обновлении, поэтому установщик кладёт Connect Beyond Borders в
 `/opt/cbb` вместо `/usr/local` и сообщает SteamOS, какие из его файлов в `/etc`
 сохранять (`/etc/atomic-update.conf.d/cbb.conf`). Программа остаётся установленной
 и в своей группе после обновлений SteamOS.
@@ -159,7 +159,7 @@ Diagnostics > Services, а её правила брандмауэра (в яко
 Repeater): обоим нужен UDP-порт 5353, а служба сама отвечает на mDNS на каждом домашнем
 интерфейсе. pfSense не поддерживается: установщик там тоже запускается, но не добавляет
 правила брандмауэра, а выводит их для Firewall > Rules, и обновление pfSense может удалить
-Copy Beyond Borders.
+Connect Beyond Borders.
 
 На рабочем столе FreeBSD (X11 или Wayland с протоколом data control, как в KDE, sway и
 Hyprland) сеанс запускает `cbb agent` из автозапуска XDG, и буфер обмена присоединяется к
@@ -183,7 +183,7 @@ docker compose -f compose.home.yaml exec cbb cbb pair
 
 ## Брандмауэр
 
-Copy Beyond Borders нужен один TCP-порт, 8764, и mDNS (UDP 5353), оба только из домашней сети.
+Connect Beyond Borders нужен один TCP-порт, 8764, и mDNS (UDP 5353), оба только из домашней сети.
 Установщик находит брандмауэр (ufw, firewalld, nftables или iptables в Linux, pf или ipfw во
 FreeBSD, брандмауэр приложений на Mac, брандмауэр Windows), перечисляет каждое правило и
 спрашивает
@@ -230,7 +230,7 @@ Windows `-AutoUpdate on|off` и `$env:CBB_AUTO_UPDATE`, чтобы ответи�
 в своё время: таймер systemd в Linux, задание launchd на Mac, запланированная задача от имени
 SYSTEM в Windows, cron в OpenWrt и FreeBSD. Каждая проверка скачивает одни и те же небольшие
 файлы с GitHub (или с `dl.cbb.tools`, когда GitHub не отвечает), поэтому GitHub узнаёт адрес
-этого устройства и то, что оно использует Copy Beyond Borders, как при любой загрузке; о группе
+этого устройства и то, что оно использует Connect Beyond Borders, как при любой загрузке; о группе
 не отправляется ничего. `sudo cbb update -mirror https://...` берёт обновления с другого
 зеркала, которому доверять не нужно, поскольку подписи проверяются. Журнал таймера —
 `update.log` в `/var/lib/cbb-update` (Linux), `/etc/cbb-update`
