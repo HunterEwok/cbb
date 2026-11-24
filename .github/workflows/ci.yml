@@ -1868,10 +1868,14 @@ jobs:
           # launching application via Xcode", or "Failed to get background
           # assertion for target app", seen on the first launch on a
           # simulator fresh from its data migration while the later tests
-          # launched it at once. When every failed test failed only so, those
+          # launched it at once; or "Application 'tools.cbb' does not have a
+          # process ID" after a minute, seen on the first launch of a run
+          # while the app had started, drawn its screen and stood idle in
+          # front (its video and spindump, 2026-11-23). When every failed
+          # test failed only so, those
           # tests (and only they) run again on the simulator booted again; a
           # failed assertion is never run again.
-          launch="Failed to launch <XCUIApplicationImpl|Failed to get background assertion for target app"
+          launch="Failed to launch <XCUIApplicationImpl|Failed to get background assertion for target app|Application 'tools\.cbb' does not have a process ID"
           failed_tests() {
             sed -nE "s/^Test Case '-\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\]' failed .*/\1\/\2\/\3/p" "$1" | sort -u
           }
