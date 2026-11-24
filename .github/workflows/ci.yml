@@ -383,6 +383,11 @@ jobs:
     # be gone, before the next one installs.
     runs-on: macos-latest
     timeout-minutes: 90
+    # security-events for the CodeQL analysis of the Go files for macOS below.
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     env:
       GO: ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' }}
       CORE: ${{ needs.changes.outputs.core }}
@@ -428,6 +433,30 @@ jobs:
           name: coverage-swift-kit
           path: coverage-swift-kit.json
           retention-days: 7
+      # CodeQL's analysis of the Go files for macOS alone (remote paste, the
+      # control socket's access list, the keychain), which codeql.yml runs on
+      # main and weekly: here on pull requests, on this machine that builds Go
+      # on macOS anyway, rather than on a macOS runner of its own. The same
+      # build mode and category as codeql.yml's, so Code scanning compares the
+      # two. Before go test, which CodeQL's tracer would slow; like codeql.yml,
+      # not a gate: a failed analysis shows as a warning, not a failed job.
+      - name: CodeQL for the Go files for macOS
+        if: env.GO == 'true'
+        continue-on-error: true
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: go
+          build-mode: autobuild
+      - name: CodeQL's build of the Go programs
+        if: env.GO == 'true'
+        continue-on-error: true
+        uses: github/codeql-action/autobuild@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      - name: CodeQL's analysis of the Go files for macOS
+        if: env.GO == 'true'
+        continue-on-error: true
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:go/macos
       - name: go test
         if: env.GO == 'true'
         # The service's tests take close to go test's default 10 minutes

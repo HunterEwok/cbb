@@ -144,10 +144,12 @@ the iPhone app's jobs build only the simulator's Rust library for the runner's p
 (`ffi/bind.sh ios-sim`; the macOS job below builds all three with the latest Rust),
 they do not run for a change that touches only Go (`iosapp` in `.github/ci-changes.sh`; the
 kit's interop tests still do), and the jobs shorter than the iPhone app's share one machine
-(`test and build (macOS), homebrew, Mac app`): the phone kit's tests, macOS's `go test`, the
+(`test and build (macOS), homebrew, Mac app`): the phone kit's tests, CodeQL's analysis of the Go
+files for macOS alone (which `codeql.yml` runs on main and weekly), macOS's `go test`, the
 macOS archives and the check that they ignore the test hooks, Homebrew's formula, the Mac app
-and the iPhone's libraries with the latest Rust. So at most five macOS jobs want a machine at
-once, and none waits for another.
+and the iPhone's libraries with the latest Rust. So at most four macOS jobs want a machine at
+once (the iPhone, the iPad, this job and the iPhone app's CodeQL analysis), and none waits for
+another; a second pull request's or a release's macOS jobs find a machine sooner.
 So the iPhone and the iPad, the longest, start at once, each booting its simulator while its
 Rust builds. The iPhone app's CodeQL analysis (`codeql-swift.yml`, about half an hour, built
 for the runner's processor only) starts on a pull request with the other jobs, from `ci.yml`,
