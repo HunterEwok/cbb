@@ -1,86 +1,102 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Privacy: who sees what
 
-For anyone who wants to know what leaves their devices. Connect Beyond Borders has no accounts, no
-cloud and no telemetry: what you copy is encrypted end to end, sealed on the device that
-copies it for the devices of your group that read copies, and nothing else can open it: no
-server, no network, no device in between. This page says what the devices that pass a copy on
-can still see, and everything that someone outside the group can see, and how to turn it off.
+For anyone who wants to know what data leaves their devices, what every server and platform can
+observe, and how to limit or turn off each exposure. Connect Beyond Borders uses no accounts, no
+cloud clipboard storage, and no analytics telemetry.
 
-## What you copy
+## What happens to your copies
 
-Texts, images and files are sealed end to end. The device that copies encrypts each copy
-with a key made for that copy alone, wraps the key for each device of the group that reads
-copies (X-Wing, which joins X25519 and the post-quantum ML-KEM-768) and signs the copy with its
-member key. Only those devices can open it; every device checks the signature, so none can
-change a copy or make one in another's name. The sealed copy then travels inside TLS 1.3 with
-the group's own certificates, and away from home inside WireGuard as well, through your hub
-and perhaps a forwarder or a relay. No server, network or provider can read it, the project's
-servers included. A device that is removed from the group gets nothing more, and a device that
-joins reads copies from its next one on, not the ones made before it.
+Every copy—plain text, secrets, formatted text, images, and files—is encrypted end to end before
+leaving the device where you copied it:
+
+1. The copying device creates a fresh 32-byte key for that single copy and encrypts the content
+   with ChaCha20-Poly1305.
+2. It wraps that key individually for each reading device in your group using HPKE with **X-Wing**
+   (combining X25519 and post-quantum ML-KEM-768) and signs the copy with its own member key
+   (ECDSA P-256).
+3. The sealed copy travels inside a mutual **TLS 1.3** connection using your group's device keys,
+   and away from home inside your group's **WireGuard** tunnel as well.
+
+No server, network, internet provider, or intermediate device without a reading key can read,
+alter, or forge a copy. A removed device receives no future copies, and a newly joined device
+cannot decrypt copies made before it joined.
 
 ## What the devices in between see
 
-A copy often reaches a device through another: through the hub away from home, or through a
-computer that passes it on at home. Those devices read nothing of a copy that is not sealed to
-them, but passing it on needs a little, which stays outside the seal:
+A copy can pass through another device in your group before reaching its destination—for example,
+through your hub away from home or through another member on your home network. A device that only
+passes copies on cannot open the seal, so it sees only the envelope metadata needed for delivery:
 
-- **Which device sent it, and when.** The time decides which copy is the newest, which every
-  device needs, a hub that only passes copies on included.
-- **Which devices it is sealed to.** That is the group's list of devices, which they know
-  anyway.
-- **Its size in steps** (1, 4, 16, 64 and 256 KB, 1 MB, then each further megabyte), and
-  whether it has an image or files, with their total to 64 KB. All the files of one copy are
-  one sealed piece, so their number does not show.
+- **Sender and timestamp:** Which device copied the item and when (needed to decide which copy is
+  newest).
+- **Recipient list:** Which devices the copy is sealed to (already known to group members from the
+  group's device records).
+- **Rounded size:** Text payload size rounded to fixed steps (`1`, `4`, `16`, `64`, `256` KB,
+  `1` MB, then per megabyte), and whether an image or file attachment is present with its total
+  rounded to `64` KB. All files in one copy travel inside a single sealed blob, so file count is
+  hidden.
 
-What never shows: whether it is a text, a secret, an image or files; the text; the files'
-names; the exact size.
+Intermediate devices never see whether a copy is plain text, a secret, an image, or files; never
+see the text or filenames; and never see the exact byte size.
 
-## Exceptions
+## Opt-in exceptions
 
-Each is your choice:
+Certain features involve channels outside Connect Beyond Borders' end-to-end seal. Each requires
+your explicit choice:
 
-- A **Roku** added with `cbb remote add -roku -consent` gets its text as plain HTTP on your
-  home network ([keyboards and TVs](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
-- A **hub that reads the copies** is an admin you chose, so the copies are sealed to it like
-  to your other devices. Make an always-on computer whose keys are only in a file, such as a
-  Raspberry Pi, a **hub that only passes copies on** instead: no copy is sealed to it, so it
-  reads none ([away from home](away-from-home.md)). Commands, such as a remote paste or a
-  quick action, are sealed to the one device they are for in either case
-  ([remote paste](remote-paste.md)).
-- An **Apple Watch** or a **Wear OS** watch gets the copies from its phone over the channel
-  the system encrypts between the two, not sealed by Connect Beyond Borders.
+- **Roku TV remote (`cbb remote add -roku -consent`):** Roku's External Control Protocol uses
+  unencrypted HTTP on your home network. Do not send passwords to a Roku
+  ([Keyboards and TVs](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
+- **Hub that reads copies:** A main device or admin computer acting as a hub receives copies
+  sealed to it like any other reading device. If your always-on hub keeps keys in files (such as a
+  Raspberry Pi or NAS), configure it as a **hub that only passes copies on** so copies are never
+  sealed to it ([Away from home](away-from-home.md)). Signed commands (such as remote paste and
+  quick actions) are always sealed only to their single target device.
+- **Paired watches (Apple Watch, Wear OS, HarmonyOS watch):** A watch communicates with its paired
+  phone over the operating system's own encrypted phone-watch channel (WatchConnectivity, Wearable
+  Data Layer, or Wear Engine) and displays device status, events, and switches rather than your
+  clipboard contents.
+- **Bluetooth and USB keyboards:** Text typed through a phone, Linux computer, or Arduino Nano
+  ESP32 keyboard travels over Bluetooth or USB directly to the paired target device.
 
-## Everyone else
+## Everyone outside your group
 
-| Who | What they can see | How to avoid it |
+When syncing away from home is off, the background service communicates only on your home network.
+When syncing away from home is on, the service communicates only with your home network and your
+group's own hub, forwarder, and relay (enforced in code on every OS and by system firewall/sandbox
+rules on Linux and Windows).
+
+Neither a forwarder nor a blind relay ever sees your group's device list, device names, or
+permanent device IDs. Instead, your group generates separate temporary **server credentials** for
+each server and rotates them every 30 days (and on device removal), so two servers cannot link
+your group's traffic together.
+
+The table below lists every party outside your group that can observe any traffic or metadata:
+
+| Party | What they can see | How to avoid or limit it |
 |---|---|---|
-| Others on your home network | that devices there run Connect Beyond Borders, their random device IDs and your group's tag in mDNS, and which of them talk and how much; never device names or contents | nothing to do; a computer publishes only on the home networks it knows |
-| Others on a network away from home (a café, a hotel) | that the device talks WireGuard, or with VLESS that it opens a TLS connection to your hub or forwarder, when and how much | a system VPN hides even that |
-| The forwarder (yours, or the project's at `cbb.tools`) | the addresses that encrypted packets come from and go to your hub, when, and how large they are; not which group or device they belong to | run your own, or forward a port to your hub and use none |
-| The push service (the project's at `cbb.tools`) | a phone's push token and the address of the member that sends to it, when a notice goes; the notice is sealed to the phone, so not what it says | turn off **Notify me when the app is closed** in the app's Settings |
-| Apple, Google, or your UnifiedPush server | that a push went to the phone, and when; nothing in it | the same setting |
-| A blind relay | which devices of a group are online now and talk to each other, when and how much; it keeps none of it | run your own, or use a hub |
-| The company that hosts a forwarder or relay | the addresses that talk to it, when and how much | a system VPN on the device |
-| GitHub, or `dl.cbb.tools` when GitHub does not answer | your address and that you use Connect Beyond Borders, at each update check and download; nothing about the group | `sudo cbb update -auto off`, or a mirror of your own (`-mirror`) |
-| `cbb.tools` | the root's address, once a day, when it fetches the signed copy of Google's list of revoked Android keys (once that copy starts, with the project's signing keys) | none needed: it is the same file for everyone |
-| Apple, Intel or AMD | that a device of that kind asked them to vouch for its key, from your address | only at the **strict** key level; the default asks no one ([keys](keys.md#the-three-levels)) |
-| The App Store, Google Play, F-Droid, Homebrew, winget | that you installed the app, as for any app | install the signed file from the release instead |
+| **Other devices on your home network** | mDNS broadcasts showing that devices run Connect Beyond Borders, their random device IDs, group tag, and port; which local IP addresses connect and how much data moves. Never device names or clipboard contents | Computers announce only on known home networks and stay silent on unfamiliar Wi-Fi |
+| **Networks away from home** (café, hotel, mobile operator, ISP) | Encrypted WireGuard/AmneziaWG UDP packets—or with VLESS, an HTTPS connection to the forwarder's domain (visible in TLS SNI)—plus timing and traffic volume | Run a system VPN on your device to hide destinations and timing |
+| **Forwarder** (the project's at `cbb.tools`, or your own) | IP addresses exchanging encrypted WireGuard packets with your hub, packet times, and packet sizes; rotating server-credential tags only, never device names, group membership, or clipboard contents | Forward UDP port 8764 directly to your hub so no forwarder is used, or [run your own forwarder](../admin/self-hosting.md#a-forwarder) |
+| **Blind relay** (the project's at `cbb.tools`, or your own) | Rotating device pseudonyms online at the same time, their IP addresses, which pseudonyms talk to each other, timing, and volume (kept in memory only, never written to logs). Never clipboard contents or device names | Use a hub of your own instead of a blind relay, or [run your own relay](../admin/self-hosting.md#a-blind-relay) |
+| **Hosting provider of a forwarder or relay** | IP addresses connecting to the server, connection times, and traffic volume | Use a system VPN on your devices, or self-host at a provider you choose |
+| **Project push service** (`cbb.tools`) | Phone push token, rotating group face tag, sender IP address, and notification timestamp when waking a closed phone app. Each push body is sealed to the phone and padded to a fixed size, so the service cannot read it | Turn off **Notify me when the app is closed** in phone **Settings** |
+| **Phone push platforms** (Apple APNs, Google FCM, or your UnifiedPush distributor such as ntfy) | That a push notification was sent to Connect Beyond Borders on your phone, and when; never the sealed contents | Turn off **Notify me when the app is closed** in phone **Settings**, or use the F-Droid Android build with your own UnifiedPush server instead of Google FCM |
+| **Update servers** (GitHub Releases, `raw.githubusercontent.com`, `dl.cbb.tools`, and `cbb.tools/openwrt` for the OpenWrt feed) | Your IP address and that you checked for or downloaded a Connect Beyond Borders release; nothing about your group or copies | Turn off automatic updates (`sudo cbb update -auto off`, or in Android **Settings > About**), or point updates to your own HTTPS mirror (`sudo cbb update -mirror https://...`) |
+| **Project signed lists and attestation mirror** (`cbb.tools`) | Your IP address when fetching signed server entry-point lists, or when the main device fetches the daily signed copy of Google's Android attestation revocation list (`https://cbb.tools/attest/`) | The same public files are served to everyone; mirroring avoids contacting Google directly |
+| **Project bug report receiver** (`https://bug.cbb.tools/`) | Only if a crash occurs **and** you tap **Allow** (or **Always allow**): your IP address, app version, crash fingerprint, and an X-Wing-sealed report (opened offline by the maintainer's robot). Reports contain filtered error logs, versions, and device model—never clipboard text, files, keys, pairing codes, device names, or IP addresses | Tap **Cancel** on the crash prompt; nothing is sent without your explicit consent |
+| **App stores and package managers** (Apple App Store / TestFlight, Google Play, F-Droid, Homebrew, winget) | That you installed or updated Connect Beyond Borders, as with any app from that store | Install signed release archives or APKs directly from GitHub Releases |
+| **Website analytics** (`cbb.tools`) | Page views when you browse `cbb.tools` in a web browser, counted by a self-hosted GoatCounter instance with no cookies and no third-party sharing | The apps and background service never load website pages or analytics |
 
-Nothing reports crashes or usage. The logs stay on each device; with error details on
-(`CBB_DEBUG=1`), they hold more of the cause, still only on that device.
-
-## The website
-
-`cbb.tools` counts visits with its own GoatCounter, without cookies and without sending
-anything to another company. The apps and the service never load anything from it apart
-from the files above.
+Logs stay local on each device. Enabling error details (`CBB_DEBUG=1` or **Show error details** in
+app settings) adds underlying error details locally and never sends them anywhere automatically.
 
 ## More detail
 
-- What a forwarder and a relay keep, and what their hosting provider sees:
-  [running your own servers](../admin/self-hosting.md#what-the-server-keeps).
-- What each server learns, field by field: the [protocol](../protocol.md), sections 13
-  and 14.
-- The attacks Connect Beyond Borders defends against, and those it does not: the
-  [threat model](../threat-model.md).
+- What a forwarder and a blind relay store on disk:
+  [Running your own servers: what the server keeps](../admin/self-hosting.md#what-the-server-keeps).
+- Exact wire fields seen by servers and push services:
+  [Protocol](../protocol.md), sections 13 and 14.
+- Threats defended against and residual risks:
+  [Threat model](../threat-model.md).

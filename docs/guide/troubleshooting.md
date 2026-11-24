@@ -1,79 +1,190 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# When something does not work
+# Troubleshooting
 
-Start with `cbb status` on the device that misbehaves: it says whether the service runs, which
-group it is in, which members are connected and the state of sync away from home. Each
-message is short; `CBB_DEBUG=1 cbb status` (on Windows `$env:CBB_DEBUG = "1"` first) shows
-the underlying error under it. The service's log always has the details: on Linux
-`journalctl -u cbb`, and the desktop connector's in the session's journal,
-`journalctl --user`; the other systems are in [files and logs](../reference/devices.md#files-and-logs).
-The details switch of every part, the apps and the installers included, is in
-[error messages and details](../reference/errors.md).
+For anyone whose devices are not syncing, failing to pair, or returning errors. Each entry below
+lists the **symptom**, **cause**, and **fix**.
 
-## Commands
+## Start with diagnostics
 
-**"the CBB service is not running"**: start it
-(`sudo systemctl start cbb` on Linux; `sudo launchctl kickstart -k system/tools.cbb`
-on a Mac; `Start-Service cbb` on Windows) and look at its log.
+Before changing settings, check what Connect Beyond Borders reports:
 
-**"permission denied" on the control socket, right after installing**: the installer added
-you to the `cbb` group, and a group counts only from the next login. Log out and
-in again (on Windows, open a new terminal); until then, `sudo cbb ...` works.
+- **In a phone or desktop app:** Open **Settings**, turn on **Advanced settings**, and check **Why
+  it does not sync** for a plain-language explanation and next step. To show underlying technical
+  errors under short messages, tap **Version** seven times in **Settings** and turn on **Show
+  error details**.
+- **In a terminal:** Run `cbb status` to see whether the service is running, your group status,
+  connected devices, and away-from-home state. Prefix any command with `CBB_DEBUG=1` (on Windows
+  PowerShell, run `$env:CBB_DEBUG = "1"` first) to print the underlying error:
 
-## Devices do not see each other
+  ```sh
+  CBB_DEBUG=1 cbb status
+  ```
 
-- **Firewall.** Members need TCP 8764 (or your port) and UDP 5353 (mDNS) from the home
-  network. The installers add them when you answer Yes; which firewalls they know, and the
-  commands for the others, are in [the firewall](install.md#the-firewall). With a firewall
-  turned on later, run the installer again. If `cbb status` warns that the others cannot
-  connect to this computer, its firewall is blocking the member port.
-- **Another subnet or VLAN.** mDNS does not cross routers, so devices on, say,
-  192.168.0.x and 192.168.20.x do not find each other. Turn on [sync away from home](away-from-home.md)
-  with a hub on one side, or name a computer with `-peer` in the other device's
-  service ([small devices](../../member/README.md#install)).
-- **Guest Wi-Fi or client isolation** on the router keeps devices from talking to each
-  other at all; put them on the main network.
-- **A different group.** `cbb status` shows the group; devices of two groups never
-  sync. To move a computer to the right one, run `sudo cbb leave` on it, then pair it with
-  the right group, and remove it from the wrong one there.
-- **Removed from the group.** `cbb status` says so, and its members refuse it. Run
-  `sudo cbb leave` on it (in the apps: Leave the group), then pair it again.
+- **Check service logs:** On Linux, run `journalctl -u cbb` for the service and
+  `journalctl --user` for the desktop clipboard agent. Log paths for macOS, Windows, FreeBSD, and
+  OpenWrt are in [Devices, ports and files](../reference/devices.md#files-and-logs), and debug
+  switches for every component are in [Error messages and details](../reference/errors.md).
+
+## Commands and service
+
+### "the Connect Beyond Borders service is not running"
+
+- **Cause:** The background service is stopped or failed to start.
+- **Fix:** Start the service for your operating system and inspect its log if it exits again:
+  - **Linux:** `sudo systemctl start cbb` (rootless: `systemctl --user start cbb`)
+  - **macOS:** `sudo launchctl kickstart -k system/tools.cbb`
+  - **Windows (administrator PowerShell):** `Start-Service cbb`
+  - **FreeBSD:** `sudo service cbb start`
+  - **OpenWrt:** `/etc/init.d/cbb start`
+
+### "permission denied" on the control socket after installing
+
+- **Cause:** The installer added your user account to the `cbb` group (`_cbb` on macOS), and new
+  group memberships take effect only after your next sign-in.
+- **Fix:** Log out and log back in (on Windows, open a new terminal window). Until you sign in
+  again, run commands with `sudo cbb ...`.
+
+## Devices do not see each other at home
+
+### `cbb status` warns that devices at home cannot connect to this computer
+
+- **Cause:** The computer's firewall blocks incoming **TCP port 8764** (or your custom member
+  port) or **UDP port 5353** (mDNS).
+- **Fix:** Re-run the installer and answer `y` to the firewall prompt, or add the rules manually
+  using the commands in [Installing: the firewall](install.md#the-firewall).
+
+### `cbb status` says "Quiet on" for your home network
+
+- **Cause:** Computers announce themselves and accept local connections only on known home
+  networks. If you replaced your router or changed subnets, the computer treats the network as
+  unfamiliar.
+- **Fix:** Mark the current network as a home network: run `sudo cbb network` on the computer, or
+  click **This is my home network** in the Mac app or tray app.
+
+### Devices are on different subnets or VLANs
+
+- **Cause:** Local network discovery (mDNS) does not cross routers between separate subnets (for
+  example, `192.168.0.x` and `192.168.20.x`).
+- **Fix:** Connect both networks through a hub ([Away from home](away-from-home.md)), run `cbb` on
+  a router connected to both subnets, or pass `-peer HOST:PORT` to the service on a small device
+  ([Small devices](../../member/README.md#install)).
+
+### Devices on Wi-Fi cannot connect to each other at all
+
+- **Cause:** The router has **Guest Wi-Fi** or **AP / client isolation** enabled, which prevents
+  wireless devices from communicating directly.
+- **Fix:** Move your devices to your main home Wi-Fi network or disable client isolation on the
+  router.
+
+### Two devices are online but never exchange copies
+
+- **Cause:** One device is in a different group, **Sync** is off, or an admin muted the device.
+- **Fix:**
+  - Check **Sync** on both devices (`cbb status` or **Home** in the app) and make sure neither
+    device is muted.
+  - Check the group tag in `cbb status`. If a computer is in the wrong group, run `sudo cbb leave`
+    on it, pair it with the right group, and remove its old entry from the wrong group.
+
+### `cbb status` or the app says this device was removed from the group
+
+- **Cause:** An admin removed this device, so all other group members refuse its connections.
+- **Fix:** Run `sudo cbb leave` on the computer (or tap **Leave the group** in the phone or
+  desktop app), then pair the device again as a new device.
 
 ## Pairing fails
 
-- **"wrong code"**: each pairing window allows three attempts; run `cbb pair` again for a
-  new code.
-- **The phone cannot reach the computer after scanning its QR code**: the phone and the
-  computer must be on the same network, and the computer's port must be open (above). On
-  iOS, allow Local Network for the app (Settings, Privacy & Security, Local Network).
+### Pairing reports "wrong code" or the window closes
+
+- **Cause:** Each pairing window stays open for 5 minutes and closes automatically after 3 wrong
+  attempts.
+- **Fix:** Open a new pairing window (`sudo cbb pair` on an admin computer, or **+ > Add a
+  device** in an app) and enter the new 6-digit code or scan the new QR code.
+
+### Phone cannot reach the computer after scanning the QR code
+
+- **Cause:** The phone and computer are on different networks, the computer's firewall blocks TCP
+  port 8764, or iOS Local Network access is denied.
+- **Fix:**
+  1. Confirm both devices are on the same home Wi-Fi or LAN.
+  2. Verify the computer's firewall allows TCP port 8764 ([the firewall](install.md#the-firewall)).
+  3. On iPhone, enable **Settings > Privacy & Security > Local Network > CBB**.
 
 ## Sync away from home
 
-`cbb global` on the device and on the hub says what is wrong. The usual causes: the router does
-not forward the hub's UDP port to the hub, the hub's firewall drops it, or the address given
-to `cbb global hub` is not the one the internet reaches. A device that has not met the hub
-at home since sync away from home was turned on, or since the hub changed its settings
-(`-no-obfuscate`, `-no-vless`), does not know how to reach it: bring it home once. A network that
-blocks VPNs needs [AmneziaWG or VLESS](blocked-networks.md). With `CBB_DEBUG=1` in the service's
-environment the log also shows WireGuard's handshakes. On Linux:
+### Away device cannot connect to the hub
 
-```sh
-sudo systemctl edit cbb     # add the two lines below, save
-# [Service]
-# Environment=CBB_DEBUG=1
-sudo systemctl restart cbb
-```
+- **Cause:** One of four common issues:
+  - Your router does not forward UDP port 8764 to the hub, the hub's firewall drops it, or the
+    public address given to `cbb global hub` is behind carrier-grade NAT.
+  - The away device has not met the hub on your home network since syncing away from home was
+    turned on or since the hub changed its tunnel settings (`-no-obfuscate`, `-no-vless`).
+  - Your home IP address changed and the computer's system outbound rule still allows only the old
+    address.
+  - The network you are visiting blocks WireGuard or UDP traffic.
+- **Fix:**
+  1. Run `cbb global` on both the away device and the hub to read the exact failure.
+  2. If your home is behind carrier-grade NAT or port forwarding fails, switch the hub to a
+     forwarder (`sudo cbb global hub` for the project's forwarder; see
+     [Away from home](away-from-home.md#5-when-the-internet-cannot-reach-your-home-a-forwarder)).
+  3. If `cbb global` says the system's outbound network rule lags behind, run `sudo cbb global
+     allow` on that computer.
+  4. If the device never met the hub at home after a settings change, connect it to your home
+     network once (and open the phone app briefly).
+  5. If the visited network filters VPNs, verify AmneziaWG and VLESS are enabled on the hub
+     ([Networks that block VPNs](blocked-networks.md)). If the project's forwarder entry points
+     are stale, import fresh signed entry points with `sudo cbb global entries import STRING`.
+  6. To log WireGuard handshakes on Linux, set `CBB_DEBUG=1` on the service and restart it:
 
-## Android
+     ```sh
+     sudo systemctl edit cbb
+     ```
 
-- **The accessibility service cannot be turned on** ("restricted setting"): on Android 13
-  and later, open the app's App info, ⋮, "Allow restricted settings", then turn it on.
-- **Copies from the computers stop arriving**: the foreground service may have been stopped
-  by a battery saver; let the app run unrestricted in its battery settings.
+     Add these lines, save, and restart:
+
+     ```ini
+     [Service]
+     Environment=CBB_DEBUG=1
+     ```
+
+     ```sh
+     sudo systemctl restart cbb
+     ```
+
+     Then inspect `journalctl -u cbb`.
+
+## Phones
+
+### Android: "Restricted setting" blocks turning on the accessibility service
+
+- **Cause:** Android 13 and later restrict accessibility permissions for apps installed from an
+  APK outside an app store.
+- **Fix:** Open Android **Settings > Apps > CBB** (App info), tap the **⋮** menu in the top
+  corner, tap **Allow restricted settings**, and then turn on **Clipboard sync** in Accessibility
+  settings.
+
+### Android: copies from computers stop arriving in the background
+
+- **Cause:** Battery optimization stopped the app's background foreground service.
+- **Fix:** Open Android **Settings > Apps > CBB > Battery** and set it to **Unrestricted**.
+
+### iPhone: iOS asks for paste permission every time you sync
+
+- **Cause:** iOS defaults **Paste from Other Apps** to **Ask**.
+- **Fix:** Open iPhone **Settings > Apps > CBB > Paste from Other Apps** and choose **Allow**.
+
+### Aurora OS 5: admin key is locked
+
+- **Cause:** Seven wrong admin PIN attempts permanently lock the admin key in the phone's secure
+  element. The phone stays in the group as an ordinary member.
+- **Fix:** Leave the group, reinstall **CBB**, and join again as a new device.
 
 ## Still stuck
 
-Open an [issue](https://github.com/HunterEwok/cbb/issues) with the output of
-`CBB_DEBUG=1 cbb status`, the relevant part of the log and the systems involved. Remove
-anything you copied that is private. Security problems go to [SECURITY.md](../../SECURITY.md)
-instead.
+Open a [GitHub issue](https://github.com/HunterEwok/cbb/issues) and include:
+
+- The output of `CBB_DEBUG=1 cbb status` (and `cbb global` for away-from-home problems)
+- The relevant lines from the service or app log
+- The operating systems and Connect Beyond Borders versions involved
+
+Remove any copied text, personal addresses, or device names you do not want to share. Report
+security vulnerabilities privately by following [SECURITY.md](../../SECURITY.md).

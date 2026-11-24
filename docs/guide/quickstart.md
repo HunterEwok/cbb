@@ -1,110 +1,148 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Quick start
 
-Connect Beyond Borders gives your phone and your computers one clipboard: copy on one, paste on
-another. The devices form a **group** on your home network. The phone holds the group's key
-and lets each new device in, so nobody can join without you.
+For anyone setting up Connect Beyond Borders for the first time with a phone and a computer on a
+home network. In four steps, you install the phone app, create a group, add your first computer,
+and share your clipboard between them.
 
-![Each computer joins the phone's group by the six digits the phone shows; then the devices share one clipboard](../images/group.svg)
+Connect Beyond Borders shares one encrypted clipboard across your own devices with no cloud or
+account. Your devices form a **group**: a set of devices that trust each other through signed
+records instead of a central server. The phone that creates the group is its **main device**
+(called *root* in command-line tools and diagrams): it holds the group's main key and admits new
+devices.
 
-It takes four steps: install the app and create the group, install Connect Beyond Borders on a
-computer, type on the computer the six digits the phone shows, and copy.
+![A phone holding the group's key connects with Linux, Mac, and Windows computers so every device shares one clipboard directly on your home network](../images/group.svg)
 
-A group can have a computer at its heart or be made of phones only: both work, and we recommend
-a computer that is often on, which keeps sync away from home going at any time ([two kinds of group](how-it-works.md#two-kinds-of-group)).
-With phones only, skip steps 2 and 3: tap **+** on the first phone, then on each other phone
-tap **Join a group** and scan the code the first one shows.
+If you want to start a group without a phone app (using computers only), follow
+[Without the app](without-app.md). If you have phones only, skip steps 2 and 3, tap **+** on the
+first phone, and tap **Join a group** on each additional phone to scan its QR code (see
+[two kinds of group](how-it-works.md#two-kinds-of-group)).
 
-## 1. Install the app on your phone
+## 1. Install the app and create a group on your phone
 
-- **Android** 10 or later: download `cbb-X.Y.Z.apk` from the
-  [latest release](https://github.com/HunterEwok/cbb/releases/latest) on the
-  phone and open it; allow the browser to install apps when Android asks.
-- **iPhone**: the app comes with TestFlight, which is not open yet. Until then a group
-  starts on Android, or on a computer: see [Without the app](without-app.md).
+This tutorial uses an Android phone (Android 10 or later). For other phone apps (iPhone, Aurora
+OS, and HarmonyOS), see [The apps](apps.md).
 
-Open the app and tap **Create a group**. The app makes the group's key (it asks for your
-fingerprint, face or passcode) and then asks how to keep the recovery key: **Write on a sheet**
-or **Write to YubiKey**. Keep it apart from your devices; it brings the group back if the
-phone is lost ([keys](keys.md)).
+1. On your Android phone, download `cbb-X.Y.Z.apk` from the
+   [latest GitHub release](https://github.com/HunterEwok/cbb/releases/latest).
+2. Open the downloaded file to install Connect Beyond Borders. When Android asks, allow your
+   browser or file manager to install apps.
+3. Open **CBB** and tap **Create a group**.
+4. Confirm with your fingerprint, face, or screen lock when asked. The app creates the group's
+   main key inside your phone's security hardware.
+5. Save the group's **recovery key**, which the app shows once. Choose **Write on a sheet** to
+   print or save it, **Write to YubiKey** to store it on a YubiKey, or both. Store the recovery
+   key separately from your devices: it is the only way to move the group to another main device
+   if you lose this phone ([Keys and attestation](keys.md)).
+
+**What you see:** After you close the recovery key screen, the app opens **Add a device** with a
+QR code and a six-digit pairing code. If you close that screen, the app shows **Home** with your
+phone listed as online.
 
 ## 2. Install Connect Beyond Borders on a computer
 
-Pick any computer on your home network: a laptop, a desktop, a Raspberry Pi.
+Choose a computer on the same home network as your phone, such as a laptop, a desktop, or a
+Raspberry Pi.
 
-On **Linux** or a **Mac**, in a terminal:
+- On **Linux** or **macOS**, open a terminal and run:
 
-```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
-```
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+  ```
 
-On **Windows** 10 or 11, in a PowerShell opened with "Run as administrator":
+  On macOS 14 or later, you can also download and open `cbb-X.Y.Z.pkg` from the
+  [latest GitHub release](https://github.com/HunterEwok/cbb/releases/latest) to install both the
+  background service and the menu bar app.
 
-```powershell
-irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
-```
+- On **Windows** 10 (1809 or later) or 11, open PowerShell with **Run as administrator** and run:
 
-The installer checks the download, starts Connect Beyond Borders and asks two questions: whether
-to open the firewall for it (answer `y`) and whether to update itself automatically (`y`
-is a good answer too). Then log out and in again once, or open a new terminal on
-Windows. Homebrew, Docker and the details are in [Installing](install.md).
+  ```powershell
+  irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
+  ```
 
-## 3. Add the computer
+During setup, the installer checks the download's signature, installs the background service
+(`cbb`), and asks up to two questions:
 
-In the app, tap **+** (Add a device). It shows a QR code and six digits under it, and waits
-for a few minutes.
+1. **Firewall rules** (shown when a firewall is active): answer `y` to let Connect Beyond Borders
+   communicate on your home network.
+2. **Automatic updates**: answer `y` to let Connect Beyond Borders check daily for signed updates
+   and install them automatically.
 
-On the computer:
+On Linux, log out and log back in once so your account can run `cbb` without `sudo`. On Windows,
+open a new terminal window.
 
-```sh
-sudo cbb pair -code
-```
+**What you see:** The installer reports that Connect Beyond Borders is running on TCP port 8764
+and prints the next command to join a group. For Homebrew, Docker, routers, and other options,
+see [Installing](install.md).
 
-On Windows, run `cbb pair -code` in the administrator terminal. Type the six digits: the
-computer finds the phone's pairing window on the home network and joins. Or, without a
-terminal, open the CBB app on the computer (the tray app on Windows and Linux, the menu bar
-app on a Mac), click **Join a group** and type the digits there; it asks for the
-administrator's password first.
+## 3. Add the computer to your group
 
-Add every other computer the same way: install, **+** in the app, and `sudo cbb pair -code`.
+1. On your phone, make sure **Add a device** is open. If you are on **Home**, tap **+** and
+   choose **Add a device**. The screen displays a QR code and six digits, and waits for five
+   minutes.
+2. On your computer, join using a terminal or the desktop app:
+   - **In a terminal (Linux and macOS):** run `sudo cbb pair -code`, then type the six digits
+     shown on your phone.
+   - **In a terminal (Windows):** open a terminal as administrator, run `cbb pair -code`, then
+     type the six digits.
+   - **In the desktop app (Linux tray app, Windows tray app, or macOS menu bar app):** open
+     **CBB**, select **Join a group**, type the six digits, and confirm with your administrator
+     password when asked.
+
+**What you see:** Your computer confirms that it joined the group, and the **Add a device** screen
+on your phone closes. On your phone's **Home** screen, the computer appears in your device list
+and shows as online.
+
+Add any other computers the same way: install Connect Beyond Borders, open **Add a device** on
+your phone, and run `cbb pair -code` (or use **Join a group** in the desktop app).
 
 ## 4. Copy on one, paste on another
 
-What you copy on the computer reaches the group, and what the group copies reaches it.
-Copy on the computer and paste on the phone, or the other way round:
+Try copying a line of text on your computer, then paste it on your phone. Then copy text on your
+phone and send it to your computer.
 
-- **Android** gets the computers' copies by itself. To send the phone's copies, tap the big
-  button on the app's Home, the **Send clipboard** tile in Quick Settings or Send in the
-  notification; or turn on **Clipboard sync** in the app to have it done for
-  you.
-- **Between computers**: copy on one, paste on another. Nothing to press.
+- **Between computers:** Copy on one computer and paste on another automatically.
+- **Computer to Android:** Copies from your computers arrive on your phone's clipboard
+  automatically in the background.
+- **Android to computer:** Open **CBB** to send what you copied automatically (if sending fails,
+  a **Send what I copied** button appears on **Home**). Without opening the app, you can tap
+  **Send** in the CBB notification, tap the **Send clipboard** home-screen widget, share text or
+  files to **Connect Beyond Borders**, or turn on **Clipboard sync** in the app's **Settings** to
+  send copies automatically.
 
-To keep a device's clipboard its own for a while, turn sync off: the house button on the
-app's first screen, or `cbb sync off` ([the commands](../reference/cli.md#cbb)). The rest of
-what the apps do is in [The apps](apps.md).
+To pause syncing on a device so its clipboard stays private:
 
-## 5. Recommended: let a computer that is always on help the phone
+- On your phone, tap the **Sync** button (the house icon) on **Home**—or hold it to pause for
+  15 minutes, 1 hour, 8 hours, or until you turn it back on—or tap the **Sync** tile in Android
+  Quick Settings.
+- On a computer, run `cbb sync off` (and `cbb sync on` to resume), or use the **Sync** switch in
+  the desktop app.
 
-The group works with just the phone, but two things are better on a computer that stays on,
-such as a home server, a Raspberry Pi or a desktop:
+For all app features and gestures across platforms, see [The apps](apps.md).
 
-- **Make it an admin.** On the phone, tap the computer on Home and then
-  **Make it an admin**. A computer without a TPM or a Secure Enclave keeps its keys in a
-  file, and the app warns you about that first
-  ([keys](keys.md#the-three-levels)). It can then add and remove devices too (`sudo cbb pair`,
-  `sudo cbb remove NAME`), so you do not need the phone at hand every time. The phone stays
-  the group's root, its most trusted device: the root's key never leaves the phone's
-  security chip.
-- **Make it the hub**, so your devices keep syncing when they are away from home. See
+## Recommended next steps
+
+Once your first phone and computer are syncing, consider these two additions:
+
+- **Promote an always-on computer to admin and hub:** If you have a computer that stays on (such
+  as a desktop, home server, or Raspberry Pi), open it on **Home** on your main phone and tap
+  **Make it an admin**. An admin computer can add and remove devices (`sudo cbb pair` and
+  `sudo cbb remove NAME`) when your phone is not at hand. If the computer lacks a hardware
+  security chip (TPM or Secure Enclave), its keys live in a file and the app warns you before
+  confirming ([Keys and attestation](keys.md#the-three-levels)). You can also make an always-on
+  computer your group's **hub** so your devices keep syncing away from home; see
   [Away from home](away-from-home.md).
-
-Add a second phone too, so that losing one phone loses nothing: tap **+** on the first phone,
-then on the second tap **Join a group** and scan the code. The first phone makes it an admin.
+- **Add a second phone:** Tap **+** on your main phone, then tap **Join a group** on the second
+  phone and scan the QR code. The second phone joins as a member. To let it manage devices as
+  well, open it on **Home** on your main phone and tap **Make it an admin**. Keep your recovery
+  key safe in case you ever need to move the group to another main device
+  ([If a device is lost](lost-device.md)).
 
 ## What next
 
-- [How it works](how-it-works.md): the group, the roles, and pictures of every way the
-  devices connect, at home and away.
-- [Away from home](away-from-home.md): sync from anywhere through a hub.
-- [Without the app](without-app.md): a group held by a computer.
-- [Troubleshooting](troubleshooting.md), when something does not work.
+- [How it works](how-it-works.md): Understand group roles, encryption, and how devices connect at
+  home and away.
+- [The apps](apps.md): Explore what the phone, watch, TV, and desktop apps show and do.
+- [Away from home](away-from-home.md): Sync your clipboard outside your home network through a
+  hub or blind relay.
+- [Troubleshooting](troubleshooting.md): Diagnose connection, firewall, and pairing issues.

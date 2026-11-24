@@ -1,106 +1,118 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Keys and attestation
 
-Every device in a group has keys: one proves who it is to the others, and the root's and
-admins' keys add and remove devices. Where a device keeps its keys decides what a thief
-gets with the device. This page says where each kind of device keeps them, how the group
-can check it, and which level of strictness to choose. The exact rules are in the
-[protocol](../protocol.md), section 17.
+For anyone who wants to understand where each device stores its cryptographic keys, how devices
+prove that their keys live in security hardware, and which **key level** to choose for their
+group. For the full wire specification, see [Protocol](../protocol.md), section 17, and
+[Cryptography](../cryptography.md).
 
-> Built and tested in CI against a software TPM; on real devices so far only the iPhone's
-> Secure Enclave and Windows in a virtual machine. What has been tried where is in the
-> README's [status table](../../README.md#status).
+Every device in a group holds a **member key** that proves its identity to your other devices. The
+**main device** (called *root* in command-line tools) holds the group's main key, and each
+**admin** holds an admin key that signs group changes and commands. Where a device keeps those
+keys determines what an attacker can extract if the device is stolen.
 
-## Where keys live
+## Where each device keeps its keys
 
-| Where | Devices | What a thief gets |
-|---|---|---|
-| **In a file** | Intel Macs without the T2 chip, Windows PCs and Linux computers without a TPM, small devices | a copy of the file, which works anywhere until an admin removes the device |
-| **In hardware** | iPhones (Secure Enclave), Android phones (Keystore: StrongBox or the TEE), Macs with Apple silicon or the T2 chip (Secure Enclave), Linux computers and Windows PCs with a TPM | nothing to copy: the key signs only on that device, and on a phone the root's and admins' keys only after your face, fingerprint or passcode |
-| **Proven hardware** | an Android phone whose key the group's root checked | the same as hardware, and the group knows it is true, not only that the device says so |
+The device list in the apps and the `KEYS` column of `cbb status` show each device's key storage
+tier: **proven** (`proven`), **hardware** (`hardware`), **file** (`file`), or **rootless**
+(`rootless`).
 
-The devices list in the apps and `cbb status` (the KEYS column) show which one each device
-has.
+| Device | Where member, admin, and main keys live | Confirmation before main/admin signing | Storage tier shown | What a thief can take |
+|---|---|---|---|---|
+| **iPhone and iPad** | Secure Enclave (hardware) | Face ID, Touch ID, or passcode | `hardware` | Nothing to copy; keys sign only on that device after unlock |
+| **Android phone or tablet** (locked bootloader, verified OS) | Android Keystore (StrongBox or TEE, hardware) | Fingerprint, face, or screen lock (enforced by Keystore) | `proven` | Nothing to copy; the group also verifies hardware proof offline |
+| **Android phone or tablet** (unlocked bootloader or custom-signed OS such as GrapheneOS) | Android Keystore (StrongBox or TEE, hardware) | Fingerprint, face, or screen lock | `hardware` | Nothing to copy; OS verification cannot be vouched for by Google's roots |
+| **Aurora OS 5 phone** | OP-TEE secure element (hardware) | App's own admin PIN (at least 6 digits when created; 7 wrong tries lock the admin key permanently) | `hardware` | Nothing to copy; member key syncs without PIN, admin/main key requires PIN |
+| **Aurora OS 4 and Sailfish OS phone** | App file on the phone | None from hardware | `file` | A copy of the key file, usable anywhere until removed |
+| **HarmonyOS 5+ phone or tablet** | HUKS (TEE, hardware) | Face, fingerprint, or PIN (User Authentication Kit) | `hardware` | Nothing to copy; keys sign only on that device after authentication |
+| **Mac with Apple silicon or T2 chip** | Secure Enclave (hardware); local and tunnel secrets sealed by Secure Enclave | macOS Touch ID or administrator password via system prompt | `hardware` | Nothing to copy; keys sign only on that Mac |
+| **Intel Mac without T2 chip** | Service state files (`/Library/Application Support/cbb/state`) | macOS administrator password | `file` | A copy of the key files if disk is readable; encrypt with FileVault |
+| **Linux or Windows PC with TPM 2.0 and `cbb-helper`** | TPM 2.0 (hardware); local and tunnel secrets sealed by TPM | Linux polkit or Windows Hello / administrator prompt | `proven` (with on-chip EK certificate) or `hardware` | Nothing to copy; keys sign only on that PC |
+| **Linux or Windows PC without TPM, FreeBSD, OpenWrt, OPNsense, small devices without `cbb-helper`, Docker** | Service state files (readable only by the service account) | Administrator privileges (`sudo` or administrator terminal) | `file` | A copy of the key files if disk or volume is readable; encrypt the disk (LUKS, BitLocker) |
+| **Linux rootless install (`--rootless`)** | User files in `~/.local/state/cbb` | None (any program of your user can read them) | `rootless` | Any program running under your account can copy the key files; never main device, admin, or hub |
+
+Setting `CBB_TPM=off` on a computer keeps newly generated keys in files instead of hardware. A
+Docker container refuses to hold main or admin keys unless you set `CBB_KEYS_IN_FILE=yes` in its
+environment.
+
+### The recovery key
+
+When you create a group, Connect Beyond Borders derives the group's **recovery key** (an ECDSA
+P-256 key paired with a post-quantum SLH-DSA-SHA2-128s key) from one random 32-byte secret. The
+secret is shown once and is never stored on any device in the group. You keep it on paper (the
+recovery sheet), sealed in an unused retired PIV slot (slots 95 down to 82) on a YubiKey
+(firmware 5.3 or later), or both.
 
 ## How a key is proven
 
-A device can say its key is in hardware, but a modified program could say so too. Some
-hardware can prove it:
+Any device can report that its key lives in hardware, and a modified program could report that
+falsely. **Hardware attestation** lets a security chip sign cryptographic proof that the key was
+generated inside the chip and cannot leave it.
 
-- **Android.** When the app makes its key, the phone's Keystore signs a certificate that
-  describes the key: in StrongBox or the TEE, on a phone with a locked bootloader and a
-  verified system. The certificate leads up to Google's attestation root. The app sends it
-  to the group's root, which checks it and records the phone as **proven**. Nothing is sent
-  to Google for this.
-- **A phone with an unlocked bootloader, or a system signed with its own key** (GrapheneOS
-  and the like) keeps its key in hardware, but the check cannot vouch for the system around
-  it. It counts as hardware, not proven.
-- **Revoked phones.** Google publishes a list of phones whose attestation keys leaked. A
-  server of the project, `cbb.tools`, copies it once a day and signs the copy. The group's
-  root fetches that copy, so your devices never ask Google. A phone on the list drops from
-  proven to hardware.
-- **Linux computers with a TPM** keep their member and admin keys in it, so the keys count
-  as hardware. A TPM whose maker wrote its certificate into the chip (Infineon, ST and
-  Nuvoton chips, as the Raspberry Pi TPM boards) proves it to the group's root, which then
-  records the computer as **proven**; nothing is asked of the maker. Intel's and AMD's
-  firmware TPMs often keep their certificate on the maker's server instead, so they stay
-  hardware. **Apple devices** (App Attest) do not prove their keys yet.
-- **A computer that made the group**, its root, counts as keys in a file all the same: the
-  group's root key, which signs everything the group decides, is a file on a computer for
-  now. Such a group starts at the level "files allowed" (below); a group made on a phone
-  keeps its root key in the phone's hardware.
+- **Android Key Attestation:** When the Android app creates its key, Android Keystore signs a
+  certificate chain describing the key (StrongBox or TEE, locked bootloader, verified boot state)
+  rooted at Google's attestation root certificates. The main device verifies this chain offline
+  and records the phone as **proven**. Nothing is sent to Google.
+- **Unlocked bootloaders and custom systems:** Phones running an unlocked bootloader or a
+  self-signed operating system (such as GrapheneOS) still store keys inside StrongBox or TEE, so
+  the key cannot be extracted. Because the chain does not vouch for a factory-verified OS, the
+  group records the phone as **hardware** rather than **proven**.
+- **Revoked Android attestation keys:** Google publishes a list of devices whose hardware
+  attestation keys were compromised. The project's server at `cbb.tools` fetches that list once a
+  day and serves a signed copy (`https://cbb.tools/attest/`). The main device fetches the signed
+  copy from `cbb.tools`, so your devices never contact Google. Any phone whose certificate serial
+  appears on the list drops from **proven** to **hardware**.
+- **TPM 2.0 attestation on computers:** A Linux or Windows computer with a TPM 2.0 and `cbb-helper`
+  stores its keys in the TPM. When the TPM holds an on-chip Endorsement Key (EK) certificate from
+  its maker (common on discrete Infineon, ST, and Nuvoton TPM chips, such as Raspberry Pi TPM
+  boards), the main device verifies the TPM's credential activation offline without contacting any
+  external server and records the computer as **proven**. Firmware TPMs (common on Intel and AMD
+  CPUs) often omit an on-chip EK certificate and therefore remain **hardware**.
 
 ## The three levels
 
-Your group has a level, which decides how sure the group must be before a device may act as
-the root or an admin. A hub that reads the copies is an admin, so the level applies to it
-too. A hub that only passes copies on needs no level: the copies are sealed end to end to the
-other devices and never to it, so whoever copies its keys can delay copies and see what any
-device in between sees ([privacy](privacy.md#what-the-devices-in-between-see)), and read none.
+Your group's **key level** sets the minimum key storage tier required for a device to act as the
+**main device**, an **admin**, or a **hub that reads copies**.
 
-1. **Strict.** Only proven hardware may be the root or an admin. To prove more
-   devices, this level also asks services outside your home: Apple for App Attest, and
-   Intel or AMD for some TPM certificates. Those services learn that a device of that kind
-   asked, from your address. Android chains count only when they came through Google's Remote
-   Key Provisioning.
-2. **Hardware (the default, recommended).** Keys in hardware may be the root or an admin,
-   proven or not. Proofs that need no outside service (Android, TPMs with their
-   certificate on the chip) are still checked and shown. Nothing about your devices leaves
-   your home, apart from fetching the revocation copy from `cbb.tools`, which is the same
-   file for everyone.
-3. **Files allowed (least safe).** A device with keys in a file may be an admin too, after a
-   warning: whoever copies the file acts as an admin until another admin removes the device.
-   A computer whose keys are not in a TPM or the Secure Enclave becomes an admin only this
-   way (`cbb admin -allow-file-key`, or the warning in the phone's "Make it an
-   admin" dialog).
+A **hub that only passes copies on** needs no key level because every copy is sealed end to end
+past it: an attacker who copies its keys can delay traffic and observe metadata (see
+[Privacy: what the devices in between see](privacy.md#what-the-devices-in-between-see)), but
+cannot read or forge copies. A **rootless member** can never be the main device, an admin, or a
+hub at any key level.
 
-Level 2 is the default because it keeps keys out of files wherever the hardware allows,
-without telling any outside service which devices you have.
+1. **Proven hardware only (`proven`):** Only devices whose keys are proven by hardware attestation
+   (`proven`) can be the main device, an admin, or a hub that reads copies. On Android, strict
+   verification requires chains issued through Google's Remote Key Provisioning (RKP). A main
+   device whose own key is not `proven` cannot set the group to this level.
+2. **Keys in hardware (`hardware`, default and recommended):** Any device whose keys live in
+   security hardware (`hardware` or `proven`) can be the main device, an admin, or a hub that
+   reads copies. Offline proofs (Android Key Attestation and TPMs with on-chip EK certificates)
+   are still verified and displayed, and no device information leaves your home network beyond
+   fetching the shared revocation list from `cbb.tools`.
+3. **Keys in files too (`files`):** Also allows devices whose keys live in files (`file`) to be
+   the main device, an admin, or a hub that reads copies, after an explicit warning each time
+   (`cbb admin -allow-file-key` in a terminal, or the warning dialog in the apps). A group created
+   on a computer without a TPM or Secure Enclave starts at `files`.
 
-A computer installed without `sudo` ([rootless](install.md#without-sudo-rootless)) is never
-the root, an admin or a hub of either kind, at any level: every program of its user can read
-its keys.
+### View or change the key level
+
+Only the group's **main device** can change the key level:
+
+- **In the phone or desktop app:** Open **Settings**, turn on **Advanced settings**, and go to
+  **Group > Admin keys**.
+- **In a terminal on a main computer:** Run `cbb keys` to view the current level, or set it with:
+
+  ```sh
+  sudo cbb keys proven
+  sudo cbb keys hardware
+  sudo cbb keys files
+  ```
+
+Admins and hubs already in the group with weaker keys stay active until you remove them, and
+Connect Beyond Borders warns you which devices fall below the new level.
 
 ## If a device is lost
 
-Remove it from the group as soon as you can: see [if a device is lost or stolen](lost-device.md).
-A key in hardware cannot be used without the device; a key in a file can, until the device
-is removed.
-
-## What is not built yet
-
-The levels above are the design; this version builds part of it:
-
-- Android phones prove their keys, and the root checks the proof and Google's list. The
-  copy on `cbb.tools` starts once the project's signing keys exist.
-- The level is a setting: Settings, Admin keys, on the root phone, or `cbb keys` on a root
-  computer. A group made on a phone starts at level 2; making a computer with keys in a
-  file an admin there, after the warning, moves the group to level 3. A group made on a
-  computer whose root key is in a file starts at level 3, since its root does not pass
-  level 2 itself. Level 1 does not yet ask the services outside your home, and a phone
-  whose own key is not proven cannot choose it.
-- Linux computers and Windows PCs with a TPM 2.0 keep their member and admin keys in it,
-  from the moment they join a group; a computer that joined earlier keeps its file until it
-  joins again. On Windows this is not yet tested on a real PC. Macs with Apple silicon or the
-  T2 chip keep them in the Secure Enclave in the same way. The group's root key on a
-  computer and App Attest are not built yet: until then their keys are in a file.
+Remove the lost device from your group as soon as possible; see
+[If a device is lost or stolen](lost-device.md). A key stored in hardware cannot be extracted or
+used off that device; a key stored in a file can be copied and used until you remove the device.
