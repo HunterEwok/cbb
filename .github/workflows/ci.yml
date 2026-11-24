@@ -809,12 +809,15 @@ jobs:
             # minutes, so a slow run shows what it waited behind; and SHA-256
             # over two seconds every 30 s, as the runner measures its own.
             # Both end with the script, however it ends, or they hold the
-            # machine's session open until the job's limit.
+            # machine's session open until the job's limit. Under set -e a
+            # failing command in the trap ends it there, with status 1: the
+            # kill of the loops already stopped below fails, so it is
+            # allowed to, and the script's own status is kept.
             (while sleep 300; do date; top -b -d1 -o cpu 12 | tail -n 16; done) &
             top_pid=$!
             (while sleep 30; do date -u +%T; openssl speed -seconds 2 -bytes 8192 sha256 2>/dev/null | tail -n 1; done) >/tmp/guest-sha.log 2>&1 &
             sha_pid=$!
-            trap 'kill "$top_pid" "$sha_pid" 2>/dev/null; cat /tmp/guest-sha.log' EXIT
+            trap 'st=$?; kill "$top_pid" "$sha_pid" 2>/dev/null || true; cat /tmp/guest-sha.log || true; exit "$st"' EXIT
             go test -timeout 25m ./... </dev/null
             kill "$top_pid" "$sha_pid" 2>/dev/null || true
             # The desktop connector against X11 under Xvfb, as on Linux.

@@ -3308,6 +3308,8 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The FreeBSD job no longer fails after its tests pass: its exit trap's `kill` of the
+  measuring loops, already stopped, ended the script with status 1 under `set -e`.
 - A release's draft is made again when its CHANGELOG section is long: GitHub refuses notes
   over 125,000 characters, so `packaging/release-notes.sh` gives a section over 60,000
   only its opening summary and a link to CHANGELOG.md, and CI checks the notes stay under
