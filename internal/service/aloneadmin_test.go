@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/HunterEwok/cbb/internal/actions"
 	"github.com/HunterEwok/cbb/internal/control"
@@ -31,7 +30,8 @@ func TestAloneAdminCommands(t *testing.T) {
 	var h hub
 	runner := newFakeRunner(t, nil)
 	desk := startService(t, &h, "desk")
-	deck := startEnv(t, &h, "deck", runner.env())
+	clock := newTestClock(t, 0) // deck's, for its limit of one action a second
+	deck := startEnv(t, &h, "deck", runner.env(), clock.env())
 	pairWith(t, desk, deck)
 	dir := joinFull(t, bin, desk)
 	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", deck.addr())
@@ -88,7 +88,7 @@ func TestAloneAdminCommands(t *testing.T) {
 	if set, err := actions.Load(deck.dir); err != nil || len(set.On()) != 0 {
 		t.Errorf("the deck's actions after cbb action off -all: %v, %v", set.On(), err)
 	}
-	time.Sleep(time.Second) // one action a second from one sender
+	clock.nextSecond(t) // one action a second from one sender
 	if _, err := rust.do(t, control.Header{Op: control.OpActionOn, Device: "deck", Name: actions.Lock}, ""); err == nil || !strings.Contains(err.Error(), "is off on this device") {
 		t.Errorf("an action turned off: %v", err)
 	}
@@ -102,7 +102,8 @@ func TestAloneOwnActions(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinAlone(t, bin, pi)
-	small := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	clock := newTestClock(t, 0) // the small device's, for its limit of one action a second
+	small := startAloneEnv(t, bin, dir, []string{clock.env()}, "-no-mdns", "-no-listen", "-peer", pi.addr())
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 && len(small.status(t).Peers) == 1 })
 	set := func(a control.Action) error {
 		_, err := small.do(t, control.Header{Op: control.OpActionSet, Actions: []control.Action{a}}, "")
@@ -130,7 +131,7 @@ func TestAloneOwnActions(t *testing.T) {
 		t.Fatalf("the status lists %+v", a)
 	}
 	run := func() error {
-		time.Sleep(time.Second) // one action a second from one sender
+		clock.nextSecond(t) // one action a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "small", Name: "backup"}, "")
 		return err
 	}

@@ -260,6 +260,14 @@ func (c *testClock) write(t *testing.T) {
 	}
 }
 
+// nextSecond moves the wall clock a second on, as a second passing does
+// for the limits of one paste or action a second from one device: the
+// next one comes as a person's would, without the test waiting.
+func (c *testClock) nextSecond(t *testing.T) {
+	t.Helper()
+	c.set(t, c.ahead+time.Second)
+}
+
 // env is the Rust service's environment for the clock.
 func (c *testClock) env() string { return "CBB_TEST_AHEAD_FILE=" + c.file }
 

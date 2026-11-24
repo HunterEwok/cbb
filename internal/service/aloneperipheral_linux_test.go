@@ -36,7 +36,8 @@ func TestAlonePeripherals(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinAlone(t, bin, pi)
-	small := startAloneEnv(t, bin, dir, []string{"CBB_HELPER=" + helper, "CBB_TEST_BLUEZ=" + f.Addr}, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	clock := newTestClock(t, 0) // the small device's, for its limit of one a second
+	small := startAloneEnv(t, bin, dir, []string{"CBB_HELPER=" + helper, "CBB_TEST_BLUEZ=" + f.Addr, clock.env()}, "-no-mdns", "-no-listen", "-peer", pi.addr())
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 && len(small.status(t).Peers) == 1 })
 
 	// A Linux computer with cbb-helper can be the keyboard, so its status
@@ -85,7 +86,7 @@ func TestAlonePeripherals(t *testing.T) {
 		t.Errorf("the paste targets: %+v", p)
 	}
 	paste := func(text string) error {
-		time.Sleep(time.Second) // one paste a second from one sender
+		clock.nextSecond(t) // one paste a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "small"}, text)
 		return err
 	}
@@ -102,7 +103,7 @@ func TestAlonePeripherals(t *testing.T) {
 	if _, err := small.do(t, control.Header{Op: control.OpActionSet, Actions: []control.Action{{Name: actions.Layout, On: true}}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(time.Second) // one action a second from one sender
+	clock.nextSecond(t) // one action a second from one sender
 	if _, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "small", Name: actions.Layout}, ""); err != nil {
 		t.Fatal(err)
 	}
