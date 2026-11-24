@@ -474,7 +474,7 @@
     <string name="shortcuts_hint">Ctrl+1 至 9 打开这些分区，Ctrl+N 添加设备，方向键选择设备，Esc 关闭其详情。</string>
     <string name="signature_n">签名 %1$d</string>
     <string name="signature_of">签名 %1$d/%2$d</string>
-    <string name="source">源代码和许可证（AGPL-3.0）</string>
+    <string name="source">源代码和许可证 (AGPL-3.0)</string>
     <string name="swapped">已发送。</string>
     <string name="sync">同步</string>
     <string name="sync_off">同步已关闭</string>
