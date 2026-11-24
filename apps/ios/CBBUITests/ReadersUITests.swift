@@ -63,8 +63,16 @@ final class ReadersUITests: XCTestCase {
         do {
             try app.performAccessibilityAudit(for: types) { issue in
                 guard let e = issue.element else {
-                    self.fail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)",
+                    // An issue the audit cannot tie to an element (one it found
+                    // at a text size it stepped to itself, or the system's
+                    // own drawing): the element tree as it stands goes with
+                    // the picture, so the log shows what was on the screen.
+                    self.fail("\(screen): \(issue.compactDescription) on no element (audit type \(issue.auditType.rawValue)): \(issue.detailedDescription)",
                               picture: XCUIScreen.main.screenshot(), screen)
+                    let tree = XCTAttachment(string: app.debugDescription)
+                    tree.name = "failed-\(screen)-elements"
+                    tree.lifetime = .keepAlways
+                    self.add(tree)
                     return true
                 }
                 // What a person cannot reach (the screen under a sheet, a

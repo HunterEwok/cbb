@@ -2247,6 +2247,8 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The phone apps' accessibility test keeps the element tree with its picture when the audit
+  reports an issue it ties to no element, so CI's log shows what was on the screen.
 - "How it works" explains first what happens to a copy, then the group, its keys and the
   ways away from home, in the apps' terms and without the commands' flags, which the guides
   and the reference keep. The pictures say a hub is a computer or router at home and that
