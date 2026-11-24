@@ -187,16 +187,15 @@ fn state_dir() -> Option<PathBuf> {
 /// lock, which lasts as long as the file stays open. Without a lock file,
 /// running twice beats not running.
 fn lock_helper(sock: &str) -> Option<Option<std::fs::File>> {
-    let dir = match std::env::var_os("XDG_RUNTIME_DIR") {
-        Some(d) if !d.is_empty() => PathBuf::from(d),
-        _ => Path::new(sock).parent().map(Path::to_path_buf).unwrap_or_default(),
-    };
-    // Named as the Go helper names it, so that the two see one lock.
-    let sum = cbb_core::certs::sha256(sock.as_bytes());
-    let path = dir.join(format!("cbb-tmux-{}.lock", hex8(&sum)));
     use std::os::unix::fs::OpenOptionsExt;
     use std::os::unix::io::AsRawFd;
-    let Ok(f) = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).mode(0o600).open(path)
+    let Ok(f) = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(lock_path(sock))
     else {
         return Some(None);
     };
@@ -206,6 +205,17 @@ fn lock_helper(sock: &str) -> Option<Option<std::fs::File>> {
         return if busy { None } else { Some(None) };
     }
     Some(Some(f))
+}
+
+/// The lock file of the helper of the tmux server at sock.
+fn lock_path(sock: &str) -> PathBuf {
+    let dir = match std::env::var_os("XDG_RUNTIME_DIR") {
+        Some(d) if !d.is_empty() => PathBuf::from(d),
+        _ => Path::new(sock).parent().map(Path::to_path_buf).unwrap_or_default(),
+    };
+    // Named as the Go helper names it, so that the two see one lock.
+    let sum = cbb_core::certs::sha256(sock.as_bytes());
+    dir.join(format!("cbb-tmux-{}.lock", hex8(&sum)))
 }
 
 /// The first 8 bytes of sum in hex.
@@ -750,8 +760,17 @@ mod tests {
         let first = lock_helper(&sock).expect("the first helper takes the lock");
         assert!(first.is_some());
         assert!(lock_helper(&sock).is_none(), "a second helper of the same server");
+        // Freed, the lock comes free when the last copy of its descriptor
+        // closes: a process another test starts at this moment holds one
+        // from its fork until its exec (close-on-exec). So the test waits
+        // for that event, a blocking flock, rather than asking once.
         drop(first);
-        assert!(lock_helper(&sock).is_some_and(|f| f.is_some()), "the lock is free again");
+        use std::os::unix::io::AsRawFd;
+        let held = std::fs::OpenOptions::new().read(true).write(true).open(lock_path(&sock)).unwrap();
+        // SAFETY: flock on a descriptor this test owns.
+        let got = unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX) };
+        assert_eq!(got, 0, "the lock is free again: {}", std::io::Error::last_os_error());
+        assert!(lock_helper(&sock).is_none(), "a helper while another holds the lock");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

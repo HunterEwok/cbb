@@ -3268,6 +3268,9 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The test that one paste helper runs for each tmux server no longer fails when another test
+  starts a process just as it frees the lock (that process holds the lock until its exec): it
+  waits for the lock to come free with a blocking flock.
 - The VLESS client makes one Xray instance at a time: each sets Xray's process-wide system
   dialer, and two dialed together wrote it at once.
 - The iPad's UI tests in CI fail less by chance: the sidebar test finds the next tile before
