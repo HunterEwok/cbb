@@ -170,7 +170,7 @@
     {"name": "keyboard", "value": "Teclado Bluetooth"},
     {"name": "keyboard_allow", "value": "Permitir Bluetooth"},
     {"name": "keyboard_bluetooth_off", "value": "El Bluetooth está desactivado."},
-    {"name": "keyboard_body", "value": "Este teléfono escribe en un televisor, una tableta, una consola o un ordenador emparejado con él, que no necesita nada instalado: el portapapeles, cuando tocas, o un pegado remoto de un administrador del grupo."},
+    {"name": "keyboard_body", "value": "Este teléfono escribe en un televisor, una tableta, una consola o un ordenador emparejado con él, sin instalar nada allí: el portapapeles, cuando tocas."},
     {"name": "keyboard_connected", "value": "Conectado a %1$s."},
     {"name": "keyboard_device_connected", "value": "Hay un dispositivo conectado."},
     {"name": "keyboard_find", "value": "Mientras el teclado está activado, un dispositivo nuevo encuentra este teléfono por su nombre en sus ajustes de Bluetooth."},

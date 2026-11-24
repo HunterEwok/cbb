@@ -1258,8 +1258,8 @@
         <translation>Unda kikundi</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>Ifanye simu nyingine kuwa msimamizi hivi karibuni: simu hii ikipotea, simu ya msimamizi itahamishia kikundi kwake.</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>Hifadhi ufunguo wa urejeshaji wa kikundi hivi karibuni: simu hii ikipotea, simu nyingine itahamishia kikundi kwake kwa ufunguo huo.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>

@@ -3353,6 +3353,9 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- No text still points to what 0.6 removed: `cbb` suggests the recovery key, not a takeover,
+  when the root is the only admin; the Aurora app asks to save the recovery key when a group
+  is made; the Android and HarmonyOS apps no longer mention remote paste onto the phone.
 - On an iPhone at the accessibility text sizes the count of devices online stands above the
   sync switches, set by the text size rather than by what fits, so the layout does not
   change while the text grows.

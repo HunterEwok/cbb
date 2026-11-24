@@ -170,7 +170,7 @@
     {"name": "keyboard", "value": "Kibodi ya Bluetooth"},
     {"name": "keyboard_allow", "value": "Ruhusu Bluetooth"},
     {"name": "keyboard_bluetooth_off", "value": "Bluetooth imezimwa."},
-    {"name": "keyboard_body", "value": "Simu hii huandika kwenye TV, kompyuta kibao, konsoli au kompyuta iliyooanishwa nayo, isiyohitaji kitu kusakinishwa: ubao wa kunakili, ukigusa, au ubandikaji wa mbali kutoka kwa msimamizi wa kikundi."},
+    {"name": "keyboard_body", "value": "Simu hii huandika kwenye TV, kompyuta kibao, konsoli au kompyuta iliyooanishwa nayo, bila kusakinisha chochote huko: ubao wa kunakili, ukigusa."},
     {"name": "keyboard_connected", "value": "Imeunganishwa na %1$s."},
     {"name": "keyboard_device_connected", "value": "Kifaa kimeunganishwa."},
     {"name": "keyboard_find", "value": "Kibodi ikiwa imewashwa, kifaa kipya hupata simu hii kwa jina lake katika mipangilio yake ya Bluetooth."},

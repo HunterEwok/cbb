@@ -114,7 +114,7 @@
     },
     {
       "concept": "move the group",
-      "note": "With the recovery key a member becomes the main device in place of the old one (cbb recover).",
+      "note": "With the recovery key a member becomes the main device in place of the old one (cbb recovery).",
       "langs": {
         "en": {
           "use": "move the group",

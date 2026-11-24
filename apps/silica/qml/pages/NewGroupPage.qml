@@ -49,7 +49,7 @@ Dialog {
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.secondaryHighlightColor
-                text: qsTr("Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.")
+                text: qsTr("Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.")
             }
             // The rights follow how the keys are kept (docs/apps.md, "Big
             // screens"): Aurora gives an app no fingerprint, so its keys

@@ -1258,8 +1258,8 @@
         <translation>Создать группу</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>Не откладывая, сделайте администратором ещё один телефон: если этот телефон потеряется, телефон-администратор перенесёт группу на себя.</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>Не откладывая, сохраните ключ восстановления группы: если этот телефон потеряется, другой телефон перенесёт группу на себя с его помощью.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>

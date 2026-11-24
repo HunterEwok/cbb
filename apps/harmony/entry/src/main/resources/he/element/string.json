@@ -170,7 +170,7 @@
     {"name": "keyboard", "value": "מקלדת Bluetooth"},
     {"name": "keyboard_allow", "value": "התרת Bluetooth"},
     {"name": "keyboard_bluetooth_off", "value": "Bluetooth כבוי."},
-    {"name": "keyboard_body", "value": "הטלפון הזה מקליד בטלוויזיה, בטאבלט, בקונסולה או במחשב שמצומדים אליו, שלא צריכים שום דבר מותקן: את הלוח, בהקשה שלכם, או הדבקה מרחוק ממנהל בקבוצה."},
+    {"name": "keyboard_body", "value": "הטלפון הזה מקליד בטלוויזיה, בטאבלט, בקונסולה או במחשב שמצומדים אליו, שלא צריכים שום דבר מותקן: את הלוח, בהקשה שלכם."},
     {"name": "keyboard_connected", "value": "מחובר ל-%1$s."},
     {"name": "keyboard_device_connected", "value": "מכשיר מחובר."},
     {"name": "keyboard_find", "value": "כל עוד המקלדת פועלת, מכשיר חדש מוצא את הטלפון הזה לפי שמו בהגדרות ה־Bluetooth שלו."},

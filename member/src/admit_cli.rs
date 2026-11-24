@@ -232,7 +232,8 @@ fn admin_hint(g: &Global) {
         return;
     }
     println!("This computer is the group's only admin. Make another computer one with cbb admin NAME,");
-    println!("so that it can take the group over if this one is lost (cbb takeover).");
+    println!("so that the group can still admit and remove devices if this one is lost; a new root");
+    println!("comes only from the recovery key (cbb recovery).");
 }
 
 /// cbb invite: a remote invitation as a QR code and in a file, valid for a

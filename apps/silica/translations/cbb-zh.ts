@@ -1258,8 +1258,8 @@
         <translation>创建群组</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以把群组移到自己这里。</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>请尽快保存群组的恢复密钥：如果这台手机丢失，另一台手机可以用它把群组移到自己这里。</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>

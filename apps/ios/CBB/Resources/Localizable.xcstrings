@@ -23832,52 +23832,6 @@
         }
       }
     },
-    "This phone as the hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الهاتف كمحور"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este teléfono como hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הטלפון הזה כרכזת"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह फ़ोन हब के रूप में"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот телефон как хаб"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Simu hii kama kitovu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这部手机作为中心节点"
-          }
-        }
-      }
-    },
     "This phone asks to join as an admin, which only the group's main device can grant. Scan it with the main device, or join on it without asking to be an admin.": {
       "localizations": {
         "ar": {

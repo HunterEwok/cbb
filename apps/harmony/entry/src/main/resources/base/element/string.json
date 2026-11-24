@@ -171,7 +171,7 @@
     {"name": "keyboard", "value": "Bluetooth keyboard"},
     {"name": "keyboard_allow", "value": "Allow Bluetooth"},
     {"name": "keyboard_bluetooth_off", "value": "Bluetooth is off."},
-    {"name": "keyboard_body", "value": "This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap, or a remote paste from an admin of the group."},
+    {"name": "keyboard_body", "value": "This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap."},
     {"name": "keyboard_connected", "value": "Connected to %1$s."},
     {"name": "keyboard_device_connected", "value": "A device is connected."},
     {"name": "keyboard_find", "value": "A new device finds this phone by its name in its Bluetooth settings while the keyboard is on."},

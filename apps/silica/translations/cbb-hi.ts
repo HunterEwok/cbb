@@ -1258,8 +1258,8 @@
         <translation>समूह बनाएँ</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह को अपने पास ले आएगा।</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>जल्द ही समूह की रिकवरी कुंजी सहेजें: अगर यह फ़ोन खो जाए, तो कोई दूसरा फ़ोन इससे समूह को अपने पास ले आएगा।</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>

@@ -170,7 +170,7 @@
     {"name": "keyboard", "value": "蓝牙键盘"},
     {"name": "keyboard_allow", "value": "允许蓝牙"},
     {"name": "keyboard_bluetooth_off", "value": "蓝牙已关闭。"},
-    {"name": "keyboard_body", "value": "这部手机可以向与它配对的电视、平板、游戏机或电脑输入文字，对方无需安装任何东西：在你轻点时输入剪贴板，或输入群组管理员的远程粘贴。"},
+    {"name": "keyboard_body", "value": "这部手机可以在与它配对的电视、平板、游戏机或电脑上打字，对方无需安装任何东西：轻点一下即可输入剪贴板。"},
     {"name": "keyboard_connected", "value": "已连接到 %1$s。"},
     {"name": "keyboard_device_connected", "value": "已有设备连接。"},
     {"name": "keyboard_find", "value": "键盘开启时，新设备可以在其蓝牙设置中按名称找到这部手机。"},
