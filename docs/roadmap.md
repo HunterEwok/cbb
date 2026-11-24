@@ -48,6 +48,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     identifiers start with `tools.cbb`.
 - **63.** Copies sealed end to end, in 0.6 (D-84; [protocol.md](protocol.md), section 4,
     "Sealing").
+- **65.** "Why it does not sync": one list of reasons from the core (`cbb_core::why`), in
+    `cbb status` and in every app, in 0.6 ([apps](apps.md#why-it-does-not-sync)).
 
 ### Partly done
 
@@ -563,14 +565,6 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       `.sna` or `.z80` at once, so a game sent from the phone runs on the Next.
     - `.cbb snap`: the Next's screen (ULA or Layer 2) to the group as a PNG, which the Pi
       makes.
-- **65.** **Planned for 0.6 (the owner, 2026-11-09).** "Why it does not sync": one screen in
-    the advanced settings of every app (iPhone, Android, Aurora, the Mac app, the tray app) and
-    the same reason in `cbb status`, which names one cause and what to do about it: the device
-    is not on the group's network, sync is off, no hub away from home, "Everywhere" not
-    allowed, the forwarder or the relay does not answer, the network blocks the tunnel, a key
-    or certificate has expired, the device was removed or frozen, or a newer version is
-    needed (`newer`). The causes come from the Rust core's state, so every device reads them
-    alike; the texts are in all eight languages.
 - **66.** **Planned for 0.7 (the owner, 2026-11-09).** Sending to one device ("Share → the
     laptop"): the copy is sealed for the chosen device alone and written only to its
     clipboard; the other devices of the group never get it.
