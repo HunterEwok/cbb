@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # An experiment, on its own branch and never on main: why the FreeBSD
 # machine runs SHA-256 about 100 times slower on runners with Intel Xeon
-# processors than on AMD EPYC ones. The same machine starts with each
-# processor model below (QEMU's -cpu, put in by a wrapper around QEMU, as
-# vmactions/freebsd-vm names no model); each measures SHA-256 for 10 s and
-# runs internal/release's tests. The model that is fast on Intel shows the
-# feature at fault.
+# processors than on AMD EPYC ones. The first round showed SHA-NI is the
+# feature: without it (-cpu host,-sha-ni) Intel is fast. This round asks
+# what makes SHA-NI slow, on Intel runners only (a job on AMD ends at
+# once): Go's preemption signals (GODEBUG=asyncpreemptoff=1), C code with
+# no Go at all (openssl speed), another XMM instruction set (AES-GCM),
+# the runner itself without the machine, and the machine without XSAVE
+# (-cpu host,-xsave: FreeBSD then saves the FPU state with FXSAVE).
 name: freebsd cpu experiment
 
 on:
@@ -25,19 +27,26 @@ jobs:
       matrix:
         cpu:
           - host
-          - host,-sha-ni
-          - host,-avx512f
-          - host,-amx-tile,-amx-int8,-amx-bf16
-          - host,-xsaves,-xsavec
-          - qemu64
-        try: [1, 2]
+          - host,-xsave
+        try: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: the runner's processor
-        run: lscpu | grep -E 'Model name|Vendor ID|Flags' | cut -c1-2000
+        id: cpu
+        run: |
+          lscpu | grep -E 'Model name|Vendor ID|Flags' | cut -c1-2000
+          if lscpu | grep -q GenuineIntel; then echo intel=true >>"$GITHUB_OUTPUT"; fi
+      - name: SHA-256 and AES-GCM on the runner, without the machine
+        if: steps.cpu.outputs.intel == 'true'
+        run: |
+          go version
+          go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256
+          go test -run '^$' -bench 'Hash8K$' -benchtime 10s crypto/sha256
+          go test -run '^$' -bench 'AESGCM/Seal-128-8192' -benchtime 5s crypto/cipher
       - name: QEMU, with its -cpu replaced
+        if: steps.cpu.outputs.intel == 'true'
         env:
           CPU: ${{ matrix.cpu }}
         run: |
@@ -59,19 +68,33 @@ jobs:
           exec /usr/bin/qemu-system-x86_64.real "\${args[@]}"
           WRAP
           sudo chmod +x /usr/bin/qemu-system-x86_64
-      - name: SHA-256 and internal/release in the machine
+      - name: SHA-256, AES-GCM and openssl in the machine
+        if: steps.cpu.outputs.intel == 'true'
         uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
         with:
           release: "15.1"
           prepare: pkg install -y go
           run: |
-            set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
             sysctl -n hw.model hw.ncpu kern.vm_guest
-            grep -E 'Features|AMD Features|Structured Extended' /var/run/dmesg.boot | head -8 || true
-            go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256 || true
-            go test -run '^$' -bench 'Hash8K$' -benchtime 10s crypto/sha256 || true
-            cd internal/release && /usr/bin/time go test -count=1 -timeout 15m . || true
+            grep -E 'Features|XSAVE|Structured Extended' /var/run/dmesg.boot | head -10 || true
+            sysctl hw.use_xsave 2>/dev/null || true
+            go test -c -o /tmp/sha.test crypto/sha256
+            go test -c -o /tmp/cipher.test crypto/cipher
+            echo "== 1. control: Go SHA-256, as the CI runs it"
+            /tmp/sha.test -test.run '^$' -test.bench 'Hash8K$' -test.benchtime 2000x
+            /tmp/sha.test -test.run '^$' -test.bench 'Hash8K$' -test.benchtime 10s
+            echo "== 2. Go SHA-256 without asynchronous preemption"
+            GODEBUG=asyncpreemptoff=1 /tmp/sha.test -test.run '^$' -test.bench 'Hash8K$' -test.benchtime 2000x
+            GODEBUG=asyncpreemptoff=1 /tmp/sha.test -test.run '^$' -test.bench 'Hash8K$' -test.benchtime 10s
+            echo "== 3. openssl SHA-256 (C, no Go)"
+            openssl version
+            openssl speed -seconds 3 -bytes 8192 -evp sha256 2>&1 | tail -3
+            openssl speed -seconds 10 -bytes 8192 -evp sha256 2>&1 | tail -3
+            echo "== 4. Go AES-GCM (AES-NI, also XMM)"
+            /tmp/cipher.test -test.run '^$' -test.bench 'AESGCM/Seal-128-8192' -test.benchtime 5s
+            echo "== 5. control again: does it recover?"
+            /tmp/sha.test -test.run '^$' -test.bench 'Hash8K$' -test.benchtime 2000x
       - name: how QEMU was started
         if: always()
         run: cat /tmp/qemu-args.log || true
