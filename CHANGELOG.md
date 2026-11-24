@@ -2272,6 +2272,9 @@ with 0.5 is set up again once. The details follow.
 - The desktop window's tests wait for the page to change or for its calls to the app to end, not
   for a time or by asking again: a check that something did not happen looks once no call is
   under way, and the invitation's tests wait for the stand-in for cbb to write the device.
+- The release signs the iPhone app's notification extension for TestFlight with its own App Store
+  profile (App ID `tools.cbb.push`, App Group `group.tools.cbb.push`); without it the archive
+  stopped.
 - The tunnel's test of clients reaching the hub no longer expects nothing from the hub before
   the first connection: a client sends its first keepalive as it starts, and the hub's answer to
   that handshake may come first (seen on macOS).
