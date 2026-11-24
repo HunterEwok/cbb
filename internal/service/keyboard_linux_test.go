@@ -26,7 +26,8 @@ func TestKeyboard(t *testing.T) {
 	f := bluetest.Start(t)
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startEnv(t, &h, "deck", "DBUS_SYSTEM_BUS_ADDRESS="+f.Addr)
+	clock := newTestClock(t, 0) // deck's, for its limit of one paste a second
+	deck := startEnv(t, &h, "deck", "DBUS_SYSTEM_BUS_ADDRESS="+f.Addr, clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -81,7 +82,7 @@ func TestKeyboard(t *testing.T) {
 		t.Errorf("the paste targets: %v", p.Targets)
 	}
 	paste := func(text string) error {
-		time.Sleep(time.Second) // one paste a second from one sender
+		clock.nextSecond(t) // one paste a second from one sender
 		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "deck"}, text)
 		return err
 	}

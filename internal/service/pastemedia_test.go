@@ -18,7 +18,8 @@ import (
 func TestRemotePasteMedia(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	clock := newTestClock(t, 0) // deck's, for its limit of one paste a second
+	deck := startEnv(t, &h, "deck", clock.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	if _, err := deck.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
@@ -94,7 +95,7 @@ func TestRemotePasteMedia(t *testing.T) {
 		}
 	}()
 	waitFor(t, "deck offers the desktop", func() bool { p := deck.status(t).Paste; return p != nil && len(p.Targets) == 1 })
-	time.Sleep(time.Second) // one paste a second from one sender
+	clock.nextSecond(t) // one paste a second from one sender
 	if err := pasteCopy(); err != nil {
 		t.Fatal(err)
 	}
