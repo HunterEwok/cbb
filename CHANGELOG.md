@@ -2303,6 +2303,10 @@ with 0.5 is set up again once. The details follow.
   waiting instead of 100 ms.
 - The Android app's test of the mode send waits until the copy has reached the phone, which then
   leaves its clipboard alone, instead of 10 seconds.
+- The hub's tests under a flood start the client once the flood is under way (the hub asks a
+  stranger for a cookie, or the garbage has gone out) rather than after half a second; the
+  tunnel's race test checks that each connection is through with a byte sent back before it
+  ends the link; and the relay's test of its stop no longer waits 300 ms before the stop.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.

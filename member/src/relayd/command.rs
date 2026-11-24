@@ -319,10 +319,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cbb-relay-run-{}", cbb_core::certs::random_id()));
         std::fs::create_dir_all(&dir).unwrap();
         let key = dir.join("relay.pem").to_str().unwrap().to_string();
+        // The stop set before the relay reaches its loop ends it there just
+        // the same: an exit of 0 says it started (every failure to start
+        // returns another code) and that the signal ends it.
+        on_signal(libc::SIGTERM);
         let run =
             std::thread::spawn(move || run(&["-key", &key, "-listen", "127.0.0.1:0", "-refused", "none", "-open"]));
-        std::thread::sleep(Duration::from_millis(300));
-        on_signal(libc::SIGTERM);
         let (code, _, err) = run.join().unwrap();
         assert_eq!(code, 0, "{err}");
         let _ = std::fs::remove_dir_all(dir);

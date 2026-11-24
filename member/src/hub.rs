@@ -1366,7 +1366,13 @@ mod tests {
                 })
             })
             .collect();
-        std::thread::sleep(Duration::from_millis(500));
+        // Under load once the hub asks a stranger for a cookie and the
+        // flood is past the size the test asks of it: then the client tries.
+        let under = Instant::now() + Duration::from_secs(20);
+        while cookies.load(Ordering::Relaxed) == 0 || sent.load(Ordering::Relaxed) <= 10_000 {
+            assert!(Instant::now() < under, "the flood put the hub under no load");
+            std::thread::sleep(Duration::from_millis(10));
+        }
         let start = Instant::now();
         let r = reach(&links[0], Duration::from_secs(25));
         let took = start.elapsed();
@@ -1606,7 +1612,12 @@ mod tests {
                 }
             })
         };
-        std::thread::sleep(Duration::from_millis(500));
+        // The client tries once the garbage is on its way.
+        let flowing = Instant::now() + Duration::from_secs(20);
+        while sent.load(Ordering::Relaxed) < 1_000 {
+            assert!(Instant::now() < flowing, "the flood did not start");
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let start = Instant::now();
         let r = reach(&links[0], Duration::from_secs(20));
         let took = start.elapsed();

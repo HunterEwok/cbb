@@ -156,14 +156,18 @@ fn many_connections_through_a_tunnel_at_once() {
     assert!(closed, "the far ends close: {} of {}", served.load(Ordering::SeqCst), threads * 4);
 
     // The link ends with connections open: their reads end, none hangs.
+    // Each is through to the far end before the link ends: a byte sent
+    // comes back.
     let open: Vec<TcpStream> = (0..8)
         .map(|_| {
-            let c = TcpStream::connect(at).unwrap();
+            let mut c = TcpStream::connect(at).unwrap();
             c.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
+            c.write_all(b"x").unwrap();
+            let mut b = [0u8; 1];
+            c.read_exact(&mut b).unwrap();
             c
         })
         .collect();
-    std::thread::sleep(Duration::from_millis(200));
     let began = Instant::now();
     drop(link);
     for mut c in open {
