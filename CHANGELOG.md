@@ -3341,6 +3341,8 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On an iPad, a device chosen with the arrow keys reads as selected to VoiceOver, as one
+  chosen by a tap does: the screen tells it that it changed.
 - A published pre-release gets its Docker image's version tag and its release check:
   `published.yml` waited for a `stable.json` that names it, which no pre-release has, and
   checked the error GitHub answered in its place. It now checks a pre-release by name

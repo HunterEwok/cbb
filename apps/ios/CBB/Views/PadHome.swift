@@ -243,6 +243,13 @@ struct PadDevices: View {
         }
         .animation(.smooth, value: selected)
         .environment(\.chosenDevice, selected)
+        // A tap moves the focus to the tile, and the tile's "selected" is
+        // read again; a choice by the arrow keys moves no focus, and
+        // VoiceOver and the UI tests went on reading the tile as it was
+        // before. The screen's change tells them to read it again.
+        .onChange(of: selected) { _, _ in
+            UIAccessibility.post(notification: .layoutChanged, argument: nil)
+        }
         .searchable(text: $query, placement: .toolbar, prompt: Text("Search devices"))
         .onChange(of: query) { _, q in if !q.isEmpty { arrange.on = false } }
         .background(AppBackground())
