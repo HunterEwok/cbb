@@ -48,21 +48,21 @@
 <text class="zone-t" x="386" y="34">Mtandao wa nyumbani</text>
 <g class=""><rect class="card " x="30.0" y="64.0" width="170" height="52" rx="10"/><g transform="translate(42.0,76)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="80.0" y="95">Laptopu</text></g>
 <g class=""><rect class="card " x="30.0" y="164.0" width="170" height="52" rx="10"/><g transform="translate(42.0,176)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="195">Simu</text></g>
-<g class="key"><rect class="card key" x="382.85" y="108.0" width="194.29999999999998" height="64" rx="10"/><g transform="translate(394.85,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="432.85" y="136">Kitovu</text><text class="s" x="432.85" y="154">kompyuta ya msimamizi</text><rect class="badge" x="522.75" y="99.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="545.9499999999999" y="112.0" text-anchor="middle">KITOVU</text></g>
+<g class="key"><rect class="card key" x="379.7" y="108.0" width="200.6" height="64" rx="10"/><g transform="translate(391.7,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="429.7" y="136">Kitovu</text><text class="s" x="429.7" y="154">huwaka daima, nyumbani</text><rect class="badge" x="525.9" y="99.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="549.0999999999999" y="112.0" text-anchor="middle">KITOVU</text></g>
 <g class=""><rect class="card " x="630.0" y="64.0" width="150" height="52" rx="10"/><g transform="translate(642.0,76)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="680.0" y="95">Kompyuta</text></g>
 <g class=""><rect class="card " x="626.75" y="164.0" width="156.5" height="52" rx="10"/><g transform="translate(638.75,176)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="676.75" y="195">Raspberry Pi</text></g>
-<path class="e-tunnel" d="M200.0,90.0 L290,90 L290,130 L382.85,130"/>
-<path class="a-tunnel" d="M382.85,130 L372.9,124.5 L372.9,135.5z"/>
-<path class="e-tunnel" d="M200.0,190.0 L290,190 L290,150 L382.85,150"/>
-<path class="a-tunnel" d="M382.85,150 L372.9,144.5 L372.9,155.5z"/>
-<path class="e-home" d="M577.15,140.0 L603.575,140"/>
-<path class="a-home" d="M577.15,140.0 L585.1,144.4 L585.1,135.6z"/>
-<path class="e-home" d="M603.575,90 L603.575,190"/>
-<path class="e-home" d="M603.575,90 L630.0,90.0"/>
+<path class="e-tunnel" d="M200.0,90.0 L290,90 L290,130 L379.7,130"/>
+<path class="a-tunnel" d="M379.7,130 L369.7,124.5 L369.7,135.5z"/>
+<path class="e-tunnel" d="M200.0,190.0 L290,190 L290,150 L379.7,150"/>
+<path class="a-tunnel" d="M379.7,150 L369.7,144.5 L369.7,155.5z"/>
+<path class="e-home" d="M580.3,140.0 L605.15,140"/>
+<path class="a-home" d="M580.3,140.0 L588.3,144.4 L588.3,135.6z"/>
+<path class="e-home" d="M605.15,90 L605.15,190"/>
+<path class="e-home" d="M605.15,90 L630.0,90.0"/>
 <path class="a-home" d="M630.0,90.0 L622.0,85.6 L622.0,94.4z"/>
-<path class="e-home" d="M603.575,190 L626.75,190.0"/>
+<path class="e-home" d="M605.15,190 L626.75,190.0"/>
 <path class="a-home" d="M626.75,190.0 L618.8,185.6 L618.8,194.4z"/>
-<text class="note" x="400" y="288" text-anchor="middle">Kipanga njia huelekeza mlango wa UDP 8764 kwenye kitovu. Kitovu husoma ubao wa kunakili: ni kompyuta yako mwenyewe.</text>
+<text class="note" x="400" y="288" text-anchor="middle">Kipanga njia huelekeza mlango wa UDP 8764 kwenye kitovu, kompyuta au kipanga njia chako nyumbani.</text>
 <rect class="lbl-bg" x="229.0" y="129.0" width="142.0" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="300" y="144.0" text-anchor="middle">handaki la WireGuard</text>
 </svg>

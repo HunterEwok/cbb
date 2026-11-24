@@ -49,14 +49,14 @@
 <g class=""><rect class="card " x="30.0" y="64.0" width="170" height="52" rx="10"/><g transform="translate(42.0,76)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="80.0" y="95">Portátil</text></g>
 <g class=""><rect class="card " x="30.0" y="164.0" width="170" height="52" rx="10"/><g transform="translate(42.0,176)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="195">Teléfono</text></g>
 <g class="srv"><rect class="card srv" x="295.0" y="108.0" width="170" height="64" rx="10"/><g transform="translate(307.0,126)" class="ic"><path d="M8 21h13a5 5 0 0 0 0 -10a7 7 0 0 0 -13.5 1.5A4.3 4.3 0 0 0 8 21z"/></g><text class="t" x="345.0" y="136">Reenviador</text><text class="s" x="345.0" y="154">no lee nada</text></g>
-<g class="key"><rect class="card key" x="731.6" y="68.0" width="188.0" height="64" rx="10"/><g transform="translate(743.6,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="781.6" y="96">Hub</text><text class="s" x="781.6" y="114">equipo administrador</text><rect class="badge" x="884.4" y="59.0" width="27.200000000000003" height="18" rx="9"/><text class="badge-t" x="898.0" y="72.0" text-anchor="middle">HUB</text></g>
-<g class=""><rect class="card " x="731.6" y="184.0" width="188.0" height="52" rx="10"/><g transform="translate(743.6,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="781.6" y="215">Sobremesa</text></g>
+<g class="key"><rect class="card key" x="712.7" y="68.0" width="225.79999999999998" height="64" rx="10"/><g transform="translate(724.7,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="762.7" y="96">Hub</text><text class="s" x="762.7" y="114">siempre encendido, en casa</text><rect class="badge" x="903.3" y="59.0" width="27.200000000000003" height="18" rx="9"/><text class="badge-t" x="916.9" y="72.0" text-anchor="middle">HUB</text></g>
+<g class=""><rect class="card " x="712.7" y="184.0" width="225.79999999999998" height="52" rx="10"/><g transform="translate(724.7,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="762.7" y="215">Sobremesa</text></g>
 <path class="e-tunnel" d="M200.0,90.0 L250,90 L250,130 L295.0,130"/>
 <path class="a-tunnel" d="M295.0,130 L285.0,124.5 L285.0,135.5z"/>
 <path class="e-tunnel" d="M200.0,190.0 L250,190 L250,150 L295.0,150"/>
 <path class="a-tunnel" d="M295.0,150 L285.0,144.5 L285.0,155.5z"/>
-<path class="e-tunnel" d="M465.0,140.0 L656.2,140 L656.2,100 L731.6,100.0"/>
-<path class="a-tunnel" d="M731.6,100.0 L721.6,94.5 L721.6,105.5z"/>
+<path class="e-tunnel" d="M465.0,140.0 L656.2,140 L656.2,100 L712.7,100.0"/>
+<path class="a-tunnel" d="M712.7,100.0 L702.7,94.5 L702.7,105.5z"/>
 <path class="a-tunnel" d="M465.0,140.0 L475.0,145.5 L475.0,134.5z"/>
 <path class="e-home" d="M825.6,132.0 L825.6,184.0"/>
 <path class="a-home" d="M825.6,184.0 L830.0,176.0 L821.2,176.0z"/>

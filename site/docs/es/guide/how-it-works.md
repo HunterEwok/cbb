@@ -1,111 +1,166 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6bb56fb8d602 -->
+<!-- source: 7ef374d1aa17 -->
 # Cómo funciona
 
-Esta página explica Connect Beyond Borders con imágenes: quién forma parte de un grupo, cómo se encuentran los dispositivos en casa y todas las formas en que pueden seguir en contacto cuando están fuera. Las reglas exactas están en el [diseño](../design.md); no las necesitas para usarlo.
+Para cualquiera que quiera entender qué ocurre con lo que copia y cómo conecta Connect Beyond Borders sus dispositivos. Connect Beyond Borders comparte un único portapapeles entre tus propios dispositivos sin cuentas, sin servicios en la nube y sin un servidor central.
+
+Para los pasos de configuración, consulta [Inicio rápido](quickstart.md). Para los detalles técnicos y el formato de red, consulta [Diseño](../design.md) y [Protocolo](../protocol.md).
+
+## Qué ocurre cuando copias
+
+Cuando copias texto, una imagen o archivos en un dispositivo, Connect Beyond Borders cifra la copia para tus otros dispositivos y la envía por tu red doméstica, o por el túnel cifrado de tu grupo cuando estás fuera de casa.
+
+La forma en que cada dispositivo envía y recibe copias depende de lo que permite su sistema operativo:
+
+- **Ordenadores y dispositivos pequeños**: al copiar, la copia se envía automáticamente a tu grupo, y las copias entrantes pasan automáticamente a tu portapapeles mientras **Sincronizar** está activado.
+- **Teléfonos Android**: la app recibe copias automáticamente en segundo plano. Para enviar copias, puedes activar su servicio de accesibilidad para el envío automático o tocar el botón de sincronización de la app.
+- **iPhone y teléfonos con Aurora OS y HarmonyOS**: los sistemas operativos móviles restringen el acceso al portapapeles en segundo plano. Mientras la app está abierta en pantalla, escucha automáticamente igual que un ordenador. Cuando usas el botón o gesto de sincronización (como el botón Acción o Tocar atrás en un iPhone), el teléfono intercambia su portapapeles con la última copia del grupo. Si el portapapeles de tu teléfono está vacío, recibe la copia del grupo sin sobrescribirla.
+
+Connect Beyond Borders protege cada copia por capas:
+
+- **Cifrado de extremo a extremo**: antes de que una copia salga del dispositivo donde la copiaste, ese dispositivo la cifra (la sella) únicamente para los dispositivos de tu grupo que leen copias y la firma con su propia clave. La copia sellada viaja dentro de una conexión cifrada (TLS 1.3) en la que ambos dispositivos verifican sus respectivas claves. Los dispositivos que solo retransmiten copias y cualquier servidor ajeno a tu grupo no pueden leer, alterar ni falsificar una copia.
+- **Texto, imágenes y archivos**: el texto sin formato viaja directamente dentro del mensaje de sincronización. Cuando copias una imagen, archivos o texto con formato, el dispositivo que copia envía primero un breve aviso; cada dispositivo receptor descarga el contenido sellado hasta su propio límite de tamaño. Consulta [Imágenes, archivos y texto con formato](images-and-files.md) y [Límites y tiempos de vida](../reference/limits.md#copies).
+- **Contraseñas y secretos**: Connect Beyond Borders omite los elementos que un gestor de contraseñas marca como secretos. Los secretos que envías deliberadamente se mantienen solo en memoria, caducan tras un corto tiempo de vida (60 segundos por defecto) y se borran de los portapapeles al cumplirse ese plazo.
+- **Sin historial del portapapeles**: Connect Beyond Borders no guarda historial de copias anteriores. Cada copia lleva un tiempo de vida válido para todo el grupo (5 minutos por defecto para copias normales y 60 segundos para secretos). Una vez transcurrido ese tiempo, los dispositivos dejan de escribir esa copia en los portapapeles.
+- **Pausar la sincronización**: cada dispositivo tiene un interruptor **Sincronizar**. Desactivar **Sincronizar** mantiene tu portapapeles privado en ese dispositivo mientras sigue conectado al grupo. Un administrador también puede silenciar un dispositivo cuyo portapapeles se comporte de forma anómala.
 
 ## El grupo
 
-Tus dispositivos forman un **grupo**. Solo pertenecen a él los dispositivos que dejas entrar, y
-hablan solo entre sí, siempre cifrados (TLS). Además, cada copia va cifrada de extremo a extremo:
-el dispositivo que copia la sella para los dispositivos del grupo que leen copias y la firma, así
-que un dispositivo que solo la pasa no puede leerla, cambiarla ni falsificarla. Cada dispositivo
-tiene un rol:
+Tus dispositivos forman un **grupo** que comparte un único portapapeles. Cada dispositivo guarda una copia de los registros firmados de dispositivos del grupo, que enumeran todos los dispositivos del grupo, su rol y los dispositivos eliminados. Como cada dispositivo verifica por sí mismo esos registros firmados, tu grupo no necesita ningún servidor central.
 
-| Rol | Quién | Qué hace |
+Un grupo pertenece a una sola persona. Dos personas que quieran portapapeles separados crean dos grupos.
+
+Solo los dispositivos que admites con un código de vinculación o un código QR pueden unirse a tu grupo. Si pierdes un dispositivo, quitarlo difunde un registro firmado de eliminación para que todos los demás dispositivos lo rechacen de inmediato. Consulta [Si se pierde un dispositivo](lost-device.md).
+
+Cada dispositivo tiene un rol en el grupo:
+
+| Rol | Qué dispositivos | Qué hace |
 |---|---|---|
-| **Raíz** | el teléfono que creó el grupo (o el ordenador, [sin la app](without-app.md)) | guarda la clave del grupo, añade y quita dispositivos, nombra administradores |
-| **Administrador** | un segundo teléfono, o un ordenador que elige la raíz | añade y quita dispositivos, como la raíz |
-| **Miembro** | cada ordenador, teléfono y dispositivo pequeño (un router, una Raspberry Pi: [dispositivos pequeños](../../member/README.md)) | sincroniza el portapapeles |
-| **Miembro sin root** | un ordenador Linux instalado sin `sudo` | sincroniza como un miembro, pero nunca es la raíz, un administrador ni un hub ([más abajo](#rootless-members)) |
-| **Hub** | un ordenador, un router o una placa pequeña en casa, si quieres uno | permite que tus dispositivos sincronicen cuando están fuera de casa; uno que solo pasa las copias no lee ninguna |
+| **Dispositivo principal** (llamado *root* en las herramientas de línea de comandos y los diagramas) | El teléfono que crea el grupo, o un ordenador cuando funcionas [sin la app](without-app.md) | Guarda la clave principal del grupo, añade y quita dispositivos, elige administradores y fija las reglas del grupo |
+| **Administrador** | Otro teléfono o un ordenador elegido por el dispositivo principal | Añade y quita dispositivos normales, congela un ordenador administrador robado y envía acciones de administración como el [pegado remoto](remote-paste.md); un teléfono administrador también puede quitar a otro administrador |
+| **Miembro** | Cada ordenador, teléfono y dispositivo pequeño (como un router o una Raspberry Pi; consulta [dispositivos pequeños](../../member/README.md)) | Sincroniza el portapapeles |
+| **Miembro sin root** | Un ordenador Linux instalado sin permisos de administrador (`sudo`) | Sincroniza como cualquier miembro, pero no puede ser el dispositivo principal, un administrador ni un hub ([miembros sin root](#rootless-members)) |
+| **Hub** | Un ordenador, un router o una placa pequeña en casa | Conecta tus dispositivos cuando están fuera de casa; un hub que solo pasa las copias no lee ninguna |
 
-Las claves del teléfono se crean en su chip de seguridad (el Secure Enclave, el Keystore de Android) y nunca salen de él; cada firma con la clave raíz del grupo o con una clave de administrador pide tu cara, tu huella o tu código, mientras que la clave con la que sincroniza funciona sin preguntar. Un ordenador guarda sus claves en archivos que solo lee Connect Beyond Borders.
+Un Apple Watch, un reloj Wear OS o un reloj HarmonyOS vinculado funciona a través de su teléfono para mostrar los dispositivos del grupo y activar o desactivar la sincronización fuera de casa; consulta [Las apps](apps.md).
 
-Un grupo son los dispositivos de una persona, que comparten un portapapeles. Dos personas que quieran portapapeles propios crean dos grupos.
+El lugar donde un dispositivo guarda sus claves determina qué puede llevarse un ladrón si roba el dispositivo:
+
+- **Los teléfonos** crean sus claves dentro de hardware de seguridad —el Secure Enclave en un iPhone, Android Keystore (StrongBox o TEE), el elemento seguro en Aurora OS o HUKS en HarmonyOS—, donde permanecen las claves. Firmar un cambio de administración pide tu rostro, huella, código o (en Aurora OS) el PIN propio de la app; la sincronización diaria funciona sin preguntar.
+- **Los ordenadores** guardan sus claves de miembro y de administrador en hardware cuando está disponible: el Secure Enclave en los Mac con chip de Apple o chip T2, y el chip de seguridad por hardware (TPM) en los PC con Linux y Windows. Los ordenadores sin ese hardware, los dispositivos pequeños y un ordenador que actúe como dispositivo principal guardan las claves en archivos que solo Connect Beyond Borders puede leer.
+
+Para conocer todos los detalles sobre el almacenamiento y la verificación de claves, consulta [Claves y atestación](keys.md).
 
 ### Miembros sin root
 
-Normalmente el instalador necesita `sudo` una vez, para que Connect Beyond Borders se ejecute bajo una cuenta propia: tu navegador, tus juegos y cualquier otro programa que ejecutes no pueden leer sus claves, y el sistema mantiene el servicio en un entorno aislado muy estricto. Una instalación sin root se salta eso, para un ordenador donde no tienes `sudo`, en el trabajo por ejemplo. Sincroniza como cualquier miembro, pero cualquiera de tus programas podría copiar su clave y hacerse pasar por él, así que nunca puede ser la raíz, un administrador ni el hub, aunque lo pidas. La lista de dispositivos lo marca como «rootless». Una Steam Deck no lo necesita: usa la instalación normal ([instalación](install.md#steamos-steam-deck)).
+Una instalación normal en Linux pide permisos de administrador (`sudo`) una vez para que Connect Beyond Borders pueda ejecutarse bajo su propia cuenta del sistema en un entorno aislado estricto. Esa separación impide que tu navegador, tus juegos y otros programas lean las claves de tu dispositivo.
+
+En un ordenador Linux donde no tienes `sudo` (como un ordenador del trabajo), una instalación sin root se ejecuta bajo tu propia cuenta de usuario. Sincroniza como cualquier miembro, pero cualquier programa que ejecutes puede copiar sus archivos de claves y hacerse pasar por ese dispositivo. Por ese motivo, un miembro sin root nunca puede ser el dispositivo principal, un administrador ni un hub. La lista de dispositivos lo etiqueta como **Miembro, sin root**.
+
+Una Steam Deck admite la instalación normal porque su usuario tiene `sudo`; consulta [Instalación en SteamOS](install.md#steamos-steam-deck).
 
 ## Dos tipos de grupo
 
-Un grupo puede tener un ordenador en su centro o estar formado solo por teléfonos. Ambos están totalmente soportados y puedes pasar de uno a otro en cualquier momento. Recomendamos un ordenador que esté encendido a menudo, por la razón que figura debajo de la tabla.
+Un grupo puede incluir al menos un ordenador o dispositivo pequeño, o estar formado solo por teléfonos. Ambas configuraciones funcionan, y puedes añadir un ordenador a un grupo de solo teléfonos en cualquier momento.
 
-| | Con un ordenador | Solo teléfonos |
+| | Con un ordenador o dispositivo pequeño | Solo teléfonos |
 |---|---|---|
-| Quién guarda la clave del grupo | el teléfono (en su chip de seguridad), o el ordenador [sin la app](without-app.md) | el teléfono, en su chip de seguridad |
-| Sincronización en casa | cada dispositivo directamente | cada dispositivo directamente |
-| Sincronización fuera de casa | a través del ordenador como hub, en cualquier momento | a través de un relé ciego, mientras las apps funcionan |
-| Qué necesitas | un ordenador que esté encendido a menudo | nada más |
+| Dispositivo principal | Un teléfono (en su hardware de seguridad) o un ordenador [sin la app](without-app.md) | Un teléfono (en su hardware de seguridad) |
+| Sincronización en casa | Conexiones cifradas directas en tu red doméstica | A través de un relé ciego mientras las apps funcionan |
+| Sincronización fuera de casa | A través de un ordenador o dispositivo pequeño que actúa como hub | A través de un relé ciego mientras las apps funcionan |
+| Dispositivo adicional necesario | Un ordenador, un router o una placa pequeña | Ninguno |
 
-Por qué recomendamos un ordenador: está encendido mucho más a menudo de lo que una app está abierta en un teléfono, y el iPhone da muy poco tiempo a una app en segundo plano, así que la sincronización fuera de casa simplemente funciona. Cuando un ordenador siempre encendido se une a un grupo de teléfonos, la app del teléfono ofrece convertirlo en el hub.
+Los teléfonos solo abren conexiones salientes porque los sistemas operativos móviles no permiten que las apps esperen conexiones entrantes en segundo plano. Los ordenadores y los dispositivos pequeños sí escuchan conexiones entrantes.
 
-## En casa: no hace falta hub
+Añadir un ordenador que permanezca encendido —como un sobremesa, un servidor doméstico, un router o una Raspberry Pi— te da sincronización local directa sin ningún servidor. También puedes convertir ese ordenador en un hub desde su página de dispositivo en la app para que la sincronización fuera de casa funcione incluso con las apps del teléfono cerradas.
 
-En una misma red doméstica, los dispositivos se encuentran solos (mDNS) y se conectan directamente. Nada sale de tu red y no hay ningún servidor en medio: cualquier dispositivo puede estar apagado y los demás siguen sincronizando.
+## En casa
 
-![En casa, cada dispositivo habla directamente con todos los demás, sin servidor](../images/at-home.svg)
+En una misma red doméstica, tus dispositivos se encuentran automáticamente mediante el descubrimiento de red local (mDNS) y se conectan directamente por conexiones cifradas TLS 1.3. Nada sale de tu red y no hay ningún servidor entre tus dispositivos. Puedes apagar cualquier dispositivo mientras los demás siguen sincronizando.
 
-**Dos redes en casa**, por ejemplo una red aparte para dispositivos inteligentes: mDNS no cruza el router, así que los dispositivos de redes distintas no se encuentran solos. Las apps de teléfono recuerdan las direcciones de cada ordenador a partir de su código QR y aun así llegan a él; a un dispositivo pequeño se le puede indicar la dirección de un ordenador ([`-peer`](../../member/README.md#install)); y para todo lo demás, un hub (más abajo) une ambos lados.
+![En casa, un teléfono, un portátil, un sobremesa y una Raspberry Pi se conectan directamente entre sí mediante conexiones cifradas encontradas por mDNS, sin ningún servidor entre ellos](../images/at-home.svg)
+
+La sincronización doméstica directa requiere al menos un ordenador o dispositivo pequeño en la red, porque los teléfonos solo inician conexiones salientes.
+
+**Redes domésticas conocidas**: los ordenadores recuerdan las redes domésticas en las que coinciden con tu grupo (identificadas por la red y su router). En una red desconocida, como el Wi-Fi de una cafetería o de un hotel, un ordenador permanece en silencio: no se anuncia en la red local ni acepta conexiones entrantes.
+
+**Redes separadas en casa**: el descubrimiento de red local (mDNS) no atraviesa routers entre redes locales separadas, como una red dedicada para dispositivos inteligentes. Puedes unir dos redes domésticas de tres maneras:
+
+- Ejecutar Connect Beyond Borders en un router conectado a ambas redes.
+- Dar a un ordenador o dispositivo pequeño la dirección de un ordenador de la otra red ([dispositivos pequeños](../../member/README.md#install)).
+- Conectar ambas redes a través de un hub ([fuera de casa](#away-from-home-the-hub)).
 
 ## Fuera de casa: el hub
 
-Cuando un portátil o un teléfono sale de casa, necesita un camino de vuelta. Un ordenador en casa se convierte en el **hub** del grupo: los dispositivos que están fuera se conectan a él a través del túnel cifrado del propio grupo (WireGuard), y él transmite el portapapeles a todos los que están en casa.
+Cuando un portátil o un teléfono sale de tu red doméstica, no puede encontrar tus dispositivos de casa mediante descubrimiento local. Para seguir sincronizando, uno de tus ordenadores, routers o placas pequeñas en casa actúa como **hub**: tus dispositivos fuera de casa se conectan de vuelta a él a través del túnel cifrado propio de tu grupo (WireGuard), y el hub pasa las copias entre ellos y los dispositivos de casa.
 
-![Fuera de casa, el portátil y el teléfono llegan al hub de casa por el túnel WireGuard del grupo](../images/hub.svg)
+![Fuera de casa, un portátil y un teléfono se conectan a través del túnel WireGuard del grupo a un hub en casa, que sincroniza con un sobremesa y una Raspberry Pi en la red doméstica](../images/hub.svg)
 
-- El hub es tu propio ordenador: Linux, Windows, un Mac, FreeBSD o un router. Es de uno de dos
-  tipos. **Un hub que lee las copias** es un administrador, así que las copias se sellan para él
-  como para tus otros dispositivos. **Un hub que solo pasa las copias** puede ser cualquier
-  ordenador del grupo, por ejemplo una Raspberry Pi con sus claves en un archivo: las copias se
-  sellan de extremo a extremo sin incluirlo, así que no lee ninguna, y sus claves no necesitan un
-  chip de seguridad.
-- Tu router redirige un puerto UDP (8764) al hub, para que internet pueda llegar a él.
-- El hub no tiene por qué estar siempre encendido. Mientras está apagado, nada se sincroniza fuera de casa, y los dispositivos que están en casa siguen sincronizando sin él.
-- Los dispositivos obtienen los datos del hub mientras están en casa, así que activa la sincronización fuera de casa antes de salir.
+Dentro del túnel WireGuard, los dispositivos utilizan las mismas conexiones TLS mutuas y copias selladas de extremo a extremo que en casa. El túnel funciona dentro del propio Connect Beyond Borders: solo transporta tráfico de Connect Beyond Borders y no ocupa la ranura VPN de tu teléfono, de modo que tu propia VPN sigue funcionando.
 
-La configuración está en [Fuera de casa](away-from-home.md).
+Puedes elegir entre dos tipos de hub:
 
-## Cuando internet no puede llegar a tu hub: un reenviador
+- **Un hub que lee las copias**: tu dispositivo principal (si es un ordenador) o un ordenador administrador. Tus dispositivos sellan las copias para él igual que para cualquier otro dispositivo lector, y el [nivel de claves](keys.md#the-three-levels) de tu grupo se aplica a sus claves.
+- **Un hub que solo pasa las copias**: un ordenador normal o una placa pequeña (como una Raspberry Pi o un NAS) que elige tu dispositivo principal. Tus dispositivos sellan las copias de extremo a extremo sin incluirlo, así que no lee ninguna, no hace copias propias y no necesita chip de seguridad por hardware.
 
-Muchos proveedores de internet ponen los hogares tras una dirección compartida (CGNAT), y entonces ninguna redirección de puertos sirve. En su lugar, el hub puede registrarse en un **reenviador**, un servidor de internet que pasa los paquetes cifrados del túnel entre tus dispositivos y tu hub. El hub llama hacia fuera al reenviador, así que no hace falta abrir nada en casa.
+Propiedades clave de un hub:
 
-![El hub, tras el NAT del proveedor, llama a un reenviador, que pasa el túnel de los dispositivos que están fuera](../images/forwarder.svg)
+- **Llegar directamente al hub**: tu router redirige un puerto UDP (8764 por defecto) al hub, o tu hogar dispone de acceso directo por IPv6.
+- **Cuando el hub está apagado**: la sincronización fuera de casa se detiene mientras el hub está apagado, y los dispositivos de casa siguen sincronizando directamente sin él.
+- **Configuración en casa**: los dispositivos intercambian las claves del túnel con el hub mientras están en tu red doméstica, así que activa **En todas partes** (sincronizar fuera de casa) antes de salir.
+- **Varios hubs**: un grupo puede tener varios hubs en un orden fijo de prioridad. Solo el hub conectado con mayor prioridad presta servicio cada vez; los hubs de reserva esperan sin túnel y toman el relevo automáticamente si el hub activo se detiene o permanece desconectado durante más de un minuto.
 
-El reenviador no guarda claves y no puede leer nada: solo ve paquetes cifrados que van a tu hub, de dónde vienen, cuándo y de qué tamaño. Hay dos tipos:
+Para los pasos de configuración, consulta [Fuera de casa](away-from-home.md).
 
-- **El tuyo**: `cbb forward` en cualquier servidor con dirección pública, por ejemplo un servidor virtual barato ([cómo ejecutar tus propios servidores](../admin/self-hosting.md)).
-- **El reenviador de Connect Beyond Borders** en `cbb.tools`, mantenido por el proyecto para todo el mundo. Está en pruebas y aún no está abierto a todos; su dirección y su clave aparecerán en esta página cuando se abra.
+## Tras el NAT del proveedor: un reenviador
 
-Los dispositivos prueban primero la dirección propia del hub y el reenviador en último lugar.
+Muchos proveedores de internet colocan los hogares tras una dirección pública compartida (NAT de operador o CGNAT), lo que impide que las conexiones entrantes lleguen a tu casa incluso con redirección de puertos. En ese caso, tu hub se registra en un **reenviador**, un servidor de internet que retransmite paquetes cifrados del túnel entre tus dispositivos fuera de casa y tu hub. Como tu hub abre una conexión saliente hacia el reenviador, no tienes que abrir ningún puerto en tu router.
 
-## Cuando la red bloquea WireGuard
+![Un hub tras el NAT de un proveedor de internet abre una conexión saliente a un reenviador, que pasa paquetes cifrados del túnel entre el portátil y el teléfono fuera de casa y el hub en casa](../images/forwarder.svg)
 
-Algunas redes (hoteles, oficinas, algunos países) bloquean el tráfico de VPN. El hub disfraza el túnel del grupo salvo que lo desactives:
+Un reenviador no guarda ninguna clave del grupo y no puede leer tu portapapeles. Solo reenvía paquetes WireGuard cifrados entre tus dispositivos fuera de casa y tu hub.
 
-- **Ofuscación**: el túnel habla AmneziaWG, que en la red no se parece a WireGuard. Los ordenadores, los dispositivos pequeños y las dos apps de teléfono lo admiten.
-- **VLESS** (a través de un reenviador): los dispositivos llegan al reenviador dentro de lo que parece una conexión HTTPS corriente al sitio web del reenviador. Para redes que bloquean las dos opciones anteriores. Los ordenadores, los dispositivos pequeños y las dos apps de teléfono lo admiten.
+Puedes usar cualquiera de dos reenviadores:
 
-`cbb global hub -no-vless` desactiva VLESS, y `-no-obfuscate` junto con él deja WireGuard normal.
+- **Tu propio reenviador** en cualquier servidor con dirección pública, como un pequeño servidor virtual ([Ejecutar tus propios servidores](../admin/self-hosting.md#a-forwarder)).
+- **El reenviador del proyecto** en `cbb.tools`, cuya dirección y clave vienen integradas en Connect Beyond Borders y se mantienen actualizadas mediante listas firmadas.
 
-## Solo teléfonos: un relé ciego
+Los dispositivos prueban primero las direcciones directas de tu hub y usan el reenviador solo cuando las conexiones directas no responden.
 
-Un teléfono nunca es el hub: un hub es un ordenador, un router o una placa pequeña como una Raspberry Pi, que sigue encendido y acepta conexiones. Un grupo de solo teléfonos se reúne en cambio en un **relé ciego**, el del proyecto o uno propio (`cbb relay` en tu servidor). Hace de punto de encuentro en lugar del hub, pero no es un miembro: el cifrado de los dispositivos va de extremo a extremo a través de él, así que no puede leer el portapapeles. Sí ve cuáles de tus dispositivos se comunican y cuándo. Los ordenadores y todas las apps de teléfono pueden usarlo.
+## Redes que bloquean VPN
 
-![Un relé ciego une el portátil que está fuera y el Mac que está en casa; el cifrado va de extremo a extremo a través de él](../images/relay.svg)
+Algunas redes Wi-Fi de hoteles y oficinas, operadores móviles y países bloquean el tráfico WireGuard estándar. Por defecto, un hub disfraza su túnel para que las conexiones logren pasar:
 
-Un grupo puede tener varios hubs: el ordenador de la raíz, cada ordenador administrador con un hub configurado y los hubs que solo pasan las copias. Los dispositivos fuera de casa usan el primero que responde.
+- **AmneziaWG**: aleatoriza las cabeceras de los paquetes y añade relleno para que el túnel no se parezca a WireGuard en la red.
+- **VLESS** (cuando se usa un reenviador): transporta el túnel disfrazado dentro de lo que parece una conexión HTTPS normal al sitio web del reenviador.
 
-El proyecto mantiene un relé ciego en `cbb.tools` para quien no quiera ejecutar un hub ni un relé propio. Ve qué dispositivos se comunican y cuándo, nunca lo que copian, y lo activa la raíz del grupo.
+Los dispositivos prueban primero AmneziaWG por UDP porque es más rápido, y cambian a VLESS por HTTPS cuando UDP está bloqueado. Cuando VLESS está activado, los dispositivos nunca recurren a WireGuard sin disfrazar, por lo que las redes con filtrado no ven tráfico VPN sin enmascarar.
+
+Los ordenadores, los dispositivos pequeños (salvo los routers MIPS, que solo sincronizan en casa; consulta [Dispositivos, puertos y archivos](../reference/devices.md)) y todas las apps de teléfono admiten tanto AmneziaWG como VLESS. Sin importar cómo se disfrace el túnel, las copias siguen protegidas por WireGuard, TLS mutuo y cifrado de extremo a extremo. Para cambiar estos ajustes, consulta [Redes que bloquean VPN](blocked-networks.md) y [Comandos](../reference/cli.md).
+
+## Sin hub: un relé ciego
+
+Un teléfono nunca es un hub: los teléfonos entran en reposo, cambian de red y no pueden aceptar conexiones en segundo plano de forma fiable. Cuando un grupo no tiene ningún ordenador, router o placa pequeña actuando como hub —por ejemplo, un grupo formado solo por teléfonos—, sus dispositivos se reúnen en un **relé ciego**.
+
+![Un portátil fuera de casa y un Mac en casa se conectan a través de túneles a un relé ciego, con cifrado de extremo a extremo directo entre ambos dispositivos](../images/relay.svg)
+
+Un relé ciego es un punto de encuentro, no un miembro del grupo. Cada dispositivo abre un túnel cifrado hacia el relé, y el relé une dos dispositivos del mismo grupo para que su TLS mutuo y sus copias selladas de extremo a extremo circulen directamente entre ellos. El relé no puede leer tu portapapeles ni hacerse pasar por un dispositivo.
+
+Como un relé ciego no almacena nada, ambos dispositivos deben estar conectados al mismo tiempo para intercambiar una copia. Los ordenadores y todas las apps de teléfono pueden usar un relé ciego, ya sea el relé abierto del proyecto en `cbb.tools` o uno en tu propio servidor. El dispositivo principal activa un relé ciego para el grupo solo con tu consentimiento. Consulta [Fuera de casa](away-from-home.md#no-computer-for-a-hub) y [Ejecutar tus propios servidores](../admin/self-hosting.md#a-blind-relay).
 
 ## Qué puede ver cada servidor
 
-| Servidor | Lee el portapapeles | Sabe qué dispositivos tuyos se comunican, y cuándo | De quién es |
-|---|---|---|---|
-| Hub que lee las copias | sí, es tu dispositivo y un administrador | sí | tuyo |
-| Hub que solo pasa las copias | no: las copias se sellan sin incluirlo | sí | tuyo |
-| Reenviador | no | no: ve las direcciones de las que vienen los paquetes cifrados y que van a tu hub, cuándo y sus tamaños | tuyo, o del proyecto en `cbb.tools` |
-| Relé ciego | no | sí | tuyo (está previsto uno en `cbb.tools`) |
+Ni un reenviador ni un relé ciego reciben nunca la lista de dispositivos de tu grupo, los nombres de tus dispositivos ni sus identificadores permanentes. En su lugar, tu grupo genera **credenciales de servidor** temporales —un juego distinto para cada servidor— y las renueva aproximadamente una vez al mes (y de inmediato cuando quitas un dispositivo). Cada servidor ve únicamente identificadores aleatorios temporales (seudónimos) durante ese periodo, y dos servidores no pueden vincular entre sí el tráfico de tu grupo.
 
-No interviene nada más: ni cuentas, ni nube, ni telemetría. Todos los demás que pueden ver algo, desde tu Wi-Fi hasta la comprobación de actualizaciones, están en [privacidad](privacy.md). Con la sincronización fuera de casa activada, el servicio de Connect Beyond Borders de un ordenador solo puede llegar a la red doméstica y al hub, el reenviador y el relé del propio grupo.
+| Servidor | Lee el portapapeles | Sabe qué dispositivos se comunican y cuándo | Operado por |
+|---|---|---|---|
+| Hub que lee las copias | Sí (es tu propio dispositivo principal o un ordenador administrador) | Sí | Tú |
+| Hub que solo pasa las copias | No (las copias van selladas sin incluirlo) | Sí (ve el remitente, la hora y el tamaño redondeado) | Tú |
+| Reenviador | No | No (ve las direcciones de red que intercambian paquetes cifrados con tu hub, la hora de los paquetes y su tamaño) | Tú, o el proyecto en `cbb.tools` |
+| Relé ciego | No | Sí (ve seudónimos temporales de dispositivos conectados a la vez, sus direcciones de red, la hora y el volumen) | Tú, o el proyecto en `cbb.tools` |
+
+Connect Beyond Borders no usa cuentas, ni almacenamiento en la nube, ni telemetría. Cuando la sincronización fuera de casa está desactivada, el servicio en un ordenador se comunica únicamente en tu red doméstica. Cuando la sincronización fuera de casa está activada, el servicio se comunica únicamente con tu red doméstica y con el hub, el reenviador y el relé de tu propio grupo. El programa aplica este límite en todos los sistemas, y Linux y Windows lo refuerzan además con reglas de red del sistema.
+
+Cuando la app del teléfono está cerrada y las notificaciones están activadas, tus dispositivos pueden despertar el teléfono con un aviso push sellado enviado a través de `cbb.tools` y el servicio de notificaciones push del teléfono. Solo tu teléfono puede abrir el aviso; ninguno de los dos servicios de notificaciones push puede leer tus copias.
+
+Para ver una lista completa de qué pueden ver otras partes (como tu red Wi-Fi, las comprobaciones de actualizaciones y las tiendas de apps), lee [Privacidad: quién ve qué](privacy.md). Para la especificación técnica completa, consulta [Diseño](../design.md) y [Protocolo](../protocol.md).

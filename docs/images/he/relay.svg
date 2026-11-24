@@ -52,7 +52,7 @@
 <path class="e-e2e" d="M110,102 L110,160 L650,160 L650,102"/>
 <path class="a-e2e" d="M650,102 L645.6,110.0 L654.4,110.0z"/>
 <path class="a-e2e" d="M110,102 L105.6,110.0 L114.4,110.0z"/>
-<text class="note" x="380" y="212" text-anchor="middle" direction="rtl">הוא רואה אילו מהמכשירים שלך מדברים, ומתי. היום: השרת שלך; בגרסה 0.5 גם cbb.tools.</text>
+<text class="note" x="380" y="212" text-anchor="middle" direction="rtl">הוא רואה אילו מהמכשירים שלך מדברים, ומתי: השרת שלך, או cbb.tools.</text>
 <rect class="lbl-bg" x="214.5" y="59.0" width="51.0" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="240.0" y="74.0" text-anchor="middle" direction="rtl">מנהרה</text>
 <rect class="lbl-bg" x="494.5" y="59.0" width="51.0" height="22" rx="11.0"/>

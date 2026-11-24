@@ -48,7 +48,7 @@
 <text class="zone-t" x="386" y="34">Home network</text>
 <g class=""><rect class="card " x="30.0" y="64.0" width="170" height="52" rx="10"/><g transform="translate(42.0,76)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="80.0" y="95">Laptop</text></g>
 <g class=""><rect class="card " x="30.0" y="164.0" width="170" height="52" rx="10"/><g transform="translate(42.0,176)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="195">Phone</text></g>
-<g class="key"><rect class="card key" x="390.0" y="108.0" width="180" height="64" rx="10"/><g transform="translate(402.0,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="440.0" y="136">Hub</text><text class="s" x="440.0" y="154">an admin computer</text><rect class="badge" x="534.8" y="99.0" width="27.200000000000003" height="18" rx="9"/><text class="badge-t" x="548.4" y="112.0" text-anchor="middle">HUB</text></g>
+<g class="key"><rect class="card key" x="390.0" y="108.0" width="180" height="64" rx="10"/><g transform="translate(402.0,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="440.0" y="136">Hub</text><text class="s" x="440.0" y="154">always on, at home</text><rect class="badge" x="534.8" y="99.0" width="27.200000000000003" height="18" rx="9"/><text class="badge-t" x="548.4" y="112.0" text-anchor="middle">HUB</text></g>
 <g class=""><rect class="card " x="630.0" y="64.0" width="150" height="52" rx="10"/><g transform="translate(642.0,76)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="680.0" y="95">Desktop</text></g>
 <g class=""><rect class="card " x="630.0" y="164.0" width="150" height="52" rx="10"/><g transform="translate(642.0,176)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="680.0" y="195">Raspberry Pi</text></g>
 <path class="e-tunnel" d="M200.0,90.0 L290,90 L290,130 L390.0,130"/>
@@ -62,7 +62,7 @@
 <path class="a-home" d="M630.0,90.0 L622.0,85.6 L622.0,94.4z"/>
 <path class="e-home" d="M600.0,190 L630.0,190.0"/>
 <path class="a-home" d="M630.0,190.0 L622.0,185.6 L622.0,194.4z"/>
-<text class="note" x="400" y="288" text-anchor="middle">The router forwards UDP port 8764 to the hub. The hub reads the clipboard: it is your own computer.</text>
+<text class="note" x="400" y="288" text-anchor="middle">The router forwards UDP port 8764 to the hub, a computer or router of yours at home.</text>
 <rect class="lbl-bg" x="241.6" y="129.0" width="116.8" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="300" y="144.0" text-anchor="middle">WireGuard tunnel</text>
 </svg>
