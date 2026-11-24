@@ -16,6 +16,7 @@ the same release ([versions and compatibility](docs/reference/compatibility.md))
 with 0.5 is set up again once. The details follow.
 
 ### Added
+- The README shows the project's OpenSSF Best Practices badge (passing).
 - The two release roots pinned in `cbb`, the phone apps and `get.sh` carry both their
   halves, ES256 and SLH-DSA-SHA2-128s, so a release's `keys.json` is checked with both
   signatures of a root.
