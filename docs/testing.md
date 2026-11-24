@@ -138,6 +138,10 @@ test binaries side by side, `.config/nextest.toml`, and the tests that time thei
 run alone; the two longest, the power cut at every byte and the record sets' differential
 check, run after the shares, one in each part), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
 and the Kotlin kit's tests before the Android apps' build, in one job (`Android app`).
+A job is split only where its parts finish sooner than the longest jobs: CI builds every
+Linux, FreeBSD and Windows target in one job (`build (Linux, FreeBSD, Windows)`, about 24
+minutes), since its two halves of 10 and 14 minutes ended long before the rest and only took a
+second runner.
 
 The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
 the iPhone app's jobs build only the simulator's Rust library for the runner's processor
