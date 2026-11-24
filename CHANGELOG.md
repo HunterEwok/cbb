@@ -2275,6 +2275,9 @@ with 0.5 is set up again once. The details follow.
   iPhone app's tests builds without link-time optimization.
 - On a pull request the iPhone app's CodeQL analysis starts with the other CI jobs and takes
   the first free macOS runner, instead of waiting for the iPhone app's jobs to finish.
+- On a pull request CodeQL analyzes the Go files for macOS alone in CI's macOS job, which builds
+  Go on macOS anyway, instead of on a macOS runner of its own: a pull request takes four macOS
+  runners at most, not five. `codeql.yml` still analyzes them on main and weekly.
 - The project's full name is Connect Beyond Borders, everywhere it is written: the apps, the
   stores, the website and the documentation. The short name CBB and the command `cbb` stay.
 - CI's Rust tests run their two longest tests, the power cut at every byte of every save and
