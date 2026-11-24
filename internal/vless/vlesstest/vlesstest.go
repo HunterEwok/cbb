@@ -19,6 +19,8 @@ import (
 	"net/http/httputil"
 	"net/netip"
 	"net/url"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -39,8 +41,109 @@ func WebServer(t testing.TB, path string, back func() string) (netip.AddrPort, [
 // valid.
 func WebServerNaming(t testing.TB, path string, back func() string, client netip.Addr) (netip.AddrPort, []byte) {
 	t.Helper()
-	web := webServer(t, path, back, nil, client)
-	return netip.MustParseAddrPort(web.Listener.Addr().String()), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: web.Certificate().Raw})
+	addr, cert, _ := WebServerWatched(t, path, back, client)
+	return addr, cert
+}
+
+// WebServerWatched is WebServerNaming with a Watch of what the web server
+// does with the clients' requests, for a test to tell when the
+// forwarder's side refused a client without waiting for time to pass.
+func WebServerWatched(t testing.TB, path string, back func() string, client netip.Addr) (netip.AddrPort, []byte, *Watch) {
+	t.Helper()
+	w := newWatch(t)
+	web := webServer(t, path, back, nil, client, w)
+	return netip.MustParseAddrPort(web.Listener.Addr().String()), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: web.Certificate().Raw}), w
+}
+
+// Watch records what refuses a client at a web server of WebServerWatched:
+// the site answered a path that is not passed on ("site"), the TLS
+// handshake failed, as with a client that does not take the certificate
+// ("handshake"), or an XHTTP session's download ended while its client
+// still ran ("ended"): the forwarder's side closes a session it does not
+// let in, and the download of a session it carries stays open until its
+// client closes.
+type Watch struct {
+	mu     sync.Mutex
+	cond   *sync.Cond
+	seq    int // requests and handshakes so far
+	events []watched
+	done   bool
+}
+
+type watched struct {
+	kind string
+	seq  int // of the request it is about
+}
+
+func newWatch(t testing.TB) *Watch {
+	w := &Watch{}
+	w.cond = sync.NewCond(&w.mu)
+	t.Cleanup(func() {
+		w.mu.Lock()
+		w.done = true
+		w.mu.Unlock()
+		w.cond.Broadcast()
+	})
+	return w
+}
+
+// begin counts a request or a handshake and returns its number.
+func (w *Watch) begin() int {
+	if w == nil {
+		return 0
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.seq++
+	return w.seq
+}
+
+func (w *Watch) note(kind string, seq int) {
+	if w == nil {
+		return
+	}
+	w.mu.Lock()
+	w.events = append(w.events, watched{kind, seq})
+	w.mu.Unlock()
+	w.cond.Broadcast()
+}
+
+// Mark returns the point after which Refused looks: requests that began
+// before it, such as the downloads of clients closed before, do not count.
+func (w *Watch) Mark() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.seq
+}
+
+// Refused returns a channel that gets the first refusal of a request that
+// began after mark.
+func (w *Watch) Refused(mark int) <-chan string {
+	ch := make(chan string, 1)
+	go func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		for !w.done {
+			for _, e := range w.events {
+				if e.seq > mark {
+					ch <- e.kind
+					return
+				}
+			}
+			w.cond.Wait()
+		}
+	}()
+	return ch
+}
+
+// handshakes counts the failed TLS handshakes the server logs.
+type handshakes struct{ w *Watch }
+
+func (h handshakes) Write(b []byte) (int, error) {
+	if strings.Contains(string(b), "TLS handshake error") {
+		h.w.note("handshake", h.w.begin())
+	}
+	return len(b), nil
 }
 
 // WebServerCA is WebServer with a certificate as a public site has one: an
@@ -76,13 +179,13 @@ func WebServerCA(t testing.TB, path string, back func() string) (netip.AddrPort,
 	if err != nil {
 		t.Fatal(err)
 	}
-	web := webServer(t, path, back, &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, netip.Addr{})
+	web := webServer(t, path, back, &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, netip.Addr{}, nil)
 	return netip.MustParseAddrPort(web.Listener.Addr().String()), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 }
 
 // webServer runs WebServerNaming's site with the certificate, or httptest's
-// own.
-func webServer(t testing.TB, path string, back func() string, cert *tls.Certificate, client netip.Addr) *httptest.Server {
+// own, telling w, if not nil, what it does.
+func webServer(t testing.TB, path string, back func() string, cert *tls.Certificate, client netip.Addr, w *Watch) *httptest.Server {
 	t.Helper()
 	proxy := &httputil.ReverseProxy{FlushInterval: -1, Rewrite: func(r *httputil.ProxyRequest) {
 		r.SetURL(&url.URL{Scheme: "http", Host: back()})
@@ -96,11 +199,24 @@ func webServer(t testing.TB, path string, back func() string, cert *tls.Certific
 		r.Out.Header.Set("X-Real-IP", from.String())
 	}}
 	site := http.NewServeMux()
-	site.Handle(path+"/", proxy)
-	site.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "the site") })
+	site.HandleFunc(path+"/", func(rw http.ResponseWriter, r *http.Request) {
+		seq := w.begin()
+		proxy.ServeHTTP(rw, r)
+		// XHTTP's packet-up downloads with GET and uploads with POST.
+		if r.Method == http.MethodGet {
+			w.note("ended", seq)
+		}
+	})
+	site.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
+		w.note("site", w.begin())
+		io.WriteString(rw, "the site")
+	})
 	web := httptest.NewUnstartedServer(site)
 	web.EnableHTTP2 = true
 	web.Config.ErrorLog = log.New(io.Discard, "", 0)
+	if w != nil {
+		web.Config.ErrorLog = log.New(handshakes{w}, "", 0)
+	}
 	if cert != nil {
 		web.TLS = &tls.Config{Certificates: []tls.Certificate{*cert}}
 	}

@@ -2288,6 +2288,12 @@ with 0.5 is set up again once. The details follow.
 - The FreeBSD job measures SHA-256 on the runner and in the machine every 30 s, to tell a
   runner held back from a slow virtual machine, and a failed test run no longer keeps the
   machine's session open until the job's limit.
+- The VLESS tests tell a refused client from an accepted one by the web server's own events:
+  the stream it closed, the site it served for a wrong path or the TLS handshake it failed,
+  instead of a second without an answer for each refusal.
+- The service tests of remote paste, quick actions, peripherals, the keyboard and the TV remote
+  move the member's clock past its limit of one a second (`CBB_TEST_AHEAD_FILE`) instead of
+  sleeping a second.
 - The core's tests of a lost root with a full room evaluate the records once after each change
   of the root rather than once for each device they look for: the longest of them takes
   seconds, not minutes.
