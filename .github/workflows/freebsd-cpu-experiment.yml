@@ -8,6 +8,10 @@
 # no Go at all (openssl speed), another XMM instruction set (AES-GCM),
 # the runner itself without the machine, and the machine without XSAVE
 # (-cpu host,-xsave: FreeBSD then saves the FPU state with FXSAVE).
+# Round two: SHA-NI turns slow only after Go's preemption signal; openssl
+# and Go with GODEBUG=asyncpreemptoff=1 stay fast. Round three: does the
+# machine without XSAVE keep it fast, and does internal/release, as the
+# CI runs it, pass in time with asyncpreemptoff=1?
 name: freebsd cpu experiment
 
 on:
@@ -28,7 +32,7 @@ jobs:
         cpu:
           - host
           - host,-xsave
-        try: [1, 2, 3, 4]
+        try: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -95,6 +99,8 @@ jobs:
             /tmp/cipher.test -test.run '^$' -test.bench 'AESGCM/Seal-128-8192' -test.benchtime 5s
             echo "== 5. control again: does it recover?"
             /tmp/sha.test -test.run '^$' -test.bench 'Hash8K$' -test.benchtime 2000x
+            echo "== 6. internal/release with asyncpreemptoff=1"
+            cd internal/release && GODEBUG=asyncpreemptoff=1 /usr/bin/time go test -count=1 -timeout 15m . || true
       - name: how QEMU was started
         if: always()
         run: cat /tmp/qemu-args.log || true
