@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Notes for coding agents
 
-Copy Beyond Borders (`cbb`) shares one clipboard between a person's computers, phones and
+Connect Beyond Borders (`cbb`) shares one clipboard between a person's computers, phones and
 small devices, with no cloud. Every computer and small device runs `cbb` (Rust, `member/` on
 the core `core/`), on computers with the Go helper `cbb-helper` beside it; the phones run
 their apps (`apps/ios`, `apps/android`, `apps/silica` for Aurora OS, `apps/harmony` for

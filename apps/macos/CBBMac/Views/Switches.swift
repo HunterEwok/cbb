@@ -124,7 +124,7 @@ struct StartView: View {
                 .resizable()
                 .frame(width: 96, height: 96)
                 .accessibilityHidden(true)
-            Text(verbatim: "Copy Beyond Borders").font(.title.weight(.semibold))
+            Text(verbatim: "Connect Beyond Borders").font(.title.weight(.semibold))
             VStack(spacing: Tokens.spacingMedium) {
                 Button { Task { await model.createGroup() } } label: { Text("Create a group").frame(maxWidth: .infinity) }
                     .buttonStyle(AccentButtonStyle())

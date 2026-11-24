@@ -156,7 +156,16 @@ type Config struct {
 	// a folder for each copy; "" takes no files.
 	Files string
 	Logf  func(format string, args ...any)
+
+	// Tests' hooks: wait, if set, takes time.After's place before the
+	// next try, and after time.AfterFunc's for a secret's expiry, so that
+	// a test moves on when it chooses rather than after real time.
+	wait  func(time.Duration) <-chan time.Time
+	after func(time.Duration, func()) stopper
 }
+
+// stopper is a timer that can be stopped, as *time.Timer.
+type stopper interface{ Stop() bool }
 
 // An Actor runs a quick action (internal/actions) in the user's session.
 // An error that is an *actions.Refusal is a reason not to, for the sender;
@@ -198,7 +207,7 @@ func Run(ctx context.Context, cfg Config) error {
 	var exp *expiry
 	var cp *copies
 	if cfg.Board != nil {
-		exp = &expiry{b: cfg.Board, logf: cfg.Logf}
+		exp = &expiry{b: cfg.Board, logf: cfg.Logf, after: cfg.after}
 		if _, ok := cfg.Board.(FileBoard); ok {
 			cp = newCopies(cfg.Files, cfg.Logf)
 		}
@@ -232,21 +241,26 @@ func Run(ctx context.Context, cfg Config) error {
 			cfg.Logf("cbb: the service connection ended: %v; trying again in %v", err, wait)
 			backoff = min(2*backoff, maxBackoff)
 		}
+		after := time.After
+		if cfg.wait != nil {
+			after = cfg.wait
+		}
 		select {
 		case <-ctx.Done():
 			exp.now()
 			return nil
-		case <-time.After(wait):
+		case <-after(wait):
 		}
 	}
 }
 
 // expiry gives up a written secret when it expires.
 type expiry struct {
-	b    Board
-	logf func(string, ...any)
-	mu   sync.Mutex
-	t    *time.Timer
+	b     Board
+	logf  func(string, ...any)
+	after func(time.Duration, func()) stopper // time.AfterFunc if nil
+	mu    sync.Mutex
+	t     stopper
 }
 
 // set starts the timer for a secret just written, or stops it for a text.
@@ -261,7 +275,11 @@ func (e *expiry) set(secret bool, ttl time.Duration) {
 		e.t = nil
 	}
 	if secret {
-		e.t = time.AfterFunc(ttl, e.clear)
+		if e.after != nil {
+			e.t = e.after(ttl, e.clear)
+		} else {
+			e.t = time.AfterFunc(ttl, e.clear)
+		}
 	}
 }
 

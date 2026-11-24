@@ -33,7 +33,7 @@ a checked box means the setting is in place.
 - [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
   setup) scan GitHub Actions, Go, Rust and Kotlin on every pull request, and
   `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes (on a pull
-  request called from `ci.yml` once the iPhone app's jobs are done), weekly, by hand and
+  request called from `ci.yml` beside the other jobs), weekly, by hand and
   before each release. GitHub rejects their results while the default setup is on.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
   OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
@@ -147,29 +147,30 @@ environment secret**.
   client under Xvfb, against wl-clipboard and xclip;
 - **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
   entry;
-- **test and build (macOS), homebrew, Mac app**: `go test -race` on macOS, the macOS
-  release archives, then the formula written by `packaging/homebrew/formula.sh`, installed
-  with Homebrew, then the Mac app's tests and its `.pkg`, one after the other on one machine;
+- **test and build (macOS), homebrew, Mac app**: CBBKit's tests on macOS, `go test -race`
+  on macOS, the macOS release archives and the check that they ignore the test hooks, then
+  the formula written by `packaging/homebrew/formula.sh`, installed with Homebrew, then the
+  Mac app's tests and its `.pkg`, then the iPhone's libraries with the latest Rust (the phone
+  core), one after the other on one machine;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
   windows-latest;
-- **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
-  code (pairing over plain TCP on Linux; pairing and a member connection over TLS on macOS);
-  the macOS job also builds the iPhone's libraries with the latest Rust (the phone core);
+- **phone kit**: CBBKit's tests and its cross tests with the Go code on Linux (pairing over
+  plain TCP); on macOS (pairing and a member connection over TLS) they run in the macOS job
+  above;
 - **iPhone app**: the Xcode project from XcodeGen, built and tested without signing on an
   iPhone and an iPad simulator, one job for each, at the same time;
-- **Android kit**: the Kotlin kit's tests and its cross tests with the Go code and the
-  computers' cbb;
-- **Android app**: the app and the Wear OS app built, unit-tested and linted;
+- **Android app**: the Kotlin kit's tests and its cross tests with the Go code and the
+  computers' cbb, then the app and the Wear OS app built, unit-tested and linted;
 - **cbb (Rust), the checks and the Raspberry Pi builds**: `cargo check` on the oldest Rust,
   `cargo fmt`, `clippy` for each system, and the ARM64 and ARMv6 builds;
 - **cbb (Rust)**: the tests of the Rust workspace under coverage: one job builds them into a
-  cargo-nextest archive, four parts run a share of them each at the same time
+  cargo-nextest archive, two parts run a share of them each at the same time
   (`.config/nextest.toml`), and one job puts the parts' coverage together;
 - **cbb (Rust), the optimized builds and the installers**: the stack a verify needs in the
   optimized builds, the installers without the helper (`get.sh --no-helper`, rootless) and
   `cbb update` there, and the tests of cbb without its helper among other members;
-- **service tests on the Rust cbb**: the build, six parts of `internal/service` and the part
-  `others` at the same time, and their coverage (docs/testing.md, "Running tests in
+- **service tests on the Rust cbb**: the build, three parts of `internal/service` at the
+  same time (the last also the desktop connector and the previous release), and their coverage (docs/testing.md, "Running tests in
   parallel");
 - **the core on the ESP32**: the protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
   ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and
@@ -288,7 +289,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   into a free retired PIV slot (82 when `ykman piv keys info 82` finds no key), and nothing
   else on the key is reset or changed. `ykman piv keys generate --algorithm ECCP256
   --pin-policy ALWAYS --touch-policy ALWAYS 82 root-N.pem`, then `ykman piv certificates
-  generate --subject "CN=Copy Beyond Borders release signing root N (2026)" 82 root-N.pem` so
+  generate --subject "CN=Connect Beyond Borders release signing root N (2026)" 82 root-N.pem` so
   the key can be read from the slot, and `ykman piv keys attest 82` with the `f9`
   certificate as proof that the key was made on the YubiKey.
   Each root's post-quantum half is made beside it ("Two signatures" below). Both halves'
@@ -373,14 +374,16 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   old one. A lost YubiKey: the other root signs, and the next release ships a new second root.
   A stolen channel key: a new one on cbb.tools, and `release-sign renew -drop cbb.tools
   -channel cbb.tools-2=channel.pem` (`-drop NAME` drops any key by its name in `keys.json`).
-- **The status key** of the revocation mirror, on cbb.tools in a file readable only by the
-  mirror's user (it signs nothing but `attest-status.json`, so a stolen one can at most keep
+- **The status key** of the revocation mirror, on cbb.tools in `/etc/cbb-attest/` like the
+  channel key (it signs nothing but `attest-status.json`, so a stolen one can at most keep
   a revoked phone proven until it is replaced): `openssl ecparam -name prime256v1 -genkey
-  -noout -out status-key.pem`, with its post-quantum half (`release-sign pq-new -key
-  file:status-key.pem -out status-pq.pem -public status.pem`, a new file readable only by
-  the same user). `keys.json` certifies both with `-status mirror=status.pem`. A daily timer runs
-  `attest-status -key status-key.pem,status-pq.pem -out /srv/cbb.tools/attest` and copies
-  `keys.json` beside it from `/srv/cbb.tools/channel`. When it stops on a list that drops a serial number, check Google's
+  -noout -out status-key.pem`, readable only by root, with its post-quantum half as a
+  credential encrypted with systemd-creds (`release-sign pq-new -key file:status-key.pem
+  -out - -public status.pem | systemd-creds encrypt --name=status-pq.pem -
+  status-pq.cred`). `keys.json` certifies both with `-status mirror=status.pem`. A daily
+  timer (`site/deploy/cbb-attest.service` and `.timer`, as the user `cbb-attest`, which gets
+  both halves as credentials for the run) runs `attest-status` into
+  `/srv/cbb.tools/attest` and copies `keys.json` beside it from `/srv/cbb.tools/channel`. When it stops on a list that drops a serial number, check Google's
   list and run it once with `-allow-drop`; a stolen status key is dropped from the next
   `keys.json` like a release key.
 - **The TPM makers' certificates** in `internal/attest/tpmroots/roots.pem`, which decide
@@ -463,19 +466,19 @@ and `-drop` with the pin of either half of a signing key drops both halves.
   encrypted credential, symmetric already. `release-sign pq-new -key file:KEY.pem -out -
   -public KEY-public.pem` writes the half to the standard output only into a pipe, for
   `systemd-creds encrypt --name=channel-pq.pem - /etc/cbb-channel/channel-pq.cred`;
-  `-out FILE` writes it to a new file only its owner reads (the status key's
-  `status-pq.pem`). `release-sign` signs with `file:KEY.pem+slh:PQ.pem`, and `pq-check
-  -key file:KEY.pem+slh:PQ.pem -public KEY-public.pem` proves the pair (for the channel
-  key, `systemd-creds decrypt --name=channel-pq.pem channel-pq.cred - | release-sign
-  pq-check -key file:channel-key.pem+slh:/dev/stdin ...`, so the decrypted half is never
-  written). The channel key's unit, `site/deploy/cbb-channel.service`, is copied to
-  `/etc/systemd/system/` and loaded with `systemctl daemon-reload`; it is a oneshot its
-  timer starts, so nothing is restarted, and `systemctl cat cbb-channel.service | grep
-  LoadCredentialEncrypted` shows the credential. The status key's timer unit
-  (`attest-status.service`, on the server only) gets `-key status-key.pem,status-pq.pem` in
-  its `ExecStart=` (`systemctl edit --full`), with a new `attest-status` built from this
-  tree; after the first release `jq -c '[.sigs[].alg]'` on the served
-  `attest-status.json` prints `[1,4]`.
+  `-out FILE` writes it to a new file only its owner reads. `release-sign` signs with
+  `file:KEY.pem+slh:PQ.pem`, and `pq-check -key file:KEY.pem+slh:PQ.pem -public
+  KEY-public.pem` proves the pair. It opens the half twice, so the half must be a file,
+  not a pipe: for a credential, `systemd-run --pipe --wait -p
+  LoadCredential=channel-key.pem:/etc/cbb-channel/channel-key.pem -p
+  LoadCredentialEncrypted=channel-pq.pem:/etc/cbb-channel/channel-pq.cred /bin/sh -c 'exec
+  release-sign pq-check -key "file:$CREDENTIALS_DIRECTORY/channel-key.pem+slh:$CREDENTIALS_DIRECTORY/channel-pq.pem"
+  -public /etc/cbb-channel/channel.pem'` reads it as the unit does, and the decrypted half
+  lives only as long as the run. The units, `site/deploy/cbb-channel.service` and
+  `site/deploy/cbb-attest.service` with their timers, are copied to `/etc/systemd/system/`
+  and loaded with `systemctl daemon-reload`; each is a oneshot its timer starts, and
+  `systemctl cat cbb-attest.service | grep LoadCredentialEncrypted` shows the credential.
+  `jq -c '[.sigs[].alg]'` on the served `attest-status.json` prints `[1,4]`.
 - **Back up** `~/.config/cbb-release/pq`, the identities and the public files like the
   other release files: an encrypted disk image (`pq-keys.dmg`, AES-256) beside them with a
   copy in iCloud. Without `pq` the hardware's P-256 half signs nothing devices take. A lost
@@ -498,7 +501,7 @@ when:
 - a signed file the devices fetch is close to its expiry: the channel's `keys.json` (21
   days: `release-sign renew -new-keys`) and `stable.json` (5 days: the `cbb-channel` timer
   stopped), the same two at `dl.cbb.tools`, and `attest/attest-status.json` (5 days: the
-  `attest-status` timer stopped);
+  `cbb-attest` timer stopped);
 - the server moved more than 1 TB in the last 24 hours, half of what its plan allows before
   it is slowed, or `status/traffic.json` is more than two hours old (`cbb-traffic.timer`
   stopped): [the servers' budget](../relay-budget.md#money-and-traffic) says what to do.

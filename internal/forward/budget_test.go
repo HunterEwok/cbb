@@ -58,6 +58,11 @@ func (f *Forwarder) state() string {
 func (f *Forwarder) fromNow() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return f.fromLocked()
+}
+
+// fromLocked is fromNow with f.mu held.
+func (f *Forwarder) fromLocked() string {
 	return fmt.Sprintf("%s\nsetting %d", f.from, f.setting)
 }
 
@@ -132,11 +137,7 @@ func TestRefusedRegistrationLeavesForwarder(t *testing.T) {
 		// A registration answers before its setup ends, so the snapshot
 		// waits for every setup before it, or it holds a slot that frees
 		// later and the sources never come back to it.
-		waitUntil(t, tc.name+": the setups before it to end", func() bool {
-			f.mu.Lock()
-			defer f.mu.Unlock()
-			return f.setting == 0
-		})
+		waitUntil(f, func() bool { return f.setting == 0 })
 		before, from := f.state(), f.fromNow()
 		holder := keyB
 		if tc.name == "another group's WireGuard key" {
@@ -153,7 +154,7 @@ func TestRefusedRegistrationLeavesForwarder(t *testing.T) {
 		if after := f.state(); after != before {
 			t.Errorf("%s: a refused registration changed the forwarder\nbefore:\n%s\nafter:\n%s", tc.name, before, after)
 		}
-		waitUntil(t, tc.name+": the sources to hold what they held", func() bool { return f.fromNow() == from })
+		waitUntil(f, func() bool { return f.fromLocked() == from })
 	}
 
 	// The forwarder holds as many groups as it may: a new group is refused
@@ -203,7 +204,7 @@ func TestRefusedRegistrationLeavesForwarder(t *testing.T) {
 	if after := f.state(); after != before {
 		t.Errorf("a new period past the wide network's share changed the forwarder\nbefore:\n%s\nafter:\n%s", before, after)
 	}
-	waitUntil(t, "the sources to hold what they held", func() bool { return f.fromNow() == from })
+	waitUntil(f, func() bool { return f.fromLocked() == from })
 }
 
 // A registration leaves nothing of its group at the forwarder but the
@@ -220,7 +221,7 @@ func TestRegistrationKeepsNoRecords(t *testing.T) {
 		t.Fatal(a.Error)
 	}
 	tc.Close()
-	waitUntil(t, "the registration to end with its connection", func() bool { return !f.registered(tag) })
+	waitUntil(f, func() bool { return f.regs[tag] == nil })
 	away := f.state()
 
 	// The same hub again, with 512 KiB in a field of a later version.
@@ -251,7 +252,7 @@ func TestRegistrationKeepsNoRecords(t *testing.T) {
 		t.Fatalf("with a field of a later version: %+v, %v", a, err)
 	}
 	tc.Close()
-	waitUntil(t, "the registration to end with its connection", func() bool { return !f.registered(tag) })
+	waitUntil(f, func() bool { return f.regs[tag] == nil })
 	// The entry's sequence number and expiry move with the new
 	// registration; nothing else may.
 	moving := regexp.MustCompile(`Seq:\d+ Expires:\d+`)
@@ -272,14 +273,13 @@ func TestRegistrationKeepsNoRecords(t *testing.T) {
 	}
 }
 
-// waitUntil waits up to ten seconds for ok.
-func waitUntil(t *testing.T, what string, ok func() bool) {
-	t.Helper()
-	for i := 0; !ok(); i++ {
-		if i == 200 {
-			t.Fatalf("waiting for %s", what)
-		}
-		time.Sleep(50 * time.Millisecond)
+// waitUntil waits until ok, which reads f's state with f.mu held, holds:
+// it looks again each time the state changes.
+func waitUntil(f *Forwarder, ok func() bool) {
+	f.mu.Mutex.Lock()
+	defer f.mu.Mutex.Unlock()
+	for !ok() {
+		f.mu.changed.Wait()
 	}
 }
 
@@ -456,21 +456,9 @@ func TestRegistrationsOverVLESSPayBySource(t *testing.T) {
 		conns = append(conns, ours)
 		go f.registrationOverVLESS(theirs, from)
 	}
-	counts := func() (setting, unknown, over int) {
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		return f.setting, f.vlessSet, f.overVLESS
-	}
 	settle := func(want int) {
 		t.Helper()
-		for range 100 {
-			if s, _, _ := counts(); s == want {
-				return
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		s, u, o := counts()
-		t.Fatalf("setting %d (from sources not known %d, over VLESS %d), want %d", s, u, o, want)
+		waitUntil(f, func() bool { return f.setting == want })
 	}
 	stranger := netip.MustParseAddr("198.51.100.9")
 	for range slots {

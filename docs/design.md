@@ -1,6 +1,6 @@
 # Design
 
-For engineers: how Copy Beyond Borders works and why, as built. The document follows the
+For engineers: how Connect Beyond Borders works and why, as built. The document follows the
 [arc42](https://arc42.org/overview) template, so each kind of question has a fixed place:
 the goals and constraints first, then the context, the building blocks, how they work at run
 time and where they run, then the concepts that cut across them, the decisions, the quality
@@ -10,7 +10,7 @@ threats with their defences in [threat-model.md](threat-model.md).
 
 ## 1. Introduction and goals
 
-Copy Beyond Borders gives one person's devices one clipboard, without a cloud. This part says
+Connect Beyond Borders gives one person's devices one clipboard, without a cloud. This part says
 what it must do and what it deliberately does not.
 
 ### Quality goals
@@ -348,7 +348,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
 
 ### Linux components
 
-Copy Beyond Borders for Linux is one program that runs as up to three processes with different rights
+Connect Beyond Borders for Linux is one program that runs as up to three processes with different rights
 and lifetimes. The installer enables what the device needs.
 
 #### 1. Service
@@ -680,7 +680,7 @@ final.
   release cbb takes only a helper of its own release. The tray app (`apps/desktop`) goes in the Windows archives
   and, built with cgo on a runner of each architecture for GTK 4 and WebKitGTK, in the
   `linux/amd64` and `linux/arm64` archives.
-- The Raspberry Pi Zero W (ARMv6) cannot run Ubuntu; it runs Raspberry Pi OS. Copy Beyond Borders
+- The Raspberry Pi Zero W (ARMv6) cannot run Ubuntu; it runs Raspberry Pi OS. Connect Beyond Borders
   does not depend on distribution specifics. The systemd units use directives from systemd
   248 and later and are checked with `systemd-analyze verify`.
 - Third-party code: `golang.org/x/net`, `golang.org/x/sys`, `golang.org/x/crypto` and
@@ -777,7 +777,7 @@ sync away from home, the admins, and remote paste.
   goodbyes, without the cache-flush bit, for addresses that go away and for everything when
   it stops. A record is multicast at most once a second on an interface, and
   a legacy unicast resolver gets a few answers a second at most. Packets are read record by
-  record, so a record Copy Beyond Borders cannot read, such as an Apple device's instance name with a
+  record, so a record Connect Beyond Borders cannot read, such as an Apple device's instance name with a
   dot in it, costs only itself. It browses at growing intervals, listing the members it
   knows as known answers, and from 1 s again when it loses a member; when it finds a member it did not have, it
   announces itself once more, as that member may have lost it too and browse only minutes
@@ -1143,7 +1143,7 @@ The receiver's limit decides (D-57): a sender offers any copy within its own lim
 receiver fetches only what fits its own and says once that a copy was too large ("A 300 MB
 copy from Mac is over this device's limit of 100 MB"). The hub's away limit caps its whole
 star. The limit protects the memory and disks of small devices, mobile data, the hub and the
-forwarder's 2 MiB a second per group; beyond 1 GiB Copy Beyond Borders is the wrong tool.
+forwarder's 2 MiB a second per group; beyond 1 GiB Connect Beyond Borders is the wrong tool.
 
 #### Security
 
@@ -1252,7 +1252,7 @@ These take precedence over convenience:
 4. On the internet, data exists only inside the tunnel, with the member protocol's mutual TLS
    inside it: nobody but the group's devices reads the contents, the inner headers or the
    inner addresses.
-5. The tunnel serves Copy Beyond Borders only and cannot be used as a general VPN.
+5. The tunnel serves Connect Beyond Borders only and cannot be used as a general VPN.
 6. Where WireGuard is blocked, the user can switch on VLESS.
 7. Groups are fully isolated from each other on the project's forwarder and cannot affect
    each other, even from one network.
@@ -2033,7 +2033,7 @@ among admins (a home group has one or two admins, so a vote decides nothing).
 An admin device sends a text to one chosen member and has it pasted where that member's
 focus is: a window, a terminal, a text console. Nobody touches the target. It is meant for
 devices without a keyboard (a Raspberry Pi on a TV, a kiosk, a console login) and, later
-through the Nano ESP32's USB keyboard, for a computer that runs no Copy Beyond Borders at all. For
+through the Nano ESP32's USB keyboard, for a computer that runs no Connect Beyond Borders at all. For
 running commands on a headless Pi, SSH stays the better tool; remote paste reaches what SSH
 does not, the screen's own session.
 
@@ -2424,7 +2424,7 @@ The ports, files and logs of each are in [devices, ports and files](reference/de
 
 Built in 0.6; how to install it is in the [install guide](guide/install.md).
 
-A router has no desktop and no clipboard of its own, so on a router Copy Beyond Borders is
+A router has no desktop and no clipboard of its own, so on a router Connect Beyond Borders is
 infrastructure, not a place to copy and paste:
 
 - **The hub for sync away from home.** The router is always on and is the device with the
@@ -2744,7 +2744,7 @@ service. The rest of the plan is in [roadmap.md](roadmap.md#device-keys-in-hardw
 
 - Automatic sync skips items marked as secret: the macOS and Windows formats above, and on
   Linux the presence of the `x-kde-passwordManagerHint` type, whatever its value.
-- Received secrets are written with the same marks Copy Beyond Borders reads: the
+- Received secrets are written with the same marks Connect Beyond Borders reads: the
   `x-kde-passwordManagerHint` type on Linux and the macOS types above, so clipboard managers
   skip them.
 - Some desktops and clipboard managers keep a copy of the last clipboard text and offer it

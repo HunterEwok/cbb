@@ -247,7 +247,7 @@ function render() {
   // This computer counts too, online as it is the one in front of the user.
   const online = s.devices.filter((d) => d.online || d.self).length;
   $("headline").textContent = s.problem ? t("The service does not answer")
-    : !inGroup ? t("Copy Beyond Borders") : t("%d of %d online", online, s.devices.length);
+    : !inGroup ? t("Connect Beyond Borders") : t("%d of %d online", online, s.devices.length);
   $("tag").textContent = inGroup ? s.status.group : "";
   renderSwitches(inGroup);
   renderAlerts(inGroup ? s.status : undefined);
@@ -273,7 +273,7 @@ function render() {
     // The start window: a group made here, one joined, or a lost group
     // claimed with its recovery key.
     const busy = state.busy ? "disabled" : "";
-    box.innerHTML = `<div class="notice start"><span class="logo" aria-hidden="true"></span><h2>${esc(t("Copy Beyond Borders"))}</h2>` +
+    box.innerHTML = `<div class="notice start"><span class="logo" aria-hidden="true"></span><h2>${esc(t("Connect Beyond Borders"))}</h2>` +
       `<div class="start-buttons"><button class="accent" id="create" ${busy}>${esc(t("Create a group"))}</button>` +
       `<button class="glass" id="join" ${busy}>${esc(t("Join a group"))}</button>` +
       `<button class="glass" id="join-invite" ${busy}>${esc(t("Join with an invitation"))}</button></div>` +

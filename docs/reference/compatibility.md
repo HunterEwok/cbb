@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Versions and compatibility
 
-Which releases of Copy Beyond Borders work together, and what an update keeps. The reasons are
+Which releases of Connect Beyond Borders work together, and what an update keeps. The reasons are
 in the [decisions](../decisions.md) (D-131); the rules behind each line are in the
 [protocol](../protocol.md).
 

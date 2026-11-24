@@ -14,7 +14,7 @@
 
 ## Команды
 
-**«the Copy Beyond Borders service is not running»**: запустите службу
+**«the Connect Beyond Borders service is not running»**: запустите службу
 (`sudo systemctl start cbb` в Linux; `sudo launchctl kickstart -k system/tools.cbb`
 на Mac; `Start-Service cbb` в Windows) и посмотрите её журнал.
 

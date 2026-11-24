@@ -14,18 +14,25 @@ import (
 	"sync"
 	"syscall"
 	"testing"
-	"time"
 )
 
-// lockedBuffer is a bytes.Buffer the forwarder's goroutines may write to.
+// lockedBuffer is a bytes.Buffer the forwarder's goroutines may write to;
+// wrote, if set, is told of each write.
 type lockedBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
+	mu    sync.Mutex
+	b     bytes.Buffer
+	wrote chan struct{}
 }
 
 func (l *lockedBuffer) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.wrote != nil {
+		select {
+		case l.wrote <- struct{}{}:
+		default:
+		}
+	}
 	return l.b.Write(p)
 }
 
@@ -46,32 +53,23 @@ func TestCommandRuns(t *testing.T) {
 	os.WriteFile(filepath.Join(groups, "other"), []byte("kept"), 0o600)
 	t.Setenv("CBB_DEBUG", "1")
 	var stdout bytes.Buffer
-	var stderr lockedBuffer
+	stderr := lockedBuffer{wrote: make(chan struct{}, 1)}
 	code := make(chan int, 1)
 	go func() {
 		code <- Command([]string{"-key", key, "-listen", "127.0.0.1:0", "-state", filepath.Join(dir, "state.json"),
 			"-vless-xhttp", "cbb.example", "-vless-listen", "127.0.0.1:0", "-vless-mirror", "127.0.0.1:443"}, &stdout, &stderr, "")
 	}()
-	deadline := time.Now().Add(20 * time.Second)
+	// Each write wakes the wait; the buffer is read after the write.
 	for !strings.Contains(stderr.String(), "reach the mirror") {
 		select {
 		case c := <-code:
 			t.Fatalf("ended with %d: %s", c, stderr.String())
-		default:
+		case <-stderr.wrote:
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("did not start: %s", stderr.String())
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 	syscall.Kill(os.Getpid(), syscall.SIGINT)
-	select {
-	case c := <-code:
-		if c != 0 {
-			t.Errorf("ended with %d: %s", c, stderr.String())
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("did not stop on SIGINT")
+	if c := <-code; c != 0 {
+		t.Errorf("ended with %d: %s", c, stderr.String())
 	}
 	out := stderr.String()
 	for _, want := range []string{"listening on UDP and TCP port", "deleted the 1 group files", "VLESS over XHTTP on", "cbb.example"} {

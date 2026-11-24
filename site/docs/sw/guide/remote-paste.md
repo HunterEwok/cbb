@@ -22,7 +22,7 @@ Simu haipokei kubandika kwa mbali katika toleo hili; huyatuma.
 
 Kwenye GNOME na KDE kubandika kwa mara ya kwanza hufungua kisanduku cha mazungumzo cha mfumo cha udhibiti wa mbali wa skrini; kiruhusu mara moja na hukumbukwa. Ili kuruka kisanduku hicho, sakinisha msaidizi wa uinput: sakinisha tena kwa `--uinput` (`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`), ambayo huongeza kibodi pepe inayobonyeza Shift+Insert na Enter tu kwa niaba ya mtumiaji aliye mbele ya skrini.
 
-Bila eneo-kazi, tmux na kiweko cha maandishi vinahitaji wasaidizi wao. Kila usakinishaji huongeza sehemu ya Copy Beyond Borders ya `/etc/tmux.conf`, inayoanzisha msaidizi wa tmux pamoja na tmux; `install.sh --console` huongeza huduma ya msaidizi wa kiweko.
+Bila eneo-kazi, tmux na kiweko cha maandishi vinahitaji wasaidizi wao. Kila usakinishaji huongeza sehemu ya Connect Beyond Borders ya `/etc/tmux.conf`, inayoanzisha msaidizi wa tmux pamoja na tmux; `install.sh --console` huongeza huduma ya msaidizi wa kiweko.
 
 ## Bandika kutoka kwa msimamizi
 

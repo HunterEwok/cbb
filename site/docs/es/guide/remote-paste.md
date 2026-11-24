@@ -22,7 +22,7 @@ Un teléfono no recibe pegados remotos en esta versión; los envía.
 
 En GNOME y KDE, el primer pegado abre el cuadro de diálogo del sistema para el control remoto de la pantalla; permítelo una vez y se recuerda. Para saltarte el cuadro de diálogo, instala el ayudante uinput: instala de nuevo con `--uinput` (`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`), lo que añade un teclado virtual que solo pulsa Mayús+Insert e Intro para el usuario que está ante la pantalla.
 
-Sin escritorio, tmux y la consola de texto necesitan sus ayudantes. Cada instalación añade la parte de Copy Beyond Borders de `/etc/tmux.conf`, que inicia el ayudante de tmux junto con tmux; `install.sh --console` añade el servicio del ayudante de la consola.
+Sin escritorio, tmux y la consola de texto necesitan sus ayudantes. Cada instalación añade la parte de Connect Beyond Borders de `/etc/tmux.conf`, que inicia el ayudante de tmux junto con tmux; `install.sh --console` añade el servicio del ayudante de la consola.
 
 ## Pegar desde un administrador
 

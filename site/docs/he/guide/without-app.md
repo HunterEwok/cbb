@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: a9d8b94a0114 -->
+<!-- source: 5013aca345ad -->
 # בלי האפליקציה
 
 קבוצה של מחשבים לא צריכה את אפליקציית הטלפון: מחשב יכול להחזיק את הקבוצה.
@@ -8,7 +8,7 @@
 
 ## 1. צרו את הקבוצה במחשב
 
-[התקינו](install.md) את Copy Beyond Borders במחשב שדלוק לעיתים קרובות: Linux, Windows, Mac או FreeBSD. הוא מחזיק את הקבוצה. אחר כך:
+[התקינו](install.md) את Connect Beyond Borders במחשב שדלוק לעיתים קרובות: Linux, Windows, Mac או FreeBSD. הוא מחזיק את הקבוצה. אחר כך:
 
 ```sh
 sudo cbb new

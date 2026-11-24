@@ -103,7 +103,7 @@ they look, so both apps are built to the same plan.
    while sync is on and grey while it is off (struck through on Android, empty on the
    iPhone). A tap turns sync on this phone on or off; on Android a long press opens the app
    (iOS gives a control no long press of its own), and without a group the tile opens the
-   app. On the iPhone, **Share → Copy Beyond Borders** (from any app, and from the
+   app. On the iPhone, **Share → Connect Beyond Borders** (from any app, and from the
    text selection menu's Share) takes the text, the link, an image or files, up to 50 MB
    together: on 0.6 the share extension runs no member of its own, so it puts them in a queue
    in the app group's folder (`ShareQueue`), says that CBB sends them the next time it is
@@ -819,10 +819,10 @@ back with 0.7.
 
 - the **home-screen widget** "Send clipboard";
 - the **"Send" button** in the service's notification;
-- **text selection → Copy Beyond Borders** (`ACTION_PROCESS_TEXT`) and **Share → Copy Beyond Borders**,
+- **text selection → Connect Beyond Borders** (`ACTION_PROCESS_TEXT`) and **Share → Connect Beyond Borders**,
   which first ask "Allow" or "Always for this app", naming the app, since any app can hand
   over a text. "Always" holds only for the app that Android records as the one that opened
-  Copy Beyond Borders (never one an intent names itself), and Settings lists those apps and asks
+  Connect Beyond Borders (never one an intent names itself), and Settings lists those apps and asks
   every app again;
 - **double-tap the back**: on a Pixel, Settings → System → Gestures → Quick Tap → Open app →
   "cbb send" (a second launcher entry that sends and closes); on Samsung, Good Lock's
@@ -833,7 +833,7 @@ back with 0.7.
 - **the accessibility button or gesture**, on every Android whoever made it, once "Send my
   copies by themselves" is on: the floating accessibility button, the swipe with two (or
   three) fingers from the bottom, or both volume keys held, whichever the person chose in the
-  system's accessibility settings for Copy Beyond Borders. The service registers for the
+  system's accessibility settings for Connect Beyond Borders. The service registers for the
   button (`flagRequestAccessibilityButton`), and a press opens the same transparent activity
   as the widget, which swaps the clipboard with the group's copy (D-128);
 - **opening the app**, by the Home button's rule.

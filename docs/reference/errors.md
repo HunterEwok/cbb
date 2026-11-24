@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Error messages and details
 
-Every part of Copy Beyond Borders shows an error in two layers: a short message that says what
+Every part of Connect Beyond Borders shows an error in two layers: a short message that says what
 went wrong in plain words, and the details underneath (the error's type, code and the
 underlying message) for finding the cause. Release builds show only the message; debug
 builds show both. Each part has one switch that shows the details in a release build too,
@@ -30,7 +30,7 @@ The variables are in [settings and environment variables](config.md).
 with details on, the cause follows on a line of its own:
 
 ```
-cbb: the Copy Beyond Borders service is not running; start it with: sudo systemctl start cbb
+cbb: the Connect Beyond Borders service is not running; start it with: sudo systemctl start cbb
   Detail: dial unix /run/cbb/control.sock: connect: no such file or directory
 ```
 

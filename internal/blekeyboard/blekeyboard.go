@@ -169,6 +169,10 @@ type Keyboard struct {
 	hosts     []dbus.ObjectPath
 	stopWatch func()
 	typing    sync.Mutex
+
+	// The clock: time.Now and time.AfterFunc, unless a test sets its own.
+	now      func() time.Time
+	afterFun func(time.Duration, func())
 }
 
 // Open exports the keyboard on conn, the system bus, and registers it
@@ -181,7 +185,8 @@ func Open(conn *dbus.Conn, name, dir string, logf func(string, ...any)) (*Keyboa
 	if err != nil {
 		return nil, err
 	}
-	k := &Keyboard{conn: conn, adapter: adapter, name: name, dir: dir, logf: logf, hosts: loadHosts(dir)}
+	k := &Keyboard{conn: conn, adapter: adapter, name: name, dir: dir, logf: logf, hosts: loadHosts(dir),
+		now: time.Now, afterFun: func(d time.Duration, f func()) { time.AfterFunc(d, f) }}
 	if err := k.export(); err != nil {
 		k.unexport()
 		return nil, err
@@ -258,7 +263,7 @@ func (k *Keyboard) Connected() bool {
 func (k *Keyboard) VisibleUntil() time.Time {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	if time.Now().After(k.visible) {
+	if !k.now().Before(k.visible) { // over once its time is, as for hide
 		return time.Time{}
 	}
 	return k.visible
@@ -271,7 +276,7 @@ func (k *Keyboard) VisibleUntil() time.Time {
 func (k *Keyboard) Visible(d time.Duration) error {
 	am := k.conn.Object(bluezBus, "/org/bluez")
 	k.mu.Lock()
-	k.visible = time.Now().Add(d)
+	k.visible = k.now().Add(d)
 	agent := k.agent
 	k.mu.Unlock()
 	if !agent {
@@ -292,7 +297,7 @@ func (k *Keyboard) Visible(d time.Duration) error {
 	if err := k.advertiseNow(true); err != nil {
 		return err
 	}
-	time.AfterFunc(d, k.hide)
+	k.afterFun(d, k.hide)
 	return nil
 }
 
@@ -301,7 +306,7 @@ func (k *Keyboard) Visible(d time.Duration) error {
 // that the desktop's own agent is the default again.
 func (k *Keyboard) hide() {
 	k.mu.Lock()
-	if time.Now().Before(k.visible) {
+	if k.now().Before(k.visible) {
 		k.mu.Unlock()
 		return
 	}

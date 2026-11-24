@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The apps
 
-Copy Beyond Borders has apps for phones, watches and desktops. The phone apps hold the group;
+Connect Beyond Borders has apps for phones, watches and desktops. The phone apps hold the group;
 the desktop apps are a window onto the service that already runs on the computer.
 
 | App | Where to get it | State |
@@ -23,7 +23,7 @@ the desktop apps are a window onto the service that already runs on the computer
    the recovery key (**Write on a sheet** or **Write to YubiKey**) and opens Home.
 2. Tap **+** on Home (Add a device). It shows a QR code and six digits, and waits a few
    minutes with the screen open.
-3. On a computer, [install](install.md) Copy Beyond Borders and run `sudo cbb pair -code`, or
+3. On a computer, [install](install.md) Connect Beyond Borders and run `sudo cbb pair -code`, or
    click **Join a group** in its tray or menu bar app, and type the six digits. A small device
    joins the same way (`sudo -u cbb cbb pair -code` on it). A new phone taps **Join a group**
    and scans the code, or types the digits.
@@ -36,13 +36,13 @@ the desktop apps are a window onto the service that already runs on the computer
   phone holds.
 - **iPhone**: iOS lets an app use the clipboard only while it is in front, so the iPhone
   syncs with one gesture: the "Sync clipboard" action on Back Tap or the Action button, the
-  Control Center control, or the home-screen widget. Share, Copy Beyond Borders sends a text
+  Control Center control, or the home-screen widget. Share, Connect Beyond Borders sends a text
   or a link at once.
 - **Android**: copies from the computers arrive by themselves. To send the phone's copies
   by themselves too, turn on **Clipboard sync** (an accessibility service;
   the app explains what it reads). Without it, one tap: the **Send clipboard** tile in Quick
   Settings, Send in the notification, the home-screen widget, or Share and text selection,
-  Copy Beyond Borders.
+  Connect Beyond Borders.
 - **Notifications** say when a device joins or is removed, becomes an admin, or the hub
   does not answer away from home. Each kind has its own switch in Settings.
 

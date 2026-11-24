@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Threat model
 
-For engineers and security reviewers: what Copy Beyond Borders protects, from whom, where the
+For engineers and security reviewers: what Connect Beyond Borders protects, from whom, where the
 trust boundaries are, and which defence answers each threat, with the code that holds it.
 It describes the version in this repository; what is not built yet is marked **open**. The
 plan of the security audit is in [security-audit.md](maintainers/security-audit.md), the wire format in
@@ -116,7 +116,7 @@ of service, **E**levation of privilege.
   the Pi's `cbb` included, and so the keys the Pi checks updates with from then on. On a
   network you do not trust, take `CBB` from the signed release (`cbb-zxnext.tar.gz`) and
   copy it to the card instead (apps/zxnext/README.md, "What is checked").
-- The systems' clipboards are readable by any program of the signed-in user; Copy Beyond
+- The systems' clipboards are readable by any program of the signed-in user; Connect Beyond
   Borders cannot protect a copy from other programs on the same device.
 - What has not run on real devices yet is listed in the [README](../README.md#status); the
   hardware key paths in particular are tested against simulators only.

@@ -52,7 +52,7 @@ svg.board { display: block; width: 100%; height: auto; }
 </style>
 <svg width="0" height="0" style="position:absolute">${filters}</svg>
 <div class="text">
-  <div class="brand"><img src="${fileURL("static/icon-dark.png")}" alt="">Copy Beyond Borders</div>
+  <div class="brand"><img src="${fileURL("static/icon-dark.png")}" alt="">Connect Beyond Borders</div>
   <h1>${t("Copy here,")} <span>${t("paste on any of your devices.")}</span></h1>
   <p>ANDROID · IPHONE · AURORA · WINDOWS · MAC · LINUX</p>
 </div>

@@ -2,7 +2,7 @@
 # Roadmap
 
 What comes next, the designs that are agreed but not built yet, and the questions to study
-before anything is planned. How Copy Beyond Borders works today is in [design.md](design.md),
+before anything is planned. How Connect Beyond Borders works today is in [design.md](design.md),
 the decisions in [decisions.md](decisions.md); what works on real devices is the
 [status table](../README.md#status).
 
@@ -43,7 +43,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     ([design](design.md#groups-without-a-computer)).
 - **32.** What the forwarder and the relay learn, cut to short server credentials, in 0.6
     ([design](design.md#what-the-servers-learn)).
-- **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
+- **48.** The name Connect Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
     CBB under the icons, the full name in the stores, the docs and the site; the apps'
     identifiers start with `tools.cbb`.
 - **63.** Copies sealed end to end, in 0.6 (D-84; [protocol.md](protocol.md), section 4,
@@ -615,6 +615,13 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       side with the command line's output, a showcase for each state, pseudo-localization,
       and a checklist for reviewing a new screen or command; then a heuristic review and a
       walk through each task, with the taps each takes as a measure.
+- **70.** **Planned for 0.7 (the owner, 2026-11-23).** Long runs as a condition of a release:
+    seven days of `tools/soak` on a release candidate's build on the bench's Raspberry Pi 4,
+    the calm and the load stand side by side, going on to thirty, with the count of days
+    starting again at any change to the code ([testing](testing.md), "Soak"); and the test
+    bench's 24-hour soak in containers (`E10-soak`) passing on the candidate
+    ([test bench](maintainers/testbench.md), section 10). In 0.6 both run when asked and do
+    not hold a release.
 
 ## Devices that are hard to type into
 

@@ -447,17 +447,7 @@ func signData(data []byte, s Signer) (File, error) {
 	f := File{Body: data}
 	for _, h := range s {
 		alg, _, _ := MarshalPublic(h.Public())
-		var sig []byte
-		switch alg {
-		case AlgES256:
-			sum := sha256.Sum256(data)
-			if sig, err = h.Sign(rand.Reader, sum[:], crypto.SHA256); err == nil {
-				// A YubiKey, the Secure Enclave and Go give either S.
-				sig, _ = lowS(sig)
-			}
-		default:
-			sig, err = h.Sign(rand.Reader, data, crypto.Hash(0))
-		}
+		sig, err := signHalf(alg, h, data)
 		if err != nil {
 			return File{}, err
 		}
@@ -469,6 +459,21 @@ func signData(data []byte, s Signer) (File, error) {
 	}
 	sort.SliceStable(f.Sigs, func(i, j int) bool { return f.Sigs[i].Alg < f.Sigs[j].Alg })
 	return f, nil
+}
+
+// signHalf signs data with one half, of algorithm alg.
+func signHalf(alg int, h crypto.Signer, data []byte) ([]byte, error) {
+	if alg != AlgES256 {
+		return h.Sign(rand.Reader, data, crypto.Hash(0))
+	}
+	sum := sha256.Sum256(data)
+	sig, err := h.Sign(rand.Reader, sum[:], crypto.SHA256)
+	if err != nil {
+		return nil, err
+	}
+	// A YubiKey, the Secure Enclave and Go give either S.
+	sig, _ = lowS(sig)
+	return sig, nil
 }
 
 func pemDecode(data []byte) (*pem.Block, []byte) { return pem.Decode(data) }

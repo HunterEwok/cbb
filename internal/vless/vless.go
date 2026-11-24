@@ -24,6 +24,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/xtls/xray-core/app/dispatcher"
@@ -497,6 +498,11 @@ func inboundHandler(tag string, listen netip.AddrPort, stream *internet.StreamCo
 
 // start runs Xray with the inbounds and one outbound, or none for one that
 // is added afterwards, logging nothing.
+// newMu keeps one core.New at a time: each sets Xray's process-wide
+// system dialer (internet.InitSystemDialer), and two instances made at
+// once, two clients dialed together, wrote it at the same time.
+var newMu sync.Mutex
+
 func start(ins []*core.InboundHandlerConfig, out proto.Message, outStream ...*internet.StreamConfig) (*core.Instance, error) {
 	sender := &proxyman.SenderConfig{}
 	if len(outStream) > 0 {
@@ -514,7 +520,9 @@ func start(ins []*core.InboundHandlerConfig, out proto.Message, outStream ...*in
 	if out != nil {
 		cfg.Outbound = []*core.OutboundHandlerConfig{{SenderSettings: serial.ToTypedMessage(sender), ProxySettings: serial.ToTypedMessage(out)}}
 	}
+	newMu.Lock()
 	inst, err := core.New(cfg)
+	newMu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("vless: %w", err)
 	}

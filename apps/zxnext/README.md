@@ -1,6 +1,6 @@
-# Copy Beyond Borders for the ZX Spectrum Next
+# Connect Beyond Borders for the ZX Spectrum Next
 
-`.cbb` is a dot command for NextZXOS. It copies text to the Copy Beyond Borders group, pastes
+`.cbb` is a dot command for NextZXOS. It copies text to the Connect Beyond Borders group, pastes
 the group's latest text, and joins the group, all through `cbb` on the Raspberry Pi
 inside the Accelerated Next. The Pi is a member of the group like any other (TLS 1.3, the same
 certificates as every other device). The Next talks to it only over the UART between the

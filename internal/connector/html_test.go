@@ -6,7 +6,6 @@ package connector
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
@@ -50,13 +49,8 @@ func TestHTML(t *testing.T) {
 
 	other := "<ul><li>one</li></ul>"
 	copyImage(t, socket, Image{Type: clip.TypeHTML, Data: []byte(other)}, "one")
-	select {
-	case got := <-b.html:
-		if got != [2]string{other, "one"} {
-			t.Errorf("wrote %q", got)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the formatted text did not reach the desktop")
+	if got := <-b.html; got != [2]string{other, "one"} {
+		t.Errorf("wrote %q", got)
 	}
 	expectWrite(t, plain, "one", false)
 

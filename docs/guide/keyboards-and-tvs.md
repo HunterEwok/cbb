@@ -2,7 +2,7 @@
 # Keyboards and TVs
 
 For anyone who wants to type a long password, a link or a search into a TV, a tablet, a
-console or a computer that has nothing of Copy Beyond Borders on it. One device of your group
+console or a computer that has nothing of Connect Beyond Borders on it. One device of your group
 types the text there as a keyboard or as the TV's remote, at your tap or when an admin sends
 a remote paste.
 

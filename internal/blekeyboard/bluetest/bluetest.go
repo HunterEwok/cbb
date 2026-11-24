@@ -50,6 +50,7 @@ type BlueZ struct {
 	agents       []string
 	pairable     bool
 	removed      []dbus.ObjectPath
+	removals     chan dbus.ObjectPath // each removal, as it happens
 }
 
 // Start runs a private bus with the fake on it, its adapter powered.
@@ -74,7 +75,7 @@ func Start(t testing.TB) *BlueZ {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &BlueZ{Addr: strings.TrimSpace(addr), powered: true}
+	f := &BlueZ{Addr: strings.TrimSpace(addr), powered: true, removals: make(chan dbus.ObjectPath, 16)}
 	f.conn = f.Connect(t)
 	f.conn.Export(f, "/", objectManager)
 	f.conn.Export(adapter{f}, adapterPath, gattManager)
@@ -217,6 +218,10 @@ func (a adapter) RemoveDevice(dev dbus.ObjectPath) *dbus.Error {
 	a.f.mu.Lock()
 	defer a.f.mu.Unlock()
 	a.f.removed = append(a.f.removed, dev)
+	select {
+	case a.f.removals <- dev:
+	default:
+	}
 	return nil
 }
 
@@ -225,6 +230,9 @@ func (a adapter) RemoveDevice(dev dbus.ObjectPath) *dbus.Error {
 func (f *BlueZ) Disconnect(dev dbus.ObjectPath, reason string) error {
 	return f.conn.Emit(dev, "org.bluez.Device1.Disconnected", reason, "")
 }
+
+// Removals tells each device whose bond is removed, as it is.
+func (f *BlueZ) Removals() <-chan dbus.ObjectPath { return f.removals }
 
 // Removed lists the devices whose bonds were removed.
 func (f *BlueZ) Removed() []dbus.ObjectPath {

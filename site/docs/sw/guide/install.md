@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: cc5e08e8e93b -->
+<!-- source: 556711697ffe -->
 # Kusakinisha
 
-Copy Beyond Borders huendeshwa kama huduma ndogo ya chinichini kwenye kila kompyuta. Amri yake ni `cbb`. Kila njia iliyo hapa chini husakinisha programu ile ile; chagua unayopenda.
+Connect Beyond Borders huendeshwa kama huduma ndogo ya chinichini kwenye kila kompyuta. Amri yake ni `cbb`. Kila njia iliyo hapa chini husakinisha programu ile ile; chagua unayopenda.
 
 ## Linux
 
@@ -32,7 +32,7 @@ Huendeshwa kama huduma yako ya chinichini wakati umeingia, na husawazisha kama m
 
 ### SteamOS (Steam Deck)
 
-Badilisha kwenda Hali ya Eneo-kazi, fungua Konsole, mpe mtumiaji `deck` nenosiri mara moja kama hana (`passwd`), kisha endesha amri ile ile. SteamOS hubadilisha faili zake za mfumo kila inaposasishwa, kwa hiyo kisakinishi huweka Copy Beyond Borders katika `/opt/cbb` badala ya `/usr/local`, na kuiambia SteamOS ni faili zipi zake katika `/etc` za kuhifadhi (`/etc/atomic-update.conf.d/cbb.conf`). Hubaki imesakinishwa na ndani ya kikundi chake katika masasisho ya SteamOS.
+Badilisha kwenda Hali ya Eneo-kazi, fungua Konsole, mpe mtumiaji `deck` nenosiri mara moja kama hana (`passwd`), kisha endesha amri ile ile. SteamOS hubadilisha faili zake za mfumo kila inaposasishwa, kwa hiyo kisakinishi huweka Connect Beyond Borders katika `/opt/cbb` badala ya `/usr/local`, na kuiambia SteamOS ni faili zipi zake katika `/etc` za kuhifadhi (`/etc/atomic-update.conf.d/cbb.conf`). Hubaki imesakinishwa na ndani ya kikundi chake katika masasisho ya SteamOS.
 
 - `cbb` iko kwenye njia ya Konsole mpya baada ya kutoka na kuingia tena. `sudo` haitafuti huko, kwa hiyo amri zinazoihitaji huchukua njia kamili: `sudo /opt/cbb/bin/cbb pair`.
 - Katika Hali ya Eneo-kazi ubao wa kunakili husawazisha kama kwenye eneo-kazi lolote la KDE Plasma.
@@ -107,7 +107,7 @@ fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | 
 
 Husakinisha `cbb`, hati ya rc.d inayoendesha huduma kupitia daemon(8), na kuongeza mstari `cbb_enable="YES"` kwenye rc.conf. Funguo ziko katika `/var/db/cbb`.
 
-Kwenye OPNsense kisakinishi hicho hicho pia huongeza ndoano ya programu-jalizi: huduma huonekana chini ya System > Diagnostics > Services, na kanuni zake za ngome ya moto (katika nanga ya pf `cbb`) hufuata kila upakiaji upya wa kichujio. Zima kirudiaji cha mDNS (Services > mDNS Repeater) wakati huduma inafanya kazi: vyote viwili vinahitaji mlango wa UDP 5353, na huduma hujibu mDNS yenyewe kwenye kila kiolesura cha nyumbani. pfSense haiungwi mkono: kisakinishi huendeshwa huko pia, lakini huchapisha kanuni za ngome ya moto za Firewall > Rules badala ya kuziongeza, na sasisho la pfSense linaweza kuondoa Copy Beyond Borders.
+Kwenye OPNsense kisakinishi hicho hicho pia huongeza ndoano ya programu-jalizi: huduma huonekana chini ya System > Diagnostics > Services, na kanuni zake za ngome ya moto (katika nanga ya pf `cbb`) hufuata kila upakiaji upya wa kichujio. Zima kirudiaji cha mDNS (Services > mDNS Repeater) wakati huduma inafanya kazi: vyote viwili vinahitaji mlango wa UDP 5353, na huduma hujibu mDNS yenyewe kwenye kila kiolesura cha nyumbani. pfSense haiungwi mkono: kisakinishi huendeshwa huko pia, lakini huchapisha kanuni za ngome ya moto za Firewall > Rules badala ya kuziongeza, na sasisho la pfSense linaweza kuondoa Connect Beyond Borders.
 
 Kwenye eneo-kazi la FreeBSD (X11, au Wayland yenye itifaki ya data control, kama KDE, sway na Hyprland), kipindi huanzisha `cbb agent` kutoka XDG autostart na ubao wa kunakili hujiunga na kikundi; ingia tena baada ya usakinishaji. Kubandika kwa mbali huandika kupitia XTEST kwenye X11 na kibodi pepe kwenye maeneo-kazi ya wlroots; GNOME haikubali kubandika kwa mbali kwenye FreeBSD, kwa kuwa bila logind hakuna kinachoonyesha kama skrini yake imefungwa.
 
@@ -123,7 +123,7 @@ docker compose -f compose.home.yaml exec cbb cbb pair
 
 ## Ngome ya moto
 
-Copy Beyond Borders inahitaji mlango mmoja wa TCP, 8764, na mDNS (UDP 5353), vyote kutoka mtandao wa nyumbani pekee. Kisakinishi hupata ngome ya moto (ufw, firewalld, nftables au iptables kwenye Linux, pf au ipfw kwenye FreeBSD, ngome ya programu ya Mac, Windows Firewall), huorodhesha kila kanuni, na kuuliza `Add these rules now? [y/N]`:
+Connect Beyond Borders inahitaji mlango mmoja wa TCP, 8764, na mDNS (UDP 5353), vyote kutoka mtandao wa nyumbani pekee. Kisakinishi hupata ngome ya moto (ufw, firewalld, nftables au iptables kwenye Linux, pf au ipfw kwenye FreeBSD, ngome ya programu ya Mac, Windows Firewall), huorodhesha kila kanuni, na kuuliza `Add these rules now? [y/N]`:
 
 - **Ndiyo**: huziongeza, huziweka mpya kwa kila sasisho na kuziondoa unapoondoa usakinishaji. Hakigusi kanuni nyingine kamwe.
 - **Hapana** (chaguo-msingi, na pia pale ambapo hakuna terminal ya kuulizia): haiongezi chochote na huchapisha amri kamili, ili uziendeshe mwenyewe.
@@ -145,7 +145,7 @@ Weka vifaa vyote vya kikundi kwenye toleo moja: 0.6 haiahidi zaidi ya 0.5, kwa h
 
 Matoleo gani hufanya kazi pamoja, na kifaa cha zamani hufanya nini na kitu kipya zaidi: [matoleo na uoanifu](../reference/compatibility.md).
 
-Visakinishi huuliza mara moja kama visasishe kiotomatiki (`--auto-update on|off`, au `-AutoUpdate on|off` na `$env:CBB_AUTO_UPDATE` kwenye Windows, ili ujibu mapema); `sudo cbb update -auto on|off` huibadilisha baadaye. Ikiwa imewashwa, kipima muda hukagua mara moja kwa siku kwa wakati wake: kipima muda cha systemd kwenye Linux, kazi ya launchd kwenye Mac, kazi iliyopangwa kama SYSTEM kwenye Windows, cron kwenye OpenWrt na FreeBSD. Kila ukaguzi hupakua faili ndogo zile zile kutoka GitHub (au kutoka `dl.cbb.tools` GitHub isipojibu), kwa hiyo GitHub hujua anwani ya kifaa hiki na kwamba kinatumia Copy Beyond Borders, kama kwa upakuaji wowote; hakitumi chochote kuhusu kikundi. `sudo cbb update -mirror https://...` huchukua masasisho kutoka kioo kingine badala yake, jambo ambalo halihitaji kuaminiwa, kwa kuwa saini hukaguliwa. Kumbukumbu ya kipima muda ni `update.log` katika `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt), `/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update` (Mac) au `C:\Program Files\cbb-update` (Windows).
+Visakinishi huuliza mara moja kama visasishe kiotomatiki (`--auto-update on|off`, au `-AutoUpdate on|off` na `$env:CBB_AUTO_UPDATE` kwenye Windows, ili ujibu mapema); `sudo cbb update -auto on|off` huibadilisha baadaye. Ikiwa imewashwa, kipima muda hukagua mara moja kwa siku kwa wakati wake: kipima muda cha systemd kwenye Linux, kazi ya launchd kwenye Mac, kazi iliyopangwa kama SYSTEM kwenye Windows, cron kwenye OpenWrt na FreeBSD. Kila ukaguzi hupakua faili ndogo zile zile kutoka GitHub (au kutoka `dl.cbb.tools` GitHub isipojibu), kwa hiyo GitHub hujua anwani ya kifaa hiki na kwamba kinatumia Connect Beyond Borders, kama kwa upakuaji wowote; hakitumi chochote kuhusu kikundi. `sudo cbb update -mirror https://...` huchukua masasisho kutoka kioo kingine badala yake, jambo ambalo halihitaji kuaminiwa, kwa kuwa saini hukaguliwa. Kumbukumbu ya kipima muda ni `update.log` katika `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt), `/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update` (Mac) au `C:\Program Files\cbb-update` (Windows).
 
 Vifaa vya kikundi huambiana kuhusu toleo jipya zaidi lililosainiwa ambalo kimojawapo kimeliona, kwa hiyo ukaguzi wa kifaa kimoja unatosha kwa `cbb status` na programu ya trei kwenye vingine kusema kwamba toleo jipya limetoka ("Update to X" kwenye programu ya trei huendesha `cbb update` kama msimamizi). Kila kifaa bado hukagua saini chenyewe na kupakua kumbukumbu yake.
 

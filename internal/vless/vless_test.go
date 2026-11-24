@@ -50,26 +50,52 @@ func echo(t *testing.T) netip.AddrPort {
 // every later try from the same port too.
 func roundTrip(t *testing.T, l tunnel.VLESS) bool {
 	t.Helper()
-	c, err := Dial(l)
+	back, err := tryRoundTrip(l)
 	if err != nil {
 		t.Fatal(err)
+	}
+	return back
+}
+
+// roundTrips runs roundTrip for each client at once: a packet that does
+// not come back is waited for five seconds.
+func roundTrips(t *testing.T, ls ...tunnel.VLESS) []bool {
+	t.Helper()
+	back, errs := make([]bool, len(ls)), make([]error, len(ls))
+	var wg sync.WaitGroup
+	for i, l := range ls {
+		wg.Go(func() { back[i], errs[i] = tryRoundTrip(l) })
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return back
+}
+
+func tryRoundTrip(l tunnel.VLESS) (bool, error) {
+	c, err := Dial(l)
+	if err != nil {
+		return false, err
 	}
 	defer c.Close()
 	b := make([]byte, 64)
 	for range 10 {
 		conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(c.Addr()))
 		if err != nil {
-			t.Fatal(err)
+			return false, err
 		}
 		conn.Write([]byte("a packet"))
 		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		n, err := conn.Read(b)
 		conn.Close()
 		if err == nil {
-			return string(b[:n]) == "a packet"
+			return string(b[:n]) == "a packet", nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // TestUserOfEachClient checks that the forwarder's side tells the clients
@@ -194,19 +220,18 @@ func TestThroughXHTTP(t *testing.T) {
 	if !roundTrip(t, l) {
 		t.Fatal("nothing came back")
 	}
-	other := l
+	other, otherID, wrongName := l, l, l
 	other.Path = path + "x"
-	if roundTrip(t, other) {
+	otherID.ID, _ = tunnel.NewVLESSID()
+	wrongName.ServerName = "www.example.org"
+	back := roundTrips(t, other, otherID, wrongName)
+	if back[0] {
 		t.Fatal("another path got through")
 	}
-	otherID := l
-	otherID.ID, _ = tunnel.NewVLESSID()
-	if roundTrip(t, otherID) {
+	if back[1] {
 		t.Fatal("another group's ID got through")
 	}
-	wrongName := l
-	wrongName.ServerName = "www.example.org"
-	if roundTrip(t, wrongName) {
+	if back[2] {
 		t.Fatal("a site whose certificate does not carry the name got through")
 	}
 	if err := s.RemoveUser(id); err != nil {
@@ -449,10 +474,11 @@ func TestGroupPaths(t *testing.T) {
 	base, other := l, l
 	base.Path = path
 	other.Path = path + "/not-a-group-path-at-all"
-	if roundTrip(t, base) {
+	back := roundTrips(t, base, other)
+	if back[0] {
 		t.Error("a group's packets passed under the registrations' path")
 	}
-	if roundTrip(t, other) {
+	if back[1] {
 		t.Error("a group's packets passed under a path that is not let in")
 	}
 	s.RemovePath("a-group-of-its-own")

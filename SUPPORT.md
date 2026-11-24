@@ -1,6 +1,6 @@
 # Getting help
 
-Copy Beyond Borders is developed by one maintainer, in the open, without paid support.
+Connect Beyond Borders is developed by one maintainer, in the open, without paid support.
 
 ## Look first
 

@@ -3,7 +3,7 @@
 
 Away from home, your devices reach the hub through the group's own WireGuard tunnel. Some
 networks block WireGuard: hotel and office Wi-Fi, some mobile operators, and whole
-countries that filter VPNs. Copy Beyond Borders has two ways around it, and a hub uses both
+countries that filter VPNs. Connect Beyond Borders has two ways around it, and a hub uses both
 unless you turn them off; the devices pick up a change the next time they meet the hub at
 home.
 

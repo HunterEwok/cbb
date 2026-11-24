@@ -101,6 +101,9 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
+	// Signals stop the forwarder from before it says it listens.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	logf("cbb forward: listening on UDP and TCP port %d; its key, for cbb global hub -forwarder-key: %s", f.Addr().Port(), pin)
 	if v := cfg.VLESS; v != nil {
 		logf("cbb forward: VLESS over XHTTP on %s, behind the web server of %s on TCP port %d, which passes the path %s to it; hubs ask for it unless they run with -no-vless", *vlessListen, v.XHTTP.Host, v.XHTTP.Port, v.XHTTP.Path)
@@ -108,8 +111,6 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	if *vlessMirror != "" {
 		logf("cbb forward: the clients of registered hubs reach the mirror at %s over VLESS", *vlessMirror)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	if os.Getenv("CBB_DEBUG") == "1" {
 		// Counts only: the forwarder logs nothing about a group or a device.
 		go func() {

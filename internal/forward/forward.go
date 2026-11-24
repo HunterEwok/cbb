@@ -110,7 +110,7 @@ type Forwarder struct {
 	limits Limits
 	logf   func(string, ...any)
 
-	mu        sync.Mutex
+	mu        stateMu
 	regs      map[string]*reg // by group tag
 	versions  *versions       // the newest credential of each group that registers with one
 	byID      map[uint64]*reg // by registration ID, for hellos
@@ -1014,4 +1014,20 @@ func (f *Forwarder) Stats() Stats {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return Stats{Groups: len(f.regs), Sessions: len(f.byHubIdx), Waiting: len(f.pending)}
+}
+
+// stateMu guards the forwarder's state. A test may set changed, a
+// condition on the mutex itself, to wait for the state to change: every
+// Unlock wakes its waiters, which see the state under the lock.
+type stateMu struct {
+	sync.Mutex
+	changed *sync.Cond
+}
+
+// Unlock wakes the waiters of changed, if set, and unlocks.
+func (m *stateMu) Unlock() {
+	if m.changed != nil {
+		m.changed.Broadcast()
+	}
+	m.Mutex.Unlock()
 }

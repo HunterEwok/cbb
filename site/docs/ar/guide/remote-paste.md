@@ -22,7 +22,7 @@
 
 على GNOME وKDE يفتح أول لصق مربع حوار النظام للتحكم عن بُعد في الشاشة؛ اسمح به مرة واحدة فيُتذكَّر. ولتخطي مربع الحوار ثبّت المساعد uinput: ثبّت من جديد مع `--uinput` (`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`)، وهو يضيف لوحة مفاتيح افتراضية لا تضغط سوى Shift+Insert وEnter للمستخدم الجالس أمام الشاشة.
 
-وبلا سطح مكتب، تحتاج tmux ووحدة التحكم النصية إلى مساعديهما. يضيف كل تثبيت حصة Copy Beyond Borders من `/etc/tmux.conf`، التي تشغّل مساعد tmux مع tmux؛ ويضيف `install.sh --console` خدمة مساعد وحدة التحكم.
+وبلا سطح مكتب، تحتاج tmux ووحدة التحكم النصية إلى مساعديهما. يضيف كل تثبيت حصة Connect Beyond Borders من `/etc/tmux.conf`، التي تشغّل مساعد tmux مع tmux؛ ويضيف `install.sh --console` خدمة مساعد وحدة التحكم.
 
 ## اللصق من مشرف
 

@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# Mirrors Google's revocation list of Android attestation keys as
+# attest-status.json, signed with the status key (docs/protocol.md, section
+# 17, "Revoked attestations"; docs/maintainers/maintaining.md, "The status
+# key"): /etc/systemd/system/cbb-attest.service, run by cbb-attest.timer.
+# The key's P-256 half stays readable only by root and its SLH-DSA half is a
+# credential encrypted with systemd-creds to this machine
+# (docs/maintainers/maintaining.md, "Two signatures"); the service gets both
+# as credentials for the run. It copies the channel's keys.json beside the
+# list, since a device checks the list under the keys.json it came with.
+
+[Unit]
+Description=Mirror the revocation list of Android attestation keys
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cbb-attest
+Group=cbb-attest
+LoadCredential=status-key.pem:/etc/cbb-attest/status-key.pem
+LoadCredentialEncrypted=status-pq.pem:/etc/cbb-attest/status-pq.cred
+ExecStart=/bin/sh -ec '/usr/local/bin/attest-status -key "$CREDENTIALS_DIRECTORY/status-key.pem,$CREDENTIALS_DIRECTORY/status-pq.pem" -out /srv/cbb.tools/attest; if [ -f /srv/cbb.tools/channel/keys.json ]; then cp /srv/cbb.tools/channel/keys.json /srv/cbb.tools/attest/.keys.json && mv /srv/cbb.tools/attest/.keys.json /srv/cbb.tools/attest/keys.json; fi'
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/cbb.tools/attest
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service

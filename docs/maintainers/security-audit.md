@@ -1,6 +1,6 @@
 # Authorized security audit (pre-0.4)
 
-This document specifies an authorized security audit of Copy Beyond Borders, run before the 0.4
+This document specifies an authorized security audit of Connect Beyond Borders, run before the 0.4
 release. It is a defensive exercise: we confirm that clipboard data cannot be read on the
 network and that an outsider with no access cannot join a group or get a useful answer from
 the servers.

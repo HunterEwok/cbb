@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: cc5e08e8e93b -->
+<!-- source: 556711697ffe -->
 # התקנה
 
-Copy Beyond Borders רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.
+Connect Beyond Borders רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.
 
 ## Linux
 
@@ -32,7 +32,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 ### SteamOS ‏(Steam Deck)
 
-עברו למצב שולחן עבודה, פתחו את Konsole, תנו למשתמש `deck` סיסמה פעם אחת אם אין לו (`passwd`), והריצו את אותה פקודה. SteamOS מחליפה את קבצי המערכת שלה בכל עדכון, ולכן תוכנית ההתקנה מציבה את Copy Beyond Borders ב-`/opt/cbb` במקום ב-`/usr/local`, ואומרת ל-SteamOS אילו מהקבצים שלה ב-`/etc` לשמור (`/etc/atomic-update.conf.d/cbb.conf`). הוא נשאר מותקן ובקבוצה שלו לאורך עדכוני SteamOS.
+עברו למצב שולחן עבודה, פתחו את Konsole, תנו למשתמש `deck` סיסמה פעם אחת אם אין לו (`passwd`), והריצו את אותה פקודה. SteamOS מחליפה את קבצי המערכת שלה בכל עדכון, ולכן תוכנית ההתקנה מציבה את Connect Beyond Borders ב-`/opt/cbb` במקום ב-`/usr/local`, ואומרת ל-SteamOS אילו מהקבצים שלה ב-`/etc` לשמור (`/etc/atomic-update.conf.d/cbb.conf`). הוא נשאר מותקן ובקבוצה שלו לאורך עדכוני SteamOS.
 
 - `cbb` נמצא בנתיב של Konsole חדש אחרי שמתנתקים ומתחברים מחדש. `sudo` לא מחפש שם, ולכן פקודות שזקוקות לו מקבלות את הנתיב המלא: ‏`sudo /opt/cbb/bin/cbb pair`.
 - במצב שולחן עבודה לוח ההעתקה מסתנכרן כמו בכל שולחן עבודה של KDE Plasma.
@@ -107,7 +107,7 @@ fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | 
 
 הוא מתקין את `cbb`, סקריפט rc.d שמריץ את השירות דרך daemon(8), ומוסיף את השורה `cbb_enable="YES"` ל-rc.conf. המפתחות נמצאים ב-`/var/db/cbb`.
 
-ב-OPNsense תוכנית ההתקנה הזאת מוסיפה גם וו לתוסף: השירות מופיע תחת System > Diagnostics > Services, וכללי חומת האש שלו (בעוגן `cbb` של pf) עוקבים אחרי כל טעינה מחדש של המסנן. כבו את מהדר ה-mDNS (‏Services > mDNS Repeater) בזמן שהשירות רץ: שניהם זקוקים ליציאת UDP 5353, והשירות עונה ל-mDNS בעצמו בכל ממשק ביתי. pfSense אינו נתמך: תוכנית ההתקנה רצה גם שם, אבל היא מדפיסה את כללי חומת האש עבור Firewall > Rules במקום להוסיף אותם, ועדכון של pfSense עלול להסיר את Copy Beyond Borders.
+ב-OPNsense תוכנית ההתקנה הזאת מוסיפה גם וו לתוסף: השירות מופיע תחת System > Diagnostics > Services, וכללי חומת האש שלו (בעוגן `cbb` של pf) עוקבים אחרי כל טעינה מחדש של המסנן. כבו את מהדר ה-mDNS (‏Services > mDNS Repeater) בזמן שהשירות רץ: שניהם זקוקים ליציאת UDP 5353, והשירות עונה ל-mDNS בעצמו בכל ממשק ביתי. pfSense אינו נתמך: תוכנית ההתקנה רצה גם שם, אבל היא מדפיסה את כללי חומת האש עבור Firewall > Rules במקום להוסיף אותם, ועדכון של pfSense עלול להסיר את Connect Beyond Borders.
 
 בשולחן עבודה של FreeBSD (‏X11, או Wayland עם פרוטוקול data control, כמו ב-KDE, ב-sway וב-Hyprland) ההפעלה מתחילה את `cbb agent` מהפעלה האוטומטית של XDG ולוח ההעתקה מצטרף לקבוצה; התחברו מחדש אחרי ההתקנה. הדבקה מרחוק מקלידה דרך XTEST ב-X11 ודרך המקלדת הווירטואלית בשולחנות עבודה של wlroots; ‏GNOME אינו מקבל הדבקה מרחוק ב-FreeBSD, כי בלי logind שום דבר לא אומר אם המסך שלו נעול.
 
@@ -123,7 +123,7 @@ docker compose -f compose.home.yaml exec cbb cbb pair
 
 ## חומת האש
 
-Copy Beyond Borders צריך יציאת TCP אחת, ‏8764, ואת mDNS (‏UDP 5353), שתיהן מהרשת הביתית בלבד. תוכנית ההתקנה מזהה את חומת האש (‏ufw, ‏firewalld, ‏nftables או iptables ב-Linux, ‏pf או ipfw ב-FreeBSD, חומת האש של האפליקציות ב-Mac, ‏Windows Firewall), מפרטת כל כלל, ושואלת `Add these rules now? [y/N]`:
+Connect Beyond Borders צריך יציאת TCP אחת, ‏8764, ואת mDNS (‏UDP 5353), שתיהן מהרשת הביתית בלבד. תוכנית ההתקנה מזהה את חומת האש (‏ufw, ‏firewalld, ‏nftables או iptables ב-Linux, ‏pf או ipfw ב-FreeBSD, חומת האש של האפליקציות ב-Mac, ‏Windows Firewall), מפרטת כל כלל, ושואלת `Add these rules now? [y/N]`:
 
 - **כן**: היא מוסיפה אותם, שומרת עליהם עדכניים בכל עדכון ומסירה אותם כשמסירים את ההתקנה. היא לעולם לא נוגעת בכללים אחרים.
 - **לא** (ברירת המחדל, וגם כשאין טרמינל לשאול בו): היא לא מוסיפה דבר ומדפיסה את הפקודות המדויקות, כדי שתריצו אותן בעצמכם.
@@ -145,7 +145,7 @@ Copy Beyond Borders צריך יציאת TCP אחת, ‏8764, ואת mDNS (‏UDP
 
 אילו גרסאות עובדות יחד, ומה עושה מכשיר ישן עם משהו חדש יותר: [גרסאות ותאימות](../reference/compatibility.md).
 
-תוכניות ההתקנה שואלות פעם אחת אם להתעדכן אוטומטית (‏`--auto-update on|off`, או `-AutoUpdate on|off` ו-`$env:CBB_AUTO_UPDATE` ב-Windows, כדי לענות מראש); ‏`sudo cbb update -auto on|off` משנה זאת מאוחר יותר. כשהאפשרות פועלת, טיימר בודק פעם ביום בשעה משלו: טיימר של systemd ב-Linux, משימת launchd ב-Mac, משימה מתוזמנת כ-SYSTEM ב-Windows, ו-cron ב-OpenWrt וב-FreeBSD. כל בדיקה מורידה את אותם קבצים קטנים מ-GitHub (או מ-`dl.cbb.tools` כש-GitHub לא עונה), ולכן GitHub לומד את כתובת המכשיר הזה ושהוא משתמש ב-Copy Beyond Borders, כמו בכל הורדה; הוא לא שולח דבר על הקבוצה. ‏`sudo cbb update -mirror https://...` לוקח עדכונים ממראה אחרת במקום זאת, מה שאינו דורש אמון, כי החתימות נבדקות. יומן הטיימר הוא `update.log` ב-`/var/lib/cbb-update` (Linux), ב-`/etc/cbb-update` (OpenWrt), ב-`/var/db/cbb-update` (FreeBSD), ב-`/Library/Application Support/cbb-update` (Mac) או ב-`C:\Program Files\cbb-update` (Windows).
+תוכניות ההתקנה שואלות פעם אחת אם להתעדכן אוטומטית (‏`--auto-update on|off`, או `-AutoUpdate on|off` ו-`$env:CBB_AUTO_UPDATE` ב-Windows, כדי לענות מראש); ‏`sudo cbb update -auto on|off` משנה זאת מאוחר יותר. כשהאפשרות פועלת, טיימר בודק פעם ביום בשעה משלו: טיימר של systemd ב-Linux, משימת launchd ב-Mac, משימה מתוזמנת כ-SYSTEM ב-Windows, ו-cron ב-OpenWrt וב-FreeBSD. כל בדיקה מורידה את אותם קבצים קטנים מ-GitHub (או מ-`dl.cbb.tools` כש-GitHub לא עונה), ולכן GitHub לומד את כתובת המכשיר הזה ושהוא משתמש ב-Connect Beyond Borders, כמו בכל הורדה; הוא לא שולח דבר על הקבוצה. ‏`sudo cbb update -mirror https://...` לוקח עדכונים ממראה אחרת במקום זאת, מה שאינו דורש אמון, כי החתימות נבדקות. יומן הטיימר הוא `update.log` ב-`/var/lib/cbb-update` (Linux), ב-`/etc/cbb-update` (OpenWrt), ב-`/var/db/cbb-update` (FreeBSD), ב-`/Library/Application Support/cbb-update` (Mac) או ב-`C:\Program Files\cbb-update` (Windows).
 
 מכשירי הקבוצה מספרים זה לזה על הגרסה החתומה החדשה ביותר שמישהו מהם ראה, ולכן בדיקה של מכשיר אחד מספיקה כדי ש-`cbb status` ואפליקציית המגש במכשירים האחרים יגידו שיצאה גרסה חדשה יותר (‏"Update to X" באפליקציית המגש מריץ את `cbb update` כמנהל). כל מכשיר עדיין בודק את החתימות בעצמו ומוריד את הארכיון שלו.
 

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Architecture decisions
 
-For engineers. Every decision that shapes Copy Beyond Borders, numbered once and never
+For engineers. Every decision that shapes Connect Beyond Borders, numbered once and never
 renumbered: the code, the changelog and the other documents cite them as D-1, D-2 and so on. The
 reasons and the details of each are in the [design](design.md) and the
 [protocol](protocol.md); this page is the register.

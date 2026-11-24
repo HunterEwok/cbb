@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: a7d4bf61e687 -->
+<!-- source: 6bb56fb8d602 -->
 # Jinsi inavyofanya kazi
 
-Ukurasa huu unaeleza Copy Beyond Borders kwa picha: nani yumo kwenye kikundi, jinsi vifaa vinavyopatana nyumbani, na kila njia ambayo vinaweza kuendelea kuwasiliana vikiwa mbali. Kanuni kamili ziko kwenye [muundo](../design.md); huzihitaji ili kuutumia.
+Ukurasa huu unaeleza Connect Beyond Borders kwa picha: nani yumo kwenye kikundi, jinsi vifaa vinavyopatana nyumbani, na kila njia ambayo vinaweza kuendelea kuwasiliana vikiwa mbali. Kanuni kamili ziko kwenye [muundo](../design.md); huzihitaji ili kuutumia.
 
 ## Kikundi
 
@@ -16,13 +16,13 @@ Vifaa vyako huunda **kikundi**. Ni vifaa unavyoviruhusu tu vinavyokuwa ndani yak
 | **Mwanachama bila root** | kompyuta ya Linux iliyosakinishwa bila `sudo` | husawazisha kama mwanachama, lakini kamwe si mzizi, msimamizi wala kitovu ([tazama hapa chini](#rootless-members)) |
 | **Kitovu** | kompyuta, ruta au bodi ndogo nyumbani, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani; kinachopitisha nakala tu hakisomi yoyote |
 
-Funguo za simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na hazitoki kamwe; kila sahihi kwa ufunguo wa mzizi wa kikundi au ufunguo wa msimamizi huomba uso wako, alama ya kidole au nambari ya siri, huku ufunguo ambao simu husawazisha nao ukifanya kazi bila kuuliza. Kompyuta huweka funguo zake kwenye faili ambazo Copy Beyond Borders pekee ndiyo huzisoma.
+Funguo za simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na hazitoki kamwe; kila sahihi kwa ufunguo wa mzizi wa kikundi au ufunguo wa msimamizi huomba uso wako, alama ya kidole au nambari ya siri, huku ufunguo ambao simu husawazisha nao ukifanya kazi bila kuuliza. Kompyuta huweka funguo zake kwenye faili ambazo Connect Beyond Borders pekee ndiyo huzisoma.
 
 Kikundi ni vifaa vya mtu mmoja, vinavyoshiriki ubao mmoja wa kunakili. Watu wawili wanaotaka mbao zao wenyewe za kunakili huunda vikundi viwili.
 
 ### Wanachama bila root
 
-Kwa kawaida kisakinishi huhitaji `sudo` mara moja, ili Copy Beyond Borders ifanye kazi chini ya akaunti yake yenyewe: kivinjari chako, michezo yako na kila programu nyingine unayoendesha haziwezi kusoma funguo zake, na mfumo huweka huduma ndani ya mazingira finyu yaliyotengwa. Usakinishaji bila root huruka hilo, kwa kompyuta ambayo huna `sudo`, kazini kwa mfano. Husawazisha kama mwanachama yeyote, lakini programu yoyote yako inaweza kunakili ufunguo wake na kujifanya yeye, kwa hiyo kamwe hawezi kuwa mzizi, msimamizi wala kitovu, hata ukiomba. Orodha ya vifaa huuweka alama "rootless". Steam Deck haihitaji hili: inatumia usakinishaji wa kawaida ([kusakinisha](install.md#steamos-steam-deck)).
+Kwa kawaida kisakinishi huhitaji `sudo` mara moja, ili Connect Beyond Borders ifanye kazi chini ya akaunti yake yenyewe: kivinjari chako, michezo yako na kila programu nyingine unayoendesha haziwezi kusoma funguo zake, na mfumo huweka huduma ndani ya mazingira finyu yaliyotengwa. Usakinishaji bila root huruka hilo, kwa kompyuta ambayo huna `sudo`, kazini kwa mfano. Husawazisha kama mwanachama yeyote, lakini programu yoyote yako inaweza kunakili ufunguo wake na kujifanya yeye, kwa hiyo kamwe hawezi kuwa mzizi, msimamizi wala kitovu, hata ukiomba. Orodha ya vifaa huuweka alama "rootless". Steam Deck haihitaji hili: inatumia usakinishaji wa kawaida ([kusakinisha](install.md#steamos-steam-deck)).
 
 ## Aina mbili za kikundi
 
@@ -67,7 +67,7 @@ Watoa huduma wengi wa intaneti huweka nyumba nyuma ya anwani moja ya pamoja (car
 Kisambazaji hakina funguo na hakiwezi kusoma chochote: huona tu pakiti zilizosimbwa zinazoelekea kwenye kitovu chako, zinakotoka, lini na ukubwa wake. Kuna aina mbili:
 
 - **Chako mwenyewe**: `cbb forward` kwenye seva yoyote yenye anwani ya umma, seva pepe ya bei nafuu kwa mfano ([kuendesha seva zako mwenyewe](../admin/self-hosting.md)).
-- **Kisambazaji cha Copy Beyond Borders** kwenye `cbb.tools`, kinachoendeshwa na mradi kwa kila mtu. Kinajaribiwa na bado hakijafunguliwa kwa wote; anwani na ufunguo wake vitakuwa kwenye ukurasa huu kikifunguliwa.
+- **Kisambazaji cha Connect Beyond Borders** kwenye `cbb.tools`, kinachoendeshwa na mradi kwa kila mtu. Kinajaribiwa na bado hakijafunguliwa kwa wote; anwani na ufunguo wake vitakuwa kwenye ukurasa huu kikifunguliwa.
 
 Vifaa hujaribu anwani ya kitovu chenyewe kwanza na kisambazaji mwisho.
 
@@ -99,4 +99,4 @@ Mradi huendesha relei pofu kwenye `cbb.tools` kwa kila mtu asiyetaka kuendesha k
 | Kisambazaji | hapana | hapana: huona anwani ambazo pakiti zilizosimbwa hutoka na zinazoelekea kwenye kitovu chako, lini na ukubwa wake | chako, au cha mradi kwenye `cbb.tools` |
 | Relei pofu | hapana | ndiyo | chako (moja kwenye `cbb.tools` imepangwa) |
 
-Hakuna kingine kinachohusika: hakuna akaunti, hakuna wingu, hakuna telemetria. Kila mtu mwingine anayeweza kuona chochote, kuanzia Wi-Fi yako hadi ukaguzi wa masasisho, ameorodheshwa katika [faragha](privacy.md). Usawazishaji ukiwa mbali na nyumbani ukiwa umewashwa, huduma ya Copy Beyond Borders kwenye kompyuta inaweza kufikia mtandao wa nyumbani tu na kitovu, kisambazaji na relei vya kikundi chenyewe.
+Hakuna kingine kinachohusika: hakuna akaunti, hakuna wingu, hakuna telemetria. Kila mtu mwingine anayeweza kuona chochote, kuanzia Wi-Fi yako hadi ukaguzi wa masasisho, ameorodheshwa katika [faragha](privacy.md). Usawazishaji ukiwa mbali na nyumbani ukiwa umewashwa, huduma ya Connect Beyond Borders kwenye kompyuta inaweza kufikia mtandao wa nyumbani tu na kitovu, kisambazaji na relei vya kikundi chenyewe.

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: a9d8b94a0114 -->
+<!-- source: 5013aca345ad -->
 # Sin la app
 
 Un grupo de ordenadores no necesita la app del teléfono: un ordenador puede sostener el grupo.
@@ -8,7 +8,7 @@ Un grupo de ordenadores no necesita la app del teléfono: un ordenador puede sos
 
 ## 1. Crea el grupo en un ordenador
 
-[Instala](install.md) Copy Beyond Borders en un ordenador que esté encendido a menudo: Linux, Windows, un Mac o FreeBSD. Sostiene el grupo. Después:
+[Instala](install.md) Connect Beyond Borders en un ordenador que esté encendido a menudo: Linux, Windows, un Mac o FreeBSD. Sostiene el grupo. Después:
 
 ```sh
 sudo cbb new

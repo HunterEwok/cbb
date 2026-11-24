@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
-# Copy Beyond Borders protocol
+# Connect Beyond Borders protocol
 
 The text of this document is under the
 [Creative Commons Attribution 4.0 license](https://creativecommons.org/licenses/by/4.0/).
 You may implement the protocol in your own code under any license. The code of this
 repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 
-This document specifies protocol version 1 of Copy Beyond Borders as the code in this
+This document specifies protocol version 1 of Connect Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
 implementations follow it today: Go (`cbb-helper`, the forwarder, and the references the tests check against), Rust
 (`cbb` on the computers and small devices, `core/`, whose member the phones' apps run too,
@@ -377,7 +377,7 @@ rescanned every 10 s.
   again at 80, 85, 90 and 95 percent of its lifetime, plus 0 to 2 percent at random.
 - Received records are kept only if relevant: PTR of the service, SRV/TXT of an instance
   whose first label is a device ID, A/AAAA of `cb-<device ID>.local`. Their TTL is capped at
-  what Copy Beyond Borders itself uses (4500 s for PTR and TXT, 120 s otherwise). A goodbye expires the
+  what Connect Beyond Borders itself uses (4500 s for PTR and TXT, 120 s otherwise). A goodbye expires the
   record after 1 s; a cache-flush record expires older records of its name and type after
   1 s.
 - A member is found when a live PTR names an instance that has a live SRV; its addresses

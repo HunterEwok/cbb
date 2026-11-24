@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-{{define "title"}}{{t "Security and privacy"}}: Copy Beyond Borders{{end}}
-{{define "description"}}{{t "What protects your clipboard in Copy Beyond Borders, and what each server can and cannot see."}}{{end}}
+{{define "title"}}{{t "Security and privacy"}}: Connect Beyond Borders{{end}}
+{{define "description"}}{{t "What protects your clipboard in Connect Beyond Borders, and what each server can and cannot see."}}{{end}}
 
 {{define "content"}}
 <section class="wrap page">
@@ -9,10 +9,10 @@
 
   <h2>{{t "Your clipboard"}}</h2>
   <ul>
-    <li>{{t "There are no accounts, no cloud and no telemetry. Copy Beyond Borders does not report to anyone."}}</li>
+    <li>{{t "There are no accounts, no cloud and no telemetry. Connect Beyond Borders does not report to anyone."}}</li>
     <li>{{t "Every copy, its text, images and files, is encrypted end to end: the device that copies seals it for the devices of your group that read copies (X-Wing, post-quantum) and signs it. Nothing that passes it on can read it, change it or forge one."}}</li>
     <li>{{t "Only devices you let in belong to your group, and they talk only to each other. Every connection is encrypted with TLS, and each device proves it is in the group."}}</li>
-    <li>{{t "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps them in its TPM or Secure Enclave when it has one, otherwise in files that only Copy Beyond Borders can read."}}</li>
+    <li>{{t "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps them in its TPM or Secure Enclave when it has one, otherwise in files that only Connect Beyond Borders can read."}}</li>
     <li>{{t "What password managers mark as secret is not synced automatically."}}</li>
   </ul>
 
@@ -33,7 +33,7 @@
 
   <h2 id="programs">{{t "What the programs send"}}</h2>
   <ul>
-    <li>{{t "Updates, when you turn them on (the installers and the Android app ask): a computer or the Android app asks GitHub whether there is a new version and downloads it from there, or from %s when GitHub does not answer. They see your address and that you use Copy Beyond Borders, nothing about your group." (code "dl.cbb.tools")}}</li>
+    <li>{{t "Updates, when you turn them on (the installers and the Android app ask): a computer or the Android app asks GitHub whether there is a new version and downloads it from there, or from %s when GitHub does not answer. They see your address and that you use Connect Beyond Borders, nothing about your group." (code "dl.cbb.tools")}}</li>
     <li>{{t "Once a day the group's owner may fetch from %s the signed copy of Google's list of revoked Android keys. It is the same file for everyone." (code "cbb.tools")}}</li>
     <li>{{t "Nothing reports usage, and the logs stay on each device. After a crash the app asks whether to send a report. Only if you allow it does the report go, anonymously and over HTTPS, to %s, sealed so that only the project can read it. It never holds what you copied, keys, device names or addresses, and the server does not log your address." (code "bug.cbb.tools")}}</li>
     <li>{{t "If you install the app from the App Store, Google Play, F-Droid, Homebrew or winget, that store knows you installed it, under its own privacy policy."}}</li>
@@ -51,7 +51,7 @@
   </ul>
 
   <h2 id="contact">{{t "Who is responsible"}}</h2>
-  <p>{{t "Copy Beyond Borders is an open-source project of its maintainer, %s, in the United Kingdom; there is no company behind it, and nobody sells or shares data, since there is none to share. Questions about this policy: %s. Every change to this page is public in %s." (link "https://github.com/HunterEwok" "HunterEwok") (link "https://github.com/HunterEwok/cbb/issues" (t "a GitHub issue")) (link "https://github.com/HunterEwok/cbb/commits/main/site/templates/privacy.html" (t "its history"))}}</p>
+  <p>{{t "Connect Beyond Borders is an open-source project of its maintainer, %s, in the United Kingdom; there is no company behind it, and nobody sells or shares data, since there is none to share. Questions about this policy: %s. Every change to this page is public in %s." (link "https://github.com/HunterEwok" "HunterEwok") (link "https://github.com/HunterEwok/cbb/issues" (t "a GitHub issue")) (link "https://github.com/HunterEwok/cbb/commits/main/site/templates/privacy.html" (t "its history"))}}</p>
 
   <h2>{{t "Found a problem?"}}</h2>
   <p>{{t "Please report a vulnerability privately, as %s describes, and not in a public issue." (link "https://github.com/HunterEwok/cbb/blob/main/SECURITY.md" "SECURITY.md")}}</p>

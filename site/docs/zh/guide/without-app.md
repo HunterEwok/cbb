@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: a9d8b94a0114 -->
+<!-- source: 5013aca345ad -->
 # 不用应用
 
 由电脑组成的群组不需要手机应用：可以由一台电脑来持有群组。
@@ -8,7 +8,7 @@
 
 ## 1. 在电脑上创建群组
 
-在一台经常开机的电脑上[安装](install.md) Copy Beyond Borders：Linux、Windows、Mac 或 FreeBSD 均可。它持有群组。然后运行：
+在一台经常开机的电脑上[安装](install.md) Connect Beyond Borders：Linux、Windows、Mac 或 FreeBSD 均可。它持有群组。然后运行：
 
 ```sh
 sudo cbb new

@@ -44,7 +44,7 @@ var (
 	mdHeading = regexp.MustCompile(`^#{1,6}\s+(.+?)\s*#*\s*$`)
 	// oldName matches the project's old names in every spelling, written
 	// in pieces so that this file does not hold them either.
-	oldName = regexp.MustCompile(`(?i)clip(?:` + `board)?[ _.-]?` + `bridge`)
+	oldName = regexp.MustCompile(`(?i)clip(?:` + `board)?[ _.-]?` + `bridge|\bcopy[ _.-]?` + `beyond[ _.-]?borders`)
 	// goneName matches the names of what the project removed for good: the
 	// Rust core as WebAssembly in the Go programs and its build tags (D-93)
 	// and the phones' tunnel in Go (D-87), written in pieces too, and the Go
@@ -134,14 +134,14 @@ func checkGoneWord(name string, data []byte) []string {
 }
 
 // checkOldName reports each line of a file that holds one of the
-// project's old names: the project is Copy Beyond Borders (CBB), and its
+// project's old names: the project is Connect Beyond Borders (CBB), and its
 // command and every technical name are cbb, in code, docs and the
 // changelog alike.
 func checkOldName(name string, data []byte) []string {
 	var problems []string
 	for i, line := range strings.Split(string(data), "\n") {
 		if oldName.MatchString(line) {
-			problems = append(problems, fmt.Sprintf("%s:%d: an old name; the project is Copy Beyond Borders (CBB) and every technical name cbb", name, i+1))
+			problems = append(problems, fmt.Sprintf("%s:%d: an old name; the project is Connect Beyond Borders (CBB) and every technical name cbb", name, i+1))
 		}
 	}
 	return problems

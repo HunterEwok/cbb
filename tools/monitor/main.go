@@ -64,7 +64,7 @@ var files = []signed{
 	{"https://cbb.tools/channel/stable.json", 5 * 24 * time.Hour, "the cbb-channel timer on cbb.tools stopped: check it, or release-sign renew"},
 	{"https://dl.cbb.tools/keys.json", 21 * 24 * time.Hour, "the mirror on cbb.tools stopped copying keys.json"},
 	{"https://dl.cbb.tools/stable.json", 5 * 24 * time.Hour, "the mirror on cbb.tools stopped copying stable.json"},
-	{"https://cbb.tools/attest/attest-status.json", 5 * 24 * time.Hour, "the attest-status timer on cbb.tools stopped: check it"},
+	{"https://cbb.tools/attest/attest-status.json", 5 * 24 * time.Hour, "the cbb-attest timer on cbb.tools stopped: check it"},
 }
 
 const timeout = 20 * time.Second

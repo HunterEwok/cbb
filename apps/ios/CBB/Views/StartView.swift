@@ -82,7 +82,7 @@ struct StartView: View {
                 .accessibilityIdentifier("largeText")
             // Bold at title 3 (20 points), WCAG's large text, as the
             // accent stays at 3:1 over the background's glow, not at 4.5:1.
-            Text(verbatim: "Copy Beyond Borders")
+            Text(verbatim: "Connect Beyond Borders")
                 .font(.system(.title3, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
                 .accessibilityIdentifier("largeText")

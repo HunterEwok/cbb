@@ -140,23 +140,18 @@ func TestFiles(t *testing.T) {
 // folder of its own readable only by the user, and returns that folder.
 func expectFiles(t *testing.T, b *fileBoard, want map[string]string) string {
 	t.Helper()
-	select {
-	case paths := <-b.files:
-		dir := filepath.Dir(paths[0])
-		for _, p := range paths {
-			if filepath.Dir(p) != dir {
-				t.Errorf("the copy's files are in %s and %s", dir, filepath.Dir(p))
-			}
+	paths := <-b.files
+	dir := filepath.Dir(paths[0])
+	for _, p := range paths {
+		if filepath.Dir(p) != dir {
+			t.Errorf("the copy's files are in %s and %s", dir, filepath.Dir(p))
 		}
-		if got := tree(t, dir); !maps.Equal(got, want) {
-			t.Errorf("the desktop got %v, want %v", got, want)
-		}
-		if info, err := os.Stat(dir); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
-			t.Errorf("the copy's folder: %v, %v", info.Mode(), err)
-		}
-		return dir
-	case <-time.After(5 * time.Second):
-		t.Fatal("the files did not reach the desktop")
-		return ""
 	}
+	if got := tree(t, dir); !maps.Equal(got, want) {
+		t.Errorf("the desktop got %v, want %v", got, want)
+	}
+	if info, err := os.Stat(dir); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
+		t.Errorf("the copy's folder: %v, %v", info.Mode(), err)
+	}
+	return dir
 }

@@ -16,6 +16,12 @@ the same release ([versions and compatibility](docs/reference/compatibility.md))
 with 0.5 is set up again once. The details follow.
 
 ### Added
+- The README shows the project's OpenSSF Best Practices badge (passing).
+- The two release roots pinned in `cbb`, the phone apps and `get.sh` carry both their
+  halves, ES256 and SLH-DSA-SHA2-128s, so a release's `keys.json` is checked with both
+  signatures of a root.
+- The revocation mirror on cbb.tools runs from `site/deploy/cbb-attest.service` and its daily
+  timer, with the status key's two halves as credentials, as the channel key's are.
 - An admin phone makes an admin computer of the group a hub, and freezes a stolen one: the
   device page of the iPhone, Android, HarmonyOS and Aurora apps offers "Make it a hub" and
   "Freeze". ffi's manage action `hub` sends the computer a `hub` command with the project's
@@ -2241,6 +2247,36 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- CI splits a job into parts only where the parts finish sooner, and asks for at most five
+  macOS machines at once, so none of its macOS jobs waits for another: the phone kit's macOS
+  tests, the iPhone's libraries with the latest Rust and the macOS check that a release build
+  ignores the test hooks run in the job `test and build (macOS), homebrew, Mac app`, the check
+  on the programs that job already built for the archives; the Quint model runs in one job,
+  when the core or the model changes; the service tests run in three parts, not seven; the
+  Rust workspace's tests in two, not four; and the Kotlin kit's tests in the Android app's job.
+- A device writing to a full room checks which removals every admin has acknowledged in one
+  pass over its records instead of two passes for each removal and admin: the core's tests at
+  the room's limits run minutes faster, and so does each write on a device near them.
+- The Go tests of mDNS, the desktop connector, the paste targets, the Bluetooth keyboard and
+  the forwarder wait for the event they check rather than for a time: a fake clock, timers the
+  tests fire and a signal when the forwarder's state changes take the place of sleeps and
+  polling, and the mDNS tests take a fraction of a second instead of 48 s.
+- `cbb forward` stops on SIGINT or SIGTERM from before it says it listens; a signal right after
+  that line ended it without its clean stop.
+- The Bluetooth keyboard stops being visible at the end of its time, not just after.
+- The core's tests of a lost root with a full room evaluate the records once after each change
+  of the root rather than once for each device they look for: the longest of them takes
+  seconds, not minutes.
+- Tests that did the same slow work again take less time: the release files' tests sign each
+  body under each SLH-DSA key once and read the interop vectors from their file rather than
+  making them anew, the VLESS tests wait for the packets that must not come back at the same
+  time, the image budget's test writes its large PNGs row by row, and the macOS CI job builds
+  `cbb` once for its archives, Homebrew's formula and the .pkg. The simulator's library for the
+  iPhone app's tests builds without link-time optimization.
+- On a pull request the iPhone app's CodeQL analysis starts with the other CI jobs and takes
+  the first free macOS runner, instead of waiting for the iPhone app's jobs to finish.
+- The project's full name is Connect Beyond Borders, everywhere it is written: the apps, the
+  stores, the website and the documentation. The short name CBB and the command `cbb` stay.
 - CI's Rust tests run their two longest tests, the power cut at every byte of every save and
   the record sets' differential check, in two different parts: the hash of their names had put
   both into the first part, which ran minutes after the others.
@@ -2446,7 +2482,7 @@ with 0.5 is set up again once. The details follow.
   clock (`CBB_RELEASE_ROOTS`, `CBB_HELPER`, `CBB_TEST_AHEAD_FILE`, `CBB_TEST_ATTEST_ROOTS`,
   `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`) are read only by a build with the test hooks, which
   says so in `cbb version` and its log; a release reads none of them.
-- The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
+- The README leads with what Connect Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
   a page of their own, [the lab](docs/guide/lab.md): experiments, not what 1.0 promises.
@@ -2744,9 +2780,9 @@ with 0.5 is set up again once. The details follow.
   app to open and asks there. A fingerprint or face added later keeps the keys; on Android 10
   they need one. Keys made by earlier builds are refused with a message to set the group up
   again.
-- The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
+- The project's name is now Connect Beyond Borders, short CBB: "CBB" under the icons, in the
   Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
-  installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers
+  installers; the full name in the docs and on the site, and "CBB: Connect Beyond Borders" in the stores. The apps' identifiers
   start with `tools.cbb` (the Android app and the watch `tools.cbb`, the iPhone app
   `tools.cbb`, the Mac app `tools.cbb.mac`), so the apps install anew. Every other technical
   name follows: the repository `HunterEwok/cbb` and its Go module, the service `cbb.service`
@@ -3242,6 +3278,17 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The test that one paste helper runs for each tmux server no longer fails when another test
+  starts a process just as it frees the lock (that process holds the lock until its exec): it
+  waits for the lock to come free with a blocking flock.
+- The VLESS client makes one Xray instance at a time: each sets Xray's process-wide system
+  dialer, and two dialed together wrote it at once.
+- The iPad's UI tests in CI fail less by chance: the sidebar test finds the next tile before
+  the arrow key rather than after it, when the search could outlast its wait on CI's small
+  machine, and a test whose app XCTest never saw start is run again like the other launch
+  failures.
+- The iPhone app no longer asks the system for its Live Activities on the main thread at every
+  refresh: it reads them once, off the main thread, and keeps the list itself.
 - The preview of who stays after a change of root with the recovery key works in the iPhone,
   Android and Aurora apps: the member took that step, which signs nothing, only with a key, as
   HarmonyOS's app sent an empty one; ffi's manage now takes a step without `public`.
@@ -3590,7 +3637,7 @@ with 0.5 is set up again once. The details follow.
 - The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
   instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
   44 points tall and the screen's width to touch, in the other buttons' medium weight, at
-  which its Hindi line is no longer reported as clipped. "Copy Beyond Borders" under the name
+  which its Hindi line is no longer reported as clipped. "Connect Beyond Borders" under the name
   is bold at the title 3 size, large text, whose contrast over the background's glow is
   enough. Settings put as many colour swatches in a
   row as their names fit at the text size, so a long colour name breaks between words instead

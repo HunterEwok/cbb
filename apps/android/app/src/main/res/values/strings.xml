@@ -168,7 +168,7 @@
     <string name="freeze_title">Freeze %1$s?</string>
     <string name="frozen">frozen</string>
     <string name="frozen_done">Frozen.</string>
-    <string name="full_name" translatable="false">Copy Beyond Borders</string>
+    <string name="full_name" translatable="false">Connect Beyond Borders</string>
     <string name="group">Group</string>
     <string name="group_hub">The group\'s hub</string>
     <string name="group_hub_in_use">The group\'s hub, in use now</string>
