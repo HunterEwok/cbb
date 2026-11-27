@@ -56,7 +56,7 @@ fn away_consent(g: &Global) -> String {
     if in_files { format!("{AWAY_NOTICE}{KEYS_WARNING}") } else { AWAY_NOTICE.to_string() }
 }
 
-/// Whether a device's key store, as `cbb devices` names it, is a file.
+/// Whether a device's key store, as the service's list of devices names it, is a file.
 fn keys_in_files(store: &str) -> bool {
     !matches!(store, "hardware" | "proven")
 }

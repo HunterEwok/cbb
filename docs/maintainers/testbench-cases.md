@@ -1,18 +1,23 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The bench's test cases, step by step
 
-Cases of the hardware test bench ([testbench.md](testbench.md)) written out in full: the
-rule it checks, the devices, what must be true before it starts, each step, and how to tell
-pass from fail. The list of every case of release 0.6 is
-[testbench-catalogue.md](testbench-catalogue.md), with its own IDs; a case there names the
-IDs of this document it replaces in brackets. The IDs are the ones of testbench.md (C content classes, sections 6 and 7; P
-features and platforms; F failures; S security). Devices are named by their role on the bench
-(section 3 there); their addresses and logins are in the controller's inventory only, never
-here.
+For the project maintainer and release testers running step-by-step hardware test bench
+procedures. Each case of [testbench.md](testbench.md) specifies the rule verified, target devices,
+preconditions, numbered steps, and pass/fail criteria.
 
-"Runs" says how a case runs today: **auto** (the suite named runs it, `tools/bench`),
-**manual** (a person or a session follows the steps; not yet in the harness), or **planned**
-(it needs something the bench does not have yet).
+The complete list of bench cases lives in [testbench-catalogue.md](testbench-catalogue.md), which
+uses its own area-prefixed IDs and cites this document's IDs in brackets. The IDs here match
+[testbench.md](testbench.md): `C` (content classes, section 6), `L` (group and life cycle,
+section 7), `P` (features and platforms, section 7), `F` (failures, section 8), `S` (security,
+section 9), and `Soak` (long run, section 10). Devices are named by bench role (section 3 of
+[testbench.md](testbench.md)); real addresses and credentials live only in the controller's
+private inventory.
+
+**Runs** indicates how each case executes:
+
+- **auto**: executed by the named `tools/bench` suite (or CI job).
+- **manual**: executed by a tester following the steps below.
+- **planned**: requires hardware or tooling not yet on the bench.
 
 ## 0. Common procedures
 
@@ -72,20 +77,19 @@ Every text carries the run ID, the case ID and the sender, so a stale clipboard 
 
 ### R5. "Arrives"
 
-A text *arrives* on a device when R4's "out" there returns it, compared with trailing line
-breaks dropped, within the case's time (default 10 s on the bench, 2 s p95 is the target on N1).
-Windows turns CR LF into LF when it reads the clipboard and LF into CR LF when it writes it, so
-the expected text is converted that way when Windows sends or receives (docs/design.md,
-Windows). It is checked again every second until the time runs out.
+A text *arrives* on a device when R4's "out" command returns it (with trailing line breaks
+stripped) within the case's timeout (default 20 s via `-timeout 20s`; 2 s p95 is the target on
+N1). Windows converts CR LF to LF when reading the clipboard and LF to CR LF when writing it, so
+the expected text is converted accordingly when Windows sends or receives ([Design](../design.md)).
+The harness polls every second until the timeout expires.
 
 ### R6. Look at errors in both modes
 
-For each error a case expects: the user message is short and says what to do; with
-`CBB_DEBUG=1` (the service's environment, or `CBB_DEBUG=1 cbb …`) the real error (type, code,
-underlying message) is shown under it; the log has the details in both modes (Linux, with and without cbb-helper:
-`journalctl -u cbb`, the agent `journalctl --user`; macOS
-`/Library/Logs/cbb/service.log`; Windows `ProgramData\cbb\logs\service.log`
-and the agent's `LocalAppData\cbb\agent.log`).
+For each expected error: the default user message is short and states what to do; with
+`CBB_DEBUG=1` (or `-debug`) the underlying error (type, code, cause) appears underneath; and the
+service log records full details in both modes (Linux: `journalctl -u cbb` and
+`journalctl --user`; macOS: `/Library/Logs/cbb/service.log`; Windows:
+`ProgramData\cbb\logs\service.log` and `LocalAppData\cbb\agent.log`).
 
 ### R7. Capture traffic
 
@@ -175,7 +179,7 @@ third text.
 Pass: every join succeeds within 2 minutes and the list is right. Fail: a join fails or a
 device shows the wrong system or role.
 
-**L2. Wrong code, expired code, reused code.** Runs: manual.
+**L2. Wrong code, expired code, reused code.** Runs: auto (`fleet`: `G5-window`); manual on real devices.
 1. On the hub `cbb pair`; on a new device `cbb pair -code` with a wrong code three times.
 2. Run `cbb pair` again on the hub; wait 5 minutes and 10 s; type the right code.
 3. Run `cbb pair` again; join one device with the code; on a second device use the same code.
@@ -183,7 +187,7 @@ Pass: each wrong code is refused and counted; the third closes the window (`too-
 code is refused (window closed); the second use is refused; each message says what to do (R6).
 Fail: any of them joins, or the counter does not stop.
 
-**L3. Revoke.** Runs: auto (part of R3); the extra checks manual.
+**L3. Revoke.** Runs: auto (part of R3 and `fleet`: `G20-roles`); extra checks manual.
 1. With the group of R2, on the hub `cbb remove NAME` (by name), then another by device ID.
 2. Copy a marker on the hub.
 3. On the revoked device: `cbb status`; try to sync; try `cbb pair -code` with a fresh code from
@@ -192,54 +196,54 @@ Pass: the marker does not reach the revoked device; its status says it was remov
 and every other member refuse its certificate; rejoining without a reset is refused.
 Fail: it still receives, or any member accepts it.
 
-**L4. Renewal.** Runs: planned (needs a short-lifetime test build or a disposable device whose
-clock can move).
-1. Set the member certificate's remaining life below the renewal threshold.
+**L4. Renewal.** Runs: auto (`time`: `K1-renewal`).
+1. Run the time-scaled build (`-cbb-time`) or move a member certificate's remaining life below the
+   renewal threshold.
 2. Wait one sync round.
-Pass: the certificate is renewed by an admin, `cbb status` shows the new expiry, sync goes on.
+Pass: the certificate is renewed by an admin, `cbb status` shows the new expiry, and sync continues.
 Fail: it expires or sync stops.
 
-**L5. Admin computer (layout A).** Runs: manual.
+**L5. Admin computer (layout A).** Runs: auto (`fleet`: `G20-roles`); manual on real devices.
 1. On the hub (root) `cbb admin WIN` is refused, since its keys sit in a file; `cbb admin
    -allow-file-key WIN` makes it one, and `cbb status` marks the Windows member as admin.
-2. On the Windows admin `cbb pair` and admit a new device; then revoke it there.
+2. On the Windows admin `cbb pair` and admit a new device; then remove it there.
 3. Turn the hub off; the Windows admin still admits a device.
 4. Turn the hub on; on it `cbb remove WIN`.
 Pass: each step works; after step 4 nothing re-pairs. Fail: an admin cannot admit, or a non-admin can.
 
-**L6. Takeover (layout A).** Runs: manual.
-1. Turn the hub (root) off.
-2. On the Windows admin `cbb takeover HUB`.
-3. Copy on each remaining device; it arrives everywhere. On the new root `cbb admin
-   -allow-file-key` another computer.
-4. Turn the old root on.
-Pass: the Windows computer is root; nobody pairs again; the old root is
-refused by every member. Fail: any member follows the old root.
+**L6. Move the group (layout A).** Runs: manual (CI covers recovery drills via `tools/e2e/drills.sh`).
+1. Turn the hub (main device) off.
+2. On the replacement computer run `cbb recovery -leave HUB` and provide the recovery key printed
+   by `cbb new` (D-117; `cbb takeover` returns an error pointing to `cbb recovery`).
+3. Copy on each remaining device; it arrives everywhere. On the new main device run `cbb admin
+   -allow-file-key` for another computer.
+4. Turn the old main device on.
+Pass: the replacement computer is the main device, no device re-pairs, and the old main device is
+refused by every member. Fail: any member follows the old main device.
 
-**L7. Remove an ordinary member.** Runs: manual (Linux), auto (R3 for the others).
-1. On the root revoke a Linux member, the Windows member and the Mac in turn.
-Pass: the group stays, the others keep syncing, nobody pairs again.
+**L7. Remove an ordinary member.** Runs: auto (R3 and `fleet`: `G20-roles`); manual spot-check on Linux.
+1. On the main device remove a Linux member, the Windows member, and the Mac in turn.
+Pass: the group stays, the others keep syncing, and no device re-pairs.
 
-**L9. Upgrade from the previous release.** Runs: manual, before each release.
-1. Every device on the previous release in one group; copy a marker.
+**L9. Upgrade from the previous release.** Runs: auto (`fleet`: `I8-update`; CI: `tools/e2e/upgrade.sh`); manual before each release.
+1. Put every device on the previous release in one group; copy a marker.
 2. Update one device at a time to the candidate; after each, copy from an old and from a new one.
 3. When all run the candidate, check `cbb status` on each and copy once more.
-Pass: mixed versions sync during step 2; state and keys survive; no device pairs again. From a
-release before 0.6 instead: each device leaves the old group at its first start (`cbb status`
-says so) and a new group works. Fail: sync stops, a device leaves a group of 0.6 or later, or
-keys are lost.
+Pass: behavior matches [Versions and compatibility](../reference/compatibility.md)—compatible
+releases sync across mixed versions with state and keys preserved; across an incompatible record
+format, each device leaves the old group on first start (`cbb status` reports why) and a new group
+works. Fail: compatible versions stop syncing or lose keys.
 
-**L10. Uninstall.** Runs: manual.
+**L10. Uninstall.** Runs: auto (`reset` `L10-clean` and `fleet`: `I8-update`); manual spot-check.
 1. `uninstall.sh` (Windows `uninstall.ps1`), then `--purge` (`-Purge`).
 Pass: no service, no agent, no firewall rule (ufw, Windows Firewall), nothing left but the keys
 without purge and nothing at all with it. Fail: anything left.
 
-**L11. Layout B (a phone's group).** Runs: planned (the emulator cannot be reached from the LAN;
-section 3). See P10.
+**L11. Layout B (a phone's group).** Runs: auto (`phone` suite on Android emulator); manual on a physical phone. See P10.
 
 ## 3. Features and platforms (section 7, P1 to P39)
 
-**P1. Password managers.** Runs: manual.
+**P1. Password managers.** Runs: auto (`desktop`: `Y31-marked` on macOS and Windows); Linux password managers manual.
 1. On the Mac copy a password from a manager that sets the concealed type; on Windows from one
    that sets "exclude from history and cloud"; on the Linux desktop from one that sets the
    Wayland password hint.
@@ -247,7 +251,7 @@ section 3). See P10.
 Pass: it travels as a secret (C6 rules) or not at all, as designed. Fail: it arrives as a plain
 text, or stays after 60 s.
 
-**P2. Rich text, images, files.** Runs: manual.
+**P2. Rich text, images, files.** Runs: partly auto (`desktop`: `O1-png`, `O4-html`; `fleet`: `O2-files`); manual for full desktop media checks.
 1. Copy formatted text from a browser and from an office app.
 2. Copy a screenshot, then a photo of about 5 MB, on each desktop member in turn; paste each on
    the others.
@@ -260,7 +264,7 @@ on a Mac and the Mark of the Web on Windows; `small` keeps the copy's text and s
 with `paste -o`; step 4's member says once that the copy is over its limit of 1 MiB and
 fetches nothing. Fail: an error, a crash, markup instead of text, or a file that differs.
 
-**P3. History and echo.** Runs: manual.
+**P3. History and echo.** Runs: auto (`desktop`: `Y24-no-echo`, `Y25-copy-again` on macOS and Windows); GNOME/KDE clipboard managers manual.
 1. With Windows Win+V history and a GNOME clipboard manager on, copy on the Linux desktop.
 2. Watch the Linux member's and Windows member's logs for 30 s.
 Pass: the text arrives once; neither member sends it back; no ping-pong. Fail: the text is sent
@@ -273,28 +277,27 @@ again or flips between two texts.
 Pass: sync works both ways; one connection per pair (the lower device ID dials). Fail: no sync
 or two connections.
 
-**P5. The service's options on `small`.** Runs: manual (`-peer` is auto in R2).
+**P5. The service's options on `small`.** Runs: auto (`fleet`: `U9-small`; `-peer` in R2); manual on `small`.
 1. `cbb service -peer HUB:8764`: it connects without mDNS.
-2. `-no-mdns`: it no longer announces itself (`avahi-browse -r _cbb._tcp` shows
+2. `-no-mdns`: it stops announcing itself (`avahi-browse -r _cbb._tcp` shows
    nothing for it) and still dials its peers.
 3. `-no-listen`: the member port is closed (`ss -ltn`), it dials and syncs.
 4. `cbb watch` prints each received text; `cbb watch -0` ends each with a zero byte.
-Pass: each as docs/reference/cli.md says.
+Pass: each matches [Command reference](../reference/cli.md).
 
-**P6. Another port.** Runs: manual.
+**P6. Another port.** Runs: auto (`fleet`: `I8-update` for Linux); other installers manual.
 1. Reinstall each member with `--port 8800` (Windows `-Port 8800`, or `CBB_PORT`).
 2. Sync; check the firewall rules.
 3. Back to 8764.
 Pass: members find each other on 8800; after step 3 the 8800 rule is gone and 8764's is back.
 
-**P7. Homebrew on the Mac.** Runs: manual (blocked until the Mac's command line tools support
-the current macOS).
+**P7. Homebrew on the Mac.** Runs: manual (CI also tests the formula in `buildmac`).
 1. `brew install hunterewok/tap/cbb`; `install.sh --in-place`.
 2. Check the agent runs Homebrew's binary and the service a root-owned copy.
 3. `uninstall.sh`, then `brew uninstall`.
 Pass: sync works; nothing is left.
 
-**P8. Text console.** Runs: manual.
+**P8. Text console.** Runs: auto (`desktop`: `H3-tmux`, `H4-console`); manual spot-check.
 1. On a Linux member `install.sh --console`; open tmux.
 2. Copy elsewhere; paste in tmux with its paste key; copy in tmux; read elsewhere.
 Pass: both ways work; a pasted text has no control characters (`cbb paste -terminal`).
@@ -306,13 +309,11 @@ Pass: both ways work; a pasted text has no control characters (`cbb paste -termi
    active.
 Pass: only the signed-in user who installed it gets the text; no other user's session does.
 
-**P10. A phone's group in the emulator.** Runs: manual (partly run; sync needs an address the
-emulator can dial).
+**P10. A phone's group in the emulator.** Runs: auto (`phone` suite on Android emulator); physical phone manual.
 1. In the Android app create a group (root key).
-2. Join a computer and `small` from its QR code (injected image or pasted QR text) and
-   PIN.
+2. Join a computer and `small` from its pairing window code or QR code.
 3. Make the Mac an admin with "Make it an admin"; renew a certificate.
-Pass: each step succeeds within the emulator's limits (testbench.md section 3). Fail: a step
+Pass: each step succeeds within the emulator's limits ([testbench.md](testbench.md), section 3). Fail: a step
 fails for a reason a real phone would share.
 
 **P11. Sync away from home.** Runs: auto (`away`, steps 1 to 5 through the forwarder); step 6 manual.
@@ -373,28 +374,29 @@ Pass: each as said.
 2. Game Mode; the lock screen.
 Pass: reconnects within 30 s; Game Mode and the lock screen are recorded as they behave.
 
-**P18. mDNS on the router.** Runs: manual (the router's avahi reflector is off by default).
+**P18. mDNS on the router.** Runs: auto (`fleet`: `D9-subnets`); manual on the physical router (avahi reflector is off by default).
 1. Reflector off: `small` in the IoT subnet is reached by address (`-peer`).
 2. Reflector on (`/etc/avahi/avahi-daemon.conf`, `enable-reflector=yes`): drop `-peer`; it is
    found by mDNS.
 3. Put the router back as it was.
 Pass: both ways sync in both settings.
 
-**P19. IPv6 at home.** Runs: manual.
+**P19. IPv6 at home.** Runs: auto (`fleet`: `G4-paths`); manual on the home LAN.
 1. Check `avahi-resolve` gives AAAA records; block IPv4 between two members (ip6-only rule).
 Pass: members find and reach each other over IPv6.
 
-**P20. UDP blocked.** Runs: manual.
+**P20. UDP blocked.** Runs: auto (`fleet`: `W34-vless`, `W45-hub-vless`; `time`: `W46-xhttp`); manual on an away device.
 1. On the away computer drop outgoing UDP to the hub and forwarder (`iptables -I OUTPUT -p udp
    -d ADDR -j DROP`, with a revert timer).
-Pass: `cbb global` shows a clear error; nothing goes another way (S9); with VLESS (the default at a forwarder) the TCP
-transport works. Remove the rule.
+Pass: with VLESS (the default with a forwarder), the TCP/HTTPS transport continues working; with
+`-no-vless`, `cbb global` reports a clear error and nothing leaves over another path (S9). Remove
+the rule.
 
-**P21. Invitations refused.** Runs: manual (run on the bench, see S7).
+**P21. Invitations refused.** Runs: auto (`fleet`: `G13-invitations`); manual on a real hub.
 1. Admin answers `no`. 2. `-for 24h`, use it one second after. 3. Hub off when it is used.
 Pass: refused with a clear message each time; nothing is left on the hub (`cbb global` there).
 
-**P22. Global off and on, forwarder restart.** Runs: manual (run on the bench).
+**P22. Global off and on, forwarder restart.** Runs: auto (`away` and `fleet`: `W4-away`); manual spot-check.
 1. `cbb global off`, then `on`, on a client and on the hub.
 2. Restart the forwarder's service.
 Pass: keys are forgotten and made again; sync comes back; the hub registers again by itself
@@ -402,7 +404,7 @@ Pass: keys are forgotten and made again; sync comes back; the hub registers agai
 
 **P23. macOS pasteboard privacy.** Runs: manual.
 1. Turn on the alert for pasting from other apps by hand; copy elsewhere and on the Mac.
-2. Repeat on macOS with its defaults of the newest release.
+2. Repeat on macOS with its defaults of the current release.
 Pass: the report records whether the agent's reading asks the user; text keeps syncing.
 
 **P24. GNOME on the Steam Deck.** Runs: manual.
@@ -411,7 +413,7 @@ Pass: the report records whether the agent's reading asks the user; text keeps s
 3. Right after sign-in, before any X11 app started XWayland, repeat 1 and 2.
 Pass: each within the usual latency.
 
-**P26. The Mac blocks all incoming.** Runs: manual.
+**P26. The Mac blocks all incoming.** Runs: auto (`desktop -disruptive`: `H8-macos`).
 1. Set the application firewall to "Block all incoming connections".
 2. Copy each way between the Mac and the others.
 Pass: the Mac finds and reaches the members; whether they reach it is recorded.
@@ -443,7 +445,7 @@ says the phone does not answer.
 Pass: the timer while adding, the shield while away, the result for a moment; never the copied
 text.
 
-**P31. The Mac app.** Runs: manual.
+**P31. The Mac app.** Runs: partly auto (`ci`: `CBBMacUITests`); full admin actions manual.
 1. Open the window and the menu bar item; send and fetch from both; switch tiles, list and
    orbits.
 2. Rename a device, freeze and unfreeze an admin computer, make a computer an admin, remove a
@@ -455,8 +457,7 @@ Pass: each action does what the same `cbb` command does; the cancelled prompt ch
 and says nothing; the stopped service is explained, with the error underneath when details
 are on.
 
-**P32. The tray app.** Runs: manual (the Linux members with GNOME and KDE, the Steam Deck,
-Windows).
+**P32. The tray app.** Runs: partly auto (`ci`: `apps/desktop` `TestWindow`); pkexec/UAC prompts manual.
 1. Start `cbb-desktop`; find the tray item; open the window from it and by starting the app
    again.
 2. Do steps 1 to 4 of P31, with pkexec on Linux and UAC on Windows (stop the service with
@@ -477,7 +478,7 @@ logs once that there is no watch.
 1. On desktop `cbb sync off`; copy on desktop's desktop, then on win's.
 2. On desktop `cbb paste`.
 3. Restart desktop's service (`sudo systemctl restart cbb`); `cbb sync` and `cbb
-   status` on desktop, `cbb devices` on win.
+   status` on desktop, `cbb status` on win.
 4. `cbb sync on` on desktop.
 Pass: with sync off neither copy crosses, and `cbb paste` on desktop prints win's text; sync
 off survives the restart and win lists it; with sync on both cross (R5).
@@ -509,7 +510,7 @@ group's CA keys, and they stay off a container.
    --force-recreate`, as after `docker compose pull`). After each, `cbb status` shows the same
    group, `cbb sync` says sync is on, and a copy on another member arrives on `nas` and on the rest.
 5. Only as an explicit choice for the run, since it puts an admin key in a file
-   (the key levels of docs/roadmap.md, level 3): first `cbb admin nas` on `desktop`, which must
+   ([Keys and attestation](../guide/keys.md#the-three-levels), level 3): first `cbb admin nas` on `desktop`, which must
    be refused ("offers no admin key"); then `CBB_KEYS_IN_FILE: "yes"` in the compose file
    and `docker compose up -d`; on `desktop` `cbb admin -allow-file-key nas`; on `nas` `cbb
    global on` (it asks about the keys in files), `cbb global hub HOST_ADDRESS:8764 -firewall
@@ -550,8 +551,7 @@ Pass: step 2 is refused with a clear message (a container and a build without th
 cannot be the hub); after step 3 `mac` serves with `desktop`'s forwarder, `desktop` is its client, and `remote`
 follows without coming home or a new invitation; copies arrive both ways (R5).
 
-**P38. The open relay's limits.** Runs: planned (a helper that starts throwaway groups in
-containers on the controller).
+**P38. The open relay's limits.** Runs: auto (`fleet`: `W38-relay-limits`); manual on `relay`.
 Devices: `relay`, the controller.
 1. Start 17 throwaway groups on the controller, each a container with `CBB_KEYS_IN_FILE=yes`
    that runs `cbb new` and `cbb global relay` to the relay of P12; they share one address.
@@ -561,24 +561,24 @@ Pass: the 17th registration from one address is refused with a clear message, an
 others work; the busy group is slowed and no other group is; the counts drop to zero groups
 once their last devices leave; the relay writes nothing to disk (as S8).
 
-**P39. Images and files away from home.** Runs: manual (`away` once `tools/bench` copies files).
-Devices: `desktop` (the hub, in mode `own`), `mac` (at home), `remote` (away, connected through
+**P39. Images and files away from home.** Runs: auto (`fleet`: `S1-captures` / `O10`); manual on real devices.
+Devices: `desktop` (the hub, with sync off via `cbb sync off`), `mac` (at home), `remote` (away, connected through
 `desktop`).
 1. Copy a 5 MB photo and a folder of a few files on `mac`; paste them on `remote`.
 2. Copy a 2 MB file on `remote`; paste it on `mac`.
 3. On `desktop` `cbb config max-copy-away 1MiB`; copy a 3 MB file on `mac`, then a 500 KB one.
 4. Capture `remote`'s uplink during steps 1 and 2 (R7).
-Pass: steps 1 and 2 arrive whole through the hub, though its mode keeps its own clipboard out;
+Pass: steps 1 and 2 arrive whole through the hub while its own clipboard stays untouched;
 in step 3 the hub's log says the 3 MB copy stays at home, `remote` gets only its text and
 then the 500 KB copy; the capture shows only WireGuard. Fail: a copy lost or changed, the hub's clipboard
-written in mode `own`, or a copy over the hub's limit through its tunnel.
+written while sync is off, or a copy over the hub's limit through its tunnel.
 
 ## 4. Failure cases (section 8)
 
 **F1. Kill the service.** Runs: auto (`full`).
-1. On each member kill the service hard: Linux `sudo systemctl kill -s KILL
-   Connect Beyond Borders`; Windows `Stop-Process -Force` on the service's process; Mac `sudo launchctl
-   kill KILL system/tools.cbb` (the bench's sudoers rule).
+1. On each member kill the service hard: Linux `sudo systemctl kill -s KILL cbb`; Windows
+   `Stop-Process -Force` on the service's process; Mac `sudo /bin/launchctl kill KILL
+   system/tools.cbb` (the bench's sudoers rule).
 2. Within 30 s `cbb status` shows the same group.
 3. Copy a marker on another member; wait for it (twice the usual time).
 Pass: the service manager restarted it and it gets the marker.
@@ -590,18 +590,17 @@ Pass: the service manager restarted it and it gets the marker.
 Pass: each rejoins and syncs with no person's action beyond booting (Windows syncs in the
 service before sign-in).
 
-**F3. Sleep.** Runs: manual.
+**F3. Sleep.** Runs: auto (`desktop -disruptive`: `I18-sleep` for Linux and macOS); Windows VM manual.
 1. Sleep the Mac; pause the Windows VM (VMware's suspend; real sleep needs a real PC).
 2. Meanwhile copy between the others; then wake.
 Pass: back in sync within 30 s of wake; `cbb status` clock column is right.
 
-**F4. Bad network.** Runs: planned (`tc netem` on the Linux members with a revert timer: `tc
-qdisc add dev IF root netem loss 30% delay 300ms reorder 25%`).
+**F4. Bad network.** Runs: auto (`faults`: `E7-netem`, using `tc qdisc add dev IF root netem loss 30% delay 300ms reorder 25% 50%` with a revert timer).
 1. Apply it on the hub; copy 20 markers from various members.
 2. Remove it.
 Pass: every marker arrives; no duplicate; no crash; the last one is on every member.
 
-**F5. Member port blocked.** Runs: planned.
+**F5. Member port blocked.** Runs: auto (`faults`: `E8-port`, 1-minute block); 5-minute block manual.
 1. Block TCP 8764 on one member for 5 minutes (firewall rule with a revert timer).
 2. Copy three markers elsewhere meanwhile.
 3. After the block: wait.
@@ -615,26 +614,27 @@ Pass: both say the hub is unreachable; nothing is sent to any other address.
 **F7. Forwarder down.** Runs: auto (`away -stop-forwarder` only, without the capture; the forwarder serves others too).
 1. With a hub registered at the forwarder, stop the forwarder.
 2. On the away computer watch `cbb global`; capture.
-Pass: the fallback port is tried as designed, then a clear error; no cleartext path.
+Pass: a clear error is reported, no cleartext path is used, and sync resumes automatically once the
+forwarder restarts.
 
-**F8. Clock skew.** Runs: manual.
+**F8. Clock skew.** Runs: auto (`time`: `K6-clock`); manual on a disposable device.
 1. On a disposable member turn NTP off and set the clock 3 hours ahead; copy each way.
 2. Set it back.
 Pass: certificates are accepted within the protocol's margin (beyond it, a clear message);
 `cbb status` shows the skew; HLC order holds (C8 again).
 
-**F9. Disk full.** Runs: planned.
+**F9. Disk full.** Runs: auto (`fleet`: `U8-disk-full`); manual on a real Linux member.
 1. On a Linux member fill the state directory's file system (`fallocate`) leaving a few KB.
 2. Copy; renew; change the group.
 3. Free the space.
 Pass: a clear error while full; after step 3 it works with no corrupted state.
 
-**F10. Corrupted state file.** Runs: manual (run on the bench).
+**F10. Corrupted state file.** Runs: auto (`faults`: `U7-damaged`).
 1. Stop the service; damage `identity.json` (truncate it); start it.
 Pass: it refuses with a clear message that names the file (R6); after restoring the file the
 device is still in the group.
 
-**F11. Address change.** Runs: manual.
+**F11. Address change.** Runs: auto (`fleet`: `Y20-fresh` / `D16`); manual on real devices.
 1. Renew a member's DHCP lease to a new address; move the away computer between networks.
 Pass: the member is found again; the away device roams without a new invitation.
 
@@ -643,83 +643,82 @@ For each failure above, R6 holds in both modes.
 
 ## 5. Security (section 9)
 
-A failure here stops the release of the feature; there are no exceptions.
+A failure here blocks the release; there are no exceptions.
 
-**S1. The internet path shows nothing.** Runs: manual.
+**S1. The internet path shows nothing.** Runs: auto (`fleet`: `S1-captures`); manual capture on `relay` and away uplink.
 1. Capture on the relay and on the away computer's uplink (R7) during a full run of P11.
 2. Search the capture for every marker, the run ID, the group tag, device names, the hub's
    tunnel addresses, and for TLS ClientHello and DNS names of the group.
-Pass: only WireGuard UDP (or VLESS on TCP) to the hub or forwarder; no hit. Fail: any hit.
+Pass: only WireGuard/AmneziaWG UDP (or VLESS over XHTTP) to the hub or forwarder; no hit. Fail: any hit.
 
-**S2. The LAN shows nothing.** Runs: manual.
+**S2. The LAN shows nothing.** Runs: auto (`fleet`: `S1-captures`); manual capture on the home LAN.
 1. Capture on a Linux member during `full`.
 2. Check member traffic (port 8764) is TLS 1.3 (`tshark -Y tls.handshake -T fields -e
    tls.handshake.version`) and search for markers.
 Pass: TLS 1.3 only, no marker in clear.
 
-**S3. Clients are isolated.** Runs: manual.
+**S3. Clients are isolated.** Runs: auto (`fleet`: `W4-away`, `W44-only-cbb`); manual on real devices.
 1. With two away clients, from inside one's tunnel scan the other client's tunnel address and
    every address of the tunnel subnet (`nmap -sT -p- ADDR`, through the tunnel).
 Pass: nothing answers but the hub's member port.
 
-**S4. The hub exposes one port.** Runs: manual.
+**S4. The hub exposes one port.** Runs: auto (`fleet`: `W4-away`); manual on real devices.
 1. From an away client scan the hub's tunnel address, TCP and UDP.
 Pass: one open port, the member port.
 
-**S5. A key outside the group.** Runs: manual.
+**S5. A key outside the group.** Runs: auto (`fleet`: `W4-away`); manual on real devices.
 1. With a WireGuard key the group does not know, send a handshake to the hub (and the
    forwarder).
 Pass: no answer of any kind; the hub's log has at most a debug line.
 
-**S6. Revoked device away.** Runs: manual.
-1. Revoke the away computer on the hub.
+**S6. Revoked device away.** Runs: auto (`fleet`: `W21-removed`); manual on real devices.
+1. Remove the away computer on the hub (`cbb remove`).
 2. Within one record round try to sync and to join again with its old invitation.
 Pass: the hub dropped its tunnel key; no sync; rejoin refused.
 
-**S7. Invitation file.** Runs: manual (passed on the bench).
+**S7. Invitation file.** Runs: auto (`fleet`: `G13-invitations`); manual on real devices.
 1. Use an invitation; use it again. 2. Use one after its time. 3. Answer `no`. 4. Compare the
    fingerprints shown on both sides.
 Pass: second use, expired and `no` are refused; the fingerprints match.
 
-**S8. The relay learns little.** Runs: manual (the forwarder and the open relay of P12 on
-`relay`).
+**S8. The relay learns little.** Runs: auto (`fleet`: `W33-two-groups`, `W36-relay`, `W30-forwarder`, `S1-captures`); manual on `relay`.
 1. Two groups registered at the forwarder; from a client of one try to reach the other's hub.
    The same at the open relay: from a device of one group `dial` a device of the other.
 2. Before and after a run, list every file changed on the server (`find / -xdev -newer STAMP`
    outside /proc, /sys, /run) and the journals of both services.
-3. Register a hub with a wrong certificate chain at the forwarder, and a device with one at
-   the relay; register at the relay a device that the group's records revoke.
-Pass: groups cannot reach each other; no file and no log line about them (besides the key
-files); each bad registration is refused.
+3. Register a hub with invalid or expired server credentials at the forwarder, and a device with
+   invalid or revoked server credentials at the relay.
+Pass: groups cannot reach each other; no file and no log line about them (besides the server key
+files and the forwarder's hashed credential-version state); each invalid registration is refused.
 
-**S9. Fail closed.** Runs: manual.
+**S9. Fail closed.** Runs: auto (`fleet`: `S1-captures`); manual on an away device.
 1. Break the tunnel (block the hub's UDP port on the away computer).
 2. Copy on the away computer; capture its uplink for 2 minutes.
 Pass: no packet to any address but the hub and forwarder; nothing in clear.
 
-**S10. Secrets never reach a disk.** Runs: auto (`full`; Windows not yet).
+**S10. Secrets never reach a disk.** Runs: auto (`full`; Windows manual).
 1. `copy -secret` a marker on each kind of member.
 2. On each, search the state directories and `/tmp` for it (`grep -r MARKER`); check swap is off
    for the service on Linux (`systemctl show cbb -p MemorySwapMax` is 0).
 3. After 65 s read every clipboard.
 Pass: no hit; swap off; gone.
 
-**S11. Local access.** Runs: auto (`full`, Linux, `small` and the Mac); Windows manual.
-1. As a user outside the `cbb` group run `cbb status` and `cbb paste`, on Linux,
-   macOS and Windows.
+**S11. Local access.** Runs: auto (`full`: Linux, `small`, and `mac`); Windows manual.
+1. As a user outside the `cbb` group (`_cbb` on macOS) run `cbb status` and `cbb paste`, on Linux,
+   macOS, and Windows.
 Pass: refused with a message that names the group; the admin socket refuses non-admins too.
 
-**S12. Installers' firewall.** Runs: manual (passed on the bench).
-1. After each install list the rules: `ufw status verbose`, `Get-NetFirewallRule -DisplayName
-   Connect Beyond Borders*`, the macOS application firewall.
+**S12. Installers' firewall.** Runs: auto (`fleet`: `I8-update` for Linux `ufw`); macOS and Windows manual.
+1. After each install list the rules: `ufw status verbose`, `Get-NetFirewallRule -Group cbb`, and
+   the macOS application firewall.
 Pass: only the member port and mDNS from the local subnet; the tunnel port only on the hub.
 
-**S13. Two groups on one network.** Runs: manual.
+**S13. Two groups on one network.** Runs: auto (`fleet`: `G43-two-groups`); manual on the home LAN.
 1. Make a second group of other devices with its own hub on the same LAN.
 2. Copy markers in each.
 Pass: no text, record or device list crosses; neither pairs into the other without a code.
 
-**S14. A stranger at home.** Runs: manual.
+**S14. A stranger at home.** Runs: auto (`fleet`: `D15-junk`, `S21-stranger`); manual on the home LAN.
 1. From a device in no group dial the member port (`openssl s_client -connect MEMBER:8764`).
 2. Replay a captured member connection.
 3. Try pairing codes against an open window.
@@ -731,11 +730,11 @@ learned (no names, no tag in any answer).
    pairing codes and key material.
 Pass: no hit.
 
-**S16. Files at rest.** Runs: auto (`full`; Windows not yet).
+**S16. Files at rest.** Runs: auto (`full`; Windows manual).
 1. List the state directories with permissions after `full`.
 Pass: only keys and certificates, owner-only permissions; no clipboard text anywhere.
 
-**S17. Commands.** Runs: manual (step 3 planned: a helper that captures and replays a command).
+**S17. Commands.** Runs: auto (`fleet`: `T2-tmux`; `time`: `K6-clock` / `T8`); manual on real devices.
 Devices: `desktop` (the root), `win` or `mac` (an admin), `small`.
 1. On the admin `cbb sync -on small off`; then on `desktop` `cbb freeze` the admin and repeat;
    `cbb unfreeze` it.
@@ -745,8 +744,8 @@ Pass: the admin's command is taken, a frozen admin's is refused; a command more 
 ahead of the receiver's clock is refused; the second copy is refused by the replay cache;
 each refusal says why on the sender, and the receiver's log names the sender.
 
-**S18. The servers keep nothing.** Runs: manual (the forwarder and the relay of P12, with
-`cbb-forward.service` and `cbb-relay.service` from packaging/linux).
+**S18. The servers keep nothing.** Runs: auto (`fleet`: `S1-captures`); `systemd-analyze security` manual on `relay`.
+Devices: the forwarder and the relay of P12, with `cbb-forward.service` and `cbb-relay.service` from `packaging/linux`.
 1. With `CBB_DEBUG=0`, then `1`: run P11 through the forwarder and P12 through the relay,
    with a hub and a device on another network, and one handshake with a key the group does
    not know (S5).
@@ -759,9 +758,9 @@ exposure is 2.0 or less.
 
 ## 6. Long run (section 10)
 
-**Soak.** Runs: planned (24 h).
-1. The group of R2 plus the away computer.
-2. Every 30 s a random member copies a marker; every hour one F case runs.
+**Soak.** Runs: auto (`fleet`: `E10-soak` with `-soak-for 24h`; or `tools/soak/soak.sh` locally).
+1. The group of R2 plus the away computer (or four fleet containers in `E10-soak`).
+2. Every 30 s a random member copies a marker; every hour one fault runs.
 3. Every 5 minutes sample each service's memory and open file descriptors.
 Pass: every marker arrived; memory and descriptors stay flat; no service restarted except by a
 test.
