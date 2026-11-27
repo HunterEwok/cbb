@@ -155,9 +155,12 @@ struct SettingsView: View {
                 versionTaps += 1
                 if versionTaps >= 7 { detailsSwitch = true }
             }
-            // One element, read as "Version, 0.6.0", as on the Mac: the
-            // number alone is no label a reader can say what it is.
-            .accessibilityElement(children: .combine)
+            // One element, read as "Version" with the number as its value,
+            // as on the Mac: the number alone is no label a reader can say
+            // what it is.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Version"))
+            .accessibilityValue(Text(verbatim: version))
             .accessibilityIdentifier("version")
             .accessibilityAddTraits(.isButton)
             if detailsSwitch {
