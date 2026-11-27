@@ -102,7 +102,7 @@ cbb does not manage %s rules: rules added at run time do not survive a restart.	
 With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	选择“是”时，CBB 会添加这些规则，每次更新时保持最新，卸载时移除。
 run it with sudo	请用 sudo 运行
 no ufw or firewalld is active; nothing was added.	ufw 和 firewalld 都未启用；未添加任何内容。
-%s needs root; a rootless install has no console or uinput helper	%s 需要 root；无 root 安装没有 console 和 uinput 助手
+%s needs root; a rootless install has no console or uinput helper	%s 需要 root；无 root 安装没有 console 和 uinput 辅助程序
 --rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless 为你自己的用户安装：请不用 sudo 运行。使用 sudo 时，不带 --rootless 的 install.sh 会安装系统服务，这样更安全。
 a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	无 root 安装以 systemd 用户单元运行，而此会话没有 systemd 用户管理器；请登录桌面或通过 ssh 登录后再次运行
 CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	这里已为整个系统安装了 CBB（%s），一台设备只运行一个服务；请先卸载它，或保留它
@@ -120,7 +120,7 @@ could not load the uinput module now; it loads at the next boot	现在无法加�
 100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	在此设备上，100.64.0.0/10 算作家庭网络（--home-cgnat on）。
 New member and admin keys of this device go into its TPM.	此设备新的成员密钥和管理员密钥存放在其 TPM 中。
 CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	CBB 使用 TCP 端口 %s，而不是 8764。如果网络上的防火墙限制入站连接，请允许来自家庭网络的 TCP %s。
-the uinput helper did not start; see journalctl -u cbb-uinput	uinput 助手未启动；请查看 journalctl -u cbb-uinput
+the uinput helper did not start; see journalctl -u cbb-uinput	uinput 辅助程序未启动；请查看 journalctl -u cbb-uinput
 the desktop agent of %s did not start again; it starts at their next login	%s 的桌面代理未能重新启动；它会在该用户下次登录时启动
 cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow 失败；服务运行后请执行 sudo cbb global allow。
 CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB 正在 TCP 端口 %s 上运行。卸载：sudo sh %s/uninstall.sh
@@ -156,13 +156,13 @@ Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, 
 Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows.	下一步：在群组中的某台设备上打开配对窗口，然后在这里运行 su -s /bin/sh cbb -c 'cbb pair -code -name router'，并输入它显示的六位数字。
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /etc/cbb 中以便重新安装；--purge 会删除它们。
 This device is in no group yet. Open a pairing window on a device of the group (cbb pair there), then type the six digits it shows here (--no-pair skips this).	此设备尚未加入群组。请在群组中的某台设备上打开配对窗口（在那里运行 cbb pair），然后在这里输入它显示的六位数字（--no-pair 可跳过）。
-could not record how CBB was installed; cbb update takes it as get.sh	无法记录 CBB 的安装方式；cbb update 将视为 get.sh
+could not record how CBB was installed; cbb update takes it as get.sh	无法记录 CBB 的安装方式；cbb update 将把它视为 get.sh
 automatic updates are on or off, not %s	自动更新应为 on 或 off，而不是 %s
 CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB 可以每天检查一次项目签名的新版本并安装；与任何下载一样，检查时 GitHub 会得知此设备的地址。
 Update automatically? [y/N]	自动更新吗？[y/N]
 No terminal to answer on; not now. Later: %scbb update -auto on	没有可回答的终端；暂不设置。以后可运行：%scbb update -auto on
 could not turn automatic updates %s; run %scbb update -auto %s	无法将自动更新设为 %s；请运行 %scbb update -auto %s
-starting	正在开始
+starting	正在启动
 a key is not P-256	某个密钥不是 P-256
 %s is not a valid release file; not installing	%s 不是有效的版本文件；不安装
 %s is not signed by the project's key; not installing	%s 未由项目密钥签名；不安装
@@ -231,7 +231,7 @@ the service does not answer; its log is %s	服务没有响应；其日志在 %s
 writing the outbound rule for what the service reaches now	为服务当前访问的地址写入出站规则
 cbb global allow exited with %s	cbb global allow 退出，代码 %s
 recording how CBB was installed	记录 CBB 的安装方式
-Could not record how CBB was installed; cbb update takes it as get.ps1.	无法记录 CBB 的安装方式；cbb update 将视为 get.ps1。
+Could not record how CBB was installed; cbb update takes it as get.ps1.	无法记录 CBB 的安装方式；cbb update 将把它视为 get.ps1。
 setting automatic updates	设置自动更新
 Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	自动更新吗？[y/N] 没有可回答的控制台；暂不设置。以后可运行：cbb update -auto on
 Could not turn automatic updates %s; run cbb update -auto %s as administrator.	无法将自动更新设为 %s；请以管理员身份运行 cbb update -auto %s。

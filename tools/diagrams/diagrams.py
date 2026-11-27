@@ -134,7 +134,8 @@ class D:
         else:
             g.append(f'<text class="t" x="{tx}" y="{cy+5}">{esc(title)}</text>')
         if badge:
-            bw = 8 + 6.4 * len(tr(badge))
+            # 10px text: a wide (Chinese) character takes about a full em.
+            bw = 8 + sum(10.5 if unicodedata.east_asian_width(c) in 'WF' else 6.4 for c in tr(badge))
             g.append(f'<rect class="badge" x="{x+w-bw-8}" y="{y-9}" width="{bw}" height="18" rx="9"/>')
             g.append(f'<text class="badge-t" x="{x+w-8-bw/2}" y="{y+4}" text-anchor="middle">{esc(badge)}</text>')
         g.append('</g>')

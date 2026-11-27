@@ -3417,7 +3417,7 @@ with 0.5 is set up again once. The details follow.
 - The iPhone app's settings read the version row out as one, "Version" and its number.
 - The installer's Chinese and Arabic messages name the `--no-helper` option, and the
   Simplified Chinese texts of the apps, `cbb`, the website and the guide use one word for
-  each thing after a review.
+  each thing after a review; the Chinese diagrams' purple labels fit their text.
 - No text still points to what 0.6 removed: `cbb` suggests the recovery key, not a takeover,
   when the root is the only admin; the Aurora app asks to save the recovery key when a group
   is made; the Android and HarmonyOS apps no longer mention remote paste onto the phone.

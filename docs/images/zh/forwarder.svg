@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" lang="zh" width="900" height="300" viewBox="0 0 900 300" role="img" aria-label="当互联网无法直接访问中枢时，中枢会向转发器注册">
-<title>当互联网无法直接访问中枢时，中枢会向转发器注册</title>
+<svg xmlns="http://www.w3.org/2000/svg" lang="zh" width="900" height="300" viewBox="0 0 900 300" role="img" aria-label="当互联网无法直接访问中心节点时，中心节点会向转发器注册">
+<title>当互联网无法直接访问中心节点时，中心节点会向转发器注册</title>
 <style>
   .bg { fill: none; }
   .zone { fill: #f6f8fa; stroke: #d0d7de; stroke-width: 1; }
@@ -44,28 +44,28 @@
 </style>
 <rect class="zone" x="10" y="10" width="210" height="250" rx="14"/>
 <text class="zone-t" x="26" y="34">离家</text>
-<rect class="zone" x="605.0" y="10" width="285.0" height="250" rx="14"/>
-<text class="zone-t" x="621.0" y="34">在家，位于运营商 NAT 之后</text>
+<rect class="zone" x="630.0" y="10" width="260.0" height="250" rx="14"/>
+<text class="zone-t" x="646.0" y="34">在家，位于运营商 NAT 之后</text>
 <g class=""><rect class="card " x="30.0" y="64.0" width="170" height="52" rx="10"/><g transform="translate(42.0,76)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="80.0" y="95">笔记本</text></g>
 <g class=""><rect class="card " x="30.0" y="164.0" width="170" height="52" rx="10"/><g transform="translate(42.0,176)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="195">手机</text></g>
 <g class="srv"><rect class="card srv" x="295.0" y="108.0" width="170" height="64" rx="10"/><g transform="translate(307.0,126)" class="ic"><path d="M8 21h13a5 5 0 0 0 0 -10a7 7 0 0 0 -13.5 1.5A4.3 4.3 0 0 0 8 21z"/></g><text class="t" x="345.0" y="136">转发器</text><text class="s" x="345.0" y="154">不读取任何内容</text></g>
-<g class="key"><rect class="card key" x="657.5" y="68.0" width="180" height="64" rx="10"/><g transform="translate(669.5,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="707.5" y="96">中枢</text><text class="s" x="707.5" y="114">常开，在家</text><rect class="badge" x="795.9" y="59.0" width="33.6" height="18" rx="9"/><text class="badge-t" x="812.7" y="72.0" text-anchor="middle">中心节点</text></g>
-<g class=""><rect class="card " x="657.5" y="184.0" width="180" height="52" rx="10"/><g transform="translate(669.5,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="707.5" y="215">台式机</text></g>
+<g class="key"><rect class="card key" x="670.0" y="68.0" width="180" height="64" rx="10"/><g transform="translate(682.0,86)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="720.0" y="96">中心节点</text><text class="s" x="720.0" y="114">常开，在家</text><rect class="badge" x="792.0" y="59.0" width="50.0" height="18" rx="9"/><text class="badge-t" x="817.0" y="72.0" text-anchor="middle">中心节点</text></g>
+<g class=""><rect class="card " x="670.0" y="184.0" width="180" height="52" rx="10"/><g transform="translate(682.0,196)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="720.0" y="215">台式机</text></g>
 <path class="e-tunnel" d="M200.0,90.0 L250,90 L250,130 L295.0,130"/>
 <path class="a-tunnel" d="M295.0,130 L285.0,124.5 L285.0,135.5z"/>
 <path class="e-tunnel" d="M200.0,190.0 L250,190 L250,150 L295.0,150"/>
 <path class="a-tunnel" d="M295.0,150 L285.0,144.5 L285.0,155.5z"/>
-<path class="e-tunnel" d="M465.0,140.0 L580.0,140 L580.0,100 L657.5,100.0"/>
-<path class="a-tunnel" d="M657.5,100.0 L647.5,94.5 L647.5,105.5z"/>
+<path class="e-tunnel" d="M465.0,140.0 L605.0,140 L605.0,100 L670.0,100.0"/>
+<path class="a-tunnel" d="M670.0,100.0 L660.0,94.5 L660.0,105.5z"/>
 <path class="a-tunnel" d="M465.0,140.0 L475.0,145.5 L475.0,134.5z"/>
-<path class="e-home" d="M747.5,132.0 L747.5,184.0"/>
-<path class="a-home" d="M747.5,184.0 L751.9,176.0 L743.1,176.0z"/>
-<path class="a-home" d="M747.5,132.0 L743.1,140.0 L751.9,140.0z"/>
+<path class="e-home" d="M760.0,132.0 L760.0,184.0"/>
+<path class="a-home" d="M760.0,184.0 L764.4,176.0 L755.6,176.0z"/>
+<path class="a-home" d="M760.0,132.0 L755.6,140.0 L764.4,140.0z"/>
 <text class="note" x="450.0" y="288" text-anchor="middle">转发器不持有任何密钥：可以是你自己服务器上的，也可以是项目在 cbb.tools 上的。</text>
 <rect class="lbl-bg" x="229.5" y="129.0" width="41.0" height="22" rx="11.0"/>
 <text class="lbl tunnel" x="250" y="144.0" text-anchor="middle">隧道</text>
-<rect class="lbl-bg" x="477.0" y="129.0" width="91.0" height="22" rx="11.0"/>
-<text class="lbl tunnel" x="522.5" y="144.0" text-anchor="middle">中枢主动连出</text>
-<rect class="lbl-bg" x="727.0" y="144.0" width="41.0" height="22" rx="11.0"/>
-<text class="lbl home" x="747.5" y="159.0" text-anchor="middle">在家</text>
+<rect class="lbl-bg" x="477.0" y="129.0" width="116.0" height="22" rx="11.0"/>
+<text class="lbl tunnel" x="535.0" y="144.0" text-anchor="middle">中心节点主动连出</text>
+<rect class="lbl-bg" x="739.5" y="144.0" width="41.0" height="22" rx="11.0"/>
+<text class="lbl home" x="760.0" y="159.0" text-anchor="middle">在家</text>
 </svg>
