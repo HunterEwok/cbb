@@ -5289,7 +5289,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在家以外的设备可能无法连接到它；CBB 会自动重试。"
+            "value": "离家在外的设备可能无法连接到它；CBB 会自动重试。"
           }
         }
       }
@@ -5749,7 +5749,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用纸页。"
+            "value": "这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用恢复单。"
           }
         }
       }
@@ -8923,7 +8923,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "离开群组"
+            "value": "退出群组"
           }
         }
       }
@@ -9015,7 +9015,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "离开群组？"
+            "value": "退出群组？"
           }
         }
       }
@@ -20883,7 +20883,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。"
+            "value": "群组的设备现在拒绝它。退出群组即可删除这里的密钥；之后它可以重新加入群组。"
           }
         }
       }
@@ -22769,7 +22769,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个 YubiKey 上有本群组的两个恢复密钥。请改用纸页。"
+            "value": "这个 YubiKey 上有本群组的两个恢复密钥。请改用恢复单。"
           }
         }
       }
@@ -25161,7 +25161,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开“随处”，以便在家以外同步。"
+            "value": "打开“随处”，以便离家时也能同步。"
           }
         }
       }

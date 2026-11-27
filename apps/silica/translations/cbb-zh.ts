@@ -43,19 +43,19 @@
     </message>
     <message>
         <source>New collection…</source>
-        <translation>新建集合…</translation>
+        <translation>新建合集…</translation>
     </message>
     <message>
         <source>Rename collection…</source>
-        <translation>重命名集合…</translation>
+        <translation>重命名合集…</translation>
     </message>
     <message>
         <source>Take out of collection</source>
-        <translation>移出集合</translation>
+        <translation>移出合集</translation>
     </message>
     <message>
         <source>Ungroup</source>
-        <translation>解散集合</translation>
+        <translation>解散合集</translation>
     </message>
 </context>
 <context>
@@ -273,7 +273,7 @@
     </message>
     <message>
         <source>New collection</source>
-        <translation>新建集合</translation>
+        <translation>新建合集</translation>
     </message>
     <message>
         <source>Office, Home, TVs…</source>
@@ -285,7 +285,7 @@
     </message>
     <message>
         <source>Rename collection</source>
-        <translation>重命名集合</translation>
+        <translation>重命名合集</translation>
     </message>
 </context>
 <context>
@@ -296,15 +296,15 @@
     </message>
     <message>
         <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
-        <translation>此集合中还没有设备。在主页面长按设备的磁贴即可将其移到这里。</translation>
+        <translation>此合集中还没有设备。在主页面长按设备的磁贴即可将其移到这里。</translation>
     </message>
     <message>
         <source>Rename collection…</source>
-        <translation>重命名集合…</translation>
+        <translation>重命名合集…</translation>
     </message>
     <message>
         <source>Ungroup</source>
-        <translation>解散集合</translation>
+        <translation>解散合集</translation>
     </message>
 </context>
 <context>
@@ -506,7 +506,7 @@
     </message>
     <message>
         <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
-        <translation>这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用纸页。</translation>
+        <translation>这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用恢复单。</translation>
     </message>
     <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
@@ -586,7 +586,7 @@
     </message>
     <message>
         <source>The phone could not save the sheet.</source>
-        <translation>手机无法保存纸页。</translation>
+        <translation>手机无法保存恢复单。</translation>
     </message>
     <message>
         <source>The phone has no key yet.</source>
@@ -638,7 +638,7 @@
     </message>
     <message>
         <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
-        <translation>这个 YubiKey 上有本群组的两个恢复密钥。请改用纸页。</translation>
+        <translation>这个 YubiKey 上有本群组的两个恢复密钥。请改用恢复单。</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -724,7 +724,7 @@
     </message>
     <message>
         <source>Leave the group</source>
-        <translation>离开群组</translation>
+        <translation>退出群组</translation>
     </message>
     <message>
         <source>Leaving the group</source>
@@ -764,7 +764,7 @@
     </message>
     <message>
         <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
-        <translation>群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。</translation>
+        <translation>群组的设备现在拒绝它。退出群组即可删除这里的密钥；之后它可以重新加入群组。</translation>
     </message>
     <message>
         <source>The group's main device changed</source>
@@ -1082,7 +1082,7 @@
     </message>
     <message>
         <source>Leave the group</source>
-        <translation>离开群组</translation>
+        <translation>退出群组</translation>
     </message>
     <message>
         <source>Leaving the group</source>
@@ -1102,7 +1102,7 @@
     </message>
     <message>
         <source>New collection…</source>
-        <translation>新建集合…</translation>
+        <translation>新建合集…</translation>
     </message>
     <message>
         <source>Off for 15 minutes</source>
@@ -1467,7 +1467,7 @@
     </message>
     <message>
         <source>The sheet is saved in Documents.</source>
-        <translation>纸页已保存到“文档”。</translation>
+        <translation>恢复单已保存到“文档”。</translation>
     </message>
     <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
@@ -1850,7 +1850,7 @@
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
-        <translation>在家以外的设备可能无法连接到它；CBB 会自动重试。</translation>
+        <translation>离家在外的设备可能无法连接到它；CBB 会自动重试。</translation>
     </message>
     <message>
         <source>Everything syncs.</source>
@@ -2018,7 +2018,7 @@
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>
-        <translation>打开“随处”，以便在家以外同步。</translation>
+        <translation>打开“随处”，以便离家时也能同步。</translation>
     </message>
     <message>
         <source>Turn on another device of the group.</source>

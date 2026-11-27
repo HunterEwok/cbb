@@ -3814,7 +3814,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在家以外的设备可能无法连接到它；CBB 会自动重试。"
+            "value": "离家在外的设备可能无法连接到它；CBB 会自动重试。"
           }
         }
       }
@@ -5838,7 +5838,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "它的成员拒绝它。在此离开群组，即可重新加入此群组或其他群组。"
+            "value": "它的成员拒绝它。在此退出群组，即可重新加入此群组或其他群组。"
           }
         }
       }
@@ -6528,7 +6528,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "离开群组"
+            "value": "退出群组"
           }
         }
       }
@@ -6620,7 +6620,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "离开群组？"
+            "value": "退出群组？"
           }
         }
       }
@@ -6666,7 +6666,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已离开群组。这台 Mac 可以再次加入群组。"
+            "value": "已退出群组。这台 Mac 可以再次加入群组。"
           }
         }
       }
@@ -8092,7 +8092,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "屏蔽 VPN 的网络 (AmneziaWG)"
+            "value": "屏蔽 VPN 的网络（AmneziaWG）"
           }
         }
       }
@@ -8138,7 +8138,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "只允许网页通行的网络 (VLESS)"
+            "value": "只允许网页通行的网络（VLESS）"
           }
         }
       }
@@ -16326,7 +16326,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开“随处”，以便在家以外同步。"
+            "value": "打开“随处”，以便离家时也能同步。"
           }
         }
       }

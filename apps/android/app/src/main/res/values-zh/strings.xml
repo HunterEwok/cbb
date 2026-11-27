@@ -130,7 +130,7 @@
     <string name="error_not_authenticated">指纹、面容或屏幕锁定未确认，因此没有任何更改。</string>
     <string name="error_not_confirmed">电脑已加入但未确认。请在它上面查看 cbb status。</string>
     <string name="error_nothing_to_leave">这部手机不在任何群组中，因此无需离开。</string>
-    <string name="error_old_key">这部手机的群组密钥由旧版应用生成。请在这部手机上离开群组并重新设置。</string>
+    <string name="error_old_key">这部手机的群组密钥由旧版应用生成。请在这部手机上退出群组并重新设置。</string>
     <string name="error_paste_refused">设备未粘贴。</string>
     <string name="error_refused">电脑拒绝了。请在它上面再次运行 cbb pair。</string>
     <string name="error_root_leaves">这部手机是群组的主设备，而群组还有其他设备。请先移除它们，或让管理员手机把群组移到自己这里。</string>
@@ -144,11 +144,11 @@
     <string name="error_yubikey_blocked">YubiKey 的 PIN 已被锁定。请在 Yubico Authenticator 中用 PUK 解锁，然后重试。</string>
     <string name="error_yubikey_holds_one">这个 YubiKey 上已有本群组的恢复密钥。</string>
     <string name="error_yubikey_management_key">应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。</string>
-    <string name="error_yubikey_no_free_slot">这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用纸页。</string>
+    <string name="error_yubikey_no_free_slot">这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用恢复单。</string>
     <string name="error_yubikey_no_key">此 YubiKey 中没有恢复密钥。</string>
     <string name="error_yubikey_none">没有 YubiKey 贴近手机，也没有插入。</string>
     <string name="error_yubikey_old">此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。</string>
-    <string name="error_yubikey_two_slots">这个 YubiKey 上有本群组的两个恢复密钥。请改用纸页。</string>
+    <string name="error_yubikey_two_slots">这个 YubiKey 上有本群组的两个恢复密钥。请改用恢复单。</string>
     <string name="error_yubikey_usb_denied">未允许手机通过 USB 使用 YubiKey。请重新插入并允许。</string>
     <string name="error_yubikey_wrong_pin">PIN 错误。连续三次错误后 YubiKey 会锁定其 PIN。</string>
     <string name="event_added">%1$s 加入了群组。</string>
@@ -266,8 +266,8 @@
     <string name="layout_tiles">磁贴</string>
     <string name="leave_footer">删除这里的本机密钥和群组数据；设置会保留。</string>
     <string name="leave_footer_root">这部手机是群组的主设备：只有在群组没有其他设备时才能离开。</string>
-    <string name="leave_group">离开群组</string>
-    <string name="leave_question">离开群组？</string>
+    <string name="leave_group">退出群组</string>
+    <string name="leave_question">退出群组？</string>
     <string name="leave_text">这部手机的密钥和这里的群组数据会被删除；设置保留。之后它可以重新加入此群组或其他群组。在管理员将它移除之前，群组仍会列出它。</string>
     <string name="lost_phone_note">让第二部手机成为管理员：在那部手机上点按“加入群组”，然后在这里用 + 扫描它的代码并设为管理员。</string>
     <string name="lost_phone_title">手机丢失？</string>
@@ -432,7 +432,7 @@
     <string name="remove_root_body">它创建了群组。这部手机用新密钥把群组移到自己这里，其他设备会跟随它。</string>
     <string name="remove_title">移除 %1$s？</string>
     <string name="removed">已移除。从现在起其他设备会拒绝它。</string>
-    <string name="removed_self_text">群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。</string>
+    <string name="removed_self_text">群组的设备现在拒绝它。退出群组即可删除这里的密钥；之后它可以重新加入群组。</string>
     <string name="removed_self_title">这部手机已从群组中移除</string>
     <string name="rename">重命名</string>
     <string name="rename_body">群组中的每台设备都会显示新名称。</string>
@@ -549,7 +549,7 @@
     <string name="why_alone_d">打开群组中的另一台设备。</string>
     <string name="why_alone_t">已连接，但群组中没有其他设备在线。</string>
     <string name="why_also">另外</string>
-    <string name="why_away_off_d">打开“随处”，以便在家以外同步。</string>
+    <string name="why_away_off_d">打开“随处”，以便离家时也能同步。</string>
     <string name="why_away_off_t">此网络中没有群组的设备。</string>
     <string name="why_change_arriving_d">在更换到达前，让此设备保持开启并靠近群组的其他设备。</string>
     <string name="why_change_arriving_t">群组主设备的更换即将生效。</string>
@@ -561,7 +561,7 @@
     <string name="why_devices_sync_off_t">以下设备已关闭同步：%1$s。</string>
     <string name="why_entries_stale_d">在群组的一台电脑上更新 CBB。</string>
     <string name="why_entries_stale_t">转发器的入口列表已过期。</string>
-    <string name="why_forwarder_down_d">在家以外的设备可能无法连接到它；CBB 会自动重试。</string>
+    <string name="why_forwarder_down_d">离家在外的设备可能无法连接到它；CBB 会自动重试。</string>
     <string name="why_forwarder_down_t">转发器未接受此中心节点。</string>
     <string name="why_frozen_d">请群组的所有者恢复它的权限。</string>
     <string name="why_frozen_t">此设备作为受信任设备的权限已暂停。</string>
