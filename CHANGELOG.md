@@ -2255,6 +2255,9 @@ with 0.5 is set up again once. The details follow.
   relay once, on the main device, and say that every device of a group runs the same release.
   The wire format now gives the CBOR element ceiling as 65 535, takes a second signature on
   keys statements, commands and grants, and says a phone sends `push` to a member.
+  The core's API page gives every C function, member event, admin action and operation
+  with its fields as the code has them; an admin action's `public` is the key's uncompressed
+  point.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
 - "How it works" explains first what happens to a copy, then the group, its keys and the
