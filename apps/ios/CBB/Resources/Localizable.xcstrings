@@ -19365,7 +19365,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。"
+            "value": "应用无法使用此 YubiKey 的管理密钥。请改用打印的恢复单。"
           }
         }
       }
@@ -20745,7 +20745,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "之后群组允许文件中的密钥成为管理员和中心节点（设置，管理员密钥）。"
+            "value": "之后群组允许文件中的密钥成为管理员和中心节点（“设置”>“管理员密钥”）。"
           }
         }
       }
@@ -21251,7 +21251,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "由群组的所有者在其提醒中决定。"
+            "value": "由群组的所有者决定其提醒。"
           }
         }
       }
@@ -22815,7 +22815,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。"
+            "value": "此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的恢复单。"
           }
         }
       }

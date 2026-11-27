@@ -13934,7 +13934,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "由群组的所有者在其提醒中决定。"
+            "value": "由群组的所有者决定其提醒。"
           }
         }
       }

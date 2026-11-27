@@ -546,7 +546,7 @@
     </message>
     <message>
         <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
-        <translation>应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。</translation>
+        <translation>应用无法使用此 YubiKey 的管理密钥。请改用打印的恢复单。</translation>
     </message>
     <message>
         <source>The device did not paste.</source>
@@ -642,7 +642,7 @@
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
-        <translation>此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。</translation>
+        <translation>此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的恢复单。</translation>
     </message>
     <message>
         <source>This build of CBB is broken.</source>
@@ -1942,7 +1942,7 @@
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
-        <translation>由群组的所有者在其提醒中决定。</translation>
+        <translation>由群组的所有者决定其提醒。</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>

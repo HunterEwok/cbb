@@ -264,7 +264,7 @@
   "The group's hub": "群组的中心节点",
   "The group's hub, in use now": "群组的中心节点，正在使用",
   "The group's main device decides.": "由群组的主设备决定。",
-  "The group's owner decides on its alerts.": "由群组的所有者在其提醒中决定。",
+  "The group's owner decides on its alerts.": "由群组的所有者决定其提醒。",
   "The group's records stop the exchange.": "交换因群组的记录而停止。",
   "The group's recovery key was used twice, so the group stopped for good.": "群组的恢复密钥被使用了两次，因此群组已永久停止。",
   "The hub %s does not answer.": "中心节点 %s 没有响应。",
