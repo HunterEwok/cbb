@@ -45,7 +45,7 @@ CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes th
 --port needs a port number	--port 需要端口号
 --home-cgnat needs on or off	--home-cgnat 需要 on 或 off
 --auto-update needs on or off	--auto-update 需要 on 或 off
-unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	未知选项 %s（可用：--lite、--no-pair、--rootless、--console、--uinput、--port N、--home-cgnat on|off、--auto-update on|off、--express、--no-firewall）
+unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	未知选项 %s（可用：--no-helper、--no-pair、--rootless、--console、--uinput、--port N、--home-cgnat on|off、--auto-update on|off、--express、--no-firewall）
 --rootless installs for your own user: run it without sudo: %s	--rootless 为你自己的用户安装：请不用 sudo 运行：%s
 --rootless is for Linux computers	--rootless 仅用于 Linux 电脑
 run it with sudo: %s	请用 sudo 运行：%s
