@@ -8920,7 +8920,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在新电脑上选择“加入群组”，然后输入这六位数字。新手机扫描此代码。"
+            "value": "在新电脑上选择“加入群组”，然后输入这六位数字。新手机扫描此二维码。"
           }
         }
       }
@@ -11588,7 +11588,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "源代码和许可证 (AGPL-3.0)"
+            "value": "源代码和许可证（AGPL-3.0）"
           }
         }
       }

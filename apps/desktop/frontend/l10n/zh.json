@@ -173,7 +173,7 @@
   "On a device of the group, open a pairing window: tap + there. Then type the six digits it shows.": "在群组中的某台设备上打开配对窗口：在那里点按 +。然后输入它显示的六位数字。",
   "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. Show or send it only to the person who joins.": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上运行 cbb pair -invite - 并粘贴其文本。只向要加入的人出示或发送它。",
   "On the group's main device, decide in its alerts.": "在群组的主设备上，于其提醒中作出决定。",
-  "On the new computer, choose Join a group and type these six digits. A new phone scans this code.": "在新电脑上选择“加入群组”，然后输入这六位数字。新手机扫描此代码。",
+  "On the new computer, choose Join a group and type these six digits. A new phone scans this code.": "在新电脑上选择“加入群组”，然后输入这六位数字。新手机扫描此二维码。",
   "Online": "在线",
   "Only an admin makes another device a hub.": "只有管理员可以让其他设备成为中心节点。",
   "Only the group's main device or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.": "只有群组的主设备或管理员才能成为读取副本的中心节点；管理员可以让这台电脑成为只转发副本的中心节点。",

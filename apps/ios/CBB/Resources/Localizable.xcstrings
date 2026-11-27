@@ -9521,7 +9521,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "手机丢了？让第二部手机成为管理员：在那部手机上点按“我已在另一部手机上使用 CBB”，然后在这里用 + 扫描它的代码。"
+            "value": "手机丢了？让第二部手机成为管理员：在那部手机上点按“我已在另一部手机上使用 CBB”，然后在这里用 + 扫描它的二维码。"
           }
         }
       }
@@ -10073,7 +10073,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让第二部手机成为管理员：在那部手机上点按“加入群组”，然后在这里用 + 扫描它的代码。"
+            "value": "让第二部手机成为管理员：在那部手机上点按“加入群组”，然后在这里用 + 扫描它的二维码。"
           }
         }
       }
@@ -11821,7 +11821,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "五分钟内没有手机扫描代码。请重试。"
+            "value": "五分钟内没有手机扫描二维码。请重试。"
           }
         }
       }
@@ -12511,7 +12511,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在电脑上运行 cbb pair，并扫描它显示的代码。"
+            "value": "在电脑上运行 cbb pair，并扫描它显示的二维码。"
           }
         }
       }
@@ -16283,7 +16283,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "扫描群组恢复纸上的二维码，或输入其文字。密钥只为这次更换留在这部手机上。"
+            "value": "扫描群组恢复单上的二维码，或输入其文字。密钥只为这次更换留在这部手机上。"
           }
         }
       }
@@ -17525,7 +17525,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "源代码和许可证 (AGPL-3.0)"
+            "value": "源代码和许可证（AGPL-3.0）"
           }
         }
       }
@@ -19641,7 +19641,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代码不匹配。请在电脑上再次运行 cbb pair 并扫描新代码。"
+            "value": "代码不匹配。请在电脑上再次运行 cbb pair 并扫描新二维码。"
           }
         }
       }
@@ -19687,7 +19687,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代码不匹配。请再次扫描设备的代码。"
+            "value": "代码不匹配。请再次扫描设备的二维码。"
           }
         }
       }
