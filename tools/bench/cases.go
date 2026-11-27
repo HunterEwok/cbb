@@ -312,7 +312,7 @@ func localAccess(ctx context.Context, r *Report, g *benchGroup) {
 			return nil
 		})
 		r.Do(prefix+d.Name+"/admin", func() error {
-			_, err := Run(ctx, d, cbbCmd(d)+" mode own", "")
+			_, err := Run(ctx, d, cbbCmd(d)+" sync off", "")
 			if err == nil {
 				setMode(ctx, d, "shared")
 				return errors.New("the bench user changed the sync mode without root")

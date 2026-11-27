@@ -34,7 +34,7 @@ type walker struct {
 }
 
 // randomWalk (G40): steps chosen at random among join, remove, rename, make
-// admin, freeze, unfreeze, takeover, restart, sleep, network cut and copy;
+// admin, freeze, unfreeze, recovery, restart, sleep, network cut and copy;
 // after each step every member that syncs lists the same devices, with the
 // names and admin marks the steps gave them, and holds the last text copied
 // since it joined. The seed is printed, and CBB_BENCH_SEED repeats a walk.
@@ -116,7 +116,7 @@ func randomWalk(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 		spares = append(spares, w.d)
 		// Removing the admin that froze one ends its freezes
 		// (docs/protocol.md, section 10, "Removals and freezes keep what the author saw"); a lost root's stay
-		// after a takeover, until the new root unfreezes.
+		// after a recovery, until the new root unfreezes.
 		for _, x := range live {
 			if x.frozenBy == w && w.mark != "root" {
 				x.mark, x.frozenBy = "admin", nil
@@ -243,14 +243,14 @@ func randomWalk(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 			w.mark, w.frozenBy = "admin", nil
 			return w.name, nil
 		}},
-		{"takeover", 1, func() bool { return len(with("admin")) > 0 }, func(int) (string, error) {
+		{"recovery", 1, func() bool { return len(with("admin")) > 0 }, func(int) (string, error) {
 			// The root is lost: cut off, then gone for good once an admin
-			// took the group over. Back, it would undo the takeover (G27).
+			// took the group's root with its recovery key, leaving it out.
 			old, w := root(), pick(with("admin"))
 			if err := isolate(old.d); err != nil {
 				return "", err
 			}
-			if _, err := Run(ctx, w.d, "cbb takeover "+old.id, ""); err != nil {
+			if err := recoverAs(ctx, g, w.d, old.id); err != nil {
 				heal(ctx, old.d)
 				return "", err
 			}

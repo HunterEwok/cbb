@@ -20,8 +20,8 @@
 # restart policy would not start it again.
 #
 # up builds the image cbb:bench from CBB, a static cbb for this
-# host's CPU (CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./cmd/cbb on a
-# Pi), and runs it with packaging/docker/compose.home.yaml in ~/cbb-nas, so
+# host's CPU (sh packaging/build.sh linux/arm64 on a Pi prints the folder
+# that holds it), and runs it with packaging/docker/compose.home.yaml in ~/cbb-nas, so
 # the container is named cbb and holds no group.
 set -eu
 

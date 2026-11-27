@@ -169,7 +169,7 @@ func writeFlaky(w io.Writer, dir string, fl []Flaky, runs int) error {
 	if len(fl) == 0 {
 		fmt.Fprintf(&b, "no case both passed and failed in %d runs\n", runs)
 	} else {
-		fmt.Fprintf(&b, "cases that both passed and failed in %d runs (add each to docs/testing.md, \"Flaky tests\"):\n", runs)
+		fmt.Fprintf(&b, "cases that both passed and failed in %d runs (add each to docs/testing.md, \"Unstable tests\"):\n", runs)
 		for _, f := range fl {
 			fmt.Fprintf(&b, "  %s: failed %d of %d\n", f.Name, f.Failed, f.Passed+f.Failed)
 		}

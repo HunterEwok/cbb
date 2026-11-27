@@ -3373,6 +3373,11 @@ with 0.5 is set up again once. The details follow.
 - `cbb global on`, `cbb global hub -away-on` and `cbb global relay` warn that the device's keys
   sit in files only where they do; a device with its keys in a TPM or the Secure Enclave is
   told what sync away from home does, without that warning.
+- The test bench (`tools/bench`) runs today's commands again: `cbb sync` for the sync mode,
+  `cbb status` for the devices, `cbb remove` instead of revoke, and the recovery key for a
+  change of root. G26 takes the root with `cbb recovery` and the sheet that `cbb new` showed,
+  G27 checks that `cbb takeover`, `cbb takeover -delay` and `cbb handover` are refused with a
+  pointer to `cbb recovery`, and the random walk (G40) changes the root the same way.
 - `cbb takeover`, `cbb takeover -delay` and `cbb handover` print only the service's answer,
   which points to the recovery key, and no longer a claim that waits; a recovery the service
   did not finish says so. `cbb`'s help shows that `cbb remote code` reads the TV's code from

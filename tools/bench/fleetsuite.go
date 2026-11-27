@@ -36,7 +36,7 @@ func FleetSuite(ctx context.Context, r *Report, cbb string, size int, timeout ti
 	}{
 		{"G5-window", func() { pairingWindow(ctx, r, f) }},
 		{"G20-roles", func() { roles(ctx, r, f, timeout) }},
-		{"G26-takeover", func() { takeover(ctx, r, f, timeout) }},
+		{"G26-recovery", func() { recovery(ctx, r, f, timeout) }},
 		{"G42-rejoin", func() { rejoin(ctx, r, f, timeout) }},
 		{"G43-two-groups", func() { sideBySide(ctx, r, f, timeout) }},
 		{"Y12-partition", func() { partition(ctx, r, f, timeout) }},
@@ -47,7 +47,7 @@ func FleetSuite(ctx context.Context, r *Report, cbb string, size int, timeout ti
 		{"E9-restarts", func() { restarts(ctx, r, f, timeout) }},
 		{"T2-tmux", func() { tmuxPaste(ctx, r, f, timeout) }},
 		{"G25-offline", func() { offline(ctx, r, f, timeout) }},
-		{"G27-takeover-undone", func() { takeoverUndone(ctx, r, f, timeout) }},
+		{"G27-takeover-refused", func() { takeoverRefused(ctx, r, f, timeout) }},
 		{"G33-admins-at-once", func() { concurrentAdmins(ctx, r, f, timeout) }},
 		{"S24-stolen-admin", func() { stolenAdmin(ctx, r, f, timeout) }},
 		{"M4-mode-kept", func() { modeKept(ctx, r, f, timeout) }},
@@ -295,7 +295,7 @@ func roles(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		return nil
 	})
 	fails(ctx, r, p+"G21-admin-makes-no-admin", admin, errorCase{cmd: "cbb admin -allow-file-key " + m1.Name, want: []string{"only the group's root"}})
-	fails(ctx, r, p+"G21-admin-keeps-root", admin, errorCase{cmd: "cbb remove " + root.Name, want: []string{"holds the group's root", "takeover"}})
+	fails(ctx, r, p+"G21-admin-keeps-root", admin, errorCase{cmd: "cbb remove " + root.Name, want: []string{"holds the group's root", "cbb recovery"}})
 	fails(ctx, r, p+"G21-member-removes-none", m1, errorCase{cmd: "cbb remove " + m2.Name, want: []string{"admin"}})
 	fails(ctx, r, p+"M5-member-sets-no-mode", m1, errorCase{cmd: "cbb sync -on " + m2.Name + " off", want: []string{"only an admin"}})
 	r.Do(p+"M5-mode-on", func() error {
@@ -379,11 +379,13 @@ func roles(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	}
 }
 
-// takeover (G26): the root is lost; an admin takes the group over, admits
-// with it, and the old root, back, is refused.
-func takeover(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
-	const p = "fleet/G26-takeover/"
-	g := fleetGroup(ctx, r, f, "fleet/G26-takeover", 3)
+// recovery (G26): the root is lost; an admin takes the group's root with
+// its recovery key, leaving the old root out, admits with it and makes an
+// admin, and the old root, back, is refused. cbb takeover only points to
+// cbb recovery (D-117).
+func recovery(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
+	const p = "fleet/G26-recovery/"
+	g := fleetGroup(ctx, r, f, "fleet/G26-recovery", 3)
 	if g == nil || len(g.members) < 3 {
 		return
 	}
@@ -396,18 +398,27 @@ func takeover(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	if r.Do(p+"root-lost", func() error { return f.stop(ctx, root) }) != nil {
 		return
 	}
-	r.Do(p+"takeover", func() error {
-		if _, err := Run(ctx, admin, "cbb takeover "+root.Name, ""); err != nil {
+	fails(ctx, r, p+"takeover-refused", admin, errorCase{cmd: "cbb takeover " + root.Name, want: []string{"cbb recovery"}})
+	if r.Do(p+"recovery", func() error {
+		if err := recoverAs(ctx, g, admin, root.Name); err != nil {
 			return err
 		}
 		return listsAs(ctx, []*Device{admin, m}, admin.Name, "root", false, timeout)
-	})
+	}) != nil {
+		return
+	}
 	r.Do(p+"new-root-admits", func() error {
 		d, err := f.Add(ctx)
 		if err == nil {
 			_, err = pairOne(ctx, admin, d)
 		}
 		return err
+	})
+	r.Do(p+"new-root-makes-admin", func() error {
+		if err := succeeds(ctx, admin, "cbb admin -allow-file-key "+m.Name, "", "is an admin now"); err != nil {
+			return err
+		}
+		return listsAs(ctx, []*Device{admin, m}, m.Name, "admin", false, timeout)
 	})
 	r.Do(p+"old-root-refused", func() error {
 		if err := f.start(ctx, root); err != nil {

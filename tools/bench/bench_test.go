@@ -475,3 +475,24 @@ func TestCaseMissing(t *testing.T) {
 		}
 	}
 }
+
+// TestSheetOf reads the recovery key out of what cbb new prints, on one
+// line as cbb recovery takes it, and nothing from output without one.
+func TestSheetOf(t *testing.T) {
+	out := "Made group 0123abcd.\n\nThe group's recovery key, shown this once:\n\n" +
+		"    1A2B 3C4D 5E6F 7G8H\n    9JKM NPQR STVW XYZ0\n    1111 2222 3333 4444\n    ABCD EFGH JKMN PQRS\n\n" +
+		"Add a device: cbb pair here opens a pairing window.\n"
+	want := "1A2B 3C4D 5E6F 7G8H 9JKM NPQR STVW XYZ0 1111 2222 3333 4444 ABCD EFGH JKMN PQRS"
+	if got := sheetOf(out); got != want {
+		t.Errorf("sheetOf = %q, want %q", got, want)
+	}
+	for _, bad := range []string{
+		"Made group 0123abcd.\n",
+		"    1A2B 3C4D 5E6F 7G8H\n    9JKM NPQR STVW XYZ0\n    1111 2222 3333 4444\n",                          // three lines
+		"    1A2B 3C4D 5E6F 7G8I\n    9JKM NPQR STVW XYZ0\n    1111 2222 3333 4444\n    ABCD EFGH JKMN PQRS\n", // I is not in the alphabet
+	} {
+		if got := sheetOf(bad); got != "" {
+			t.Errorf("sheetOf(%q) = %q, want none", bad, got)
+		}
+	}
+}

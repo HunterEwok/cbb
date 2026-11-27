@@ -36,7 +36,7 @@ func certsOf(ctx context.Context, d *Device) (cert, ca *x509.Certificate, err er
 // there at the real pace, a certificate ends no later than its CA, and one
 // that already ends with it is not renewed again, while the group keeps
 // syncing. (Replacing the CA itself works as after a removal, which the
-// takeover cases run.)
+// recovery cases run.)
 func caEnd(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "time/K5-ca-end/"
 	env := []string{"CBB_TEST_SCALE=1", "CBB_TEST_CLOCK_FILE=" + clockFile}
