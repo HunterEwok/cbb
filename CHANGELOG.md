@@ -6,6 +6,8 @@ All notable changes to cbb are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-27
+
 In short, for 0.6: every computer and small device runs one `cbb` in Rust on the same core as
 the phones' apps, with the Go helper beside it on computers; the group's signed records are
 new (version 2, in one strict form of CBOR) and a phone can be the group's root; there are
@@ -5386,7 +5388,8 @@ archives, so it has no release.
 - The release build packs the macOS archives with `packaging/macos`; CI now builds every
   release archive on each pull request with the same script, `packaging/archive.sh`.
 
-[Unreleased]: https://github.com/HunterEwok/cbb/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/HunterEwok/cbb/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/HunterEwok/cbb/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/HunterEwok/cbb/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/HunterEwok/cbb/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/HunterEwok/cbb/compare/v0.3.0...v0.4.0
