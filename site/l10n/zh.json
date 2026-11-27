@@ -260,7 +260,7 @@
   "Who makes it?": "谁在做这个项目？",
   "Whose it is": "归谁所有",
   "Why it does not sync": "为什么不同步",
-  "Windows 10 (1809 or later) or 11, x86-64 or ARM64. In a PowerShell opened with “Run as administrator”:": "Windows 10（1809 或更高版本）或 11，x86-64 或 ARM64。在以“以管理员身份运行”打开的 PowerShell 中运行：",
+  "Windows 10 (1809 or later) or 11, x86-64 or ARM64. In a PowerShell opened with “Run as administrator”:": "Windows 10（1809 或更高版本）或 11，x86-64 或 ARM64。在通过“以管理员身份运行”打开的 PowerShell 中运行：",
   "Windows and Linux": "Windows 和 Linux",
   "Windows clipboard sync": "Windows 剪贴板同步",
   "With a computer": "有电脑",

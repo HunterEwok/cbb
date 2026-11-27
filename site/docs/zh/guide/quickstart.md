@@ -34,7 +34,7 @@ Connect Beyond Borders 在你自己的设备之间共享同一个加密剪贴板
 
   在 macOS 14 或更高版本上，你也可以从[最新 GitHub 发布版本](https://github.com/HunterEwok/cbb/releases/latest)下载并打开 `cbb-X.Y.Z.pkg`，同时安装后台服务和菜单栏应用。
 
-- 在 **Windows** 10（1809 或更高版本）或 11 上，以**以管理员身份运行**打开 PowerShell 并运行：
+- 在 **Windows** 10（1809 或更高版本）或 11 上，右键选择**以管理员身份运行**打开 PowerShell 并运行：
 
   ```powershell
   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
