@@ -3410,6 +3410,9 @@ with 0.5 is set up again once. The details follow.
   them is not in the build yet.
 - The release builds the iPhone app for TestFlight with Xcode 27.2 and the iOS 27 SDK, as
   App Store Connect asks of every upload from April 2027; it was built with the iOS 26.5 SDK.
+- The iPhone app, its extensions and its watch app carry the release's version and build number
+  in their Info.plist, which Xcode 27 no longer fills in by itself, and `testflight.sh` checks
+  every bundle in the archive before it signs and sends it.
 - No text still points to what 0.6 removed: `cbb` suggests the recovery key, not a takeover,
   when the root is the only admin; the Aurora app asks to save the recovery key when a group
   is made; the Android and HarmonyOS apps no longer mention remote paste onto the phone.

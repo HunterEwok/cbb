@@ -122,6 +122,21 @@ fi
 tail -n 5 "$tmp/archive.log"
 [ -d "$archive/Products/Applications/CBB.app" ]
 
+# Every app and extension in the archive carries this build's numbers: App
+# Store Connect refuses an upload whose bundles say otherwise, and only after
+# the archive has been signed and sent.
+bad=0
+find "$archive/Products/Applications" -name Info.plist \( -path '*.app/Info.plist' -o -path '*.appex/Info.plist' \) >"$tmp/bundles"
+while IFS= read -r plist; do
+	got=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist" 2>/dev/null || echo none)
+	short=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist" 2>/dev/null || echo none)
+	if [ "$got" != "$build" ] || [ "$short" != "$version" ]; then
+		echo "testflight.sh: ${plist#"$archive"/} is $short ($got), not $version ($build)" >&2
+		bad=1
+	fi
+done <"$tmp/bundles"
+[ "$bad" = 0 ]
+
 # options DESTINATION writes the export's options: the App Store, signed by
 # hand with the profiles above.
 options() {
