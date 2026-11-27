@@ -92,7 +92,7 @@ pub const FIELD_GROUP: u16 = 2;
 /// The grant's field of its leaf's device ID.
 pub const FIELD_LEAF: u16 = 10;
 /// The fields of a grant below the optional zone (256): any other is a
-/// critical field this version does not know, and `signer2` (8) is one.
+/// critical field this version does not know; `signer2` (8) is taken.
 pub const FIELDS: [u16; 15] = [1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 /// The longest lifetime of a guarded grant: 40 days.
 pub const MAX_LIFE_MS: u64 = 3_456_000_000;
@@ -111,13 +111,13 @@ pub const RULE_NEIGHBORS: Rule = Rule::field("grants/neighbors");
 /// A guarded leaf's grant that a root did not sign, or a grant without
 /// `guarded` for a leaf that is guarded.
 pub const RULE_GUARDED: Rule = Rule::field("grants/guarded");
-/// More than eight commanders, one that is not an ES256 Key, or commanders
+/// More than sixteen commanders, one that is not an ES256 Key, or commanders
 /// out of order.
 pub const RULE_COMMANDERS: Rule = Rule::field("grants/commanders");
 /// A lifetime in an ordinary leaf's grant, or a guarded grant's lifetime
 /// that is not an integer from 1 to 40 days.
 pub const RULE_LIFE: Rule = Rule::field("grants/life");
-/// Readers that are not a list of at most four `[device ID, ES256 Key]` in
+/// Readers that are not a list of at most sixteen `[device ID, ES256 Key]` in
 /// a set.
 pub const RULE_READERS: Rule = Rule::field("grants/readers");
 /// An admin's first grant without the root's record of that admin key, or
@@ -258,7 +258,7 @@ pub const STATE_VERSION: u64 = 1;
 /// The bytes ([`Stored::encode`]) are a canonical CBOR map, every field in
 /// its one spelling (a default is left out): 1 the version (1), 2 guarded
 /// (flag), 3 the root counter, 4 the admin counter, 5 the commanders
-/// (`[key hash, point]` sorted by key hash, at most eight), 6 the grant's
+/// (`[key hash, point]` sorted by key hash, at most sixteen), 6 the grant's
 /// hash (bytes 32), 7 the recovery seq of the grant, 8 forked (flag), 9 the
 /// wait to be bound again (`[root key hash, recovery seq]`), 10 the newest
 /// head (`[root key hash, recovery seq]`). Fields from 256 on are a later
@@ -611,7 +611,7 @@ fn admin_key(record: &Envelope<'_>, root: &[u8], group: &GroupId) -> Result<[u8;
     admin.public().to_vec().try_into().map_err(|_| RULE_ADMIN)
 }
 
-/// The commanders of a grant body: at most eight ES256 Keys, sorted by key
+/// The commanders of a grant body: at most sixteen ES256 Keys, sorted by key
 /// hash, each once.
 fn commanders(map: &Value<'_>) -> Result<Vec<Commander>, Rule> {
     let list = match map.get(FIELD_COMMANDERS) {
@@ -647,7 +647,7 @@ fn commanders(map: &Value<'_>) -> Result<Vec<Commander>, Rule> {
 /// none, but a guarded leaf stays guarded.
 ///
 /// The grant must be of type 1, for this group and this leaf, with no
-/// critical field this version does not know (`signer2` among them). A root
+/// critical field this version does not know (`signer2` is not one). A root
 /// grant is checked with the root's uncompressed point and must be above
 /// the kept root counter. Any other grant is an ordinary leaf's: the first
 /// one signed by an admin key that the record in field 3 makes an admin
@@ -655,7 +655,7 @@ fn commanders(map: &Value<'_>) -> Result<Vec<Commander>, Rule> {
 /// the kept root counter, above the kept admin counter, naming the kept
 /// grant as the one it replaces. Then the rules of the two kinds of leaf
 /// (design-small-device section 15): a lifetime only in a guarded grant and
-/// within 40 days; at most eight commanders, four readers
+/// within 40 days; at most sixteen commanders, sixteen readers
 /// `[device ID, Key]` and eight neighbours, each list a set.
 ///
 /// A guarded leaf that waits to be bound again ([`Kept::needs_rebind`])

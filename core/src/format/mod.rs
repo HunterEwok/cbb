@@ -65,7 +65,7 @@ impl Rule {
     pub const UTF8: Rule = Rule("cbor/utf8");
     /// Containers nested more than 8 deep.
     pub const DEPTH: Rule = Rule("cbor/depth");
-    /// An array or map of more than 4096 elements.
+    /// An array or map of more than 65 535 elements.
     pub const COUNT: Rule = Rule("cbor/count");
     /// Bytes after the item.
     pub const TRAILING: Rule = Rule("cbor/trailing");

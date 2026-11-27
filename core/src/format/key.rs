@@ -80,7 +80,7 @@ pub struct KeyHash(pub [u8; 32]);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DeviceId(pub [u8; 16]);
 
-/// The first 16 bytes of the group's first root key's hash.
+/// A group's ID: `records::key::group_id`, from the first root key and the recovery key.
 pub type GroupId = DeviceId;
 
 impl KeyHash {

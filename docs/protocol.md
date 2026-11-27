@@ -522,7 +522,7 @@ would grant more, change the mode, or change what the person compares or approve
 | 25 | `entries` | as `release`, for `entries.json` | 16 |
 | 26 | `waiting` | the holder (a hub) to a device that may admit | 12 |
 | 27 | `dismiss` | that admin to the holder | 12 |
-| 28, 29 | `push`, `push-renew` | member to phone, about push ([format](format.md), section 9.6) | 4 |
+| 28, 29 | `push`, `push-renew` | `push` phone to member, `push-renew` member to phone ([format](format.md), section 9.6) | 4 |
 | 30 | `want` | record IDs or a list's hash: "give me these" | 10 |
 | 64–69 | pairing | `cbb-pair/3` only | 6 |
 | 80–84 | forwarder | device and forwarder | 13 |
@@ -3438,6 +3438,7 @@ does not know unless its section says it refuses it.
 | `cbb-pair/3` | the member port; TCP 8764 inside a guest tunnel | 6, 12 |
 | `cbb-forward/3` | TCP on the forwarder's port (8764 by default) | 13 |
 | `cbb-relay/3` | TCP on the relay's port (8764 by default) | 14 |
+| `cbb-push/1` | TCP on the project's push service's port (8767 by default) | [format](format.md), section 9.6 |
 | (WireGuard, AmneziaWG) | UDP on the hub's, forwarder's or relay's port (8764 by default) | 11, 13, 14 |
 | (VLESS over XHTTP) | TCP 443 on the web server in front of a forwarder | 11, 13 |
 | (mDNS) | UDP 5353, 224.0.0.251 and ff02::fb | 3 |
@@ -3550,7 +3551,7 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `copies::fresh::MAX_SECRETS` | 1024 | reader | secrets listed by ID above the floor |  |
 | `copies::fresh::MAX_ORIGINS` | 1024 | reader | origins with a newest time |  |
 | `copies::blob::SEGMENT` | 65536 | frozen | a blob's plaintext segment, the last one padded with zeros |  |
-| `copies::blob::SEALED_SEGMENT` | 65552 | frozen | a segment and its AES-256-GCM tag, the unit a fetch gets |  |
+| `copies::blob::SEALED_SEGMENT` | 65552 | frozen | a segment and its ChaCha20-Poly1305 tag, the unit a fetch gets |  |
 | `copies::blob::MAX_SEGMENTS` | 16384 | frozen | the largest media copy in segments |  |
 | `content::MAX_STATE` | 4096 | frozen | a device's state | `content/data` |
 | `media::MAX_NAME` | 765 | stated | a file name of 255 characters of 3 bytes | `content/manifest` |
@@ -3592,7 +3593,7 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `records::MAX_SEQ` | 2147483647 | frozen | 2^31 − 1 | `records/seq` |
 | `records::MAX_SEEN` | 1024 | reader | a `seen` list; the body's bound comes first: 1024 of the smallest entries pass MAX_BODY, so the count is a reader's guard that already stands if a later version widens the body | `records/revoke/seen` |
 | `records::body::MAX_RECOVERY` | 64 | stated | 64 recovery records for the group's life | `records/recovery/seq` |
-| `records::body::MAX_KEYS` | 256 | frozen | keys of a settings record | `records/revoke/keys` |
+| `records::body::MAX_KEYS` | 256 | frozen | keys of a revoke or freeze record, or records a thaw or resolve names | `records/revoke/keys` |
 | `records::body::MAX_HUBS` | 16 | stated | hubs of a group | `records/hubs/hubs` |
 | `records::body::MAX_SERVERS` | 16 | stated | servers of a group | `records/settings/servers` |
 | `records::body::MIN_COPY_TTL_MS` | 60000 | frozen | the owner's shortest lifetime of an ordinary copy, a minute | `records/copies/ttl_ms` |
