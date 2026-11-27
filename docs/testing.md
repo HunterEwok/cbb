@@ -366,7 +366,8 @@ Every app is verified across all eight project languages (`zh`, `en`, `es`, `ru`
 - **iPhone and Mac (`ReadersUITests`)**: Launches each language with `-AppleLanguages`, checks
   rendered strings against the catalog, verifies right-to-left header layout on iPhone, and runs
   Xcode's accessibility audit (clipped text, labels, touch targets, and Dynamic Type at the largest
-  accessibility size in English, Swahili, and Hindi on iPhone). On iPhone and iPad, `ReadersUITests`
+  accessibility size in English, Swahili, and Hindi on iPhone). Settings is audited a screenful at a time down
+  to its end, so the rows below the first screenful, the version among them, are checked too. On iPhone and iPad, `ReadersUITests`
   also tests Home's legacy-group and member notice cards in English and Arabic using `-showcase
   -showcaseAlerts -showcaseNoDevices` (a group with no device tiles, since the audit counts text
   running past the screen edge as clipped), confirming that **Hide** hides only dismissible notices. Text and iPhone button

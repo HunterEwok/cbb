@@ -163,6 +163,44 @@ final class ReadersUITests: XCTestCase {
         return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
+    /// The labels of the texts and buttons the window holds whole, from
+    /// one snapshot of the app, once it has settled.
+    private func inSight(_ app: XCUIApplication, _ screen: String) -> Set<String> {
+        app.settle(screen)
+        guard let root = try? app.snapshot() else {
+            XCTFail("\(screen): no snapshot of the app")
+            return []
+        }
+        let window = app.windows.firstMatch.frame
+        var labels: Set<String> = []
+        var stack = [root]
+        while let e = stack.popLast() {
+            if [.staticText, .button].contains(e.elementType), !e.label.isEmpty, window.contains(e.frame) {
+                labels.insert(e.label)
+            }
+            stack.append(contentsOf: e.children)
+        }
+        return labels
+    }
+
+    /// Audits a list a screenful at a time down to its end, which is where
+    /// a swipe brings nothing new into sight: a row below the first
+    /// screenful (the version, at the foot of Settings on an iPhone) is
+    /// audited as a person reaches it, not left out as out of reach.
+    private func auditToTheEnd(_ app: XCUIApplication, list: XCUIElement, _ screen: String) {
+        XCTAssertTrue(list.exists, "\(screen): no list in \(app.debugDescription)")
+        audit(app, checks, screen)
+        var seen = inSight(app, screen)
+        for page in 2...12 {
+            list.swipeUp()
+            let now = inSight(app, "\(screen), screenful \(page)")
+            if now.isSubset(of: seen) { return }
+            seen = now
+            audit(app, checks, "\(screen), screenful \(page)")
+        }
+        XCTFail("\(screen): the end of the list was not reached in 12 screenfuls")
+    }
+
     /// The audit's checks that hold in every language and text size.
     private let checks: XCUIAccessibilityAuditType = [.textClipped, .sufficientElementDescription, .hitRegion, .elementDetection]
 
@@ -226,7 +264,10 @@ final class ReadersUITests: XCTestCase {
             XCTAssertTrue(bar.waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Blueprint", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
-            audit(app, checks, "Settings in \(language)")
+            auditToTheEnd(app, list: app.collectionViews.containing(NSPredicate(format: "label == %@", tr("Blueprint", language))).firstMatch, "Settings in \(language)")
+            // The version, at the foot of Settings, was in sight and audited.
+            let version = app.descendants(matching: .any).matching(identifier: "version").firstMatch
+            XCTAssertTrue(version.exists && app.windows.firstMatch.frame.contains(version.frame), "\(language): the version was not reached")
             app.terminate()
         }
     }

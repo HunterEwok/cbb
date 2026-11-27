@@ -146,7 +146,7 @@ struct SettingsView: View {
         }
         Section {
             LabeledContent {
-                Text(version).font(.system(.body, design: .monospaced))
+                Text(verbatim: version).font(.system(.body, design: .monospaced))
             } label: {
                 Text("Version")
             }
@@ -155,6 +155,11 @@ struct SettingsView: View {
                 versionTaps += 1
                 if versionTaps >= 7 { detailsSwitch = true }
             }
+            // One element, read as "Version, 0.6.0", as on the Mac: the
+            // number alone is no label a reader can say what it is.
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("version")
+            .accessibilityAddTraits(.isButton)
             if detailsSwitch {
                 Toggle(isOn: $errorDetails) {
                     Text("Show error details")

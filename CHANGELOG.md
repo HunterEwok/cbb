@@ -3414,6 +3414,7 @@ with 0.5 is set up again once. The details follow.
   in their Info.plist, which Xcode 27 no longer fills in by itself, and `testflight.sh` checks
   every bundle in the archive before it signs and sends it. The Mac app
   carries them too, and the release checks it after the build.
+- The iPhone app's settings read the version row out as one, "Version" and its number.
 - No text still points to what 0.6 removed: `cbb` suggests the recovery key, not a takeover,
   when the root is the only admin; the Aurora app asks to save the recovery key when a group
   is made; the Android and HarmonyOS apps no longer mention remote paste onto the phone.
