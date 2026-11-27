@@ -14,11 +14,12 @@ import (
 )
 
 // The recovery drills (docs/testing.md, "Recovery drills"; tools/e2e/drills.sh
-// runs them with TestRecovery and TestFFIPhoneRestore): what a person does
+// runs them with TestRecovery, TestFFIPhoneChangeRoot and TestFFIPhoneYubiKey): what a person does
 // after a loss, played on whole members. A device restored from yesterday's
 // backup gets back in; a removed device restored from a backup made before
 // its removal stays out. The root lost and taken back with the recovery key
-// is TestRecovery (computers) and TestFFIPhoneRestore (a phone).
+// is TestRecovery (computers), TestFFIPhoneChangeRoot and TestFFIPhoneYubiKey
+// (a phone, with the recovery sheet or a YubiKey).
 
 // backup copies a stopped service's state folder, as a nightly backup.
 func backup(t *testing.T, s *testService) string {

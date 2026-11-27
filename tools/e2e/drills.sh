@@ -9,8 +9,9 @@
 #
 #   - the root is lost and a computer takes the group back with the
 #     recovery key, then hands it to an admin (TestRecovery);
-#   - a new phone restores the group with the recovery sheet once the root
-#     is lost (TestFFIPhoneRestore, the phone's member on Linux);
+#   - a phone in the group becomes its root with the recovery sheet, or with
+#     the secret a YubiKey holds, once the root is lost (TestFFIPhoneChangeRoot,
+#     TestFFIPhoneYubiKey; the phone's member on Linux);
 #   - a device restored from yesterday's backup gets back in while the
 #     group went on (TestDrillRestoreFromYesterday);
 #   - a removed device restored from a backup made before its removal
@@ -30,4 +31,4 @@ CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
 CBB_TEST_RUST_SERVICE="$top/target/release/cbb" CBB_TEST_ALONE="$top/target/release/cbb" \
 	CBB_PHONE_ON_LINUX="$top/target/release/examples/phone-on-linux" \
 	go test -timeout 60m -count "$count" ./internal/service \
-	-run '^(TestRecovery|TestFFIPhoneRestore|TestDrillRestoreFromYesterday|TestDrillRemovedStaysOut)$' -v
+	-run '^(TestRecovery|TestFFIPhoneChangeRoot|TestFFIPhoneYubiKey|TestDrillRestoreFromYesterday|TestDrillRemovedStaysOut)$' -v

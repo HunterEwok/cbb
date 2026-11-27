@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Keeps the release channel current (docs/maintainers/maintaining.md, "Signed
-# releases"): takes the stable.json that cbb.tools renews every week with
+# releases"): takes the stable.json that cbb.tools renews twice a week with
 # the channel key into the branch channel, after checking it under the
 # pinned roots, and opens an issue when keys.json or stable.json there is
 # close to its expiry. It holds no key: cbb.tools signs, and GitHub only

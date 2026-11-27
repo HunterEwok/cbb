@@ -1,404 +1,420 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Testing
 
-For contributors and reviewers: how Connect Beyond Borders is tested, from a single function to
-real devices, and which level answers which question. The commands are in
-[CONTRIBUTING.md](../CONTRIBUTING.md#development), the CI jobs one by one in
-[maintaining](maintainers/maintaining.md#ci), and the tests on real devices in the
-[test bench](maintainers/testbench.md).
+For contributors, engineers, and security reviewers: how Connect Beyond Borders is tested from single
+functions to physical devices, and which test level verifies each property. For per-component build
+and test commands, see [Contributing](../CONTRIBUTING.md#development). For the full CI job list, see
+[Maintaining](maintainers/maintaining.md#ci). For differential and native fuzzing, see
+[Differential fuzzing](differential.md). For physical hardware procedures, see
+[Test bench](maintainers/testbench.md).
 
 ## Levels
 
-| Level | What it shows | Where | Runs |
+| Level | What it verifies | Where | When it runs |
 |---|---|---|---|
-| Unit tests | one package or type does what its comment says | `*_test.go`, `cargo test`, `swift test`, `./gradlew -p kit test` | every push, in CI |
-| Interop vectors | the four implementations (Go, Rust, Swift, Kotlin) read and write the same bytes | `testdata/interop` | every push, in CI |
-| Cross tests | two implementations talk over a real connection | Go tests that start `cbb`, and the kits' tests that join groups of 0.6 through the core | every push, in CI |
-| Service tests | several members, with their real services, in one process or as programs | `internal/service`, `member/tests` | every push, in CI |
-| System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
-| App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `tray app`, `Android app` jobs and the Mac app's part of `test and build (macOS), homebrew, Mac app` | every push, in CI |
-| Bench scenarios | real devices pass real copies over real networks | the [test bench](maintainers/testbench.md), its [catalogue](maintainers/testbench-catalogue.md) | before each release |
+| Static checks and lints | Formatting, linters, vulnerability scans, license compliance, workflow security, spelling, design tokens, translations, and repository rules | `check` and `advisories (Rust, Android, tray app)` jobs | Every pull request in CI |
+| Unit tests | Individual packages, types, and functions meet their contracts | `*_test.go`, `cargo test`, `swift test`, `./gradlew -p kit test`, Qt host tests, Node host tests | Every pull request in CI |
+| Interop vectors | Go, Rust core, Swift kit, and Kotlin kit agree on shared formats and rules | `testdata/interop` | Every pull request in CI |
+| Frozen format vectors | Binary CBOR format, envelopes, records, commands, grants, credentials, copies, and push payloads match deterministic generators and independent readers | `testdata/format`, `the frozen format (testdata/format)` job | Every pull request in CI |
+| Formal model | Record evaluation rules satisfy safety invariants in Quint | `docs/model/records-v3.qnt`, `model of the records' rules (Quint)` job | Pull requests touching the core or model |
+| Differential fuzzing | Go, Rust core, and Kotlin kit produce identical verdicts on mutated inputs | `differential (Go, Rust, Kotlin)` job; nightly `differential, a fresh seed` | Every relevant pull request; nightly |
+| Cross tests | Implementations interoperate over real connections | Go service tests starting `cbb`, phone kit tests joining groups through `cbb_core` | Every pull request in CI |
+| Service tests | Full multi-member groups running real services over loopback or local networks | `internal/service`, `member/tests` | Every pull request in CI |
+| System tests | Built binaries on real operating systems: containers, sockets, clipboards, installers, upgrades, and hook isolation | `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `upgrade from the last release`, `test (freebsd)`, `test (linux/mips under qemu)`, `docker image`, `cbb (Rust), the optimized builds and the installers`, `a release build ignores the test hooks` | Every pull request in CI |
+| App and firmware builds and tests | Phone, watch, desktop, and embedded targets build and pass automated tests on simulators, emulators, QEMU, and runners | `phone kit (Linux)`, `iPhone app`, `tray app`, `Android app`, `Android app on an emulator`, `F-Droid build reproduces`, `Aurora app`, `HarmonyOS app (native module)`, `Aurora and HarmonyOS apps' code on the computer`, `phone core`, `the core on the ESP32`, `ZX Spectrum Next`, and the Mac app part of `test and build (macOS), homebrew, Mac app` | Every pull request in CI |
+| Nightly deep checks | Native fuzzers, deterministic group simulation, slow tests, Miri, AddressSanitizer, mutation testing, reproducible builds, branch coverage, and flakiness repeats | `.github/workflows/nightly.yml` | Nightly |
+| Bench scenarios | Physical devices sync real copies over real networks | [Test bench](maintainers/testbench.md) and [Test bench catalogue](maintainers/testbench-catalogue.md) | Before each release |
 
-A change is not done before the levels it touches pass locally (CONTRIBUTING lists the
-commands per part); CI then runs the jobs of every part the pull request changes, and the
-`ci-ok` job sums them up for the branch rules. Which part a path belongs to, and which parts
-read another's files, is in `.github/ci-changes.sh`; a path it does not know, the workflow,
-`go.mod` and `testdata/` run every job. A skipped job has nothing new to test: the pull
-request is up to date with main, whose run tested those files when they last changed.
+Run the local checks for every component a change touches before pushing (see
+[Contributing](../CONTRIBUTING.md#development)). In CI, the `changes` job runs
+`.github/ci-changes.sh` to determine which parts a pull request modifies, and only the jobs that
+build or test those parts run. Changes to unrecognized paths, `.github/workflows/ci.yml`,
+`.github/workflows/release.yml`, `.github/actions/*`, `.github/*.sh`, `.github/*.ps1`, `go.mod`,
+`go.sum`, or `testdata/*` trigger all jobs. The `ci-ok` job aggregates every required job for branch
+protection; skipped jobs count as passed because `main` already tested those unchanged files.
 
 ## Unit tests
 
-- Go tests run with the race detector on Linux x86-64, Linux ARM64 and macOS, under QEMU
-  for big-endian 32-bit MIPS, and on FreeBSD. A change to Go is tested under it on a Mac too
-  before it is pushed, since a fault of one system's race build shows only there: gVisor's
-  race build on ARM64 before its 2026-08 versions keeps its network stack from ever sleeping,
-  which on the runner's three cores slows the tunnel's tests past their waits, while Linux
-  x86-64 passes them in a fraction of a second.
-- Time comes from the caller (`now time.Time`), so a test sets the clock; lifetimes and
-  renewals are tested at their edges without waiting.
-- The TPM code runs against swtpm (`internal/tpmkey`), the ei protocol against a test EIS
-  server (`internal/ei/eitest`), the clipboards against wl-clipboard and xclip.
-- The Rust core is `no_std`; its tests run on the host, and CI builds it for the ESP32-C6
-  and ESP32-S3 and runs the firmware's self-test in Espressif's QEMU.
+- **Go**: `go test -race` runs on Linux x86-64 (`ubuntu-latest`), Linux ARM64 (`ubuntu-24.04-arm`),
+  Windows (`windows-latest`), and macOS (inside `test and build (macOS), homebrew, Mac app`), with a
+  32-bit x86 run (`GOARCH=386`) on `internal/group`, `internal/clip`, and `internal/helper`, a
+  big-endian 32-bit MIPS run under QEMU (`test (linux/mips under qemu)`), and a FreeBSD run
+  (`test (freebsd)`). Test Go changes under `-race` on macOS as well as Linux because OS-specific
+  race-detector issues can surface on only one platform.
+- **Clock injection**: Go code takes time from the caller (`now time.Time`), so unit tests exercise
+  lifetimes and renewals at exact boundaries without sleeping.
+- **System integrations**: TPM tests run against `swtpm` (`internal/tpmkey`), the `ei` remote-input
+  protocol runs against a test EIS server (`internal/ei/eitest`), and Linux clipboard tests run
+  against `wl-clipboard` under headless Sway and `xclip` under Xvfb.
+- **Rust core and firmware**: `cbb_core` is `no_std`. Its unit tests run on the host, and the
+  `the core on the ESP32` job cross-compiles `cbb_core` with TLS for ESP32-C6 (RISC-V) and ESP32-S3
+  (Xtensa), builds the Arduino Nano ESP32 firmware (`esp32/`), and runs the firmware console, flash
+  persistence, and TLS 1.3 self-test in Espressif's QEMU (`esp32/qemu-test.sh`).
 
 ## Interop vectors
 
-`testdata/interop` holds JSON files of fixed inputs and the exact bytes each implementation
-must produce or accept: certificates, device and revocation records, freezes, takeovers,
-admin CAs, commands, quick actions, server credentials, releases, attestation evidence, the
-watch's state, content hashes, join QR codes and a CPace exchange.
+`testdata/interop` holds JSON test vectors that keep Go, the Rust core (`cbb_core`), the Swift kit,
+and the Kotlin kit aligned on shared encodings and rules:
 
-- The files named `go-*.json` and those without a prefix are written by Go tests with
-  `-update` and read by the Swift kit, the Kotlin kit and, for what it implements, the lite
-  core (`core/src/vectors.rs`).
-- `seal-go.json` holds messages Go's `crypto/hpke` sealed with the sealing suite, and
-  `seal-rust.json` what the core seals; the core opens both, and no Go test writes the first
-  again.
-- A Go test fails when a committed vector is out of date, and names the command that
-  writes it again.
-- `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
-  from the draft; the Rust core opens its messages, and no test writes it.
+- **Go-generated vectors** (`go-attest.json`, `go-entries.json`, `go-netid.json`,
+  `go-release.json`, `go-release-envelopes.json`, `go-sekey-seal.json`, `go-zxnext.json`,
+  `media-names.json`, `tunnel-state.json`): Written by Go tests with `-update` and verified by
+  `cbb_core` (`core/src/vectors.rs`, `core/src/attest.rs`, `core/src/api/signed.rs`), the Swift kit,
+  and the Kotlin kit. A Go test fails if a committed vector is out of date and prints the command to
+  regenerate it.
+- **Rust-generated and cross-checked vectors**: `seal-go.json` holds messages sealed by Go's
+  `crypto/hpke`, and `seal-rust.json` holds messages sealed by `core/src/seal.rs` (regenerated with
+  `CBB_UPDATE_VECTORS=1`); `core/src/seal.rs` opens both. `keyboard.json` and `push-open.json` are
+  generated by `cbb_core` tests and checked by the phone kits. Other shared JSON vectors cover
+  strict manifests and release files (`strict.json`, `strict-files.json`, `strict-generated-1.json`),
+  copy verdicts (`copy-verdicts.json`), content (`content.json`), hybrid logical clocks
+  (`hlc-ahead.json`), member certificates (`member-certs.json`), group state (`member-group.json`),
+  and join QR payloads (`joinqr.json`).
+- **External standard vectors**: `xwing-hpke-pq.json` (from `draft-ietf-hpke-pq-05`) is verified by
+  `core/src/seal.rs`, and `nist-slh-dsa-sha2-128s.json` (NIST SLH-DSA-SHA2-128s) is verified by both
+  `core/src/vectors.rs` and `internal/release/release_test.go`. Neither file is regenerated by tests.
 
-A change to the wire format changes the vectors in the same pull request, together with
-[the protocol](protocol.md) and every implementation.
+For the binary CBOR wire format (`testdata/format`), `gen.py` and `push_gen.py` deterministically
+generate vectors covering strict CBOR rules, keys, signed envelopes, records, key statements,
+commands, grants, server credentials, frames, copies, recovery sheets, push payloads, and TLS key
+containers. Three independent implementations verify them: `cbb_core` (`core/src/format`,
+`core/src/push`), the standalone Go checker (`testdata/format/check`), and `gen.py`'s own strict
+reader. The `the frozen format (testdata/format)` CI job runs on every pull request to verify
+`testdata/format/FROZEN` with `tools/formatfreeze`, confirm deterministic regeneration with
+`gen.py`, and run `testdata/format/check`.
 
-The [differential run](differential.md) changes these bodies and record sets at random and
-checks that all four implementations still read them alike; a case they read differently
-becomes a vector here.
+Any change to the wire format must update [Protocol](protocol.md), [Wire format](format.md), the
+vectors, and every implementation in the same pull request.
+
+[Differential fuzzing](differential.md) mutates vectors from `testdata/interop` and checks that Go,
+the Rust core, and the Kotlin kit return identical verdicts; any disagreement is promoted to a
+permanent vector.
 
 ## Cross tests
 
-- The Swift and Kotlin kits join groups of 0.6 through the core and sync through its member
-  (`CoreMemberTests`, `CorePairingTests`, `WindowTests`; `CoreMemberTest`, `CorePairingTest`).
-- `TestAloneMember`, `TestAloneRemotePaste` and `TestAloneQuickActions` run the built cbb
-  without its helper (`CBB_TEST_ALONE`) among other services at home. Sync away from home runs only in
-  a group of 0.6 (D-122): `member/tests/away_live.rs` and `away_hubs.rs` (the latter with
-  `--features testhooks`) run real services of such a group through the hub's tunnel.
+- **Phone kits and core**: The Swift kit (`CoreMemberTests`, `CorePairingTests`, `WindowTests` in
+  `apps/ios/CBBKit/Tests/CBBKitTests`) and the Kotlin kit (`CoreMemberTest`, `CorePairingTest` in
+  `apps/android/kit/src/test/kotlin/tools/cbb/kit`) join groups and sync through `cbb_core` and the
+  Rust member.
+- **Standalone `cbb` interoperability**: `TestAloneMember`, `TestAloneRemotePaste`,
+  `TestAloneQuickActions`, and `TestAloneMemberAwayXHTTP` in `internal/service/alone_test.go` run
+  the built `cbb` binary without `cbb-helper` (`CBB_TEST_ALONE`) alongside full-computer members.
+- **Away-from-home live tests**: `member/tests/away_live.rs` and `member/tests/away_hubs.rs` (with
+  `--features testhooks`) run real Rust members syncing through hub tunnels.
 
 ## Service and system tests
 
-- `internal/service` starts whole members in one test: sync, pairing, remote paste, quick
-  actions, sync away from home through a hub, a forwarder (`TestAwayThroughForwarder`) and a
-  relay (`TestAwayThroughRelay`), with obfuscation (`TestAwayObfuscated`).
-- `member/tests` runs the Rust `cbb service` as programs on the loopback, without mDNS, and
-  talks to them over the control and admin sockets as plain JSON (`common/mod.rs`):
-  `control_contract` checks that every operation answers once and on the right socket and
-  that a broken client never stops the service; `control_admin` admits, renames, removes,
-  freezes, makes admins, hands over and takes over; `remote_commands` carries out remote
-  paste and quick actions through a member's watchers; `helper_faults` runs a fake
-  cbb-helper that crashes, hangs, writes garbage or plays a TPM. `cli_commands` checks the
-  command line against a fake service.
-- `tools/e2e/e2e.sh` runs the built static binary as three members and an avahi browser
-  in Docker containers: mDNS, pairing with codes, sync, a wrong code.
-- The installer jobs install, run and remove the service on each system they cover.
+- **Go multi-member service tests (`internal/service`)**: Start real `cbb` and `cbb-helper`
+  processes to test syncing, pairing, remote paste, quick actions, recovery, and away-from-home sync
+  through a hub, a forwarder (`TestAwayThroughForwarder`), a blind relay (`TestAwayThroughRelay`),
+  and obfuscated tunnels (`TestAwayObfuscated`).
+- **Rust service integration tests (`member/tests`)**: Run `cbb service` on loopback without mDNS
+  and exercise the control and admin sockets with plain JSON (`member/tests/common/mod.rs`):
+  - `control_contract.rs`: Verifies every operation replies once on the expected socket and that a
+    broken client cannot stop the service.
+  - `control_admin.rs`: Exercises admitting, renaming, removing, freezing, promoting admins,
+    handover, and moving the group.
+  - `remote_commands.rs`: Delivers remote paste and quick actions through member watchers.
+  - `helper_faults.rs`: Runs a fake `cbb-helper` that crashes, hangs, writes garbage, or emulates a
+    TPM.
+  - `cli_commands.rs`: Exercises CLI commands against a fake service.
+  - `next_link.rs`: Exercises `cbb next link` UART framing against a real echo server.
+  - `phone_push.rs`: Runs `phone-on-linux` with `pushd` and real computer members to verify push
+    registration, sealed push delivery, and re-registration requests.
+- **Container e2e (`tools/e2e/e2e.sh`)**: Runs the built `cbb` (and `cbb-helper` when present) as
+  three members (`a`, `b`, `c`) plus a fourth member (`d`) and an `avahi-browse` container on a
+  Docker network to test mDNS discovery, pairing with codes, clipboard and secret sync, and wrong
+  pairing codes.
+- **Installer and upgrade jobs**: `packaging`, `windows installer`, `OpenWrt`, `test (freebsd)`,
+  `cbb (Rust), the optimized builds and the installers`, `upgrade from the last release`, and the
+  macOS installer steps in `test and build (macOS), homebrew, Mac app` install, start, verify,
+  update, and cleanly uninstall the service on each target platform.
 
 ## Running tests in parallel
 
-Go runs the packages of `go test ./...` at the same time, and Cargo the tests of each test
-binary; the tests of `internal/service` do not run in parallel within one process, since each
-starts whole members that find each other by mDNS on the same network. CI splits them into
-parts instead, each on a machine of its own:
+Go runs packages in `go test ./...` concurrently, and Cargo runs tests within each test binary
+concurrently. Tests in `internal/service` cannot run in parallel inside one process because each
+test starts live member services that discover each other over mDNS on the same network. CI splits them
+across runners instead:
 
-- `service tests on the Rust cbb, the build` builds every program once, instrumented for the
-  coverage (the Rust `cbb`, `phone-on-linux`, a `cbb-helper` and the Go
-  test binaries built with `-cover`), runs the Rust cbb's own tests and hands the build on as
-  one archive.
-- `service tests on the Rust cbb (1)` to `(3)` each run a part of `internal/service`, some
-  fourteen minutes each; `(3)` then runs the desktop connector and the previous release. Each
-  writes its Go coverage (`cover-go-service-PART.out`) and its Rust profiles.
-- `service tests on the Rust cbb, the coverage` adds up the Rust profiles of the build and
-  every part into `rust-service`.
+- `service tests on the Rust cbb, the build`: Builds instrumented binaries once (`cbb`,
+  `phone-on-linux`, `cbb-helper` with `-cover`, and the `service.test` and `connector.test` Go test
+  binaries), runs the Rust member's own tests, and uploads one archive (`service-build`).
+- `service tests on the Rust cbb (1)` to `(3)`: Each job runs one shard of `internal/service`;
+  shard `3` also runs `internal/connector` and `TestPreviousRelease`. Each shard uploads its Go
+  coverage (`cover-go-service-PART.out`) and Rust `.profraw` profiles.
+- `service tests on the Rust cbb, the coverage`: Merges the Rust profiles from the build job and
+  all three shards into `coverage-rust-service.json` (the `rust-service` coverage row).
 
-`tools/shard` makes the parts: it reads the test names (`service.test -test.list .`) and
-prints the `-test.run` expression of one part, filled longest test first from the seconds
-in `tools/shard/service.txt`. Every test is in exactly one part, a new one included, which
-counts as a median test until the file names it. After the tests' times change much, record
-a full run's `-v` output into the file:
+`tools/shard` computes balanced shards by reading test names from `service.test -test.list .` and
+assigning them longest-first using durations recorded in `tools/shard/service.txt`. Every test
+lands in exactly one shard; new tests default to the median duration until recorded. After test
+durations shift, refresh `tools/shard/service.txt` from a full `-v` run:
 
 ```sh
 go run ./tools/shard -record tools/shard/service.txt <service-test.log
 ```
 
-On a computer with Docker, `tools/e2e/parallel.sh` runs the same parts at the same time, each
-in a container on a Docker network of its own, after one container has built the programs
-and the test binary; IMAGE is a Linux image with Go, Rust, swtpm, Xvfb and xclip:
+On a machine with Docker, `tools/e2e/parallel.sh` builds the binaries in one container and runs the
+shards concurrently, each in its own container and isolated Docker network. `IMAGE` must provide Go,
+Rust, `swtpm`, `Xvfb`, and `xclip`:
 
 ```sh
-sh tools/e2e/parallel.sh -n 6 IMAGE              # every test of internal/service
-sh tools/e2e/parallel.sh -run 'Takeover' IMAGE   # only those -run names
+sh tools/e2e/parallel.sh -n 6 IMAGE              # all tests in internal/service
+sh tools/e2e/parallel.sh -run 'Takeover' IMAGE   # only tests matching the regexp
 ```
 
-Other jobs run side by side the same way: the iPhone app's UI tests on an iPhone and an iPad
-simulator are two jobs, the Rust workspace's checks and Raspberry Pi builds
-(`cbb (Rust), the checks and the Raspberry Pi builds`) and its optimized builds and installers
-(`cbb (Rust), the optimized builds and the installers`) run beside its tests (`cbb (Rust)`),
-which run as the service tests do: one job builds them once into a cargo-nextest archive,
-two parts run a share of its tests each (`--partition`; within a part cargo-nextest runs the
-test binaries side by side, `.config/nextest.toml`, and the tests that time their own run
-run alone; the two longest, the power cut at every byte and the record sets' differential
-check, run after the shares, one in each part), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
-and the Kotlin kit's tests before the Android apps' build, in one job (`Android app`).
-A job is split only where its parts finish sooner than the longest jobs: CI builds every
-Linux, FreeBSD and Windows target in one job (`build (Linux, FreeBSD, Windows)`, about 24
-minutes), since its two halves of 10 and 14 minutes would end long before the rest and only take a
-second runner.
+Other long CI jobs also split across runners where splitting shortens wall-clock time:
 
-The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
-the iPhone app's jobs build only the simulator's Rust library for the runner's processor
-(`ffi/bind.sh ios-sim`; the macOS job below builds all three with the latest Rust),
-they do not run for a change that touches only Go (`iosapp` in `.github/ci-changes.sh`; the
-kit's interop tests still do), and the jobs shorter than the iPhone app's share one machine
-(`test and build (macOS), homebrew, Mac app`): the phone kit's tests, CodeQL's analysis of the Go
-files for macOS alone (which `codeql.yml` runs on main and weekly), macOS's `go test`, the
-macOS archives and the check that they ignore the test hooks, Homebrew's formula, the Mac app
-and the iPhone's libraries with the latest Rust. So at most four macOS jobs want a machine at
-once (the iPhone, the iPad, this job and the iPhone app's CodeQL analysis), and none waits for
-another; a second pull request's or a release's macOS jobs find a machine sooner.
-So the iPhone and the iPad, the longest, start at once, each booting its simulator while its
-Rust builds. The iPhone app's CodeQL analysis (`codeql-swift.yml`, about half an hour, built
-for the runner's processor only) starts on a pull request with the other jobs, from `ci.yml`,
-and takes the first macOS runner that is free.
+- **Rust workspace tests**: `cbb (Rust), the checks and the Raspberry Pi builds` and
+  `cbb (Rust), the optimized builds and the installers` run alongside the test pipeline.
+  `cbb (Rust), the build of the tests` compiles all tests once into a `cargo-nextest` archive; two
+  `cbb (Rust) (1)` / `(2)` jobs partition the tests (`--partition hash:PART/2`, `.config/nextest.toml`,
+  with timing-sensitive tests isolated via `threads-required = "num-cpus"` and the two longest tests,
+  `powerloss::a_power_cut_at_every_byte_of_every_save` and
+  `records::tests::differential::a_set_agrees_with_evaluate`, pinned one per shard); and
+  `cbb (Rust), the coverage` combines the profiles into `coverage-rust.json`.
+- **iPhone and iPad UI tests**: `iPhone app (iPhone)` and `iPhone app (iPad)` run in parallel, each
+  booting its simulator while building only the simulator Rust library for the runner's architecture
+  (`ffi/bind.sh ios-sim`).
+- **Android**: `Android app` runs the Kotlin kit tests before building and testing the Android and
+  Wear OS apps in one job.
+- **Cross-compilation**: `build (Linux, FreeBSD, Windows)` builds all Linux, FreeBSD, and Windows
+  targets in one job because splitting it would not reduce overall CI latency.
 
-The jobs that build the most Rust on the way to their tests (the iPhone app, the phone kit
-in the macOS job, the Android phone core and the service tests' build) keep their build in the Actions cache
-(`.github/actions/rust-cache`). A pull request saves its own and its later runs take it, so
-they compile only the crates it changed; another pull request never reads it, and the release
-and F-Droid builds build from nothing.
+To stay within the five-runner macOS concurrency limit, CI keeps macOS work compact:
+
+- Changes that touch only Go skip `iPhone app` (`iosapp` in `.github/ci-changes.sh`), while the
+  Swift kit's tests still run.
+- Shorter macOS tasks share one runner in `test and build (macOS), homebrew, Mac app`: Swift kit
+  tests, CodeQL analysis for macOS-only Go files, `go test -race`, macOS release archives and hook
+  checks, Homebrew formula and installer tests, Mac app tests and `.pkg` verification, and
+  `ffi/bind.sh ios` with the latest stable Rust.
+- `codeql-swift.yml` runs on pull requests modifying `apps/ios/**` alongside the other jobs and
+  takes the next free macOS runner.
+
+Jobs with heavy Rust builds (`iPhone app`, `codeql-swift`, the Swift kit step of `test and build
+(macOS), homebrew, Mac app`, `phone core (android)`, `service tests on the Rust cbb, the build`,
+`cbb (Rust), the build of the tests`, and `Aurora and HarmonyOS apps' code on the computer`) cache
+incremental artifacts per pull request via `.github/actions/rust-cache`. Pull requests do not share
+caches with each other, and release and F-Droid builds compile from scratch.
 
 ## Before and beside CI
 
-A change is tested where it can be before it is pushed: the cloud sessions run everything that
-runs on Linux (the Rust and Go tests, the service tests on the Rust `cbb`, the e2e, the
-format's vectors). Right after the push, while CI runs, a maintainer's macOS machine runs what
-only it can (the Apple builds and their unit tests, Go with `-race` on macOS), a Linux machine
-builds the Android apps and runs their unit tests, screenshots, lint and the F-Droid build, and
-a Windows machine runs Go and Rust on Windows and the installer. The Android emulator suite
-needs a machine with hardware virtualization and runs in CI. They
-answer in minutes what CI answers in most of an hour, so a red result is fixed before CI ends;
-CI stays the gate before the merge.
+Test changes locally on every platform available before pushing:
+
+- **Linux**: Rust and Go tests, service tests on the Rust `cbb`, container e2e, and format vectors.
+- **macOS**: Apple builds, unit tests, and `go test -race` on macOS.
+- **Android and Windows**: Local Linux machines can build and unit-test Android apps, screenshots,
+  lint, and F-Droid reproducibility; Windows machines run Windows Go/Rust tests and the installer.
+  The Android emulator job (`Android app on an emulator`) requires hardware virtualization and runs
+  in CI.
+
+CI remains the merge gate (`ci-ok`).
 
 ## Time
 
-Rules that live for days are walked with a moved clock, never waited for.
+Time-dependent rules that span minutes or days are tested with a controlled clock rather than real
+wall-clock waits:
 
-- The core reads no clock: it takes its own clock for the keys and a leaf's running time as
-  inputs. `core/src/longrules.rs` plays the caller hour by hour and day by day: the weekly
-  change of the sealing keys with a device that sleeps three weeks and asks for its copies to
-  be sealed again, a clock set back by weeks that does not stop that change, a guarded
-  leaf's 35-day grant on its running time, and a change of root by the recovery key (rule 33),
-  which counts at once whatever the clock says, survives a restart, and leaves the old root's
-  later records, at any date, without effect.
-- The Rust service has one wall clock, `uptime::wall_ms()`, and one clock of running time,
-  `uptime::now()`; `tools/repocheck` refuses a read of the system's wall clock anywhere else
-  in `member/src` but the few files that decide no rule. The tests move both through the file
-  `CBB_TEST_AHEAD_FILE` names: `testClock.set` moves the wall clock as a person sets it,
-  `testClock.run` moves both as if the machine had run that much longer
-  (`internal/service/time_test.go`). The Go helper reads no clock.
-- When the service moves to the 0.6 core (wave 5), `internal/service/time_test.go` gains the
-  core's rules through the whole service: a change of root by the recovery key with a member
-  off at the time and one restarted in the middle; the weekly key change with a member
-  that slept through two changes and gets its copies sealed again; a guarded leaf whose grant
-  goes stale after 35 days of running time and obeys nobody until it has a new one; a wall
-  clock set back by days during each of them.
+- **Rust core (`core/src/longrules.rs`)**: `cbb_core` reads no system clock; callers supply wall
+  clock time and device running time. `longrules.rs` advances both hour by hour and day by day to
+  verify weekly sealing-key rotation (including a device offline for three weeks requesting
+  re-sealing), backward wall-clock jumps, a guarded leaf's 35-day running-time grant, and immediate
+  recovery-key root changes regardless of clock skew.
+- **Rust service (`member/src/uptime.rs`)**: The service reads wall time only through
+  `uptime::wall_ms()` and running time through `uptime::now()`. `tools/repocheck` rejects direct
+  `SystemTime::now()` calls elsewhere in `member/src` outside allowed non-rule files. Service tests
+  in `internal/service/time_test.go` (`TestPairingWindowCloses`, `TestSetWallClockMovesNoRunningTime`)
+  shift both clocks via `CBB_TEST_AHEAD_FILE` using `testClock.set` (wall clock only) and
+  `testClock.run` (both wall clock and running time). `cbb-helper` reads no clock.
 
 ## Power loss
 
-A save cut short must leave the old state or the new one, and a member must never act on
-what it has not saved.
+Interrupted saves must leave either the complete previous state or the complete new state, and a
+member must never act on state it has not finished saving:
 
-- `core/src/powerloss.rs` runs a member's life (records, a removal, commands sent twice,
-  copies with a secret sent twice, a change of root by the recovery key with its list) through
-  the two-slot store
-  of a device with only flash (`crate::store`), and cuts every save after each of its bytes,
-  the rest of the slot erased or stale. After each cut it starts again from the flash, is
-  sent again what it was handling, and must end as a member never cut: the state reads, is
-  the one before or after the save, no command runs twice or is lost, no copy is written
-  twice, and a change of root it reported stays.
-- The Rust service writes its state files through `files::write_atomic` (a new temporary
-  file, sync, rename). Its tests cut that write at every byte and step, as a process that
-  dies and as an error of the system, and find the old file or the new one; the temporary
-  file a crash leaves is swept at the next start once an hour old (`files::sweep`).
-- When the service moves to the 0.6 core, its saves of the core's state (the records with
-  the lists of the changes of root, the command counters, the freshness marks) join the same cut at
-  every step through the whole service.
+- **Flash two-slot store (`core/src/powerloss.rs`)**: Runs a member's lifecycle (records, removal,
+  repeated commands, repeated secret copies, and recovery-key root changes) through `crate::store`
+  and cuts every write after every single byte, leaving the remainder either erased or stale. After
+  each cut, the member restarts from flash and replays its inputs; tests verify that state loads
+  cleanly as pre-save or post-save, no command runs twice or is lost, no copy is written twice, and
+  reported root changes persist.
+- **Service files (`member/src/files.rs`)**: The Rust service saves state through
+  `files::write_atomic` (write temporary file, sync, rename). Unit tests inject faults at every byte
+  and step—both abrupt process termination and OS errors—and verify either the old or new file
+  remains intact. Leftover temporary files older than one hour are removed on startup by
+  `files::sweep`.
 
 ## The simulation
 
-`core/src/sim` runs a whole group in one process: 3 to 12 members on a network and clocks the
-test plays, every choice drawn from one seed, so that a failure replays from its seed alone.
+`core/src/sim` runs a deterministic multi-member simulation of 3 to 12 members in one process. Every
+network event, clock offset, and group action derives from a single numeric seed so any failure
+replays deterministically.
 
-- The network delivers, drops, duplicates, delays and reorders messages, splits the members into
-  two sides and heals; a member crashes, also in the middle of taking a message, and restarts
-  from what it wrote; clocks move by up to two minutes either way. Outside actions: copies,
-  admissions, removals, freezes and thaws, admins made, checkpoints, a change of root by the
-  recovery key on any member, two such changes at one seq (a fork), and a member off while days
-  pass, its keys changing on its return.
-- During the run: no member shows a copy as new twice; a removed member opens no copy sealed
-  after every other member had saved its removal (until a change of root brings it back); a
-  member that holds both heads of a fork is halted.
-- Then the network goes quiet: healed, every member back with the world's clock, every pair
-  synced until nothing changes. Every member of the group holds the same records (in a halted
-  group, every member ever admitted is halted on the same fork); a removed
-  member has learned its removal; each member restarted from what it wrote has the records and
-  the state it saved. Unless the group is halted, two members in turn send a last copy, newer than
-  any: it is sealed to every reader of the group and shown as new by each of them.
-- The members speak through `sim/exchange.rs`, the glue that stands in for the member protocol's
-  sync; wave 5 puts the core's sans-I/O connection in its place, and with it the check that
-  connections settle.
-- `cargo test -p cbb-core --lib sim::` runs 16 seeds of 300 steps; `SIM_SEEDS`, `SIM_FIRST` and
-  `SIM_STEPS` change that, `SIM_SEED` runs one, and `SIM_ALL=1` lists every failing seed rather
-  than stopping at the first. A failure is cut down to the fewest steps that still fail and
-  prints its replay, `SIM_SEED=… SIM_STEPS=… cargo test -p cbb-core --lib sim::`. The nightly run
-  takes a thousand seeds from a fresh start.
+- **Faults and actions**: The simulated network delivers, drops, duplicates, delays, and reorders
+  messages, partitions the group, and heals. Members crash mid-message and restart from persisted
+  state; clocks skew by up to two minutes. Actions include copies, admissions, removals, freezes and
+  thaws, admin promotions, checkpoints, recovery-key root changes, forks at the same sequence
+  number, and devices offline for days across key rotations.
+- **Invariants during the run**: No member shows the same copy as new twice; no removed member opens
+  a copy sealed after all other members persisted its removal (unless a root change restores it);
+  any member holding both heads of a fork halts.
+- **Quiescence checks**: After healing the network, restoring clocks, and syncing every pair until
+  quiescent, all group members hold identical record digests (or all halt on the same fork), removed
+  members know they were removed, restarted members match their saved state, and in non-halted
+  groups a final copy reaches and opens on every reader.
+- **Running locally and nightly**: `cargo test -p cbb-core --lib sim::` runs 16 seeds of 300 steps
+  by default. Configure runs with `SIM_SEEDS`, `SIM_FIRST`, `SIM_STEPS`, `SIM_SEED` (single seed),
+  and `SIM_ALL=1` (report all failing seeds instead of stopping at the first). Failures shrink to
+  the minimum failing step count and print the exact replay command:
+  `SIM_SEED=… SIM_STEPS=… cargo test -p cbb-core --lib sim::`. The nightly `the group simulation,
+  a thousand fresh seeds` job runs 1,000 fresh seeds.
 
 ## Recovery drills
 
-What a person does after a loss, played on whole members by `sh tools/e2e/drills.sh`: the root
-lost and the group taken back with the recovery key, then handed to an admin
-(`TestRecovery`); a phone in the group changing the root with the recovery sheet
-(`TestFFIPhoneChangeRoot`) or with the secret a YubiKey opens (`TestFFIPhoneYubiKey`), the
-phone's member on Linux; a device restored from yesterday's backup that gets back in while
-the group went on (`TestDrillRestoreFromYesterday`); a removed device restored from a backup made
-before its removal that stays out (`TestDrillRemovedStaysOut`). What a real iPhone's Secure
-Enclave and Face ID add is a hand checklist in the bench's test plan, run once before a release.
+Recovery tests in `internal/service` exercise complete recovery flows across real services:
+
+- `TestRecovery` (`internal/service/recovery_test.go`): A lost main device is recovered with the
+  recovery key on a computer, then handed over to an admin.
+- `TestFFIPhoneChangeRoot` (`internal/service/recovery_test.go`) and `TestFFIPhoneYubiKey`
+  (`internal/service/phone_yubikey_test.go`): A phone member (`phone-on-linux`) moves the group
+  using the recovery sheet or a YubiKey-sealed secret.
+- `TestDrillRestoreFromYesterday` (`internal/service/drill_test.go`): A device restored from an
+  older backup rejoins an active group.
+- `TestDrillRemovedStaysOut` (`internal/service/drill_test.go`): A removed device restored from a
+  pre-removal backup remains rejected.
+
+`sh tools/e2e/drills.sh [COUNT]` builds `cbb`, `cbb-helper`, and `phone-on-linux` and runs all
+five drills, with the environment variables they need (`CBB_TEST_RUST_SERVICE`, `CBB_TEST_ALONE`,
+`CBB_PHONE_ON_LINUX`). Real
+iPhone Secure Enclave and Face ID recovery steps are verified manually on the
+[test bench](maintainers/testbench.md).
 
 ## Soak
 
-`tools/soak/soak.sh` runs a small group of a build's `cbb` for days on one machine, on 127.0.0.1
-only, and checks that what is copied arrives everywhere and that a member killed with SIGKILL
-starts whole. Several stands run side by side, each with its own name, folder and ports
-(`SOAK_NAME`, `SOAK_DIR`, `SOAK_PORT`), in two profiles:
+`tools/soak/soak.sh` runs a local loopback (`127.0.0.1`) group of `cbb` and `cbb-helper` processes
+for days, verifies that copies arrive on every member, kills random members with `SIGKILL` (leaving
+member 1 alive for the full run so slow leaks surface), and checks that restarted members recover
+intact. Multiple stands can run concurrently by setting `SOAK_NAME`, `SOAK_DIR`, and `SOAK_PORT`.
 
-- **calm**: 3 members; a line every two minutes, checked on every member; a member killed every
+Two profiles are supported (`SOAK_PROFILE`):
+
+- **calm** (default): 3 members; one checked text copy every 2 minutes; one random `SIGKILL` every
   10 to 60 minutes.
-- **load**: 8 members; the calm lines, and every ten minutes a burst of a copy a second for a
-  minute (one in ten a text at the 1 MiB limit), its last copy checked on every member; every
-  half hour a file of up to 64 MiB, checked by its hash on every member; the kills inside the
-  bursts. It runs under `nice` on one core, so that a calm stand beside it keeps its numbers.
+- **load**: 8 members; the calm schedule plus a 60-second burst of one copy per second every 10
+  minutes (one in ten near the 1 MiB text limit, last copy verified on all members) and a random
+  file up to 64 MiB every 30 minutes (verified by SHA-256 on all members), with kills timed inside
+  bursts. Runs under `nice 10` and pinned to one CPU core (`taskset`) so a calm stand beside it is
+  not perturbed.
 
-Once a day a line goes to `soak.log`: copies sent and checked, arrived and missed, kills, whole
-and broken starts, the delivery time of the checked copies (p50, p95, max over the slowest
-member, and each member's p95, to tell which one was slow; the members are asked in turn, so
-each time includes the asking before it), the largest RSS and open files, and how each member's memory and open files moved. A
-single sample of RSS swings by megabytes as large copies come and go, so memory is judged by
-floors: after an hour's warm-up (again after each restart) a member's samples, one every ten
-minutes, go into windows of an hour, and a window's floor is its least RSS and open files.
-`soak.sh verdict` prints the pass or fail line so far, and `soak.sh stop` ends with it: PASS when
-no copy was missed, every start was whole, no member's RSS floor grew over its first window's by
-more than 1 MiB on the calm stand or 4 MiB on the loaded one, no member's RSS floor rose in three
-windows in a row (a rise being at least 64 KiB over the previous window's floor), no member's floor of open files rose over its first window's, the members' folders (state, records
-and logs) grew by at most 20 MiB a day each (measured from six hours after the first sample), and
-the delivery time's p95 is at most 10 s. The bounds are fixed ahead of any long run's measures: a run over
-them is a finding, not a reason to move them. Beside the verdict the single samples' numbers are
-printed as `raw_*`, for reading. A checked copy that is not on every member within 60 s counts as
-missed, also when it was sent just after a kill: a restarted member is back and has it within a
-minute, or the run fails. These bounds follow the service's reconnect wait (5 s after a lost
-connection, `RECONNECT_WAIT` in `member/src/node.rs`) and the 15 s timeout of a silent peer;
-they are set again when the reconnect work (#539) changes either. A third profile, one service
-process in two groups (the family case), waits for wave 5, when one service holds several
-groups.
+Commands: `sh tools/soak/soak.sh start BINDIR`, `status`, `verdict`, and `stop`.
 
-One member of each stand is never killed, so that a slow leak inside one long-lived process shows.
+Every 24 hours, a summary line is written to `soak.log` with copies sent, checked, arrived, and
+missed; kills and whole vs. broken restarts; checked-copy delivery percentiles (`p50`, `p95`, `max`
+across the slowest member, plus per-member `p95`); peak RSS and open file descriptors; RSS and
+descriptor floor movement; and disk growth rate. Because single RSS samples fluctuate with large
+copies, memory and open files are evaluated using hourly floors (six samples at 10-minute intervals
+after a 1-hour warm-up following start or restart), while single-sample metrics are printed as
+`raw_*` for inspection.
 
-A run reports, for each stand: the days, the commit, the hardware (`soak start` writes the
-machine and its cores), copies sent, checked and missed, kills and broken starts, the delivery
-times, the memory and open files with their growth, and the verdict. The documents give only
-numbers measured that way. A soak is not a condition of a release in 0.6; seven days on a
-release candidate's build is planned for 0.7 ([roadmap](roadmap.md), item 71).
+`verdict` (and `stop`) reports `PASS` only when all fixed bounds hold:
+
+- Zero missed copies (a checked text copy must reach all members within 60 s; a file within 240 s),
+  including copies sent immediately after a kill. These timeouts reflect the member reconnect
+  backoff (`FIRST_WAIT` of 1 s up to `MAX_WAIT` of 30 s in `member/src/discovery.rs`) and the 15 s
+  silent-peer `TIMEOUT` in `member/src/mesh.rs`.
+- Zero broken restarts.
+- Delivery `p95` at most 10 s (`10000 ms`).
+- No member's RSS floor grows by more than 1 MiB (`calm`) or 4 MiB (`load`) over its first window's
+  floor, and no member's RSS floor rises for three consecutive windows (a rise being at least 64 KiB
+  over the previous window).
+- No member's open-file floor rises above its first window's floor.
+- Combined member state, record, and log directories grow by at most 20 MiB per member per day
+  (measured starting 6 hours after the first sample).
+
+These bounds are fixed ahead of measurement: exceeding a bound is a defect, not a reason to relax the
+limit. Soak reports record duration, commit, hardware (CPU architecture and core count logged by
+`start`), copy and restart counts, delivery percentiles, memory and file-descriptor growth, and
+verdict. For release-gating plans around soak runs, see [Roadmap](roadmap.md).
 
 ## Bench scenarios
 
-Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's
-Wi-Fi. The [test bench](maintainers/testbench.md) does, on the real devices of each platform, with the
-rules R1 to R7 ([cases](maintainers/testbench-cases.md)), a catalogue of the cases of a release with how
-each runs, and a coverage report of the product's functions
-([functions](maintainers/testbench-functions.md)). Security cases block a release; a case that cannot
-run yet is skipped with its reason and stays on the list.
+Unit and CI tests cannot prove that a copy on a physical iPhone reaches a Windows PC across café
+Wi-Fi. The [test bench](maintainers/testbench.md) verifies physical devices across every platform
+using rules R1–R7 ([Test bench cases](maintainers/testbench-cases.md)), a release
+[catalogue](maintainers/testbench-catalogue.md), and a function coverage matrix
+([Test bench functions](maintainers/testbench-functions.md)). Security cases block a release; cases
+that cannot run remain on the list with a recorded skip reason.
 
-## The apps' languages, accessibility and screenshots
+## App languages, accessibility, and screenshots
 
-Every app is checked in the project's eight languages (zh en es ru ar sw he hi) and for a
-person who uses a screen reader, large text or the keyboard (docs/maintainers/testbench-catalogue.md,
-A9 and U14 to U18).
+Every app is verified across all eight project languages (`zh`, `en`, `es`, `ru`, `ar`, `sw`, `he`,
+`hi`) and for screen readers, large text, and keyboard navigation
+([Test bench catalogue](maintainers/testbench-catalogue.md), cases `A9` and `U14`–`U18`):
 
-- `tools/repocheck` checks that every text of every app (the String Catalogs, Android's
-  `strings.xml`, the tray's and the command line's JSON) is translated into all eight, marked
-  done, and keeps the original's placeholders. `tools/tokens` checks that every palette keeps
-  WCAG AA contrast for text, the accent included, on the background and on a surface.
-- The tray app (`apps/desktop`, `TestWindow` in a headless Chrome): each language without
-  English left over, clipped text or a page wider than the window, Arabic and Hebrew from
-  right to left and no text set to one side; every control named in the accessibility tree;
-  every text's contrast in all ten colours, dark and light; the window at twice the text size;
-  Tab through the header and Settings with the focus shown.
-- Android (`LanguagesTest`, `AccessibilityTest` on Robolectric): the Start screen and Settings
-  in each language, no text cut off or ended with "…", right to left in Arabic and Hebrew,
-  every control named and at least 48 dp to touch, nothing cut off at font scale 2.
-- The iPhone and the Mac (`ReadersUITests`): each language launched with `-AppleLanguages`,
-  the texts checked against the app's catalog, the iPhone's top row swapping sides from right
-  to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets; on the
-  iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
-  Hindi) passing, and on the iPhone and the iPad also Home's cards about the group itself (a
-  group from before 0.6 and the member's notices, from the made-up group with
-  `-showcase -showcaseAlerts`) in English and Arabic, with Hide hiding only the notice that may
-  be hidden; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`), and the English ones
-  are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
-  of each element the audit fails and of the screen a lost tap met (the test taps Settings
-  again and says so in its output). For each failed iPhone test CI also keeps its activities,
-  every launch, tap, wait and query with its time (`.github/activities.py`, in `ios-screens-*`
-  and the log). The audit's contrast check
-  fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each
-  button's) contrast is measured on the screen's picture instead: its darkest and lightest
-  pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
-  audit looks only at what a person can reach.
-- The iPad (`PadUITests`, skipped on an iPhone): Home with a made-up group, which a debug
-  build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
-  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
-  settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
-  largest size; each screen's picture is attached. Escape is sent as U+241B
-  (`XCUIKeyboardKey.simulatorEscape`): the simulator's keyboard has no key for `.escape`'s
-  "\u{1B}" and sends nothing for it.
-- In CI both run on GitHub's `xcode-27` image with Xcode 27.2 and the newest iOS, as on the
-  maintainers' Macs: Xcode 26.6's iOS 26.4 takes whole Devanagari and Chinese texts for clipped
-  (the clipped text check compares the first two and the last two letters' frames, which a
-  conjunct such as ग्स or a squeezed 「。」 at a line's end share).
-- The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
-  restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
-  compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of
-  the three is yet run on a tablet.
+- **Static checks**: `tools/repocheck` verifies that every app string catalog, Android
+  `strings.xml`, tray JSON, and CLI translation covers all eight languages, is complete, and
+  preserves format placeholders. `tools/tokens -check` verifies WCAG AA contrast for every palette.
+- **Tray app (`apps/desktop`, `TestWindow` in headless Chrome)**: Verifies all eight languages with
+  no untranslated English, no clipped text, and no horizontal overflow; right-to-left layout in
+  Arabic and Hebrew; accessible names for all controls; contrast across all ten palettes in light
+  and dark themes; layout at 2x text size; and keyboard Tab focus across the header and Settings.
+- **Android (`LanguagesTest`, `AccessibilityTest` on Robolectric)**: Verifies Start and Settings
+  screens in all eight languages with no truncated text or ellipsis, right-to-left layout in Arabic
+  and Hebrew, accessible names, at least 48 dp touch targets, and no clipping at font scale 2.
+- **iPhone and Mac (`ReadersUITests`)**: Launches each language with `-AppleLanguages`, checks
+  rendered strings against the catalog, verifies right-to-left header layout on iPhone, and runs
+  Xcode's accessibility audit (clipped text, labels, touch targets, and Dynamic Type at the largest
+  accessibility size in English, Swahili, and Hindi on iPhone). On iPhone and iPad, `ReadersUITests`
+  also tests Home's legacy-group and member notice cards in English and Arabic using `-showcase
+  -showcaseAlerts`, confirming that **Hide** hides only dismissible notices. Text and iPhone button
+  contrast is verified directly on captured screenshots (at least 4.5:1 between darkest and lightest
+  pixels) because Xcode's built-in audit reports false contrast failures on high-contrast elements.
+  CI exports all `.xcresult` screenshots (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`),
+  embeds English, failed-audit, and lost-tap screenshots in failed job logs (`.github/pictures.py`),
+  and records failed iPhone test activities (`.github/activities.py`).
+- **iPad (`PadUITests`, skipped on iPhone)**: Launches a debug build with `-showcase`
+  (`apps/ios/CBB/App/Showcase.swift`, local fixture only) to verify the sidebar, detail card beside
+  tiles, arrow keys, Escape (sent via `XCUIKeyboardKey.simulatorEscape`, `U+241B`), Settings,
+  Command-1, portrait layout, Arabic right-to-left card placement, and largest-text clipping.
+- **iOS CI image**: `iPhone app` runs on GitHub's `xcode-27` image with Xcode 27.2 and the latest
+  iOS runtime so clipped-text audits handle Devanagari conjuncts and Chinese punctuation accurately.
+- **Other big screens**: Android `TabletHomeTest` verifies sidebar section state across restarts.
+  HarmonyOS ArkTS (including sidebar, keys, and drops) is compiled and linted by
+  `apps/harmony/check.sh`.
 
-Screenshots are compared where a picture is the same on every machine that draws it: the
-tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,
-`fonts-droid-fallback`), and the Android screens in Robolectric's native graphics, which
-bring their own fonts. A picture may differ from its reference in 0.3% of its pixels, the
-smoothing of text between two builds of a browser, not more. A failed comparison leaves the
-new picture and the difference in the job's artifacts. The simulators' pictures change with
-each Xcode and iOS, so the iPhone's and the Mac's are kept with the results to look at, not
-compared.
+Pixel screenshot comparisons run where rendering is deterministic across machines: the tray app on
+Linux with Noto fonts (`fonts-noto-core`, `fonts-noto-mono`, `fonts-droid-fallback`) and Android
+screens under Robolectric native graphics (`ScreenshotTest`). Up to 0.3% differing pixels are
+tolerated for font-smoothing differences across browser builds; failures upload actual and diff
+images as CI artifacts (`tray-screenshots`, `android-screenshots`). Simulator screenshots vary by
+Xcode and iOS release, so iPhone and Mac screenshots are attached for visual review rather than
+pixel-diffed.
 
-After a change to a screen, write the pictures again and look at each before committing it:
+After intentional UI changes, regenerate and inspect reference screenshots before committing:
 
 ```sh
 cd apps/desktop && CBB_UPDATE_SCREENSHOTS=1 go test -run 'TestWindow/screenshots' .
 cd apps/android && ./gradlew :app:recordRoborazziFullDebug
 ```
 
-The tray's references are CI's pictures: another build of Chrome smooths text differently in
-more than 0.3% of the pixels. When a run elsewhere draws them, compare them by eye and take
-the ones to commit from the `tray-screenshots` artifact of the failed CI job.
+Tray screenshot references match CI's Linux Chrome build; if a local Chrome version differs by more
+than 0.3%, verify the local screenshots visually and adopt the reference images from the failed CI
+job's `tray-screenshots` artifact.
 
-### The dangerous screens
+### Dangerous screens
 
-`TestWindow/dangerous screens` (`apps/desktop/dangerous_test.go`) draws every screen of the tray
-app where a person decides something the group's safety depends on, in all eight languages, into
-one HTML file: the six digits a joining computer shows, an invitation's fingerprint to compare,
-removing a device, making a computer an admin, the takeover warning and the alerts of admins or
-claims that split the group, voiding a key's two histories, claiming the group with the recovery
-key, and a group taken over from this device. Each picture has its words under it, for a native
-speaker to quote. The Android app's part (`DangerousScreensTest`, on Robolectric's native graphics) adds an
-invitation's fingerprint, removing a device and the root phone, the alerts, and the recovery
-sheet with the question on closing it. It is for a person to read before a release; nothing
-compares it. It runs only when asked, Android first, as the tray's test puts its pictures on the
-sheet:
+`TestWindow/dangerous screens` (`apps/desktop/dangerous_test.go`) renders every security-critical
+tray screen in all eight languages into a single HTML review sheet with captions: the six-digit
+pairing code, invitation fingerprint comparison, removing a device, promoting an admin computer,
+conflict and split-group alerts, voiding conflicting histories, moving the group with the recovery
+key, and lost-group warnings. `DangerousScreensTest` on Android Robolectric contributes the
+Android invitation fingerprint, removing a device or main device, conflict alerts, and recovery
+sheet screens.
+
+This sheet is for human and native-speaker review before a release and is not pixel-compared. Run
+Android first so the tray test embeds its images into the HTML sheet:
 
 ```sh
 export CBB_DANGEROUS_SHEET=/tmp/sheet
@@ -406,81 +422,80 @@ export CBB_DANGEROUS_SHEET=/tmp/sheet
 (cd apps/desktop && go test -run 'TestWindow/dangerous' .)
 ```
 
-The iPhone's screens are not on it yet: they would come from `ReadersUITests` on a Mac.
+iPhone screens are not yet included in the combined sheet.
 
 ## Coverage
 
-CI measures how much of the code the tests run, part by part and by kind, and its `coverage`
-job prints the table, coverage by kind, in the run's summary. `tools/coverage` adds the
-reports up and fails when a row falls more than one point below its floor in
-`tools/coverage/floor.json`. The project aims at 90% of the lines in every part
-(`-target 90`): a part below that is marked in the table and gets a warning, without failing
-the run. A floor only rises: it is set at the whole percent under the part's last measure
-whenever tests raise it, so coverage once won is not lost again. Code that only tests compile (the
-simulation, the tests' kits, the service's network tests in `member/src/nettest/`) counts in
-no part: `rustTestOnly` in `tools/coverage` lists it.
+CI measures line or statement coverage per component (and branch coverage where supported) and
+publishes a summary table in the `coverage` job. `tools/coverage` aggregates reports and fails CI if
+any row drops more than 1 percentage point below its floor in `tools/coverage/floor.json`.
 
-Branches are rows of their own (`PART/branches` in the table and in `floor.json`) where the
-report counts them: JaCoCo for the Kotlin kit, llvm-cov for the Swift kit, and for the Rust
-core the nightly `rust core, branch coverage` job, since only a nightly compiler counts Rust's
-branches. Go counts statements only. The aim is 80% of the branches (`-branch-target 80`),
-90% in a core (`-core-branch-target 90`), where each branch is a decision to take or refuse;
-a branch row's floor is its first measure, and it only rises. The table shows each row's floor
-and target side by side, so the gap between them is in view.
+Targets above the floors emit warnings without failing CI:
 
-Under the table are the hard gates, which have no floor and fail the job at once:
+- **Lines / statements**: 90% (`-target 90`)
+- **Branches**: 80% (`-branch-target 80`), and 90% for protocol cores (`-core-branch-target 90`)
 
-- every closed finding of the security audits keeps its tests: `testdata/audit/closed.json`
-  lists each by an opaque id with the tests that hold it closed, and `-audit` fails when one
-  of them is gone; a fix that closes a finding adds its row, and a test removed with the
-  code it held names, in the finding, the replacement `tools/repocheck/removed-tests.txt`
-  gives it;
-- every rule a format reader refuses by name (`Rule::field("grants/replaces")` in `core/src`)
-  is the expected refusal of at least one vector in `testdata/format/*.json` (`-rules`,
-  `-vectors`): a vector with that `rule` and the verdict `refuse`, or one whose `verdict`
-  is the rule itself (`"verdict": "content/type"`, as wave 4's and push's vectors write
-  it); the rules of a test's own tables (`tests.rs`) are not counted. A rule whose refusal
-  depends on what the reader already holds (a command's counter, a grant's earlier branch,
-  a key no longer current, the clock) cannot be a vector of bytes alone: a Rust test in
-  `core/src` marked `// refuses: <rule>, <rule>` on the line above its `#[test]` counts
-  instead, when its body names the rule, as its string or one of its constants. A stateful
-  vector format, which the Go reader would check too, is for 0.7;
-- no mutant survives that `tools/mutants/missed.txt` does not name (`-mutants`, as
-  `tools/mutants/check.sh` in the nightly jobs).
+Floors only rise as coverage improves, locking in gains. Test-only Rust modules compiled under
+`#[cfg(test)]` (listed in `rustTestOnly` in `tools/coverage/main.go`, including `sim/`,
+`vectors.rs`, `verdicts.rs`, `longrules.rs`, `powerloss.rs`, `testkit.rs`, `msg/mutants.rs`, and
+`member/src/nettest/`) are excluded from product line totals.
+
+Branch rows appear as `PART/branches` where the toolchain reports them: JaCoCo for Kotlin,
+`llvm-cov` for Swift, and the nightly `rust core, branch coverage` job for `cbb_core` (which
+requires nightly Rust). Go reports statement coverage only.
+
+Below the coverage table, `tools/coverage` enforces three hard gates that fail CI immediately:
+
+- **Closed audit findings (`-audit testdata/audit/closed.json`)**: Every closed security audit
+  finding lists one or more regression tests by opaque ID; removing a listed test fails the gate.
+  If a test is removed along with the feature it tested, update its entry to the replacement named
+  in `tools/repocheck/removed-tests.txt`.
+- **Format refusal rules (`-rules core/src -vectors testdata/format`)**: Every rule named with
+  `Rule::field("...")` in `core/src` (outside `tests.rs`) must appear as an expected refusal in
+  `testdata/format/*.json`—either with `"rule"` and `"verdict": "refuse"` (or omitted verdict) or
+  with `"verdict"` set directly to the rule name—or be covered by a stateful Rust test annotated
+  with `// refuses: <rule>` whose body references the rule string or constant.
+- **Mutation survivors (`-mutants`)**: Every surviving mutant must be explicitly listed in
+  `tools/mutants/missed.txt` (enforced nightly via `tools/mutants/check.sh`).
 
 | Part | What counts | Measured by |
 |---|---|---|
-| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` jobs' tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
-| `go-core` | the same, in `internal/group`, `clip` and `hlc` | as `go` |
-| `go-tray` | statements of the tray app (`apps/desktop`, a module of its own) | `go test -coverprofile` in the `tray app (ubuntu-latest)` job, the window's tests in a headless browser among them |
-| `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov nextest` in the four `cbb (Rust)` parts, put together by `cbb (Rust), the coverage` |
-| `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
-| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
-| `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `test and build (macOS), homebrew, Mac app` job |
-| `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
-| `kotlin-watch` | lines of what the Android phone app and its Wear OS app share (`apps/android/shared`: `WatchState`, what the phone tells the watch, and the design) | the unit tests' coverage (`createDebugUnitTestCoverageReport`, JaCoCo) in the `Android app` job |
-| `js-tray` | lines of the tray app's scripts (`apps/desktop/frontend`) | the browser's count under `TestWindow` (`CBB_JS_COVERAGE`), as LCOV, in the `tray app (ubuntu-latest)` job |
-| `cpp-aurora` | lines of the Aurora app's code that runs without a screen (`apps/silica/src`: `errors`, `membership`, `events`, `core` and `platform/keystore_file`) | `apps/silica/tests/qt/run.sh` in the `Aurora and HarmonyOS apps' code on the computer` job: the tests on desktop Qt 5 against the core built for the computer, with gcov |
-| `ets-harmony` | lines of code of the HarmonyOS app's model, core and common ArkTS (`apps/harmony/entry/src/main/ets`, without the pages and components), every module loaded | `apps/harmony/nodetest/run.sh` in the same job: the app's ohosTest suite under Node's test runner, its ArkTS turned into JavaScript by TypeScript, with the real core behind the native module's `call` |
-| `ets-harmony-watch` | the same of the HarmonyOS watch's app (`apps/harmony/wearable/src/main/ets`) | as `ets-harmony`, with `apps/harmony/nodetest/watch.test.cjs`, the watch's link to its phone under a fake Wear Engine |
+| `go` | Statements in `cmd/` and `internal/`, excluding `third_party/` and test-fake packages listed in `testFakes` (`tools/coverage/main.go`) | `go coverage` (cross-package `-coverpkg`, desktop clipboards under Sway and Xvfb, `uinput`, Avahi mDNS, e2e `cbb-helper` built with `-cover`, desktop connector), `service tests on the Rust cbb` shards (`cover-go-service-PART.out`), and per-OS profiles from `test` and macOS `go test` |
+| `go-core` | Statements in `internal/group` and `internal/clip` | Same profiles as `go` |
+| `go-tray` | Statements in `apps/desktop` | `go test -coverprofile` in `tray app (ubuntu-latest)` (including `TestWindow` in headless Chrome) |
+| `rust-core` | Lines in `core/src`, excluding `third_party/` and `rustTestOnly` | `cargo llvm-cov nextest` across the two `cbb (Rust)` shards, merged by `cbb (Rust), the coverage` |
+| `rust-member` | Lines in `member/src`, excluding `rustTestOnly` (Rust tests alone) | Same as `rust-core` |
+| `rust-service` | Lines in `member/src` from Rust member tests and Go service/connector/phone-tunnel tests combined | `cargo llvm-cov` in `service tests on the Rust cbb, the coverage` |
+| `swift-kit` | Lines (and branches) in `apps/ios/CBBKit/Sources` | `swift test --enable-code-coverage` in `test and build (macOS), homebrew, Mac app` |
+| `kotlin-kit` | Lines (and branches) in `apps/android/kit` | JaCoCo in `Android app` |
+| `kotlin-watch` | Lines (and branches) in `apps/android/shared` (`WatchState` and shared design) | `createDebugUnitTestCoverageReport` (JaCoCo) in `Android app` |
+| `js-tray` | Lines in `apps/desktop/frontend` scripts | Browser coverage under `TestWindow` (`CBB_JS_COVERAGE`, LCOV) in `tray app (ubuntu-latest)` |
+| `cpp-aurora` | Lines in headless Aurora C++ sources (`apps/silica/src`: `errors.cpp`, `events.cpp`, `membership.cpp`, `core.cpp`, `platform/keystore_file.cpp`) | `apps/silica/tests/qt/run.sh` (Qt 5 + `gcovr` LCOV) in `Aurora and HarmonyOS apps' code on the computer` |
+| `ets-harmony` | Lines in HarmonyOS phone model, core, and common ArkTS (`apps/harmony/entry/src/main/ets`) | `apps/harmony/nodetest/run.sh` (compiled TypeScript + Node test runner against host `libcbb_ffi.a`) in `Aurora and HarmonyOS apps' code on the computer` |
+| `ets-harmony-watch` | Lines in HarmonyOS watch ArkTS (`apps/harmony/wearable/src/main/ets`) | `apps/harmony/nodetest/run.sh` with `watch.test.cjs` in `Aurora and HarmonyOS apps' code on the computer` |
 
-A test that compares two times of its own run is not timed under `cargo llvm-cov`, which counts every step of the code under test and none of its dependencies (`cfg(coverage)`): the full group's fill against its signatures (`records::tests::insert_cost`) is ignored there and runs in the `cbb (Rust), the checks` job's plain build.
+Tests that compare their own execution time against cryptographic operations are skipped under
+`cfg(coverage)` because instrumentation slows only the measured crate:
+`a_full_group_fills_in_about_the_time_of_its_signatures` (`core/src/records/tests/insert_cost.rs`)
+runs uninstrumented in `cbb (Rust), the checks and the Raspberry Pi builds`.
 
-The core's tests too slow for a pull request are `#[ignore]` there and run in the nightly `the core's slow tests` job: the record set's restores step by step (`core/tests/read_records.rs`) and the timing tests of the secrets' comparisons (`core/src/secret.rs`, dudect's method, one thread). A coverage build leaves the timing tests out (`cfg(coverage)`), since they never run there. An `#[ignore]` names where the test runs or why it waits.
+Tests too slow for pull requests carry `#[ignore]` with a reason and run nightly in
+`the core's slow tests`: step-by-step record-set restore tests (`core/tests/read_records.rs`) and
+constant-time secret comparison tests (`core/src/secret.rs`, Welch's t-test on one thread; excluded
+from `cfg(coverage)` builds).
 
-The Go packages of the `service tests on the Rust cbb` jobs run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and each part's profile (`cover-go-service-PART.out`) counts in `go` too.
-A number is a hint, not the goal: a test that runs a line without checking what it did
-raises it and proves nothing.
+Coverage is a diagnostic signal, not proof of correctness: executing a line without asserting its
+effect raises the percentage without catching bugs.
 
-To see Go's numbers locally:
+To measure Go coverage locally:
 
 ```sh
 go test -coverpkg=./cmd/...,./internal/... -coverprofile=cover.out ./cmd/... ./internal/...
 go run ./tools/coverage -go cover.out -floor tools/coverage/floor.json
 ```
 
-And the Rust service's, on Linux (the tests of `internal/service` need mDNS, so a computer on a
-network or a container with one of its own):
+To measure `rust-service` coverage locally on Linux (requires a network interface with a private
+home address for mDNS):
 
 ```sh
 eval "$(cargo llvm-cov show-env --sh)"
@@ -492,10 +507,9 @@ cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
 
-A member finds a pairing window, and the other members, only at a home address (a private,
-link-local or unique local one), as on a real network. A container whose one address is
-public finds none; run the tests there in a network namespace of their own with a private
-address, as root and with `iproute2`:
+Because members discover peers only on private, link-local, or unique-local home addresses, run
+`internal/service` inside an isolated network namespace with a private bridge if your container has
+only a public IP address (requires root and `iproute2`):
 
 ```sh
 unshare -n sh -c 'ip link set lo up && ip link add home0 type bridge &&
@@ -507,98 +521,98 @@ unshare -n sh -c 'ip link set lo up && ip link add home0 type bridge &&
 
 ## Firmware size
 
-A small device takes only the parts of the core it calls, and the linker drops the rest, so
-what a part costs shows only in a linked program. `tools/size` is a program for the ESP32-C6's
-RISC-V (`riscv32imac-unknown-none-elf`, the workspace's release profile) that calls the parts
-its features name with input the linker cannot see through; it is never run. `sh
-tools/size/size.sh` builds it empty, once per part (`p256`: X.509 and a chain check; `json`;
-`records`: the group's records and their state; `seal`: opening a sealed message, X-Wing;
-`copy`: a copy read, checked and opened; `pair`: a joiner and CPace; `tls`: the member TLS),
-with all of them, and with the core's whole entry point (`api`), and prints each program's
-flash (`.text`, `.rodata` and `.data`) and its cost over the empty one against
-`tools/size/baseline.txt`. The `esp32` job runs it on every change to the Rust code and puts
-the table in the job's summary; it fails when everything together grows more than 10% over
-the baseline. A change that makes the core larger on purpose writes the baseline again with
-`sh tools/size/size.sh -update` in the same pull request. The parts overlap (`copy` holds
-`records`, `seal` and JSON), so the costs do not add up to `all`.
+Small devices link only the `cbb_core` modules they call, so flash footprint is measured on linked
+binaries. `tools/size` (`cbb-size`) builds for ESP32-C6 RISC-V (`riscv32imac-unknown-none-elf`,
+release profile) with opaque inputs that prevent dead-code elimination; it is never executed.
+
+`sh tools/size/size.sh` builds an empty binary, one binary per feature (`p256`, `json`, `records`,
+`seal`, `copy`, `pair`, `tls`), one binary with all seven (`all`), and one binary calling the full
+C ABI entry point (`api`). For each build, it sums flash sections (`.text`, `.rodata`, `.data`,
+`.sdata`, `.srodata`), computes the delta over the empty binary, and compares against
+`tools/size/baseline.txt`. Because features overlap (for example, `copy` pulls in `records`,
+`seal`, and `json`), individual deltas do not sum to `all`.
+
+The `the core on the ESP32` CI job runs `size.sh` on every Rust change, appends the table to the job
+summary, and fails if `all` grows more than 10% over baseline. Intentional size increases update
+`tools/size/baseline.txt` in the same pull request with `sh tools/size/size.sh -update`.
 
 ## Unsafe code
 
-The Rust core has no unsafe code (`forbid(unsafe_code)`). The unsafe code in `member/src` (system
-calls) and `ffi/src` (the C functions the phones call) is checked by the nightly workflow: Miri
-runs `ffi`'s tests of its C functions pointer by pointer (`cargo +nightly miri test -p cbb-ffi
---features join --lib`), and AddressSanitizer runs the Rust tests of `cbb-member` and `cbb-ffi`
-and Go's tests of the service against a `cbb` built with it, which reaches the system calls
-Miri cannot.
+`cbb_core` forbids unsafe code (`#![forbid(unsafe_code)]` in `core/src/lib.rs`). Unsafe code lives
+only in `member/src` (OS syscalls) and `ffi/src` (C ABI entry points) and is checked nightly in
+`.github/workflows/nightly.yml`:
+
+- **Miri (`miri (the C functions of ffi)`)**: Runs
+  `cargo +nightly miri test --locked -p cbb-ffi --features join --lib` to validate FFI pointer
+  handling.
+- **AddressSanitizer (`address sanitizer (the Rust cbb and ffi)`)**: Runs Rust tests for
+  `cbb-member` and `cbb-ffi --features member,tunnel` and runs `go test -timeout 60m ./internal/service`
+  against an ASan-instrumented `cbb` binary, covering OS syscalls that Miri cannot execute.
 
 ## Mutation testing
 
-Coverage says a line ran; mutation testing says whether a test would notice if it were wrong.
-The nightly workflow changes the code one place at a time (drops a check, turns `<`
-into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
-the strict form of signed bodies (`core/src/strict.rs`), in eight shards. A change that every test still passes is listed as missed, in the run's
-summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
-does not name (no new survivor, from the first day); the list holds the baseline,
-and each of those gets a test or a note why it cannot matter.
+Coverage shows that code ran; mutation testing checks whether tests catch deliberate bugs (such as
+dropped checks, boundary shifts like `<` to `<=`, or early returns). The nightly workflow runs
+`cargo mutants` on parsers of untrusted input:
 
-The service's readers of outside input fail on a new one too: `cargo mutants` on the
-control socket's messages (`member/src/control.rs`), the pairing window
-(`member/src/window.rs`) and the seals of the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
-compares what lived with the known list, `tools/mutants/missed.txt`, line and column aside. A
-mutant on that list either changes nothing a caller can see (an equivalent mutant, with why
-in a comment) or lives in code that only Go's end-to-end tests reach, which `cargo mutants`
-does not run (the window's exchange with a joiner). A new survivor gets a test; a mutant that
-the tests catch can leave the list.
+- `mutants-rust`: Mutates `core/src/strict.rs` across 8 shards.
+- `mutants-service`: Mutates `core/src/seal.rs` (`--lib`) and `member/src/control.rs` across 4
+  shards each.
 
-To run them locally:
+Each shard runs `tools/mutants/check.sh` against `tools/mutants/missed.txt` (ignoring line and
+column numbers) and fails on any unlisted surviving mutant. Write a test to kill each new survivor;
+if a mutant is strictly equivalent and unobservable to callers, document why in
+`tools/mutants/missed.txt`.
+
+To run mutation testing locally:
 
 ```sh
 cargo mutants --in-place -p cbb-core -f core/src/strict.rs
-cargo mutants --in-place -p cbb-member -f member/src/control.rs -f member/src/window.rs
+cargo mutants --in-place -p cbb-core -f core/src/seal.rs --cargo-test-arg=--lib
+cargo mutants --in-place -p cbb-member -f member/src/control.rs
 tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
 ```
 
 ## Not tested yet
 
-What has not run on real devices is listed in the [README](../README.md#status): the
-Android phones' hardware keys and the fingerprint, Android 17's local network permission,
-the iPhone's background app refresh and takeover, and the Windows service on a real PC
-among them. Do not rely on
-these before the bench has run them.
+Components built and tested in CI that have not yet run on physical hardware are listed in
+[README status](../README.md#status) and [Platform parity](parity.md#on-real-devices) (including
+physical Windows PCs, physical Android phones and hardware attestation, HarmonyOS phones, FreeBSD,
+OpenWrt, Sailfish OS, Wear OS, Linux tray app, and physical ESP32 boards). Do not treat those
+platforms as hardware-verified until the test bench has run on them.
 
 ## Red tests
 
-A failing test is a finding, never noise: find the cause before running it again. A test is
-never skipped, disabled or retried until green to make CI pass.
+Every failing test is a real defect until its root cause is fixed. Never skip, disable, or retry a
+failing test to make CI pass.
 
-A test that needs something of its machine (an X server, a compositor, the IPv6 loopback, a
-tool) skips without it on a developer's machine and says why, but fails in CI, where that
-thing is set up on purpose: the environment variable `CI`, or the test's own switch
-(`CBB_TEST_IPV6=1`, `CBB_TEST_UINPUT=1`), turns the skip into a failure.
+Tests requiring host capabilities (an X server, Wayland compositor, IPv6 loopback, `swtpm`, or
+`uinput`) may skip with an explanation on a developer machine, but fail in CI when the environment
+variable `CI` or the explicit switch (`CBB_TEST_IPV6=1`, `CBB_TEST_UINPUT=1`, `CBB_TEST_WAYLAND=1`,
+`CBB_TEST_X11=1`, `CBB_TEST_AVAHI=1`, `CBB_TPM_REQUIRED=1`) is set.
 
 ## Known failures
 
-A step that fails for a reason outside the project, shown with evidence, is not skipped: it
-stays, wrapped in a strict expected failure (`XCTExpectFailure` with `isStrict`), so it is
-still run, it still fails the test the day it starts passing, and the tag `KNOWN-ISSUE(<release>)`
-finds it again (`git grep KNOWN-ISSUE`). What it checks is checked by hand until then. The owner
-decides each entry.
+When an external platform defect causes a test step to fail with documented evidence, keep the test
+running inside a strict expected-failure wrapper (such as `XCTExpectFailure` with `isStrict`) so
+the test fails as soon as the external defect is fixed, tag it `KNOWN-ISSUE(<release>)`, and verify
+the covered behavior manually until resolved. Only the maintainer approves entries.
 
-No step is marked at the moment.
+No steps are currently marked as known failures.
 
 ## Unstable tests
 
-A test that fails only now and then is a red test too, with a cause to find: a race in the
-code, a wait too short for a slow runner, or an order the test assumes. The nightly
-workflow's `unstable` job runs the members' tests ten times over, against the Rust service with
-its helper and with `cbb` alone, and `unstable-tray` runs the tray app's (its window's in a
-browser among them) as often; the summary lists every test that failed and how often. A test
-found there goes into this table with what is known of its cause, and leaves it with the
-fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
--scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
-([test bench](maintainers/testbench.md#11-automation)).
+An intermittent failure is a real bug (a race condition, an overly tight timeout, or an assumed
+ordering). The nightly workflow runs `unstable tests (service)` and `unstable tests (alone)`
+(10 repetitions each of `internal/service` and `internal/tunnel` against `cbb` with and without
+`cbb-helper`) and `unstable tests (tray app)` (10 repetitions of `apps/desktop`), summarizing every
+failing test and failure count. The hardware test bench also detects flakes via
+`go run ./tools/bench -repeat 5 -scenario NAME fleet`, recording intermittent cases in `flaky.txt`
+([Test bench automation](maintainers/testbench.md#11-automation)).
 
-| Test | Where | Seen | What is known |
+Track any test observed failing intermittently in the table below until its root cause is fixed:
+
+| Test | Where | Observed rate | Known details |
 |---|---|---|---|
-| `TestSeveralHubs` | `internal/service` | about one run in six | not yet found |
-| `TestWindow` | `apps/desktop`, Windows and Linux | rarely: once on Linux in some 300 runs | Chrome runs but gives no DevTools port within 30 seconds; on Linux its last line comes 5 seconds after the start, after failed D-Bus calls to the desktop portal. The test writes how long each start took to the job's summary and keeps the last 200 lines of Chrome's detailed log (`--v=1`), to be read when it fails again |
+| `TestSeveralHubs` | `internal/service` | ~1 in 6 runs | Cause not yet identified |
+| `TestWindow` | `apps/desktop` (Linux, Windows) | Rarely (~1 in 300 runs on Linux) | Chrome starts but does not expose its DevTools port within 30 s; on Linux the last log line appears ~5 s after launch following failed desktop-portal D-Bus calls. The test logs startup timing to the job summary and keeps the last 200 lines of Chrome `--v=1` output for diagnosis |

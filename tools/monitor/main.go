@@ -143,7 +143,7 @@ func (c *checker) certificate(url string, st *tls.ConnectionState, within time.D
 	end := st.PeerCertificates[0].NotAfter
 	left := end.Sub(c.now)
 	if left < within {
-		c.fail("%s: its certificate expires on %s, in %s: renew it on cbb.tools (certbot)", url, end.UTC().Format(time.DateOnly), days(left))
+		c.fail("%s: its certificate expires on %s, in %s: renew it on cbb.tools (nginx's ACME module)", url, end.UTC().Format(time.DateOnly), days(left))
 		return
 	}
 	c.ok("%s: its certificate expires in %s", url, days(left))

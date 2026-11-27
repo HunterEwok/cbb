@@ -164,7 +164,7 @@ func extend(args []string) error {
 }
 
 // maxTakeStep is how far past the branch's channel file take accepts a
-// renewed one: the weekly timer signs one more each time.
+// renewed one: the timer signs one more each time, twice a week.
 const maxTakeStep = 16
 
 // take replaces the channel file in a checkout of the branch channel with

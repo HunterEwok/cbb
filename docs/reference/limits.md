@@ -62,8 +62,8 @@ For normative wire bounds, see [Protocol](../protocol.md).
 | Device offline window for reading and writing copies (keys statement max age) | 35 days |
 | Server credential period | 35 days; main device starts the next period after 30 days |
 | Interactive admin confirmation cache (everyday changes) | 5 minutes |
-| Signed release metadata (`keys.json`, `release.json`) | At most 100 days |
-| Signed release channel status (`stable.json`) | At most 8 days |
+| Signed release metadata (`keys.json`, `release.json`) and channel (`stable.json`) | At most 100 days; `stable.json` is signed for 14 days |
+| Signed attestation status (`attest-status.json`) | At most 8 days |
 
 ## The group
 

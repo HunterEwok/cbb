@@ -1,1329 +1,720 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Roadmap
 
-What comes next, the designs that are agreed but not built yet, and the questions to study
-before anything is planned. How Connect Beyond Borders works today is in [design.md](design.md),
-the decisions in [decisions.md](decisions.md); what works on real devices is the
-[status table](../README.md#status).
+For contributors, engineers, and reviewers: planned features, agreed designs not yet built, and
+open research questions. For the current system architecture, see [Design](design.md). For recorded
+architecture decisions, see [Architecture decisions](decisions.md). For hardware verification
+status, see [README status](../README.md#status) and
+[Platform parity](parity.md#on-real-devices).
 
 ## Order of work
 
-The order may change. Items keep their numbers, since the code and the other documents cite
-them; a done item keeps one line and points to where [design.md](design.md) describes it.
+Execution order can change. Items keep their permanent numbers because code and documentation cite
+them. Completed items appear as one line each in [Done](#done) with a link to where the current
+documentation describes them.
 
 ### Done
 
 - **1.** Repository scaffolding.
 - **2.** Service core: sync engine, group and pairing, discovery, member connections, control
-   socket, command line; Linux without a desktop and tmux.
-- **3.** macOS: the service as a LaunchDaemon and the pasteboard agent.
-- **4.** Desktop connector: Wayland data-control, X11, GNOME through XWayland.
-- **5.** The first iPhone support, without the app; replaced by the app (item 17).
-- **6.** Simpler setup: QR codes, the phone as the main device.
-- **8.** Windows: the service, the clipboard agent and the installers; CI on windows-latest, not
-   yet run on a real PC.
-- **9.** Apps for iPhone and Android, which make the phone the group's root of trust
-   ([design](design.md#the-phone-apps)); tested in CI, not yet on a real phone or in a store.
-- **12.** Sync away from home through the group's own WireGuard tunnel: the hub, the phones and
-    small devices on Linux as clients, remote invitations for computers and phones, the forwarder, the
-    blind relay, AmneziaWG and VLESS ([design](design.md#sync-away-from-home)).
-- **16.** Computers, admins and the device's system, in 0.3 and 0.4
-    ([design](design.md#members-capabilities-admins-and-the-operating-system)).
-- **17.** Every phone joins through its app, with a key of its own, in 0.6 (D-80;
-    [design](design.md#group-and-pairing)).
-- **18.** Remote paste, in 0.6 ([design](design.md#remote-paste)).
-- **19.** Sync on and off, in 0.6 ([design](design.md#sync-on-and-off)).
-- **20.** Images, files, folders and formatted text, in 0.6
-    ([design](design.md#images-and-files)).
-- **21.** OpenWrt routers, in 0.6 ([design](design.md#openwrt-routers)).
-- **23.** Docker, in 0.5 ([design](design.md#docker)).
-- **24.** FreeBSD and OPNsense, in 0.6 ([design](design.md#freebsd)).
-- **27.** Quick actions, in 0.6 ([design](design.md#quick-actions)).
-- **30.** No phone is a hub: a hub is a computer, a router or a board (D-134), in 0.6
-    ([design](design.md#groups-without-a-computer)).
-- **32.** What the forwarder and the relay learn, cut to short server credentials, in 0.6
-    ([design](design.md#what-the-servers-learn)).
-- **48.** The name Connect Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
-    CBB under the icons, the full name in the stores, the docs and the site; the apps'
-    identifiers start with `tools.cbb`.
-- **63.** Copies sealed end to end, in 0.6 (D-84; [protocol.md](protocol.md), section 4,
-    "Sealing").
-- **65.** "Why it does not sync": one list of reasons from the core (`cbb_core::why`), in
-    `cbb status` and in every app, in 0.6 ([apps](apps.md#why-it-does-not-sync)).
-- **61.** The ways out (the forwarder, VLESS with the mirror, the relay, the hub's tunnel) carry
-    only cbb and never lead to the internet, in 0.6 ([maintaining](maintainers/maintaining.md#ways-out-carry-only-cbb)).
+  socket, command line, and headless Linux with `tmux`.
+- **3.** macOS: `cbb` service as a LaunchDaemon and pasteboard LaunchAgent.
+- **4.** Desktop connector: Wayland data-control, X11, and GNOME through XWayland.
+- **5.** Initial iPhone support without an app (replaced by item 17, D-80).
+- **6.** QR code setup and using a phone as the main device.
+- **8.** Windows: service, clipboard agent, and installers (verified in CI on `windows-latest` and
+  an Arm Windows 11 VM; physical PC testing pending).
+- **9.** iPhone and Android apps making a phone the group's main device
+  ([Design: the phone apps](design.md#the-phone-apps); iPhone tested on physical hardware, Android
+  tested in the CI emulator; store distribution tracked in items 38, 43, and 59).
+- **12.** Sync away from home (**Everywhere**) through the group's WireGuard tunnel: hubs, phones
+  and small Linux devices as clients, remote invitations, forwarder, blind relay, AmneziaWG, and
+  VLESS ([Design: sync away from home](design.md#sync-away-from-home)).
+- **16.** Computers, admins, capabilities, and device operating systems
+  ([Design: members, capabilities, admins, and the operating system](design.md#members-capabilities-admins-and-the-operating-system)).
+- **17.** Every phone joins through its app with its own key (D-80;
+  [Design: group and pairing](design.md#group-and-pairing)).
+- **18.** Remote paste to computers, `tmux`, and Linux consoles (D-54, D-59;
+  [Design: remote paste](design.md#remote-paste); remote paste onto phones waits for 0.7 per D-132).
+- **19.** Per-device **Sync** switch ([Design: sync on and off](design.md#sync-on-and-off)).
+- **20.** Images, files, folders, and formatted text
+  ([Design: images and files](design.md#images-and-files)).
+- **21.** OpenWrt routers ([Design: OpenWrt routers](design.md#openwrt-routers)).
+- **23.** Docker image ([Design: Docker](design.md#docker)).
+- **24.** FreeBSD and OPNsense ([Design: FreeBSD](design.md#freebsd)).
+- **27.** Quick actions ([Design: quick actions](design.md#quick-actions)).
+- **30.** No phone acts as a hub: only a computer, router, or small board serves as a hub (D-134;
+  [Design: groups without a computer](design.md#groups-without-a-computer)).
+- **32.** Short-lived per-server credentials for forwarders and blind relays
+  ([Design: what the servers learn](design.md#what-the-servers-learn)).
+- **34.** Local device collections and tile ordering across iPhone, iPad, Android, Aurora OS,
+  HarmonyOS, Mac, tray, and paired watch apps (D-72;
+  [App specification: collections](apps.md#collections-and-the-order-of-the-tiles)).
+- **41.** End-to-end sealed command orders using X-Wing HPKE to each receiver's sealing key
+  ([Protocol](protocol.md), section 15; `core/src/commands`, `member/src/commands.rs`).
+- **42.** Simplified group authority protocol: strict canonical signed bodies, per-server
+  credentials, shared `cbb_core` rules engine, certificate-free members, capability-based hellos,
+  conflict halting, signed `hubs` priority records, and strict media manifests
+  ([Protocol](protocol.md), section 10; D-93, D-100–D-115).
+- **48.** Connect Beyond Borders (`CBB`) branding and `tools.cbb` app identifiers
+  ([Brand: the name](../BRAND.md#the-name)).
+- **61.** Ways out (forwarder, VLESS mirror, blind relay, hub tunnel) carry only CBB traffic and
+  never proxy to the internet
+  ([Maintaining: ways out carry only cbb](maintainers/maintaining.md#ways-out-carry-only-cbb)).
+- **63.** End-to-end sealed copies (D-84; [Protocol](protocol.md), section 4).
+- **64.** Rust `cbb` as the service and full command line across computers, with Go `cbb-helper` as
+  a companion process, Rust `cbb-relay`, and removal of the Go member daemon (D-88, D-130;
+  [Design: the service and its helper](design.md#the-service-and-its-helper)).
+- **65.** Unified "Why it does not sync" diagnostics from `cbb_core::why` in `cbb status` and every
+  app ([App specification: why it does not sync](apps.md#why-it-does-not-sync)).
 
 ### Partly done
 
-- **7.** Installers: the Linux, macOS, FreeBSD, OpenWrt and Windows installers, Homebrew, winget
-   and releases with checksums and attestations are done; on SteamOS the Linux installer
-   uses `/opt` and SteamOS's keep list (not yet run on a real Steam Deck); the release
-   workflow makes the signed and notarized `.pkg` for macOS
-   ([maintaining](maintainers/maintaining.md#signing-for-macos)), first with 0.6.
-- **11.** `cbb` in Rust: done on Linux and OpenWrt. On the Arduino Nano ESP32 see item
-    15; other ESP32 boards follow on the same `core/`.
-- **13.** Device keys in hardware: done for Linux and Windows with a TPM (Windows not yet
-    tested on a real PC) and for a Mac's Secure Enclave; sealing the Mac's tunnel key
-    follows. See
-    "Device keys in hardware" below.
-- **14.** **The ZX Spectrum Next** through its own Raspberry Pi: `cbb next` and
-    the `.cbb` dot command (`apps/zxnext`) are written, not yet run on a real Next; the
-    NextPi set-up and the path through the ESP8266 are next (see "The Next's network in the
-    background" below). The Accelerated Next carries a
-    Raspberry Pi Zero on its accelerator header, wired to the FPGA's second UART, with
-    NextPi (a read-only DietPi) and a root shell (`SUP>`) on that UART. `cbb` runs
-    on this Pi as an ordinary member without its helper, installed on the NextPi card itself (its user
-    partition and a start script), so NextPi's own tools keep working. It speaks the member
-    protocol with TLS 1.3 like any other member and reaches the network in one of two ways,
-    both built: the Pi's own Wi-Fi on a Zero W, which NextPi turns off and we turn back on;
-    or, on a Zero without a radio, the Next's built-in ESP8266, which then only carries the
-    Pi's TLS bytes: the Z80 copies them between the Pi's UART and the ESP's, and the ESP
-    never sees anything but ciphertext. A dot command on the Next, `.cbb`, talks to `cbb`
-    over the internal UART the way NextPi's own tools do (`.pisend`): it copies a text
-    to the group, pastes the latest one, and joins by drawing the QR code for the phone app
-    on the Next's screen (`cbb next`, member/README.md). The UART is a trace on the Next's
-    board and never leaves the case, so it carries the texts in the clear. The Pi converts
-    between UTF-8 and the Spectrum character set: printable ASCII first, with every other
-    character shown as `?`; Cyrillic follows later as an encoding of its own. No other
-    device takes part: a Next without a Pi is future research (below), not a reason to lean
-    on a computer in the group.
-- **15.** **The Arduino Nano ESP32** (an ESP32-S3) as a small device, on the same `core/` as
-    the other ESP32 boards, with the member protocol and TLS 1.3 on the board itself. Done:
-    the firmware (`esp32/`) builds, keeps its settings in flash, joins the Wi-Fi network
-    set on its USB console, passes its self-test in QEMU, and types as a USB keyboard in
-    the layout set for the host. Next: joining a group of 0.6 by its home window and sync
-    on the board (0.7), OTA updates (item 29), and a library for one's
-    own Arduino sketches may follow. It ships as a ready firmware flashed over USB with one
-    command.
-- **22.** **A Mac app** that carries the service and a Network Extension (a content filter); the
-    release workflow already signs the Mac app with the Developer ID and notarizes it
-    ([maintaining](maintainers/maintaining.md#signing-for-macos)), so what is left is the extension: the
-    system then keeps the service on the home network until sync away from home is on, and
-    lets only the home network reach its port, as the systemd unit does on Linux and Windows
-    Firewall on Windows. Until then the Mac has the service's own limit only
-    (`internal/netguard`, and the member port's check of the address), which every computer
-    has as well; macOS has no per-program limit without such an app (the application
-    firewall allows or blocks a program, and pf is shared by the whole system), so this is
-    the one difference between the computers, and it goes away with the app. The app's
-    window and menu bar item over the installed service are there already (`apps/macos`,
-    [apps.md](apps.md#the-mac-app)).
-- **25.** Devices that are hard to type into: the Android TV variant of the app, the Nano
-    ESP32's USB and Bluetooth LE keyboards (`esp32/README.md`), the Android phone and a
-    Linux computer as a Bluetooth keyboard ([apps.md](apps.md#android-the-bluetooth-keyboard),
-    `cbb keyboard`), and a computer as the remote of an Android TV, a Google TV or a Roku
-    (`cbb remote`) are done; the Apple TV, Samsung and LG remotes, and the remotes in the
-    phones' apps, follow. See "Devices that are hard to type into" below.
-- **26.** Watches: the notifications, both watch apps, the watch's admin key and its emergency
-    actions are done ([design](design.md#watches)); prompt delivery on the iPhone needs push
-    notifications (item 57; the Apple developer account and its APNs keys are there).
-- **28.** The blind relay: the open relay (`cbb relay -open`) with its limits, the choice in `cbb
-    global relay` and in both phone apps, and the guide ([running your own
-    servers](admin/self-hosting.md)) and the project's open relay on `cbb.tools` (`cbb global
-    relay default`) are done, and so is a new key or address for the project's relay without
-    a release (`keys.json` and `entries.json`, [maintaining.md](maintainers/maintaining.md)). Next:
-    - the relay's own key in the signed `keys.json` from the first `release-sign publish`
-      (`-relay cbb.tools:8765=...`), before the relay ever gets a new key;
-    - the rotation run once on the Windows virtual machine, as the other changes;
-    - "The project's relay" in both phone apps and on small devices: today a phone enters
-      the relay's address and key by hand and a small device has no relay; the kits would
-      take the relay's keys and address from the signed lists they already keep, as `cbb`
-      does;
-    - AmneziaWG and VLESS on the relay.
-- **29.** Secure updates: `cbb update`, automatic updates, the release passed through the group,
-    the Android APK's own updates and `cbb`'s on Linux and OpenWrt are done
-    ([design](design.md#secure-updates)); the project's root and release keys wait for the
-    owner's hardware keys, then Sparkle in the Mac app and OTA on the Nano ESP32.
-
-- **34.** **Collections** in the apps: the user's own sets of devices and the order of the
-    tiles, personal to each app installation (D-72), are done: the model, the same in Go,
-    Kotlin and Swift against shared vectors
-    ([apps.md](apps.md#collections-and-the-order-of-the-tiles)), and the Arrange screens on
-    the iPhone and the iPad, on Android, in the Mac app and in the tray app; both watches show
-    their phone's collections as sections. See "Collections" below.
-- **35.** The review of all the documentation against the code for 0.6: in progress.
-- **42.** **A simpler protocol for the group's authority**, so that fewer of its rules can be
-    read two ways ([protocol.md](protocol.md), section 10).
-    Done in 0.6, so that 0.7 does not change the core, without a migration from `v:1` (groups
-    made before are set up again):
-    1. records `v:2`: the signer inside the body, powers written down, each signer's records
-       numbered, two records with one number shown as two histories, and signed bodies in one
-       canonical form that refuses unknown fields;
-    2. the servers check only server credentials (section 18) and read no records; both stay
-       open to every group;
-    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings) and the
-       Rust service `cbb`; the Go programs (`cbb-helper`, `cbb-forward`) keep their own rules,
-       held to the core's by the interop vectors and the differential run (D-93);
-    4. no CA keys between devices, and a Welcome without one;
-    5. features instead of versions in the hello;
-    6. one form for each thing: one framing, one fingerprint, one encoding of bytes;
-    7. a fork of roots, two admins acting against each other or two claims stop the group,
-       shown as a conflict in `status` and in every app, until the root decides;
-    9. manifests in the strict form: the manifest of a media event (protocol.md section 4) is
-       read by the rules of signed bodies in their canonical form (exact names, each once, none
-       its table does not name, no null, valid UTF-8, integers of int64), in Go, the core and
-       both kits alike, and the differential run ([differential.md](differential.md)) fails on
-       a manifest they read differently.
-
-    Later, point 8: the hubs' order from a table the root signs (D-65) instead of one derived
-    from the roles.
-- **64.** **The service in Rust, for 0.6** (D-88;
-    [design](design.md#the-service-and-its-helper)): the Rust `cbb` as the service and the
-    command line on every computer, with the Go `cbb-helper` as its child for what needs Go.
-    The program and its helper are in; the whole command line in Rust, the relay's server in
-    Rust (the forwarder stays in Go) and the removal of the Go member's code follow, its
-    rules staying as the tests' reference.
+- **7.** **Installers**: Linux, macOS, FreeBSD, OpenWrt, and Windows installers, Homebrew, winget
+  manifest generation, signed checksums and provenance attestations, SteamOS `/opt` persistence
+  (untested on a physical Steam Deck), and the signed and notarized macOS `.pkg` release workflow
+  ([Maintaining: signing for macOS](maintainers/maintaining.md#signing-for-macos)) are built.
+  Remaining: submitting the package to winget's repository, verifying SteamOS on a physical Steam
+  Deck, and running the first published release end to end.
+- **11.** **`cbb` in Rust**: Complete on Linux, macOS, Windows, FreeBSD, and OpenWrt. Remaining:
+  additional ESP32 boards beyond the Arduino Nano ESP32 (item 15) on the shared `core/`.
+- **13.** **Device keys in hardware**: Built for Linux TPM 2.0 (`internal/tpmkey`), Windows TPM 2.0
+  (untested on a physical PC), and macOS Secure Enclave (`member/src/sekey.rs`, including sealing
+  secrets and tunnel keys via `member/src/keys.rs`). Remaining: physical Windows PC testing,
+  protecting fallback file keys on Linux with `systemd-creds` and on Intel Macs with the system
+  keychain, and storing a computer main device's root key in hardware. See
+  [Device keys in hardware](#device-keys-in-hardware).
+- **14.** **ZX Spectrum Next** through its Raspberry Pi Zero: Built—`cbb next`, `cbb next link`
+  (`member/src/nextlink/`), `.cbb` and `.pibridge` dot commands (`apps/zxnext`), `CBB.DRV` driver,
+  `CBB.OVL`, `.cbb install` and `.cbb update` with signed `zxnext.json`, `.cbb net on/off` over the
+  ESP8266, `.cbb show` / `.cbb show -tape`, and `.cbb speed` (up to 921600/2000000 baud). Remaining:
+  real-hardware verification of newer commands (`show -tape`, `speed`, mobile-network forwarder
+  path), slow-link timeout tuning, background key-feeder and Terminex shell integration, copying
+  from the Next, and Cyrillic character encoding. See
+  [The Next's network in the background](#the-nexts-network-in-the-background).
+- **15.** **Arduino Nano ESP32** (ESP32-S3) on `core/`: Built—firmware (`esp32/`) persists settings
+  in flash, joins Wi-Fi, passes its QEMU TLS 1.3 self-test, and acts as a USB or Bluetooth LE
+  keyboard (`us` and `ru` layouts). Remaining: joining a group through a home window and clipboard
+  or remote-paste sync (planned for 0.7), real-hardware verification, OTA updates (item 29), and an
+  optional library for custom Arduino sketches.
+- **22.** **Mac app with Network Extension**: The menu bar app (`apps/macos`,
+  [App specification: the Mac app](apps.md#the-mac-app)) and its Developer ID–signed, notarized
+  `.pkg` ([Maintaining: signing for macOS](maintainers/maintaining.md#signing-for-macos)) are built.
+  Remaining: embedding the service and a Network Extension content filter so macOS enforces
+  home-network address limits at the OS level, matching Linux systemd and Windows Firewall (beyond
+  the service's own `internal/netguard` checks).
+- **25.** **Devices that are hard to type into**: Built—Android TV app variant, Nano ESP32 USB and
+  Bluetooth LE keyboards (`esp32/README.md`), Android and Linux Bluetooth LE keyboards
+  ([App specification: Android Bluetooth keyboard](apps.md#android-the-bluetooth-keyboard),
+  `cbb keyboard`), computer network remotes for Android TV/Google TV, Apple TV Companion, and Roku
+  (`cbb remote`), and the universal iPad layout. Remaining: Samsung (Tizen) and LG (webOS) remotes,
+  TV remotes inside the phone apps, addressing paired TVs by target name in `cbb paste -on`,
+  real-device testing on Android TV, Roku, and Meta Quest, and Entware router support. See
+  [Devices that are hard to type into](#devices-that-are-hard-to-type-into).
+- **26.** **Watches**: Built—Apple Watch, Wear OS, and HarmonyOS watch apps displaying group devices,
+  collections, and the away-from-home switch, plus watch notifications
+  ([Design: watches](design.md#watches)). Remaining: signing admin and emergency actions from the
+  wrist (deferred to 0.7 per D-124), physical verification on Wear OS and HarmonyOS watches, and
+  live iPhone push delivery (item 57).
+- **28.** **Blind relay**: Built—open relay server (`cbb-relay`, `member/src/relayd/`),
+  `cbb global relay` / `cbb global relay default`, the project's open relay on `cbb.tools`, the
+  self-hosting guide ([Running your own servers](admin/self-hosting.md)), signed `keys.json` and
+  `entries.json` rotation ([Maintaining](maintainers/maintaining.md)), and `"default"` project relay
+  selection across all four phone apps and `cbb` on small Linux devices. Remaining:
+  - Including the relay's key in the first signed `keys.json` publish (`release-sign publish
+    -relay cbb.tools:8765=...`).
+  - Testing relay key rotation on the Windows virtual machine.
+  - Adding AmneziaWG and VLESS transport support to the blind relay (`member/src/relayd/`).
+- **29.** **Secure updates**: Built—`cbb update`, automatic update timers, signed releases backed by
+  two pinned YubiKey hybrid roots (`internal/release/roots/roots.pem`, ES256 and
+  SLH-DSA-SHA2-128s), Android APK self-updates, and group release propagation
+  ([Design: secure updates](design.md#secure-updates)). Remaining: Sparkle updates in the Mac app,
+  OTA updates on the Arduino Nano ESP32, exercising a published release upgrade end to end, and
+  signing the Windows programs without a bought certificate through the
+  [SignPath Foundation](https://signpath.org) (Microsoft's Artifact Signing takes no individuals
+  outside the USA and Canada): apply with this repository, put `SIGNPATH_API_TOKEN` and the
+  organization and project ids in the Actions settings, and let the release workflow submit the
+  unsigned programs to SignPath's action in place of the `osslsigncode` step, which stays for a
+  bought certificate. `cbb update` on Windows then installs only programs with the same signer.
+- **31.** **Key levels**: Built—hardware attestation evidence verification, key storage marks in
+  `cbb status` and apps, the `key_level` group setting ([Protocol](protocol.md), section 10),
+  `cbb keys`, phone app **Admin keys** settings, and the daily Google attestation revocation mirror
+  (`site/deploy/cbb-attest.service`). Remaining: external Level 1 checks (Apple App Attest and
+  Intel/AMD TPM manufacturer EK certificate fetches) and storing a computer main device's root key
+  in TPM or Secure Enclave. See [Key levels](#key-levels).
+- **35.** **Full documentation review against the code**: In progress.
+- **39.** **Rootless installs** (D-79): Built and verified in CI (`install.sh --rootless`,
+  [Design: rootless installs](design.md#rootless-installs)). Remaining: verification in a real Linux
+  desktop session.
+- **46.** **VLESS over XHTTP for blocked networks**: Built—forwarder XHTTP listener
+  (`cbb forward -vless-xhttp`), `cbb.tools` nginx configuration (`site/deploy/nginx.conf`), hub
+  offers, and AmneziaWG + VLESS over XHTTP clients in `cbb` (`member/src/awg.rs`,
+  `member/src/vless.rs`, `core/src/vless.rs`) and every phone app; REALITY is removed (D-91).
+  Remaining (planned for 0.7): VLESS's own encryption (ML-KEM-768 with X25519), blind relay support
+  (item 28), and ESP32 support. See [VLESS behind a web server](#vless-behind-a-web-server).
+- **49.** **Eight project languages across every app and CLI**: Built—Chinese, English, Spanish,
+  Russian, Arabic, Swahili, Hebrew, and Hindi across all phone, watch, Mac, and tray apps (with
+  right-to-left layout in Arabic and Hebrew, per-app language picker, locale selection in `cbb`,
+  and CI termbase/Vale linting). Remaining: native-speaker review of translations before release.
+- **53.** **Pre-launch review for sceptical readers**: Done—Android skips
+  `android.content.extra.IS_SENSITIVE` copies, guides and README state end-to-end encryption bounds
+  and server visibility accurately, README includes the trust model, comparison table, checksum
+  verification, and build instructions, and website copy and RTL formatting fixes are applied.
+  Remaining:
+  - README key architecture diagram and app screenshots.
+  - GitHub repository description and search topics (set by the maintainer).
+  - Website polish: trust facts above the fold, Hebrew prepositions before links, Hindi terminology
+    consistency, link wrapping on page titles, and native-speaker review of every language.
+- **55.** **Updates through the group's ways out**: Built—VLESS mirror access through the forwarder,
+  `site/deploy/cbb-mirror.service`, hub archive caching, and `cbb update` fetching releases and
+  archives from the group when GitHub and `dl.cbb.tools` are unreachable (`member/src/update.rs`,
+  [Design: where updates come from](design.md#where-updates-come-from)). Remaining: Android APK
+  fetching updates from the group, and deploying `dl.cbb.tools` live.
+- **56.** **Hub registration over VLESS and signed entry points (`entries.json`)**: Built—hubs
+  register over VLESS with per-group XHTTP data paths, signed `entries.json` propagates via
+  `cbb.tools`, the GitHub `channel` branch, group sync, and QR/text (`cbb global entries`), and
+  apps warn when entry lists are stale. Remaining: adding multiple domains or a CDN (such as
+  Cloudflare) in front of XHTTP inside the signed entry list once a spare domain or CDN is in place.
+- **57.** **Push notifications for closed phone apps**: Built in the repository—sealed push wire
+  format (`core/src/push.rs`, `testdata/format/push.json`), push daemon (`member/src/pushd/` for
+  APNs, FCM, and UnifiedPush; `packaging/linux/cbb-push.service`), member pusher
+  (`member/src/pusher.rs`, `member/tests/phone_push.rs`), iOS Notification Service Extension
+  (`apps/ios/NotificationService/`, `apps/ios/CBB/App/PushSetup.swift`), and Android push platform
+  (`apps/android/app/src/full/kotlin/tools/cbb/PushPlatform.kt`). Remaining: deploying the push
+  service on `cbb.tools`, testing end to end on physical phones, verifying whether the iOS
+  Notification Service Extension can write to the clipboard without a tap, and verifying whether
+  iPhone Back Tap's execution budget suffices away from home over VLESS.
+- **60.** **Aurora OS and Sailfish OS app (`apps/silica`)**: Built—shared Qt 5.6 / Silica QML
+  codebase over `cbb_core` (`cbb_call`), unsigned RPM builds in CI for Aurora 5 (`armv7hl`,
+  `aarch64`), Aurora 4 (`armv7hl`), and Sailfish OS (`armv7hl`, `aarch64`, passes `rpmvalidation`),
+  OP-TEE PKCS#11 member and PIN-guarded admin keys (D-94), blind relay, notices, collections, Qt
+  host unit tests in CI, and initial physical testing on Aurora 5.1.5 (F+ R570E). Remaining:
+  - Full physical testing on Aurora 5.1.5 (group creation, YubiKey over `pcscd`, away-from-home
+    sync).
+  - Verifying clipboard, networking, and file-key fallback in the Aurora 5.2 SDK emulator, and
+    checking whether Aurora 5.2 adds hardware key attestation for Level 1.
+  - Community testing on physical Sailfish OS hardware (file key, Level 3).
+- **68.** **Fewer choices in the apps**: Built—**Advanced settings** toggle hiding key levels and
+  detailed away-from-home settings behind sensible defaults, and **The lab** framing for
+  experimental hardware features ([App specification: the lab](apps.md#the-lab),
+  [The lab](guide/lab.md)); freezing and removing an admin remain separate actions. Remaining:
+  making away-from-home a single switch with fully automatic hub, forwarder, relay, and
+  blocked-network selection (depends on device consent, item 58).
+- **70.** **The 0.6 core and binary format (D-131)**: Waves 1–5 are built in `core/` and `member/`.
+  Remaining: Wave 6 (moving the sans-I/O member session into `cbb_core`, replacing
+  `core/src/sim/exchange.rs`, and running a real ESP32 board in a group) and Wave 7 (freezing the
+  format in `testdata/format/FROZEN`, cross-version N / N-1 compatibility per D-131, and two
+  consecutive clean security audit passes, planned for 0.7). See
+  [The core and the format in 0.6](#the-core-and-the-format-in-06).
 
 ### Next
 
-- **70.** **Planned for 0.6.** The core and the format of 0.6 (D-131): one binary
-    format, new record rules, members without certificates, content and keys, the session
-    in the core and the small device. Six waves, each with its own test of being done; the
-    format stays preliminary until 0.7. See "The core and the format in 0.6" below.
-- **10.** **Console helper and auto-paste**: the double press that injects the member's own text
-    on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
-    a phone through the uinput helper (design.md, "Auto-paste"). The helpers themselves are
-    done, as remote paste targets.
-- **31.** **Key levels**: the user picks who may be the group's root or an admin (a trusted hub is one): only
-    devices whose hardware key is proven by attestation, devices with a key in hardware (the
-    default), or, after a warning, devices with a key in a file too. The evidence and the
-    marks are built, and so is the setting's format: `key_level` in the root's `settings`
-    record ([protocol.md](protocol.md), section 10), which the state carries, `cbb keys` with
-    its checks on a root computer, and the phone apps' setting (Settings, Admin keys) with
-    theirs. Level 1's outside checks (App Attest, the TPM makers' services) are next. See "Key levels" below.
-- **33.** **Researched; not built (D-73), and void since no phone is a hub (D-134).** The
-    iPhone as a hub in the background, as a Network Extension. See "Research: the iPhone hub
-    in a Network Extension" below.
-- **36.** **Russian versions of the documentation for users**, postponed: the README, the guide
-    and the reference pages for users, in `docs/ru/` and `README.ru.md`; the documents for
-    developers stay in English. The rule of D-8 then allows Cyrillic in those two places as
-    well as in the apps' translations, and `tools/repocheck` checks that each Russian page
-    has its English original with the same sections, so a translation cannot fall behind
-    unnoticed. The Russian text uses the words of the apps' Russian translations.
-- **37.** **Planned for 0.7.** Sync away from home for `cbb` on MIPS routers. In 0.6
-    `cbb` for mips and mipsle is built without the tunnel, since GotaTun, its
-    WireGuard library, needs 64-bit atomics that 32-bit MIPS lacks; such a router syncs only
-    at home. The aim is the full tunnel there too: GotaTun without 64-bit atomics, or
-    another WireGuard for that build (design.md, "OpenWrt routers", step 5).
-- **38.** **Planned after 0.6.** The Android app and Google: the project has a Google Play
-    Console account (2026-10-27).
-    - Before 2027, when Android installs sideloaded apps only from registered developers:
-      register the package `tools.cbb` there with the
-      certificate of the release key that signs the APKs of the releases
-      (docs/maintainers/maintaining.md, "Android signing key"), so that those APKs and their own
-      updates (docs/apps.md, "Updates") keep installing.
-    - Whether the app goes to Google Play, and with which key: with Play App Signing, Play
-      signs its copy with a key of its own, so the copy from Play and the APK of a release
-      cannot update each other; the app already leaves a copy from a store to the store.
-      Uploading with the release key itself keeps one key for both. The decision is the
-      owner's, with the Wear OS app (which must share its key with the phone's) and the
-      F-Droid build, planned at the end of 0.6 or in 0.7.
-- **39.** **Rootless installs** (D-79), built in 0.6 and not yet run on a desktop session: a computer or a small device on Linux installed and run without root,
-    for a computer whose user has no `sudo` or does not want to give it. The service runs as
-    the user's systemd user unit, with its files under the user's home; its hello and device
-    record say `rootless`, and such a device is never the root, an admin or a hub, not even
-    after a warning. It loses what the system install has: its own account, which keeps its
-    keys from the user's other programs, systemd's sandbox and address limits, the TPM, the
-    uinput and console helpers, the polkit rule of the quick actions, and the firewall rules.
-- **40.** **Planned** (the Apple developer account is there). Apple Vision Pro (visionOS):
-    1. The iPad app on Vision Pro, in its compatibility mode, through TestFlight and the App
-       Store; nothing to build.
-    2. A visionOS build of the app: the kit and the app with visionOS among their platforms,
-       without what visionOS lacks: the QR code scanner (the six digits instead), the watch
-       link and the Live Activities. The clipboard, the Secure Enclave and Optic ID work as on
-       the iPhone; like the iPhone, it syncs only while the app is open.
-    3. Sync away from home there: the phones' tunnel is in the Rust core's library
-       (`ffi/src/tunnel.rs`), which `ffi/bind.sh` would build for visionOS too.
-- **41.** **Being built for 0.6**, with the rules core (item 42). Commands sealed for their receiver: a command's body (a
-    paste's text among it) is signed but not encrypted, so a hub that passes a command on
-    for a device the sender cannot reach reads it; since 0.6 only the hubs pass commands
-    on. Each member gets a key for this beside its member key (X-Wing, ML-KEM-768 with
-    X25519, so a recorded paste stays closed to a later quantum computer; the keys in the
-    TPM, the Secure Enclave and the Keystore only sign), published in a statement its member
-    key signs; the sender seals the body to it (HPKE, RFC 9180: X-Wing, HKDF-SHA256,
-    ChaCha20-Poly1305; `cbb_core::seal`) with the open header (group, sender, receiver, ID, times) as its
-    associated data, and signs the sealed command. A device that published no key gets a
-    secret paste only directly. The same in Go, `cbb`, both kits, with shared
-    vectors and docs/protocol.md section 15.
-- **43.** **Planned for 0.7.** What the app stores ask for, before the apps are submitted:
-    - App Store (the iPhone, Apple Watch and Mac apps): a privacy manifest
-      (`PrivacyInfo.xcprivacy`) with the reasons for the APIs that need them (`UserDefaults`,
-      file times and the like), without which an upload is refused; and
-      `ITSAppUsesNonExemptEncryption` in each `Info.plist`, with the export answer for the
-      apps' encryption (standard algorithms) written down in docs/maintainers/maintaining.md.
-    - Google Play: the declaration for the accessibility service, which Play allows for an
-      app that is not an accessibility tool only with a declaration in the console, a video
-      and a prominent disclosure in the app before the user turns the service on; the Data
-      safety form; the reason for the `connectedDevice` foreground service; the current
-      target API level. The GitHub and F-Droid builds are not affected. Found in the
-      study of Play's rules (2026-11-02):
-        - The disclosure is its own screen, reached from Home (a card "Send my copies by
-          themselves, optional") and not only from Settings; it says what the service reads
-          and what it does not, with "Agree" and "Not now" (Back counts as "Not now"); only
-          "Agree" opens Android's accessibility settings, and the switch in Settings shows
-          the service's real state. Play turned down another app in 2026 for a disclosure
-          reached only through Settings.
-        - Remote paste through the same service is its own point in the disclosure, the
-          listing, the declaration and the video; a change in what the service does needs
-          a new declaration.
-        - The service asks for no more than it uses: whether `canRetrieveWindowContent` and
-          events from every app are needed for noticing a copy, or only for remote paste's
-          focused field (to be tried on a real phone).
-        - Android 17's Advanced Protection takes the accessibility service away from every
-          app that is not an accessibility tool: the app notices it (and an OEM that turned
-          the service off after a reboot), switches to sending with one tap and says why.
-        - The listing names the tunnel for sync away from home (Android's VpnService) and
-          the accessibility service; targeting API 37 adds a declaration for
-          `ACCESS_LOCAL_NETWORK`.
-        - IzzyOnDroid reviews an accessibility service by hand and has a policy on code
-          written with AI: a short paragraph that explains both is ready before applying.
-    - App Store, from the study of Apple's rules (2026-11-02): the review notes say how the
-      reviewer sees sync work (a video and a group with its QR code) and that the tunnel
-      for sync away from home runs inside the app, not as a VPN (rule 5.4 is for VPN
-      services); a privacy policy linked in the metadata and in the app; the store text
-      promises no automatic sending on the iPhone (iOS allows no background reading of the
-      clipboard: Share, the Action button, Back Tap, a widget, Control Center); an external
-      TestFlight group needs a beta description, a feedback address and the first build's
-      beta review.
-- **44.** More tools that check the code (all free and run only in CI, none ships in the
-    product). Mutation testing of the records' code is done in 0.6 with the rules core
-    (item 42); the rest is planned for 0.7, after the core settles:
-    - Mutation testing, nightly, on the records' code only: cargo-mutants for `cbb_core` and
-      gremlins for Go change the code (drop a check, turn `<` into `<=`) and report every
-      change that no test notices, so a weakened check cannot go unseen.
-    - golangci-lint with a few linters beside staticcheck: errcheck (an error left unread),
-      exhaustive (a switch over the record kinds that misses one), gosec's G115 (an integer
-      conversion that overflows), errorlint and bodyclose; first a clean-up of what they find.
-    - Not Kani: tried on `cbb_core` in 0.6, its proofs did not finish on the parsers, which
-      read JSON into `BTreeMap`, `Vec` and `String`; the property tests, the fuzzing and the
-      mutation testing cover them instead.
-    - goleak in the tests of the daemon, the relay and the forwarder: a goroutine a test
-      leaves running fails it.
-    - The Swift code that stays in Swift (the network, `AppModel`, `LiveGroup`): the
-      Thread Sanitizer in the Mac app's CI job, then the Swift 6 language mode with its
-      strict checks of concurrency.
-- **45.** **Planned after 0.6.** Two things the rules core does not yet allow:
-    - One device in several groups (a family's and a work group, or a phone that helps in a
-      relative's group): every call into the core and every saved state names its group.
-    - A temporary guest: a device record with an end date, after which the device leaves the
-      group without being removed by hand.
-- **46.** **XHTTP in 0.6 for `cbb` and the phones.** Sync away from home through networks that block VPNs, on
-    every member, small devices included. There are two ways, equal options that the user
-    or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS runs
-    with the site's real certificate, behind the server's own web server (XHTTP, which the
-    site's nginx passes to the forwarder; the project's forwarder at cbb.tools runs it);
-    REALITY, its other kind until then, was removed (the owner, 2026-11-08, D-91). Every
-    client speaks both ways; `cbb` on Linux speaks AmneziaWG and VLESS over XHTTP
-    in 0.6 (the owner, 2026-11-07); the ESP32 and the blind relay come later
-    ([below](#vless-behind-a-web-server)).
-- **47.** **Planned.** Back Tap on the iPhone in two taps: iOS lets no app make a
-    shortcut or set Back Tap, so the app carries a signed shortcut file (`shortcuts sign
-    --mode anyone` on a Mac) that runs its Sync clipboard action. A button "Add the
-    double-tap shortcut", in Settings and after the first computer connects, opens it and iOS
-    asks to add it; a card then gives the steps to Settings, Accessibility, Touch, Back Tap,
-    Double Tap. The file names the release bundle identifier, so it goes with the TestFlight
-    builds the release workflow makes (`apps/ios/testflight.sh`); a copy for a Personal Team
-    build tests it before.
-- **49.** **Done in 0.6.** One set of languages across the project: every app (the
-    phones, the watches, the Mac app, the tray app) speaks the languages of the website
-    (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice
-    in Settings, System or one of them, remembered; the Rust `cbb` picks the language from
-    the locale (docs/reference/cli.md), and English where the project has no translation.
-    Arabic and Hebrew lay the screens out right to left. Left: a native speaker reads the
-    new translations before a release.
-- **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-cbb`, in the
-    project's own apk feed: the group's devices and their state, adding a device with its
-    QR code, sync away from home and the hub, the network zones; the same sections in the
-    same order as the apps, in LuCI's own look. A JavaScript view with a small rpcd backend
-    that asks the service over its control socket, with an ACL that allows only that. Later,
-    after 1.0, when the protocol keeps backward compatibility: the official OpenWrt feeds,
-    a package for `openwrt/packages` built from source with OpenWrt's Go or Rust package
-    rules (`cbb` in Rust, which fits routers with 16 MB
-    of flash) and the page for `openwrt/luci`, with a maintainer for each.
-- **51.** **Planned for 0.7, research.** Arduino boards whose Wi-Fi module is an ESP32, as
-    devices of their own: the Uno R4 WiFi (an RA4M1 with an ESP32-S3 module), and the Nano 33
-    IoT, MKR WiFi 1010 and Nano RP2040 Connect (u-blox NINA-W10x, a classic ESP32). Our
-    firmware on the module makes it a member (`core/`, TLS 1.3, joining by the
-    phone's QR code), and the board's main chip only types the texts as a USB keyboard and
-    shows them, over the UART or SPI already between the two, in frames like `cbb next`'s:
-    the split of the ZX Spectrum Next, where the Pi is the member and the Z80 only types.
-    Everything runs on the board's own hardware, so it is no gateway. The cost: Arduino's
-    own Wi-Fi firmware is gone while ours is on (its updater puts it back). To find out:
-    whether each module takes new firmware without an external programmer (the Uno R4
-    WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
-    whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `core/` with TLS 1.3, which
-    builds today for the C6 and the S3 only. The Uno R4 WiFi first.
-- **52.** **Planned for 0.7, on every device (the owner, 2026-11-09).** A clipboard history of
-    CBB's own, the same on the phones (iPhone, Android, Aurora), in the Mac app, in the tray
-    app on Linux and Windows and in `cbb` on the command line, so that it works alike
-    everywhere, also where the system keeps none (the iPhone has none, even in iOS 27; Android
-    only on some phones). The history:
-    - stays on the device; it is never synced between the group's devices;
-    - is off by default, one switch turns it on;
-    - keeps entries for a time the user picks (1 hour, 1 day, 7 days), with a "Clear" button;
-    - is encrypted with the device's key (Secure Enclave, Android Keystore, the TPM, or the
-      key file where a computer has no chip);
-    - never holds copies marked as secret (password managers' marks);
-    - can be searched, and an entry is sent again with one tap.
-    docs/apps.md's principle "no history" changes to say this. Why: users of the other
-    clipboard tools ask for a history more than for almost anything else, and every device
-    should have the same one.
-- **53.** **Planned for 0.6, before the launch.** What a sceptical reader checks first,
-    found by reading the project as one would (2026-11-02):
-    - Done in 0.6: Android's automatic sending skips a copy that carries
-      `android.content.extra.IS_SENSITIVE`, as the computers skip the password managers'
-      marks.
-    - Done in 0.6: the guides (privacy, how it works, keys, away from home) and the README
-      say "end to end" for the clipboard only once it was true (D-84): who reads the copies,
-      the two kinds of hub, and what the devices that pass a copy on still see; the forwarder's addresses, timing and sizes on the site and in the guides;
-      the status notes and the README's status link in the guides of keys and away from
-      home; "each signature" of the root's and the admins' keys only; "only over TLS" linking what is not encrypted; winget named only where
-      it says "once the package is in winget's repository"; docs/maintainers/security-audit.md says it
-      is a plan.
-    - Done in 0.6: the README's trust model ("Who can read what": who holds which key, who
-      reads the copies, who admits devices, what the hub, the forwarder and the relay see;
-      the pairing code as the only secret), one line on what
-      is tested, a security section with links, the comparison with KDE Connect, ClipCascade
-      and Universal Clipboard with its weak points, an install that checks SHA256SUMS first,
-      links to the ports and to removing it, and how the project is built. Still to do: a
-      picture of the keys, screenshots.
-    - The repository's description and topics on GitHub, so that a search for "clipboard
-      sync" finds it (the owner sets them).
-    - Done in 0.6 on the website: the first screen's title says what it does ("Copy on one
-      device, paste on another", also in the link picture), the iPhone card says the app
-      comes with TestFlight, no "trademarks", no "the one that does all of it", no "simpler"
-      for the recommended computer, X11 and Wayland instead of "any desktop", the privacy
-      page's keys in a TPM or Secure Enclave and the forwarder's addresses, timing and
-      sizes; the Chinese "全程", the Swahili "haimripoti" and "huru"/"huria", Hindi's
-      pairing and Hebrew's mixed singular and plural fixed; `dir="ltr"` on code and no
-      letter spacing in Arabic and Hebrew. Still to do: the trust facts above the fold,
-      Hebrew's prepositions before links, Hindi's mixed terms, links that wrap a whole page
-      title, and a native speaker's read of each language before the launch.
-- **54.** **Planned for 0.6, before the launch.** Support for the project: a
-    `.github/FUNDING.yml` and a `funding.json` (the format FLOSS/fund reads), once the
-    author's GitHub Sponsors and Liberapay accounts exist, and a short "Support" section in
-    the README: what the money pays for (the Apple developer account, the forwarder,
-    devices to test on), that a donation buys no priority, and the commercial license for
-    companies. No paid features, no "license key" in the apps and no paid tier on the
-    forwarder: the app store builds may later be the same free code at a small price. Grants
-    after the launch: the GitHub Secure Open Source Fund, then FLOSS/fund once the project
-    has users; NLnet's calls since 20 October 2026 do not fund code written with generative
-    AI.
-- **55.** **Built for 0.6 (the owner, 2026-11-03): the mirror over VLESS, the release from the group, and the hub fetching the archives its members install; `cbb` and the Android APK do not take them from the group yet.** Updates through the group's ways
-    out, for devices on networks that block GitHub or the mirror. GitHub stays reached
-    directly, as now. Where the user switched AmneziaWG or VLESS on, the mirror on cbb.tools
-    is reached only through them: over VLESS the forwarder lets a group's registered VLESS
-    user ID reach the mirror on its own server as well as its UDP port, and nothing else, so
-    the server still gives no way to the internet; with AmneziaWG the devices get the
-    update from the group, inside its tunnel. The members already pass the signed release
-    to each other (the `release` message, docs/protocol.md section 16); the archives follow
-    over the member protocol ([design](design.md#where-updates-come-from)), so about one
-    device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
-    Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
-    with this item, on the same server.
-- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and `cbb` take, keep and (`cbb`) pass on the list, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
-    only over VLESS, in a network that lets nothing else through.
-    The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
-    into `cbb` and the kits beside its key, as they are no secret the design relies on; a
-    forwarder of one's own prints them with its key (`cbb forward`), and the user enters
-    them once. A hub keeps what the forwarder's answer says and uses that afterwards. It
-    tries TCP and UDP 8764 first and VLESS on 443 after them, as its clients do: over VLESS
-    go the registration (its TLS, with the forwarder's key pinned, inside VLESS) and the
-    hub's own tunnel packets, and the forwarder passes the clients' packets to such a hub
-    over that connection instead of UDP (docs/protocol.md, sections 11 and 13).
-    Nothing secret is compiled in: the builds stay reproducible (F-Droid) and the code
-    public. Instead the built-in path, and the `xhttp://host/path#key` string or QR code of
-    one's own forwarder, serve only a hub's first registration: the forwarder then gives each
-    group a data path of its own (random, kept with the group's registration), the hub hands
-    it to its clients in the offer, and the forwarder carries the group's packets only on
-    that path. The entry points (domains, ports, registration paths, the forwarders' keys)
-    are also published as a signed list in the release channel (`cbb.tools/channel/`, signed
-    with the channel key), so a blocked entry is replaced without a release; hubs and clients
-    pick the list up. Every device fetches the list with its update check, whether or not
-    VLESS is on, and takes it from any source, as the signature is what it trusts: cbb.tools,
-    the `channel` branch on GitHub, any member of its group (over the member protocol, as the
-    signed release), or a QR code or string another device shares; when none of them answers
-    and the list is stale, the app says so and where to get a new one. Later, once there is a spare domain or a CDN: several domains, or
-    Cloudflare in front of XHTTP, in the same signed list, as the name a network sees in TLS
-    is what it can block.
-- **57.** **Planned for 0.7 (the owner, 2026-11-03).** Push notifications on the iPhone, so
-    that a copy and the group's events reach it while its app is closed (Android needs
-    none: its foreground service keeps the connections). A member or the hub asks the
-    project's push service on cbb.tools to notify the phone; the service holds the APNs keys
-    and the phones' device tokens, never a group's keys. A Notification Service Extension
-    (about 30 seconds and 24 MiB) opens what is sealed to that phone: a short copy (a push
-    carries 4 KiB) shown with a "Copy" button, or a line that a larger copy or a file waits.
-    The service sees the tokens and the times, not the content: the privacy page says so,
-    and push can be switched off. Back Tap, the Action button and Share stay
-    as they are. To check on a device: whether the extension may put the text in the
-    clipboard without a tap, and whether Back Tap's 5 seconds are enough away from home
-    over VLESS (iOS allows about 30).
-- **58.** **Planned for 0.7 (the owner, 2026-11-24).** Sync away from home by consent (D-82):
-    the device's user consents once, at install, at pairing or in the app, and the root or an
-    admin then turns it on and makes hubs from the app, without a command on each computer
-    (see [Consent to sync away from home](#consent-to-sync-away-from-home)).
-- **59.** **Planned for 0.6, before the release (the owner, 2026-11-06).** The stores' signing,
-    set up before 0.6 is tagged, since an Android app's key can never change once its APKs
-    are installed:
-    - One release key for every Android channel: the key that replaced 0.5.0's on 2026-11-03
-      (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
-      **release** already holds. Write its fingerprint in docs/maintainers/maintaining.md, "Android
-      signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
-      in place (a group made with 0.5 is set up again on 0.6, D-131).
-    - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
-      without an update of its own and without Wear OS), not an AAB, so that RuStore never
-      holds the key and its copy, the GitHub APK and F-Droid's share one certificate. The
-      app already leaves a copy from a store to its store (docs/apps.md,
-      "Updates").
-    - RuStore, Aurora OS: the developer certificate with the profile `regular` (issued
-      2025-12-05 by Open Mobile Platform's root, valid until 2049) signs the Aurora build's
-      RPM, and every test build that reaches a phone too (the workflow `aurora`, after the
-      maintainer's approval): not the public test key ("Noname developer"), which 5.2's
-      installer refuses, and a change of certificate installs only after the app is removed,
-      which removes its key. What a
-      `regular` app may do on Aurora 5.1.5 was measured on a device (2026-11-06): it listens
-      and is reached over Wi-Fi in the background, mDNS works both ways, the OP-TEE
-      PKCS#11 token makes non-extractable P-256 keys that sign, it writes the clipboard from the
-      background but reads another app's copy only in the foreground (so the phone sends
-      on a gesture: opening the app, a notification or Share), and a second executable in
-      the package is installed without its execute bit.
-    - F-Droid: the steps in docs/maintainers/maintaining.md, "F-Droid", with `AllowedAPKSigningKeys`
-      set to that certificate. The fdroid flavor already has no update of its
-      own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
-      requires: an app it publishes must not download or install code outside F-Droid.
-- **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS (`apps/silica`), in Qt 5.6 with Silica
-    QML around the Rust core through `cbb_call` (docs/core-api.md), one binary with its
-    libraries, since the installer leaves a second executable in a package without its execute
-    bit: two packages from one
-    code, one for Aurora 4 and one for Aurora 5 (5.1 and 5.2), since the two have different
-    SDKs, sandbox permissions and installers. The Aurora 5 package is built with the SDK of
-    the oldest 5.x it supports, 5.1.5 (each release has its own SDK on OMP's site), for both
-    armv7hl (phones with a 64-bit kernel and a 32-bit system, such as the F+ R570E) and
-    aarch64, and tested on a 5.1.5 phone first; the app reads `VERSION_ID` in
-    `/etc/os-release` for what differs within a major version. The same code makes a third
-    package for Sailfish OS, built with the Sailfish SDK for armv7hl
-    and aarch64 and published in Jolla's store or OpenRepos: only the installer, the signing
-    and the key store differ, so the platform layer keeps them apart from the start and CI
-    builds all the packages. Sailfish ships together with Aurora (the owner, 2026-11-06),
-    tested only in the Sailfish SDK's emulator and marked as not yet tested on a phone,
-    for the community to try, as the Android app first was. All three packages build
-    (2026-11-06; CI's `Aurora app` jobs): Sailfish's passes Jolla's store check
-    (`rpmvalidation`), and Aurora 4's keeps its key in a file too, as no Aurora 4 phone has
-    been measured for a key in its TEE.
-    Sailfish has no TEE key through PKCS#11, so its key is a file (level 3). Its key fits
-    [Key levels](#key-levels) as the other phones' do:
-    - Level 2, "hardware", the default. How the key is kept, measured on the R570E with
-      5.1.5 (2026-11-06): the app asks Aurora's QCA keystore (provider
-      `qca-aurora-pkcs11`, keystore `USERAPP`, PKCS#11 provider `cktee`, PIN `0000`) once
-      to initialize its token, which gives the app a slot of its own in OP-TEE (model
-      "Aurora TA"; another app sees the same slot number empty); then, through `libckteec`
-      directly, it logs in with that PIN and keeps a P-256 key there with `CKA_TOKEN`,
-      `CKA_SENSITIVE` and not `CKA_EXTRACTABLE`. The key is found again after the app's
-      restart and the phone's reboot, refuses its value and signs. QCA itself handles only
-      RSA and GOST keys and aborts the process when the keystore holds an EC key, so the
-      app never calls QCA again once its key is there. The app checks that the key is in
-      OP-TEE, not in a software token that sets the same flags: `/dev/tee0` and
-      `libckteec` are there, the token is the initialized "Aurora TA" one, and the key
-      reads back `CKA_NEVER_EXTRACTABLE` and `CKA_ALWAYS_SENSITIVE`. Nothing about the
-      device leaves the group (D-47).
-    - Level 1, "proven", only when the group's user chooses it, as everywhere, and only
-      if Aurora offers key attestation (a proof that the key was made in the TEE, not only
-      that the system is unmodified): 5.1.5 has none, and whether the attestation that 5.2's
-      release notes list covers keys is to be checked in its SDK later, with no date, once
-      phones with 5.2 exist. Until then an Aurora phone is never "proven".
-    - The package for Aurora 5 is meant to run on 5.2 too, without level 1; the SDK's 5.2
-      emulator checks it first (the clipboard, which 5.2 reworked, and the network), and,
-      having no OP-TEE, the file key's path: the app says its key is not hardware and is no
-      admin without the user's consent.
-    - A phone without OP-TEE keeps its key in a file and is an admin or the hub only at
-      level 3, after the user allows it.
-    - Ed25519 works in the same token when the template names `CKA_KEY_TYPE`
-      (`CKK_EC_EDWARDS`) and `CKA_EC_PARAMS` is the printable string `edwards25519`;
-      `CKM_EDDSA` needs a `CK_EDDSA_PARAMS`, since `libckteec` crashes on a null parameter.
-    - Removing the app removes its token and key: a reinstalled app finds its slot
-      uninitialized again, initializes it through QCA and joins as a new device.
-- **62.** **Planned for 0.7 (the owner, 2026-11-08).** Sound and files on the ZX Spectrum Next,
-    after the group's images (`.cbb show`, 0.6):
-    - `.cbb play`: the group's latest sound. The Pi decodes it (MP3, AAC, WAV) and plays it
-      into the Next's mixer over I2S, if NextPi's audio path allows it; else it sends 8-bit
-      samples over the UART to the Next's DACs (about 11 kHz mono at 115200 baud).
-    - `.cbb get`: the group's latest files saved on the SD card, with 8.3 names (about a
-      minute and a half a megabyte at 115200 baud); `-run` starts a `.nex`, `.tap`, `.tzx`,
-      `.sna` or `.z80` at once, so a game sent from the phone runs on the Next.
-    - `.cbb snap`: the Next's screen (ULA or Layer 2) to the group as a PNG, which the Pi
-      makes.
-- **66.** **Planned for 0.7 (the owner, 2026-11-09).** Sending to one device ("Share → the
-    laptop"): the copy is sealed for the chosen device alone and written only to its
-    clipboard; the other devices of the group never get it.
-- **67.** **Later, not planned (the owner, 2026-11-09).** Several people in one group, each with
-    a clipboard of their own inside it. Today a group is the devices of one person, and two
-    people make two groups ([how it works](guide/how-it-works.md#the-group)). The records
-    allow adding it without breaking groups: new fields and record types come only with a
-    new `v`, which older devices keep, pass on and ask to be updated for
-    ([protocol.md](protocol.md), section 10, "Records of a later version").
-- **68.** **Planned for 0.6 (the owner, 2026-11-09).** Fewer choices in the apps:
-    - key levels and attestation (item 31): one sensible default, the rest deep in the
-      advanced settings;
-    - away from home, one switch for the user; the hub, the forwarder, the relay and the
-      ways through blocking networks are chosen by themselves, by hand only in the advanced
-      settings;
-    - the ZX Spectrum Next, the ESP32, the TV remotes and the Bluetooth keyboards are shown
-      as "the lab" in the README, on the site and in the docs: experiments, not what 1.0
-      promises.
-
-    Freezing and removing an admin stay two separate actions.
-- **69.** **Planned for 0.7 (the owner, 2026-11-23).** The apps and the command line as one
-    product: the same meaning and flows everywhere, each platform's own controls.
-    - An inventory of every screen on every platform (iPhone and iPad, Apple Watch, the Mac,
-      Android and Wear OS, the tray, Aurora OS, HarmonyOS and its watch, the command line)
-      with its states, against [parity.md](parity.md).
-    - The person's tasks (ten to fifteen), with how often and how much each matters, which
-      decide what Home shows and what lies deeper.
-    - One model of the product's objects (the group, a device, the main device, an admin, a
-      copy, an invitation, the recovery key) with their properties and actions, named by the
-      termbase, and a few written principles of the product.
-    - The flows' states in the core: adding a device, joining and recovery first, each a
-      state machine the core runs and the apps only draw, with tests of its moves on every
-      platform.
-    - One catalogue of messages: every error, notice and reason with a code, its text and
-      what to do, the same in the apps and in `cbb status`.
-    - One library of patterns (confirming what cannot be undone, progress, an empty state, an
-      error, pairing, a secret, no network) with how each looks on every platform and on the
-      command line, and design tokens named by role.
-    - The command line by the [Command Line Interface Guidelines](https://clig.dev): the same
-      nouns and verbs, `--json`, one form of error, meaningful exit codes.
-    - A gallery in CI: each screen on every platform, in every state and language, side by
-      side with the command line's output, a showcase for each state, pseudo-localization,
-      and a checklist for reviewing a new screen or command; then a heuristic review and a
-      walk through each task, with the taps each takes as a measure.
-- **71.** **Planned for 0.7 (the owner, 2026-11-23).** Long runs as a condition of a release:
-    seven days of `tools/soak` on a release candidate's build on the bench's Raspberry Pi 4,
-    the calm and the load stand side by side, going on to thirty, with the count of days
-    starting again at any change to the code ([testing](testing.md), "Soak"); and the test
-    bench's 24-hour soak in containers (`E10-soak`) passing on the candidate
-    ([test bench](maintainers/testbench.md), section 10). In 0.6 both run when asked and do
-    not hold a release.
+- **10.** **Console helper double-press and auto-paste**: Double-press injection of the member's
+  own text on Linux text consoles (`design.md`, "3. Console helper") and `Shift+Insert` auto-paste
+  after a copy from a phone through the `uinput` helper. The helpers themselves already operate as
+  remote paste targets.
+- **33.** **Researched and not built (D-73; superseded by D-134)**: Running an iPhone as a
+  background hub via a Network Extension. See
+  [Research: the iPhone hub in a Network Extension](#research-the-iphone-hub-in-a-network-extension).
+- **36.** **Russian user documentation in the repository** (postponed): Dedicated `docs/ru/` and
+  `README.ru.md` translations using the apps' Russian terminology, with `tools/repocheck` checking
+  section parity against English originals and D-8 allowing Cyrillic there. (Developer documents
+  stay in English; website user guides already have translations in `site/docs/ru/guide/`.)
+- **37.** **Planned for 0.7.** Sync away from home on 32-bit MIPS routers: `cbb` for `mips` and
+  `mipsle` omits the WireGuard tunnel because GotaTun requires 64-bit atomics that 32-bit MIPS
+  lacks, so those routers sync at home only. Add tunnel support by removing GotaTun's 64-bit atomic
+  requirement or using another WireGuard implementation for MIPS
+  ([Design: OpenWrt routers](design.md#openwrt-routers)).
+- **38.** **Planned after 0.6.** Android app registration and Google Play (Play Console account
+  exists):
+  - Register `tools.cbb` with the release signing certificate
+    ([Maintaining: Android signing key](maintainers/maintaining.md#android-signing-key)) so
+    sideloaded release APKs and self-updates remain installable under Android's developer
+    registration requirement.
+  - Decide whether to publish on Google Play and with which key: Play App Signing uses a separate
+    Play-managed key (preventing cross-updates with GitHub APKs), whereas uploading with the
+    release key keeps one key across channels. Coordinate with the Wear OS app (which must share
+    the phone app's key) and F-Droid.
+- **40.** **Planned.** Apple Vision Pro (`visionOS`):
+  1. Offer the iPad app in compatibility mode through TestFlight and the App Store (no build
+     changes required).
+  2. Add a native `visionOS` target for `CBBKit` and the app, omitting unavailable features (QR
+     scanner—use the six-digit code instead—Watch link, and Live Activities); clipboard, Secure
+     Enclave, and Optic ID work as on iPhone.
+  3. Build the Rust core and phone tunnel (`ffi/bind.sh`) for `visionOS` to support away-from-home
+     sync.
+- **43.** **Planned for 0.7.** App store submission requirements:
+  - **Apple App Store (iPhone, Apple Watch, Mac)**:
+    - Add `PrivacyInfo.xcprivacy` declaring required-reason APIs (`UserDefaults`, file timestamps,
+      and similar) and set `ITSAppUsesNonExemptEncryption` in each `Info.plist`, documenting the
+      standard-encryption export answer in [Maintaining](maintainers/maintaining.md).
+    - Provide review notes (demo video, test group QR code, and clarification that the tunnel runs
+      inside the app rather than as a system VPN under Guideline 5.4), link a privacy policy in
+      metadata and inside the app, ensure store text does not promise automatic background sending
+      on iPhone, and provide beta description and feedback address for external TestFlight review.
+  - **Google Play and IzzyOnDroid**:
+    - Add a dedicated prominent disclosure screen for the accessibility service reachable from Home
+      (a card "Send my copies by themselves, optional"), not only from Settings, clearly stating
+      what the service reads and does not read, with **Agree** and **Not now** (Back counts as
+      **Not now**); open Android Accessibility settings only after **Agree**, and reflect actual
+      service state in Settings.
+    - Cover remote paste through the accessibility service explicitly in the disclosure, store
+      listing, Play Console declaration, and review video.
+    - Verify on a physical phone whether `canRetrieveWindowContent` and cross-app events are needed
+      for copy detection or only for remote paste's focused field, requesting only what is used.
+    - Handle Android 17 Advanced Protection (and OEMs that disable accessibility services on
+      reboot) by detecting the revocation, falling back to one-tap sync, and explaining why.
+    - Complete the Data safety form, `connectedDevice` foreground service justification, target API
+      level, and API 37 `ACCESS_LOCAL_NETWORK` declaration. (GitHub and F-Droid builds are
+      unaffected.)
+    - Prepare a concise explanation of the accessibility service and development process for
+      IzzyOnDroid's manual review policy.
+- **44.** **Planned for 0.7.** Additional CI code checks (all free, CI-only; Rust `cargo-mutants`
+  is already running nightly):
+  - Go mutation testing with `gremlins` on Go parsers/rules.
+  - `golangci-lint` with `errcheck`, `exhaustive`, `gosec` `G115`, `errorlint`, and `bodyclose`,
+    after cleaning up existing findings.
+  - `goleak` in Go service, relay, and forwarder tests to fail on leaked goroutines.
+  - Thread Sanitizer in the Mac app CI job, followed by Swift 6 strict concurrency mode for the
+    remaining Swift networking and state code (`AppModel`, `LiveGroup`).
+  - Note: Kani formal verification is ruled out for `cbb_core` parsers (`BTreeMap`, `Vec`,
+    `String` proofs did not terminate); property tests, fuzzing, and mutation testing cover them.
+- **45.** **Planned after 0.6.** Core multi-group and guest capabilities:
+  - One device participating in multiple groups simultaneously (such as a personal and work group),
+    scoping every core call and persisted state file by group.
+  - Temporary guest devices whose device record carries an expiration date and leaves the group
+    automatically without manual removal.
+- **47.** **Planned.** Two-tap iPhone Back Tap setup: bundle a signed Shortcuts file
+  (`shortcuts sign --mode anyone` on macOS) invoking the app's Sync clipboard action, add an "Add
+  the double-tap shortcut" button in Settings and post-pairing onboarding that opens the shortcut
+  for import, and show a card guiding the user to Settings → Accessibility → Touch → Back Tap →
+  Double Tap. Sign with the release bundle identifier for TestFlight builds (`apps/ios/testflight.sh`)
+  and verify first with a Personal Team build.
+- **50.** **Planned for 0.7.** OpenWrt LuCI interface (`luci-app-cbb`) in the project's `apk` feed:
+  JavaScript view with a small `rpcd` backend querying the service over its control socket under a
+  minimal ACL, showing devices, QR pairing, away-from-home and hub controls, and network zones.
+  After 1.0 (once backward compatibility is guaranteed), submit packages to official
+  `openwrt/packages` and `openwrt/luci` feeds with dedicated maintainers.
+- **51.** **Planned for 0.7 (research).** Arduino boards with an ESP32 Wi-Fi coprocessor (Arduino
+  Uno R4 WiFi first, then Nano 33 IoT, MKR WiFi 1010, and Nano RP2040 Connect with u-blox
+  NINA-W10x): flash CBB firmware onto the ESP32 module to run `core/` and TLS 1.3 while the main
+  MCU types and displays text over the internal UART or SPI link, replacing stock Wi-Fi firmware
+  while installed (restorable via Arduino's updater). Open questions: reflashing without an
+  external programmer (`SerialNINAPassthrough` / Arduino updater) and fitting `core/` + TLS 1.3
+  into a classic ESP32's 520 KB RAM without PSRAM.
+- **52.** **Planned for 0.7.** Local, opt-in, encrypted clipboard history across every platform
+  (iPhone, Android, Aurora OS, HarmonyOS, Mac, tray app, and `cbb` CLI):
+  - Device-local only (never synced across the group).
+  - Off by default, enabled with one switch.
+  - Configurable retention (1 hour, 1 day, 7 days) with a **Clear** button.
+  - Encrypted with the device's key (Secure Enclave, Android Keystore, TPM, or file key).
+  - Excludes copies marked as secret (password managers and deliberate secrets).
+  - Searchable, with one-tap resend to the group. (Updates the "no history" principle in
+    [App specification](apps.md).)
+- **54.** **Planned before launch.** Project funding metadata: add `.github/FUNDING.yml` and
+  `funding.json` (for FLOSS/fund) once GitHub Sponsors and Liberapay accounts exist, plus a brief
+  **Support** section in `README.md` stating what donations fund (Apple developer account,
+  forwarder hosting, test hardware), that donations buy no priority, and that commercial licensing
+  is available—with no paid features, license keys, or paid server tiers. Post-launch grant
+  candidates: GitHub Secure Open Source Fund and FLOSS/fund (noting NLnet excludes code written
+  with generative AI).
+- **58.** **Planned for 0.7.** Sync away from home by one-time device consent (D-82): a device's
+  user consents once at install, at pairing, or in the app, allowing the main device or an admin to
+  enable away-from-home sync or promote the computer to a hub remotely without typing a local
+  command on each computer. See [Consent to sync away from home](#consent-to-sync-away-from-home).
+- **59.** **Planned before 0.6 release.** App store signing setup (must precede the 0.6 tag because
+  an Android signing key cannot change after install):
+  - Record the Android release key SHA-256 fingerprint (`alias cbb`, stored in the **release**
+    environment) in [Maintaining: Android signing key](maintainers/maintaining.md#android-signing-key).
+  - RuStore (Android): upload the signed `cbb-fdroid-X.Y.Z.apk` (no self-updater, no Wear OS) rather
+    than an AAB so RuStore never holds the signing key and shares one certificate with GitHub and
+    F-Droid builds.
+  - RuStore (Aurora OS): sign Aurora 5 RPMs and device test builds with the `regular` developer
+    certificate (via the `aurora` workflow after maintainer approval), never the public test key
+    refused by Aurora 5.2.
+  - F-Droid: submit with `AllowedAPKSigningKeys` set to the release certificate following
+    [Maintaining](maintainers/maintaining.md).
+- **62.** **Planned for 0.7.** Sound, files, and screenshots on the ZX Spectrum Next (building on
+  `.cbb show`):
+  - `.cbb play`: decode the group's latest audio (MP3, AAC, WAV) on the Pi and play via I2S into
+    the Next's mixer if supported, or stream 8-bit mono samples (~11 kHz at 115200 baud) over UART
+    to the Next's DACs.
+  - `.cbb get`: save the group's latest files to the SD card with 8.3 filenames, with `-run` to
+    launch `.nex`, `.tap`, `.tzx`, `.sna`, or `.z80` files directly.
+  - `.cbb snap`: capture the Next screen (ULA or Layer 2) and send it to the group as a PNG.
+- **66.** **Planned for 0.7.** Send a copy to a single device ("Share → laptop"): seal the copy for
+  only the selected recipient and write it only to that device's clipboard.
+- **67.** **Later (not planned).** Multiple people in one group, each with a separate clipboard. A
+  group belongs to one person ([How it works: the group](guide/how-it-works.md#the-group)), and the
+  versioned record format allows future extensions without breaking older devices
+  ([Protocol](protocol.md), section 10).
+- **69.** **Planned for 0.7.** Unified product experience across all apps and the CLI:
+  - Complete screen-and-state inventory across every platform against [Platform parity](parity.md).
+  - Task-frequency prioritization deciding Home screen layout versus deeper screens.
+  - Shared object model (group, device, main device, admin, copy, invitation, recovery key) aligned
+    with the termbase and written product principles.
+  - Core-driven state machines for add-device, join, and recovery flows tested on every platform.
+  - Single error, notice, and reason catalogue with codes, texts, and remedies shared by apps and
+    `cbb status`.
+  - Cross-platform UI pattern library (irreversible confirmations, progress, empty states, errors,
+    pairing, secrets, offline states) and role-named design tokens.
+  - CLI alignment with [Command Line Interface Guidelines](https://clig.dev) (consistent nouns and
+    verbs, `--json`, uniform errors, meaningful exit codes).
+  - CI visual gallery across platforms, states, and languages alongside CLI output,
+    pseudo-localization, review checklist, heuristic review, and tap-count task walkthroughs.
+- **71.** **Planned for 0.7.** Release-gating soak runs: a seven-day `tools/soak` run on the
+  release candidate build on the bench's Raspberry Pi 4 (calm and load stands side by side,
+  restarting the day counter on any code change; [Testing: soak](testing.md#soak)) plus the
+  24-hour container soak (`E10`, [Test bench](maintainers/testbench.md), section 10).
 
 ## Devices that are hard to type into
 
-Partly built in 0.6: the TV variant of the Android app and the Nano ESP32's USB keyboard
-(steps 1 and part of 4); the rest is next.
+Partly built (item 25): Android TV, Nano ESP32 USB and Bluetooth LE keyboards, Android and Linux
+Bluetooth LE keyboards, computer remotes for Android TV/Google TV, Apple TV, and Roku, and the
+universal iPad app are built; Samsung/LG remotes, phone-app remotes, target-addressed
+`cbb paste -on`, and real-device validation remain.
 
-The aim: a text copied on any device of the group lands in a field of a device where typing
-it is slow or impossible with what is in the user's hands, usually a TV remote or a gamepad.
-Logins, Wi-Fi passwords, links, search queries and codes are the common cases. There are
-four ways, from the one that needs least to the one that reaches most.
+The goal is delivering copied text (logins, Wi-Fi passwords, URLs, search terms, codes) into text
+fields on devices controlled only by a TV remote or gamepad, ordered from least to most hardware
+required.
 
 ### 1. Our app on the device
 
-Many such devices run Android, so the Android app reaches them with little more than a
-layout for a remote:
+Devices running Android use the Android app directly or its TV layout:
 
-- **Android TV, Google TV, Fire TV** and the Android set-top boxes and projectors: a TV
-  variant of the Android app, with a launcher banner, a screen driven by the D-pad and no
-  need for a touch screen. The TV shows the QR code and the phone scans it, so joining
-  types nothing on the TV. Fire TV takes the signed APK of each release or the Amazon
-  Appstore.
-- **Android car head units, Android e-readers (Onyx Boox), Chromebooks** take the Android
-  app as it is.
-- **Meta Quest** (Horizon OS is Android) takes the APK; whether its accessibility service
-  may put text into other apps is to be checked on a headset.
+- **Android TV, Google TV, Fire TV**, set-top boxes, and projectors: TV layout in the main APK with
+  launcher banner, D-pad navigation, no touch requirement, and QR pairing without typing on the TV.
+- **Android car head units, Android e-readers (Onyx Boox), and Chromebooks**: run the standard
+  Android app.
+- **Meta Quest (Horizon OS)**: installs the APK; verify on a headset whether its accessibility
+  service can enter text into other apps.
 
-The app receives as it does on a phone, in its foreground service; a TV is receive only by
-default (sync modes, item 19). The text goes into the field that has the focus through the
-accessibility service (`ACTION_SET_TEXT`, or `ACTION_PASTE` after setting the clipboard),
-on remote paste from any admin, so nothing is pressed on the TV. This is the Android target
-of item 18, step 4.
+TV devices default to receive-only sync. Remote paste onto Android targets inserts text via the
+accessibility service (`ACTION_SET_TEXT` or clipboard + `ACTION_PASTE`; deferred to 0.7 for phones
+per D-132).
 
 ### 2. The device's own remote, from a member
 
-Most TVs can be driven over the home network by the maker's remote app on a phone, and those
-apps can type into the field on screen. A member does the same: it pairs once with the TV as
-its remote and, on remote paste, sends the text into the field. Nothing is installed on the
-TV.
+A member pairs once with a TV on the home network using the TV's native remote protocol and sends
+remote-paste text directly into the focused on-screen field without installing anything on the TV.
 
-| Device | Protocol | Pairing | On the network |
-|---|---|---|---|
-| Android TV, Google TV | Android TV Remote v2, as in the Google TV app | a code shown on the TV | TLS |
-| Apple TV | the Companion protocol of the Apple TV Remote, with its keyboard | a PIN shown on the TV | encrypted |
-| Samsung (Tizen) | the TV's remote WebSocket API, port 8002 | allowed once on the TV | TLS |
-| LG (webOS) | SSAP over WebSocket, port 3001 | allowed once on the TV | TLS |
-| Roku | External Control Protocol, a key press per character | none | plain HTTP |
+| Device | Protocol | Pairing | Transport | Status |
+|---|---|---|---|---|
+| Android TV, Google TV | Android TV Remote v2 | On-screen code | TLS | Built in Go (`cbb remote`), untried on physical TV |
+| Apple TV | Companion protocol | On-screen PIN | Encrypted | Built in Go (`cbb remote add -appletv`), tested on Apple TV 4K |
+| Samsung (Tizen) | TV remote WebSocket API (port 8002) | One-time on-TV prompt | TLS | Planned |
+| LG (webOS) | SSAP over WebSocket (port 3001) | One-time on-TV prompt | TLS | Planned |
+| Roku | External Control Protocol (per-character keys) | None | Plain HTTP | Built in Go (`cbb remote`), untried on physical TV |
 
-Apple TV is the main reason for this way: an iPhone already types on it with its own
-keyboard, but Android, Linux and Windows have no way to, and a tvOS app cannot type into
-other apps.
+Rules:
 
-The rules:
+- **Target, not a member**: The TV holds no group key, receives no sync events, and belongs to the
+  member that paired with it (which stores its pairing keys). Remote paste currently routes via
+  `cbb remote pastes`; addressing a TV by target name with `cbb paste -on` comes with device-list
+  targets.
+- **Home network only**: The final hop uses the TV's own protocol, so a member connects only to
+  home-network addresses (`internal/netguard`), never across the tunnel.
+- **Roku requires explicit opt-in**: Disabled until the user acknowledges that text crosses the
+  home network unencrypted.
+- **No third-party cloud**: Every protocol runs locally in Go with full debug error details.
+- **Supported hosts**: Computers, routers, and Docker images first; phone apps (Android and iOS
+  local network) follow.
 
-- **The TV is a target, not a member.** It holds no key, gets no events and never joins the
-  group; it belongs to the member that pairs with it, is shown under that member in the
-  device list, and is addressed by remote paste (`cbb paste --on living-room-tv`) like the
-  member's own screen. The member keeps the TV's pairing keys in its state.
-- **Only on the home network.** The last hop leaves the group's encryption and is protected
-  by the TV's own protocol, so a member reaches a TV only on its home network (the address
-  checked as `internal/netguard` does) and never through the tunnel. Away from home, the
-  text reaches the member through the tunnel and member TLS as always; only the member's
-  last step to the TV is local.
-- **Roku is off until the user turns it on** for that Roku, after being told that the text
-  then crosses the home network in the clear.
-- **The protocols are not all documented** (only Roku's is, and Samsung's in part), so
-  firmware updates may change them; each one is ours in Go, with no third-party service
-  and no maker's cloud, and a failure says which TV and protocol failed (the debug details
-  as everywhere).
-- **Who can be the remote.** Every computer, the routers and the Docker image (they are
-  always on), and the Android app; the iPhone app too, where iOS lets it use the local
-  network. The same remotes on Linux, Mac and Windows, and on both phones.
+Apple TV pairing note: Apple TV accepts new remote pairings only when **Settings → AirPlay and
+HomeKit → Allow Access** is set to **Everyone on the Same Network** (or **Everyone**); document
+this step in onboarding and user guides.
 
-### 3. A phone or a computer as a Bluetooth keyboard
+### 3. A phone or computer as a Bluetooth keyboard
 
-A device of the group that has Bluetooth can pair with the TV, console or tablet as a
-Bluetooth keyboard and type what remote paste sends it, so no extra hardware is needed. The
-paired device is a target of that member, as a TV is in way 2.
+A group member with Bluetooth HID device support pairs with a TV, console, or tablet as a Bluetooth
+keyboard and types incoming remote pastes.
 
-| Member | Bluetooth keyboard | Why |
+| Member | Bluetooth keyboard | Platform constraint |
 |---|---|---|
-| Android | yes, Android 9 and later | the HID Device profile (`BluetoothHidDevice`); a few makers leave it out, which the app detects and says |
-| Linux | yes | BlueZ registers a keyboard profile; the service needs the Bluetooth adapter's permission, asked for at install |
-| iPhone, iPad | no | iOS does not let an app act as a keyboard: the HID service is the system's own |
-| Mac, Windows | no | neither has a public interface for the keyboard side of Bluetooth HID |
+| Android (9+) | Yes | `BluetoothHidDevice` (detected at runtime; some OEMs omit it) |
+| Linux | Yes | BlueZ HID profile (requires Bluetooth adapter permission at install) |
+| Aurora OS, HarmonyOS | Yes | BlueZ (Aurora OS); HID over GATT without LED reports (HarmonyOS) |
+| iPhone, iPad | No | iOS reserves Bluetooth HID for the system |
+| macOS, Windows | No | No public API for the peripheral keyboard side of Bluetooth HID |
 
-So in a group with an Android phone or a Linux computer near the TV, the iPhone sends the
-text and that device types it. Bluetooth keyboards on Android and Linux are the one
-difference within the phones and within the computers, and it is the operating system's:
-iOS, macOS and Windows allow it to no app. Groups without such a device use the Nano ESP32
-(way 4). The text crosses the air as a Bluetooth keyboard's does, with the link's own
-encryption after pairing, a short hop next to the device; Enter and secrets follow the
-same rule as the Nano ESP32 below.
+Open fixes from real Apple TV testing with a Linux Bluetooth keyboard:
+
+- Give the BLE keyboard its own advertised name so the TV does not display duplicate entries for
+  classic Bluetooth and BLE HID.
+- Drop stored bonds automatically when the host forgets the keyboard ("PIN or Key Missing") and
+  re-enter pairing mode cleanly.
+- Add a **Switch keyboard layout** quick action (such as `Control-Space` on Apple devices) so users
+  can switch the target host's active keyboard layout to match `-layout`.
 
 ### 4. The Nano ESP32 as a keyboard
 
-For devices with no app and no protocol, and for groups with no Android phone or Linux
-computer near them, the Nano ESP32 (item 15) plugs in or pairs as a keyboard and types what
-remote paste sends it:
+For targets without an app, network remote protocol, or nearby Android/Linux member, the Arduino
+Nano ESP32 (item 15) acts as a hardware keyboard:
 
-- **USB keyboard** (item 15): PlayStation 5, Xbox, Nintendo Switch in the fields that take a
-  keyboard, TVs and set-top boxes with a USB port, KVM switches, BIOS and UEFI setup, boot
-  loaders, servers without a network.
-- **Bluetooth LE keyboard** (the ESP32-S3 has Bluetooth LE): Apple TV, Samsung and LG TVs,
-  iPads, consoles that take a Bluetooth keyboard. The board keeps its pairings in flash.
-- **Serial console:** its UART on the console header of a router, a switch or a server, or a
-  USB serial adapter, typed as a terminal.
+- **USB boot keyboard** (built): PlayStation 5, Xbox, Nintendo Switch, TVs, KVM switches, BIOS/UEFI
+  setup, boot loaders, and air-gapped servers. Switches USB-JTAG to a composite HID + CDC-ACM
+  console with a `flash` command.
+- **Bluetooth LE keyboard** (built, `ble on`): Apple TV, Samsung/LG TVs, iPads, and consoles;
+  settings reset erases pairings.
+- **Serial console** (planned): UART on a router, switch, or server console header.
 
-A keyboard sends key codes and the device's layout decides the characters, so the board
-types Latin with a US layout first; other layouts are a setting per target, and Cyrillic
-works where the target has a Russian layout to switch to. Login, disk encryption (LUKS,
-BitLocker) and password screens are typed only on an explicit remote paste, with Enter a
-separate permission (D-59), never on sync.
+Keyboards emit scancodes interpreted by the target's active layout (`us` and `ru` supported; other
+layouts configurable per target). Login and disk-encryption prompts are typed only on explicit
+remote paste, with Enter governed by a separate permission (D-59).
 
 ### Other devices
 
-- **SteamOS**: in Desktop Mode the Steam Deck syncs as any KDE Plasma desktop, installed
-  under `/opt` (item 7). Game Mode has no clipboard the desktop connector can use; remote
-  paste types there through uinput (item 18, step 2).
-- **iPad**: the iPhone app on iPad, built as a universal app.
-- **Keenetic and other routers with Entware**: after OpenWrt, the same service with
-  Entware's init scripts.
-- **WSL and Termux** need nothing of their own: the Windows service and the Android app
-  cover them.
-- **Not reachable**: Kindle e-readers take neither apps nor keyboards; watches have apps of
-  their own (item 26) but nothing worth typing into.
-
-### Steps
-
-One pull request each, smaller ones together:
-
-1. The TV variant of the Android app, with the accessibility target of item 18, step 4.
-2. Remotes in Go: Android TV Remote v2 and the Apple TV Companion protocol first, then
-   Samsung and LG, Roku last; `cbb remote add` pairs a TV, and the apps add theirs (Android
-   TV, Apple TV and Roku done in 0.6, untried on real TVs; for now the user sends a computer's remote
-   pastes to one of its TVs with `cbb remote pastes`, as with `cbb keyboard on -pastes`,
-   and addressing a TV by name with `cbb paste -on` comes with the device list's targets).
-3. The Bluetooth keyboard on Android and Linux.
-4. The Nano ESP32's Bluetooth LE keyboard, after its USB keyboard (item 15), the layouts,
-   and the serial console (done in 0.6: `ble on` on its console).
-5. The iPad build of the iPhone app (done in 0.6: CI tests it on an iPad simulator too,
-   and a keyboard's shortcuts work).
-
-The TV variant is part of the one APK of the phone app. For Apple TV the spike with pyatv is
-done (2026-11-01, Apple TV 4K of the second generation, tvOS 27.2): the Companion protocol
-pairs with a PIN shown on the TV and then sets the whole text of the focused field at once,
-with no key presses; the Companion protocol in Go (`cbb remote add -appletv`) followed in
-0.6. The Bluetooth keyboard of a
-Linux computer typed on the same Apple TV too (a Steam Deck, 2026-11-01), with two fixes to
-make: the TV lists the computer twice under one name (its classic Bluetooth and the
-keyboard over Bluetooth LE, the one with a battery), so the keyboard needs a name of its own;
-and forgetting either entry on the TV forgets both, while the computer keeps its key and
-then fails every connection ("PIN or Key Missing"), so the keyboard drops a bond its host
-lost and becomes visible again. It typed in the TV's own layout: with Russian on the TV and
-`-layout us` on the computer, "cbb ble 123" came out in Cyrillic, the
-Russian letters on those keys, since a keyboard sends keys, not letters. For now the keyboard types as it is,
-and the apps get a "switch the layout" action for the keyboard's device, with the quick
-actions (restart and the others): the keyboard presses the device's shortcut
-(Control-Space on Apple's). The Apple TV accepts a new
-remote only while Settings, AirPlay and HomeKit, Allow Access is "Everyone on the Same
-Network" (or "Everyone"); with "Only People Sharing This Home" it refuses every pairing, so
-the app's steps and the user guide say to switch it before pairing. A keyboard types with
-whatever layout the user sets for the target. In keyboard mode the Nano ESP32 swaps its
-USB-JTAG console for a CDC console with a "reboot to flash" command, and a reset of its
-settings also erases its Bluetooth pairings.
-
-## Collections
-
-Built in 0.6 (D-72; the model and its rules in [apps.md](apps.md#collections-and-the-order-of-the-tiles)). A user with many devices puts them into collections and sets the
-order of the tiles in every graphical app: the phones, the Mac app, the tray app, and the
-watches, which show their phone's arrangement as sections.
-
-- **The word.** "Collection", translated as such in the apps' String Catalogs: "group" is
-  the sync group, "tag" the group tag, and "folder" will mean copied folders (item 20).
-- **Personal.** Each app installation keeps its own arrangement beside its other settings
-  (UserDefaults on the iPhone and the Mac, the app's preferences on Android, `desktop.json`
-  in the tray app). A group record would need an admin's signature for every drag, would
-  let two admins undo each other, would keep nobody but admins from arranging their own
-  screen, and would bring the collections' names to the forwarder.
-- **Simple.** One level; a device is in at most one collection; this device's own tile is
-  first until the user moves it. A device that joins goes to the end, a removed one leaves its collection.
-- **Arranging.** An Arrange mode on every platform, as the iPhone's home screen has: drag a
-  tile to its place, or onto another tile to make a collection. Every drag also has a menu
-  item ("Move to collection…"), a VoiceOver and TalkBack action, and keyboard keys on the
-  computers. A collection's tile shows how many devices it holds, how many are online, and a
-  warning when one of them needs attention. Search and the filters "Online" and "Needs
-  attention" help with many devices.
-- **Display only in 0.6.** The device picker of remote paste follows the same order. Actions
-  on a whole collection come later, if at all; remote paste to several devices at once never.
-
-Per platform: SwiftUI's own grid reordering needs iOS and macOS 27 while the apps support
-iOS 17 and macOS 14, so they use drop delegates; Android uses the `sh.calvin.reorderable`
-library (Apache-2.0); the tray app uses pointer events of its own, not HTML drag and drop
-(WebKitGTK bug 265857), and pauses its redraw of the list every 4 s while a drag is on.
-
-Steps: the docs and a shared model with test vectors first, then the iPhone, Android, the
-watches, the Mac and the tray app.
+- **SteamOS**: Desktop Mode syncs as KDE Plasma (installed under `/opt`, item 7); Game Mode uses
+  `uinput` remote paste.
+- **iPad**: Universal iPhone/iPad app (built and tested in CI with `PadUITests`).
+- **Keenetic and other Entware routers**: Planned after OpenWrt, using the same `cbb` binary with
+  Entware init scripts.
+- **WSL and Termux**: Covered by the Windows service and Android app with no separate target.
+- **Not reachable**: Kindle e-readers accept neither apps nor keyboards; watches run companion apps
+  (item 26).
 
 ## Key levels
 
-Partly built in 0.6 (D-66): each device's evidence, checked by the root, and where its key
-lives in `cbb status` (the KEYS column) and the apps; the group's setting below is next. The owner's rule: the root and the admins hold keys in
-hardware. A trusted hub is an admin and follows it; a hub that only passes copies on reads
-no copy and needs no key in hardware (D-84). A key in hardware cannot be copied, even from a device that is broken into; it
-can only be misused on that device while the attacker holds it. A key in a file can be
-copied once and used anywhere, for as long as nobody removes the device.
+Partly built (item 31, D-66, D-70). The main device and admins (including reading hubs) hold
+hardware-backed keys by default; forwarding-only hubs read no copies and need no hardware key
+(D-84).
 
-The user picks one of three levels for the group, at its root:
+Three group levels selected on the main device:
 
-1. **Proven hardware only.** A device may be the root or an admin only when
-   attestation proves its key is in hardware: Android's Key Attestation, a TPM with its
-   maker's certificate, the iPhone through App Attest. This asks outside servers, and the
-   guide says which: Apple's for each iPhone that makes a key, Google's public list of
-   revoked attestation keys, and for some TPMs their maker's server. The public lists are
-   mirrored on cbb.tools, signed like the releases (item 29), so the devices ask only us;
-   the per-device requests (Apple, the TPM makers) cannot be mirrored. This level is the
-   one exception to D-47, and only for a group whose user chose it.
-2. **Hardware (the default).** The device's own word that its key is in hardware: the
-   phones, a Mac's Secure Enclave, a TPM without its maker's certificate. Nothing about the
-   device leaves the group, which is why it is the default (D-47).
-3. **Files allowed.** A device whose key is in a file may also be an admin, each
-   time after the user allows it, with a warning that the key can be copied and must be
-   watched. A group of computers only, while they have no TPM or Secure Enclave support
-   (D-44), works only at this level.
+1. **Proven hardware only (Level 1)**: Main device and admins must prove via attestation that their
+   keys live in hardware (Android Key Attestation through Remote Key Provisioning, TPM with
+   manufacturer endorsement certificate, or Apple App Attest). Queries external services where
+   necessary (Apple for App Attest, Intel/AMD for firmware TPM certificates); Google's revoked
+   attestation key list is mirrored and signed daily on `cbb.tools` (`site/deploy/cbb-attest.service`)
+   so devices never query Google directly. Only exception to D-47, strictly opt-in.
+2. **Hardware (Level 2, default)**: Trusts the device's own report of hardware-backed keys (phones,
+   Mac Secure Enclave, TPM without external fetch) while also marking offline-verifiable proofs
+   (Android chains, on-chip TPM EK certificates) as **proven** without contacting outside servers
+   (D-70).
+3. **Files allowed (Level 3)**: Permits file-backed admin keys after an explicit warning per
+   promotion. Required for computer-only groups without hardware security chips (D-44).
 
-- A computer that is the group's root counts as a key in a file, whatever its TPM or Secure
-  Enclave holds, since the group's CA key, which signs the records and the certificates, is
-  kept in its identity file; `cbb new` therefore starts its group at level 3. Next: make the
-  root's CA key in the TPM or the Secure Enclave, as the member and admin keys are, and
-  count such a root as hardware.
-- A device that shows signs of being broken into (a jailbreak or root, an unlocked
-  bootloader, a Keystore in software, which attestation reports) counts as a key in a file,
-  and the devices list marks it. A custom system whose bootloader is locked again with its
-  own key, such as GrapheneOS, counts as hardware.
-- Decided after the research (D-70):
-  - Proofs that need nobody outside the group (Android chains, a TPM whose maker's
-    certificate is on the chip) mark a key "proven" at level 2 as well.
-  - Level 1 accepts App Attest for Apple devices, and the guide says it proves a genuine
-    copy of the app on Apple's hardware, not that our own key is in the Secure Enclave.
-  - Level 1 accepts only Android chains issued through Remote Key Provisioning, since
-    leaked factory keys can forge a green, locked attestation on a rooted phone.
-  - Only level 1 asks Intel or AMD for a TPM's certificate. The address of that request
-    names the TPM for good, so the user is warned first.
-  - `cbb.tools` fetches Google's list of revoked attestation keys once a day and serves it
-    signed. No device asks Google, and no copy goes into the releases.
-  - A group is offered, never forced, a move of the root to a proven key.
-- Found on the way:
-  - Android keys made today carry no attestation challenge, so each phone makes a new key
-    to be proven.
-  - The Mac's service runs as a LaunchDaemon, and a daemon can use the Secure Enclave
-    after all: a key that no keychain keeps needs no entitlement, and the service keeps
-    the enclave's encrypted copy of it (checked on a Mac with macOS 27).
-  - The Linux unit's `PrivateDevices=yes` hides `/dev/tpmrm0` and changes with the TPM
-    work.
-- A group whose root or admins hold keys in files shows a warning and suggests moving the
-  root to a phone.
-- The guide "Keys and attestation" (docs/guide) says all of this plainly.
+Current gaps and remaining work:
+
+- **External Level 1 checks**: Apple App Attest (noted in user docs as proving a genuine app on
+  Apple hardware rather than the specific key) and opt-in Intel/AMD firmware TPM EK fetches (with a
+  privacy warning because the request identifies the TPM) are not yet built.
+- **Computer main-device root key**: On a computer created with `cbb new`, the root key still sits
+  in a file (starting the group at Level 3). Moving the computer root key into the TPM or Secure
+  Enclave so a computer main device qualifies as hardware remains open.
+- **Android attestation challenge**: Existing Android keys created without an attestation challenge
+  must generate a new key to qualify as proven.
+- **Compromised devices**: Devices reporting root/jailbreak, unlocked bootloaders, or software
+  Keystore count as file keys and show a warning; relocked custom OS builds (such as GrapheneOS)
+  count as hardware.
 
 ## Device keys in hardware
 
-On the phones the member key and the root and admin keys live in the Secure Enclave or the
-Android Keystore and cannot be exported. A Linux computer with a TPM 2.0 keeps its new
-member, admin and tunnel keys there (built in 0.6, `internal/tpmkey`), and so does a
-Windows PC (through TBS, under Windows' own storage root key). On the other
-computers the member key, the WireGuard key and the CA keys sit in files readable only by
-the service, so whoever gets root on such a computer, or a copy of its disk, can copy them
-and act as that device until it is removed. The plan, of which the Linux TPM part and the
-marks in `cbb status` are built:
+Partly built (item 13, D-44). Phones keep member, root, and admin keys in the Secure Enclave,
+Android Keystore, OP-TEE (Aurora 5), or HUKS (HarmonyOS). Linux and Windows computers with TPM 2.0
+and Macs with Apple silicon or a T2 chip keep member and admin keys in hardware and seal their
+tunnel keys (`internal/tpmkey`, `member/src/sekey.rs`, `member/src/keys.rs`; Linux installer opens
+`/dev/tpmrm0` via a systemd drop-in in `packaging/linux/install.sh`).
 
-- **Hardware where there is some.** Linux and Windows keep the member key (P-256) and the
-  admin key in the TPM 2.0 (Linux through the kernel's TPM device, Windows through the
-  Platform Crypto Provider; the Go library go-attestation cannot make such keys on Windows,
-  so the calls are our own), and a Mac in the Secure Enclave (Apple silicon or the T2
-  chip), so the keys are used there and never leave it. WireGuard's X25519 is not offered
-  by these chips; that key is kept sealed by the TPM or the Secure Enclave and opened only
-  in the service's memory. On a Mac the LaunchDaemon itself uses the Secure Enclave (built
-  in 0.6, `internal/sekey`, through Security.framework); on Linux the unit gives
-  the service `/dev/tpmrm0` in place of `PrivateDevices=yes`.
-- **Without hardware** (many Raspberry Pis and older PCs, Intel Macs without the T2): the
-  key stays in a file readable only by the service, on Linux sealed with `systemd-creds`
-  (by the TPM when there is one, else by the machine's own key readable only by root), on
-  an Intel Mac in the system keychain. This protects a copy of the file alone, such as a
-  backup or a memory card read elsewhere, not a device whose root is taken; it is said
-  plainly rather than hidden. At home that is how every computer works today; for sync
-  away from home such a device needs the user's separate consent (see "Turning it on, step
-  by step").
-- `cbb status` and the devices list show where each device keeps its key (hardware or a
-  file), so the user sees which devices are weaker.
-- **Regular renewal**: the member key and the WireGuard key are replaced on a schedule
-  (the certificate renewal and a new tunnel key through the tunnel), so a copied key stops
-  working even when nobody noticed the theft.
-- Removing a device stays the main answer to a stolen key in every case.
-- **Attestation.** A TPM can sign that a key was made inside it and cannot leave it, with a
-  chain up to its maker's certificate (the endorsement key); Android's Key Attestation does
-  the same with Google's root, and App Attest proves a genuine copy of the app on Apple's
-  hardware. How these mark a device, and which of them ask a server outside the group, is
-  in "Key levels" above (D-66, D-70). What attestation does not do: it does not stop malware
-  on the device itself from using the key while it runs there, and it is no stronger than
-  the chip.
+Remaining work:
+
+- **Physical Windows PC verification**: Windows TPM 2.0 support (via TBS and Platform Crypto
+  Provider) is tested in CI and a VM, not yet on physical PC hardware.
+- **Protected fallback key files**: On computers without hardware security chips (older PCs,
+  Raspberry Pis, Intel Macs without T2), seal file-backed keys with `systemd-creds` on Linux and
+  store them in the system keychain on Intel Macs to protect offline disk copies and backups while
+  documenting clearly that root access still exposes keys.
+- **Computer main-device root key**: Move the root signing key into TPM or Secure Enclave (item 31).
+- **Scheduled renewal and revocation**: Member and tunnel keys renew on schedule; removing a device
+  remains the primary response to theft.
 
 ## VLESS behind a web server
 
-Item 46, decided by the owner on 2026-11-01. In 0.6 (moved there by the owner on 2026-11-03):
-the forwarder's XHTTP behind a web server (`cbb forward -vless-xhttp`), the transport in the
-hub's offer, and the clients in `cbb` and the phones' tunnel, the default on cbb.tools
-([design](design.md#blocked-networks)). Also in 0.6 (the owner, 2026-11-03): a hub that sets
-VLESS speaks AmneziaWG too, and its clients try AmneziaWG over UDP first and VLESS after it,
-never plain WireGuard; the client's XHTTP reuses its connections and spaces its uploads at
-random, with Xray's usual numbers. Brought into 0.6 (the owner, 2026-11-07): `cbb`'s
-AmneziaWG and its VLESS client over XHTTP on Linux. Left for 0.7: VLESS's own encryption. Before it, VLESS ran only inside REALITY: the forwarder
-listens on TCP 443 itself and borrows another site's TLS. A server that already serves a site on 443, as cbb.tools does with
-nginx, cannot do that, and `cbb` cannot speak REALITY at all: REALITY needs a
-browser's ClientHello and its own check inside the session ID, which rustls does not
-make. So VLESS gets a second kind beside REALITY, with the site's real certificate behind
-a web server; neither replaces the other. VLESS and AmneziaWG stay two equal ways, and the
-user or the server's operator picks the one their network lets through; more ways may
-join them later. REALITY suits forwarders that people run on servers of their own without
-a site.
+Partly built (item 46, D-91). VLESS uses one transport: XHTTP behind the forwarder site's web
+server (such as `cbb.tools` nginx), terminating TLS with the site's real certificate and forwarding
+one configured path to the forwarder's loopback VLESS listener (no access logs on that location).
+REALITY is removed (D-91). AmneziaWG and VLESS over XHTTP are equal transports: hubs with VLESS
+enabled also speak AmneziaWG, clients try AmneziaWG over UDP first and VLESS over HTTPS when UDP is
+blocked, and clients never fall back to plain WireGuard when VLESS is enabled.
 
-REALITY removed (the owner, 2026-11-08, D-91): nobody used it once cbb.tools ran XHTTP, and
-writing it in Rust would need a browser's ClientHello that rustls does not make. VLESS has
-one transport now, XHTTP; the history above is kept as it was decided. Should a network
-single out the Rust client's own ClientHello, a browser-like one for XHTTP comes first.
+Built:
 
-- **The transport.** VLESS over XHTTP over TLS, as cbb.tools' nginx already passes VLESS
-  for other uses. The web server (nginx) ends the TLS with the site's own certificate and
-  passes one path to the forwarder's VLESS listener on the loopback address; every other
-  request gets the site. XHTTP is plain HTTP requests that nginx passes as they are;
-  WebSocket is the fallback if a client cannot carry XHTTP.
-- **What stays the same.** VLESS carries WireGuard's UDP packets (VLESS's UDP command,
-  each packet with its length), the forwarder passes them to its own UDP port and routes
-  them as every packet, by `mac1` and the indices, and the group's VLESS user ID is let in
-  only while its hub is registered. VLESS and the web server add no security and the
-  design does not rely on them: the boundary stays the member TLS, then WireGuard. The web
-  server sees the VLESS user ID and WireGuard packets, nothing more; that location keeps no
-  access log.
-- **The forwarder.** Its operator picks the transport: REALITY as today, or XHTTP with the
-  public host and the path the web server passes, the forwarder listening only on the
-  loopback address. The path is made at random and kept in the forwarder's key file; it
-  keeps scanners off the VLESS listener and is not a secret the design relies on. The
-  forwarder tells a registering hub which transport it runs and its settings.
-- **The hub's offer** (docs/protocol.md, sections 11 and 13) names the transport: today's
-  `public_key`, `short_id` and site for REALITY, or the host, port and path for XHTTP, with
-  the group's VLESS user ID either way. A client that does not know the transport says that
-  it needs an update and stays at home; it never falls back to plain WireGuard, which would
-  show the network what it hides.
-- **Clients.**
-  - `cbb`: Xray-core has VLESS over XHTTP; its TLS uses Xray's browser fingerprint (uTLS),
-    so the ClientHello looks like a browser's.
-  - `cbb` on Linux and the phones (the owner, 2026-11-03: not on the ESP32, whose memory
-    it would not fit, and after AmneziaWG): a VLESS and XHTTP client of its own in
-    `cbb_core` (sans-I/O, `no_std` with alloc), on the TLS it has (rustls with the
-    RustCrypto provider), with VLESS's own encryption (ML-KEM-768 with X25519, as
-    Xray-core's) when the forwarder asks for it. It checks the site's certificate against
-    the public CAs (the Mozilla list built in, or the system's bundle on Linux and OpenWrt),
-    which its member TLS never needed. GotaTun's packets go over that connection instead of
-    its UDP socket.
-  - Interop vectors for the VLESS header, the XHTTP framing and the encryption in
-    `testdata/interop`, checked against Xray-core, and a test of `cbb` against
-    the Go forwarder in CI's `rust` job.
-- **Risks.** rustls' ClientHello is not a browser's, and a censor that singles out TLS
-  fingerprints (JA3, JA4) may notice it; a real site and its certificate still hide far more
-  than plain WireGuard, and the order of the cipher suites and extensions can be brought
-  closer to a browser's. WireGuard over TCP adds latency on a lossy network (TCP inside
-  TCP), which a clipboard tolerates.
-- **cbb.tools.** `site/deploy/nginx.conf` gains the XHTTP location, which reads the path
-  from a file made on the server (as `cbb-preview.conf`), so the path stays out of the
-  repository; `site/README.md` gains the step, and the forwarder runs with XHTTP.
-- **First, on `cbb` (built in 0.6):** AmneziaWG (its changes to WireGuard's packets: junk
-  packets, shifted sizes and headers, padding) as a layer around GotaTun's UDP socket,
-  ported from amneziawg-go (MIT, already in `internal/third_party/amneziawg-go`) to a
-  sans-I/O layer in `cbb_core` under `src/third_party`, checked against it with interop
-  vectors, an end-to-end test against a hub with AmneziaWG and fuzzing of the incoming
-  packets, so `cbb` also reaches an obfuscated hub (today `member/src/tunnel.rs`
-  refuses one). WireGuard's Noise and keys stay GotaTun's; the layer recomputes `mac1` for
-  the changed message types. Padding inside the encrypted packets and random rekey times
-  live inside GotaTun and need a small patch of it (`[patch]` in `Cargo.toml`, as for
-  the ring stand-in). The same layer serves the ESP32 later. As built, the layer is
-  `member/src/awg.rs` (checked end to end against the Go hub), and the VLESS client
-  `member/src/vless.rs` over HTTP/1.1 with `cbb_core::vless`, checked against the Go forwarder
-  behind a web server (`TestAloneMemberAwayXHTTP`); the blind relay (item 28) comes later.
+- Go forwarder XHTTP listener (`cbb forward -vless-xhttp`) with random per-group data paths.
+- `cbb` AmneziaWG (`member/src/awg.rs`) and VLESS over XHTTP (`member/src/vless.rs`,
+  `core/src/vless.rs`, `TestAloneMemberAwayXHTTP`), plus the same transport in the phone apps.
+- `site/deploy/nginx.conf` XHTTP location and `cbb.tools` forwarder deployment.
+- User guide ([Networks that block VPNs](guide/blocked-networks.md)) and test bench cases (`W34`).
 
-Steps: the protocol and the Go forwarder and hub first, with Xray's XHTTP transport; then
-the phones' tunnel; then `cbb`'s client and its vectors; then cbb.tools' nginx
-and forwarder; then the guide for blocked networks (with its translations), the reference
-and the bench's cases for a network that blocks WireGuard (P20, S9, F7), run from a real
-network that blocks VPNs; AmneziaWG and VLESS on `cbb` came in 0.6, the relay later.
+Remaining (planned for 0.7):
+
+- **VLESS encryption**: Add VLESS's own encryption (ML-KEM-768 with X25519) when requested by a
+  forwarder.
+- **Blind relay**: Add AmneziaWG and VLESS over XHTTP to `cbb-relay` (item 28).
+- **ESP32**: Evaluate whether AmneziaWG fits alongside ESP32 member sync (VLESS is excluded on
+  ESP32 due to RAM constraints).
+- **TLS ClientHello fingerprint**: If censoring networks single out `rustls` ClientHello fingerprints
+  (JA3/JA4), align cipher suite and extension ordering closer to a browser profile for XHTTP.
 
 ## The Next's network in the background
 
-Item 14 on a Pi Zero without a radio. The owner's choice (November 2026): the Pi stays in
-the group while any program runs on the Next, and a text from the group is typed into
-whatever program has the keyboard, without leaving it. Running a dot command to sync, or a
-terminal of our own, was turned down: nobody leaves a program to paste. What the bench
-showed first: `.pibridge` (apps/zxnext) carried 12.5 KB of the Pi's shell through the ESP8266
-without a lost byte once the Z80 ran at 28 MHz, while at 3.5 MHz a polling loop lost bytes
-after about 1 KB.
+Partly built (item 14, on a Raspberry Pi Zero without Wi-Fi). The Pi runs `cbb service` from the
+writable `/NextPi` partition while NextZXOS stays in any program, using `CBB.DRV` (a 512-byte
+interrupt-driven NextZXOS driver) to frame bytes between the ESP8266 UART and the Pi UART and feed
+pastes into the ROM keyboard buffer (`LAST_K`, 50 characters/s).
 
-**What NextZXOS gives.** An installable driver (`.install`) is 512 bytes of code, may take
-8K banks of memory, and is called on every frame's interrupt, 50 times a second, while
-NextBASIC and most programs run; four may be installed. The keyboard driver can be replaced
-by one of 512 bytes, and the API document names a buffer of several keys as a use. Each of
-the two UARTs has a 512-byte receive buffer and a 64-byte send buffer; port 0x133B says when
-the receive buffer overflowed, and port 0x163B turns on hardware flow control, which on the
-Pi's side uses GPIO 16 and 17 (the ESP honours it only on an issue 4 board). NextZXOS's own
-`uart.drv` and `espat.drv` are interrupt-driven drivers of this kind.
+Built and verified on the bench:
 
-**The pieces.**
+- `.pibridge`, `CBB.DRV`, `CBB.OVL`, `CBB` in `C:/DOT`, and `cbb next link` (`member/src/nextlink/`,
+  `member/tests/next_link.rs`) carrying framed ESP traffic and `.cbb paste` / `copy` / `text` over
+  the active link (only `.cbb pair` stops the link).
+- `.cbb install` and `.cbb update` downloading from `cbb.tools/zxnext`, verifying SHA-256 and
+  signed `zxnext.json` (`cbb next check-list`), transferring gzipped `cbb` to `/NextPi/nextpi` at
+  up to 921600 baud with automatic step-down, and setting Pi time from the Next's DS1307 RTC.
+- Bench-tested home and hub-tunnel sync through the ESP8266 at 19200 baud (`AT+UART_CUR`) with
+  XON/XOFF flow control.
 
-- *The driver on the Next* is a dumb pipe and a key feeder. On each interrupt it moves the
-  ESP's received bytes into a frame towards the Pi, the Pi's frames for the ESP into the
-  ESP's send buffer, and the Pi's paste frames into a key buffer in its own bank. It restores
-  the UART selection it found, so the program in front is not disturbed. It knows nothing of
-  AT commands, TCP or TLS.
-- *Keys.* One character a frame goes into the ROM's `LAST_K` with the new-key flag, as the
-  ROM's keyboard routine does: 50 characters a second, so a text of 1 KB types in 20
-  seconds. Programs that read the keyboard through the system take it: NextBASIC, the
-  editors, most applications; games that read the ports themselves do not.
-- *`cbb` on the Pi* runs `cbb service` as a service from the user partition
-  (`/NextPi`) and drives the ESP through the pipe: AT commands, then passthrough to one
-  member or the hub, the member protocol with TLS 1.3 on the Pi, so the ESP sees only
-  ciphertext. The stock firmware (AT 1.2) holds one passthrough connection, which is enough
-  for a small device that dials one peer. A new `cbb next link` holds the Pi's UART for the
-  frames.
-- *Frames on the Pi's UART.* A start byte, a type (bytes from the ESP, bytes for the ESP,
-  a paste, a status), a length and the bytes; the start byte doubled inside a frame. The
-  UART is a trace inside the case, so it carries no encryption of its own; the texts in
-  paste frames are already the user's, as on every other member's screen.
+Remaining work and open bench questions:
 
-**Time.** The Pi Zero has no clock of its own (NextPi keeps a saved time, which is wrong
-after every power-up), and TLS checks certificates against the time. The Next has a
-battery-backed DS1307 that NextZXOS reads (`.date`, `.time`), so the driver or `.cbb` reads
-it at the start and sends it to the Pi in a frame of its own, and `cbb` sets the
-system clock. The DS1307 keeps local time without a zone, so `cbb` takes the zone
-from its own setting; the group's time is the fallback when the Next's battery has run down.
-
-**What NextPi gives** (read on the bench, NextPi 1.91D): the user partition `/NextPi` is
-writable and on the shell's `PATH` (`/NextPi/nextpi`), and NextPi's start script runs
-`/NextPi/nextpi/autoexec.sh` when it exists, so `cbb` is installed and started
-without touching the read-only root. The shell on the UART is a systemd service that
-restarts bash at once; GPIO 16 and 17 are plain inputs, so there is no RTS and CTS, and
-flow control towards the Next is XON and XOFF.
-
-**Speeds.** At 115200 baud the 512-byte buffer holds about two frames' worth of bytes, so
-one missed interrupt (a long SD card access runs with interrupts off) loses data. The ESP
-runs at 19200 baud instead (`AT+UART_CUR`), about 2 KB a second, which a text and a TLS
-handshake need, with more than 0.2 s of margin; a lost byte breaks the TLS session, and the
-Pi dials again. Towards the Pi, the driver stops the Pi with XOFF (NextPi's terminal has
-`ixon`).
-
-**On the bench (November 2026).** Paired through the ESP, synced at home, and away from
-home through the hub's tunnel over the ESP's UDP: a text sent from a phone reached the Pi
-through the Mac's hub and `.cbb paste` typed it. The member connection through the tunnel
-still reconnects now and then on a read timeout; on a link of 2 KB a second the timeouts
-the other members use are short. `cbb next link` starts the service when none runs, since
-NextPi starts nothing of ours at boot. Not yet: a phone on a mobile network through the
-forwarder to the hub, with the Next behind it.
-
-**Installing.** `.cbb install` (0.5.0) does what was agreed with the owner, except the
-signature (apps/zxnext/README.md, "Install"):
-
-- The files for the Next are published on `cbb.tools` over plain HTTP, since NextZXOS's
-  `.http` has no TLS: `CBB`, `CBB.DRV`, the Pi's `cbb` for ARMv6, and a list
-  with each file's size, CRC-32 and SHA-256 (`packaging/zxnext/site.sh`, the release's
-  `cbb-zxnext.tar.gz`). Each `CBB` carries the size and SHA-256 of the driver and the Pi's
-  `cbb` built with it (`apps/zxnext/pins.sh`) and installs only those (0.6); the release
-  key signs the list as `zxnext.json` (0.6).
-- One line fetches `.cbb` into `C:/DOT`: `.http -h cbb.tools -u /zxnext -f CBB`, then `.cbb install` fetches
-  the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
-  list before it replaces the old one, a download that broke goes on from where it
-  stopped, and a line shows the percentage, the kilobytes, the speed and the time left;
-  SPACE stops it.
-- The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same line,
-  and the Pi checks its SHA-256 before it swaps the binary.
-- `CBB` itself is as trustworthy as the network `.http` fetched it over; one taken from the
-  signed release and copied to the card is not. `.cbb update` (0.6) takes a newer `CBB` and
-  its files only from the signed `zxnext.json`, which the `cbb` already on the Pi checks
-  against its pinned roots (`cbb next check-list`), so that an update needs no trust in the
-  network.
-- The Pi's `cbb` is sent at 460800 baud, at 115200 when the Pi's tty does not take it or
-  the copy comes damaged; a real Next measured 31 to 32 KB/s, against 9 at 115200. Next
-  (0.7): a faster step first, 921600 (the line's limit is about 92 KB/s, but the card's reads
-  and the Pi's writes take part of it, so about 50 to 60 KB/s), then 460800 and 115200.
-  The Pi Zero's UART has a 16-byte buffer and no flow control here, so a speed it loses
-  bytes at fails the SHA-256 check and the next step down sends again.
-- `.cbb paste`, `copy` and `text` go over the running network: the driver (0.2) carries
-  them to `cbb next link` in frames of their own, as it carries the ESP's bytes, and the
-  link runs their `cbb next` as NextPi's shell would. Only `.cbb pair` still stops the
-  network for the shell.
-- `CBB` lives in `C:/DOT`, so `.cbb` runs from any folder, and its rarer commands are in
-  `/cbb/CBB.OVL`, read into a page of their own when they run, so `CBB` stays under the 64K
-  a real Next reset at.
-
-**Open questions, for the bench.**
-
-1. The shell. NextPi's shell (`SUP>`) holds the Pi's UART, and `.cbb` and Terminex use it.
-   `cbb next link` runs under that shell and gives it back on exit; whether it should
-   instead keep the shell inside, on a pseudo-terminal of its own, and hand its bytes
-   through unframed while Terminex is open, decides how a text is pasted into the Pi's
-   shell. Terminex reads the Pi's UART itself, so the driver must leave that UART alone
-   while it runs; how the driver tells (the UART selection it finds, or a key) is to be
-   tried.
-2. Copying from the Next: a key in the driver that sends the current BASIC line or a marked
-   part of the screen, or `.cbb copy` through the driver's API.
-3. Whether the driver and the replacement keyboard driver should be one, and how much of the
-   key buffer fits in 512 bytes.
-
-Steps: the frames and `cbb next link` on the Pi, tested on Linux against a program that
-plays the driver; the driver in assembly, built with z88dk, tried with `.pibridge`'s
-counters on the bench; then the keys; then the shell and copying.
+1. **Slow-link timeouts and mobile-network forwarder test**: Tune member read timeouts for the
+   ~2 KB/s ESP link (which occasionally reconnects on read timeout) and test a phone on cellular
+   data through the forwarder to a hub with the Next behind it.
+2. **NextPi shell and Terminex coexistence**: Decide whether `cbb next link` should own a
+   pseudo-terminal for the `SUP>` shell so pastes work inside Terminex, and how `CBB.DRV` detects
+   when Terminex directly accesses the Pi UART.
+3. **Copying from the Next**: Choose between a driver hotkey (sending the current BASIC line or a
+   marked screen region) and `.cbb copy` through the driver API.
+4. **Driver and keyboard-driver layout**: Determine whether `CBB.DRV` and the replacement keyboard
+   driver should be combined and how large a key buffer fits in 512 bytes.
+5. **Real-hardware tests**: Verify `.cbb show -tape` (NextPi I2S audio via `aplay` into EAR) and
+   `.cbb speed` on a physical Next, and add Cyrillic encoding support.
 
 ## Consent to sync away from home
 
-Planned for 0.7 (item 58, D-82). Today a computer turns sync away from home on only with
-`cbb global on` typed on it, so the root phone's "Make it a hub" is refused on a computer
-where nobody did that yet (D-45). The owner asked for one consent per device instead, given
-when the device is installed or joins, after which the group's root and admins switch it
-from their apps, at home or away from home.
+Planned for 0.7 (item 58, D-82). Currently, turning sync away from home on requires typing
+`cbb global on` (or `cbb global hub -away-on`) locally on each computer. With one-time device
+consent, a device's user consents once at install, at pairing, or in the app, after which the main
+device or an admin can enable away-from-home sync or promote the computer to a hub remotely.
 
-**The consent.** A setting of the device, kept in its state, that only its own user changes:
+**Consent storage and controls**:
 
-- Given at install: the installers ask, as they ask about updating themselves, and
-  `--global on|off` (or `CBB_GLOBAL`) in `get.sh` and `install.sh` on Linux, macOS and
-  FreeBSD, and `-Global on|off` in `get.ps1` and `install.ps1`, answer ahead; the installers of
-  small devices ask the same, `.cbb install` on the ZX Spectrum Next asks Y or N, and
-  the ESP32's console has a setting. The question is `[y/N]`: without an answer it stays off.
-- Given or taken back later: `cbb global consent [on|off]` on a computer (with root or as
-  administrator, as every change of the group), a switch in the phone apps' settings and on
-  their first screen, the tray and Mac apps' settings.
-- On a device whose keys sit in a file the consent is given only together with the separate
-  warning of D-45 (step 3 of "Sync away from home" in the design): the installer and
-  `cbb global consent on` show it and ask for it, and without it the consent counts as not
-  given. Rootless installs (D-79) consent the same way and stay clients.
-- Taking the consent back does not turn sync away from home off by itself; `cbb global off`
-  does. It only stops the root and the admins from turning it on.
+- **At install**: Installers prompt `[y/N]` (off by default); non-interactive flags
+  `--global on|off` / `CBB_GLOBAL` (`get.sh`, `install.sh`), `-Global on|off` (`get.ps1`,
+  `install.ps1`), `.cbb install`, and the ESP32 console set it ahead of time.
+- **Later changes**: `cbb global consent [on|off]` (requires root/administrator), phone Settings
+  and onboarding switch, and Mac/tray app Settings.
+- **File-backed keys**: Devices without hardware keys require the separate risk warning of D-45
+  before consent takes effect. Rootless installs (D-79) may consent as clients only.
+- **Revoking consent**: Prevents remote enabling (`away-on` / `hub`) without turning off an active
+  session (`cbb global off` turns it off).
 
-**What it allows.**
+**Behavior with consent**:
 
-1. A device with the consent turns sync away from home on by itself once it is in a group
-   (after pairing, or at once when the consent comes later): it makes its tunnel key and
-   offers it to the group's hubs as `cbb global on` does now. A group with no hub yet only
-   keeps the key. This holds for devices that are never a hub or an admin too (keys in a
-   file, rootless, a small device): they go online at once and keep their role, whoever asks.
-2. A new signed command `away-on` (protocol section 15) from the root or an admin turns it on
-   again on a device that has the consent, for example after an `away-off`; without the
-   consent the device refuses it and says so. A watch never signs it.
-3. A `hub` command to a device with the consent turns sync away from home on there first,
-   then makes it a hub. Who may be a hub does not change: an admin, at the group's key level
-   (D-66), never a rootless install (D-79), never a member without `hub` among its capabilities, never a phone (D-134).
-4. A device turned off by `away-off` or by its own `cbb global off` does not turn itself on
-   again at the next start; only `away-on`, a `hub` command or its user do.
+1. On joining a group (or immediately when granted later), a consented device generates its tunnel
+   key and offers it to group hubs automatically while keeping its role.
+2. A new signed `away-on` command ([Protocol](protocol.md), section 15) from the main device or an
+   admin re-enables away-from-home sync on a consented device (refused without consent; watches
+   never sign it).
+3. A `hub` command to a consented, eligible member enables away-from-home sync first and then
+   promotes it to a hub (respecting key levels, capabilities, D-79, and D-134).
+4. A device turned off via `away-off` or local `cbb global off` stays off across restarts until
+   turned back on by `away-on`, `hub`, or its user.
+5. **Visibility**: Hellos carry `away_consent` (informational only); signed device records record
+   consent at admission and renewal so apps show remote enable/hub controls only where allowed and
+   `cbb status` displays it.
 
-**What the others see.** The hello gets `away_consent` (`true` from a device whose user
-consented, for its kind of keys), shown and never trusted, and the device record carries it too, copied from the hello when an
-admin signs the record (at admission and at each renewal), so the apps show "Turn on sync
-away from home" and "Make it a hub" only where they will work, and say why elsewhere.
-`cbb status` shows the consent on each device.
+**OS firewall boundaries**:
 
-**The system's limit.** On Linux and Windows the second line of defence outside the program
-(the systemd drop-in, the `cbb-home-only` rule) is widened only with root, so it is widened
-where root is at hand and nothing of ours runs as root for it later:
+- With consent, elevated installers pre-allow the project's built-in `cbb.tools` forwarder and
+  relay, and `cbb pair` adds the group's servers from the Welcome. If group servers change later,
+  `cbb status` and apps prompt for `sudo cbb global allow` (administrator on Windows).
+- Remote `hub` promotion creates a forwarder-backed hub (already permitted by outbound rules).
+  Direct-address hubs require an open inbound UDP port and stay local (`sudo cbb global hub` or an
+  elevated **Hub on its own address** switch in the Mac and tray apps, which first verifies public
+  IP and port reachability via a loopback probe from `cbb.tools` and falls back to recommending a
+  forwarder-backed hub).
 
-- With the consent the installer (with `sudo`, or as administrator) writes the project's
-  forwarder and relay at once, `cbb.tools` by the built-in entry points, as
-  `cbb global allow` does now; `cbb pair`, which runs with root as well, adds the group's
-  hubs, forwarder and relay from the Welcome. A device switched on from an app then reaches
-  its hub through the forwarder at once.
-- When the group's servers change later (a hub reached at its own address that moves, a
-  self-hosted forwarder or relay), the program's limit follows by itself and the system's
-  lags behind: `cbb status` and the apps say so and ask for `sudo cbb global allow` (on
-  Windows, as administrator), as they do now.
-- A `hub` command makes a hub that its clients reach through the group's forwarder, which
-  the limit already allows. A hub at its own address needs its UDP port open to everyone (on
-  Windows the inbound rule, on Linux a unit that allows every address), so that stays
-  `sudo cbb global hub` on the device.
-- **"Hub on its own address" in the computers' apps (the owner, 2026-11-04).** The Mac app
-  and the tray app on Linux and Windows offer it on their own computer, never on a phone,
-  which has no public address. It says plainly what it needs: a public IP address on the
-  router (not behind carrier-grade NAT, which many mobile and some home providers use), the
-  hub's UDP port forwarded on the router to this computer, and that port open to the whole
-  internet, though only the group's devices get an answer. Before it may be turned on, the
-  app checks that the address really is public and reachable: the hub asks `cbb.tools` to
-  send a packet back to its public address and port, and only when that packet arrives does
-  the switch turn on. Otherwise it says why (no public address, or the port not forwarded)
-  and suggests a hub through the forwarder, which needs neither. With the user's yes it
-  runs `cbb global hub` elevated, as the pair QR button runs `cbb pair` (pkexec, UAC, the
-  administrator's password on a Mac), which opens the port in the system's firewall.
-- Without the consent the installers write nothing beyond the home network. A Mac keeps the
-  program's limit only, as now; `cbb` on a small device has none of its own.
-
-**Steps.** The protocol (the hello field, `away-on`, the interop vectors) and the Rust
-core's checks of the command; the Go service, its control operation and the installers;
-`cbb` on small devices; the phone kits and the apps' screens; then the guide (sync away from home) and
-its translations, and design.md in place of this section.
+**Implementation steps**: Protocol (`away_consent`, `away-on`, vectors) and `cbb_core` validation →
+Rust service, control operations, and installers → small devices → phone kits and app UI → user
+guides, translations, and moving this specification to [Design](design.md).
 
 ## The core and the format in 0.6
 
-The format of the records and of the wire changes in 0.6 and stays preliminary until 0.7
-(D-131), and the groups of 0.5 are set up again, so everything that touches the core and the
-protocol is done in 0.6, in this order. The third and the fourth waves run side by side. The waves that change the
-format land in `main` together, from one shared branch, since between them nothing works.
+Partly built (item 70, D-131). The binary wire format and records core stay preliminary in 0.6 and
+freeze in 0.7 (D-131).
 
-1. **At once, without the format.** The firmware's size measured in CI, part by part; a
-   member does not write a copy older than its own saved clock mark; secrets are erased
-   from memory; an outside test vector for X-Wing; a guard against a test build in a
-   release; the keys of a Windows PC in its TPM; a shorter life for the update channel's
-   file.
-2. **The format (D-100).** Strict CBOR for the messages and the records, one reader in the
-   core, a command of `cbb` that prints any of them as text; a number for the algorithm of
-   every key and signature; room for a second signature; frames padded to a grid. Done when
-   the vectors pass in Rust, Go, Swift and Kotlin and fuzzing finds one form for each value.
-3. **The records (D-101, D-102, D-103, D-104, D-113, D-114, D-115).** A record is its signed body and nothing
-   else, kept by the hash of that body and checked before it is kept. A device is its key.
-   An admin admits a device and never widens its rights. What a member keeps depends on the
-   set of records alone, not on the order they came in. No rule reads a clock: the wait of a
-   takeover is the time a device itself held the claim. Fields in two zones, so that a later
-   version adds to the format and an older one still applies every removal. A device's
-   rights as a list: what it reads and what it makes. Only the format's ceilings bound a
-   set, and a claim pays for the space of its new root. The apps write one of three sets
-   of an admin's powers, kept in the core. Done when any order of one set of records gives
-   one state, in a property test and in the model.
-4. **Members without certificates (D-105, D-106).** TLS proves the key, the key's hash is
-   the device, and the records say whether it is in the group; certificates, their chains,
-   their renewal and the admins' CAs go. No server name is sent. A forwarder and a relay
-   take a device by its period's credentials only. The post-quantum key exchange in the
-   core's TLS; the tunnel's key from the connection to its hub; one invitation for home and
-   away, admitted by matching the key (D-109).
-5. **Content, keys and commands (D-108).** The content's envelope of a type, flags and
-   data, so that a later type passes through an older device; a secret of any type; the
-   key a device's copies are sealed to in the device's own signed statement, changed every
-   week; one interface to a key store; commands as the only way to run anything on a
-   device; a guarded device takes each one only with its own one-time number and a
-   person's consent (D-112).
-6. **The session in the core and the small device (D-107, D-112).** The member's session without
-   I/O moves from the service into the core, so the service, the phones and a board run one
-   code. A small device keeps the root's key and a short grant in place of the records:
-   an ordinary one is admitted by any admin and obeys the admins, a guarded one is the
-   root's alone. Done when a real board in a real group took a command and a copy, sent its
-   state and took a new grant, and its size is a threshold in CI. About 512 KB for the part
-   of cbb is the aim, not a limit.
-7. **The freeze.** [protocol.md](protocol.md) written again from the core, with no
-   mechanism left that nothing uses; two audit passes in a row without a new finding of
-   high weight; a test stand where release N works with N-1.
+1. **Wave 1 — Core hardening without format changes (built)**: CI firmware size tracking
+   (`tools/size`), saved copy clock mark, memory zeroization of secrets, external X-Wing vector,
+   release test-hook guard, Windows TPM keys, and shorter channel expiry.
+2. **Wave 2 — Strict CBOR wire format (built, D-100)**: Strict CBOR encoder/decoder in `cbb_core`,
+   `cbb` inspection output, algorithm numbers, second-signature slot, padded frames, and
+   deterministic vectors in `testdata/format`.
+3. **Wave 3 — Deterministic record set (built, D-101–D-104, D-113–D-115)**: Self-contained signed
+   bodies keyed by hash, order-independent evaluation with no clock reads, forward-compatible field
+   zones, rights bitmasks, format ceilings, three core admin presets, Quint model, and property
+   tests.
+4. **Wave 4 — Certificate-free members (built, D-105, D-106, D-109)**: Fixed TLS key container
+   without SNI, period-only server credentials, post-quantum TLS key exchange, hub-derived tunnel
+   keys, and key-matched invitations.
+5. **Wave 5 — Content, keys, and commands (built, D-108, D-112)**: Typed content envelope, weekly
+   sealing-key rotation, unified `KeyStore` trait, sealed signed commands, and guarded-device
+   nonce/consent rules.
+6. **Wave 6 — Session in `cbb_core` and small-device board (open)**: Move the sans-I/O member
+   session from `member/` into `cbb_core` (replacing `core/src/sim/exchange.rs`) so computers,
+   phones, and microcontrollers run identical session code; run a physical ESP32 board in a real
+   group taking copies, commands, and grants (targeting ~512 KB flash as an aim, not a hard limit).
+7. **Wave 7 — Format freeze for 0.7 (open, D-131)**: Regenerate [Protocol](protocol.md) cleanly
+   from `cbb_core` with no unused mechanisms, declare `frozen` in `testdata/format/FROZEN`, complete
+   two consecutive security audit passes with no new high-severity findings, and verify N / N-1
+   cross-release interoperability in CI.
 
-After 0.6, with no change to the core or the protocol: a locked build of the board's
-firmware, half of the copies' key in the Secure Enclave, a board with a hardware key, one
-place in the code that picks the way to a peer, the second signature switched on, the apps
-for several groups.
+Post-freeze items requiring no wire-format changes: locked ESP32 firmware builds, half of the
+sealing key in the Secure Enclave, a hardware-key microcontroller board, a single peer-routing
+selector, enabling the second signature, and multi-group app UI.
 
-Not planned: an end of life for records or rights (no rule reads a clock); rights across
-groups (a small shared group does it, D-111); a lighter channel of its own for small devices
-(D-107); a new kind of admin (D-102).
+Explicitly out of scope: expiring records or rights (record rules read no clock), cross-group
+rights (use a shared small group per D-111), a separate lightweight protocol for small devices
+(D-107), and new admin types (D-102).
 
 ## Future research (not planned)
 
-Questions to study before anything is planned for them.
+Questions to investigate before committing to a plan:
 
-- **A ZX Spectrum Next without a Pi**, on its own hardware only: no other device in the
-  network may do its part. Three paths, in the order to try them:
-  (1) the Z80N is the member itself and the built-in ESP8266, with its stock AT firmware,
-  only carries the TCP bytes, so the ESP never sees anything but ciphertext; TLS 1.3, the
-  P-256 signatures and X25519 in Z80N assembly would take minutes per connection (one
-  X25519 is estimated at 5-20 s), then the connection stays open and texts move at
-  several KB/s; (2) our own firmware for the ESP-01, which then is the member and the
-  Z80 only shows the text, with about 80 KB of RAM for TLS 1.3 and at the cost of the AT
-  programs that need the stock firmware; (3) an ESP32 module in place of the ESP-01 in
-  its socket, running `core/`, if such a module exists for that socket. To measure:
-  the cost of P-256 on the Z80N and the RAM a TLS 1.3 member needs on the ESP8266.
-- **No gateway and no plain tier.** A device too weak for the member protocol does not
-  lean on another member over the network to do its part, neither through a gateway with
-  a simpler encrypted protocol nor in the clear. Such a device joins through hardware of
-  its own (the Next's Pi, an ESP32 on the board) or not at all. Arduino boards whose
-  Wi-Fi chip runs its own TLS (Uno R4 WiFi, Nano 33 IoT, MKR WiFi 1010) cannot be
-  members with their stock firmware, because that TLS gives no access to the exporter the
-  member protocol needs; with our firmware on that chip they may be (item 51). Boards
-  without a network are not supported.
+- **ZX Spectrum Next without a Raspberry Pi**: Must run on the Next's own hardware with no external
+  gateway. Three candidate paths in priority order:
+  1. Z80N runs the member directly while the stock ESP8266 AT firmware carries only TLS ciphertext
+     (estimated 5–20 s per X25519 handshake, then multi-KB/s over the open session).
+  2. Custom firmware on the ESP-01 acting as the member (~80 KB RAM for TLS 1.3; replaces stock AT
+     firmware).
+  3. An ESP32 module fitted into the ESP-01 socket running `core/`, if a compatible module exists.
+  Measurements needed: P-256 signing cost on Z80N and TLS 1.3 RAM footprint on ESP8266.
+- **No gateway and no plaintext tier (D-49)**: Devices too constrained for the member protocol do
+  not delegate trust to another network member. Arduino boards whose Wi-Fi coprocessor hides TLS
+  exporters cannot participate with stock firmware (see item 51 for custom coprocessor firmware).
+  Devices without networking are unsupported.
 
 ### Research: the iPhone hub in a Network Extension
 
-Researched for 0.6 and not built (D-73); no phone is a hub at all (D-134). The one way known
-to keep an iPhone hub running in the background is a Network
-Extension, a packet tunnel provider, and each condition for it fails or is doubtful:
+Researched and not built (D-73); superseded by D-134 (no phone acts as a hub). Running an iPhone
+hub in the background via a `NEPacketTunnelProvider` Network Extension fails multiple constraints:
 
-1. **Apple's rules.** Guideline 5.4 allows VPN apps only from developers enrolled as an
-   organization, and App Review applies it to every app that installs a VPN profile; the
-   project's Apple developer account is a personal one. Guideline 2.5.4 and Apple's TN3120
-   ("Do not use a packet tunnel provider to host a network listener or proxy server") make a
-   rejection likely in any case.
-2. **One VPN at a time.** iOS keeps one tunnel-type VPN on; any other VPN app turns ours off
-   and stops its on-demand rules. Per-app VPN, app proxies and DNS proxies need a managed
-   device.
-3. **Memory.** A packet tunnel extension gets 50 MiB on iOS 15 to 26. A Go hub alone uses
-   about 4 MiB with no clients and 11 MiB with 256 on Linux, so a small group would fit only
-   after tuning (the forwarder code pulls Xray-core into the hub, gVisor allows 1 MiB per
-   connection), and the Swift member node comes on top.
-4. **The cost.** A hub on cellular keeps the radio from idling (a packet every 15 s to the
-   forwarder plus each client's keepalive every 25 s); there are no published measurements.
+1. **App Store rules**: Guideline 5.4 restricts VPN apps to organization developer accounts (the
+   project uses a personal account), and Guideline 2.5.4 plus Apple TN3120 prohibit using a packet
+   tunnel provider to host a network listener or proxy server.
+2. **Single VPN slot**: iOS allows only one active tunnel-type VPN; enabling a packet tunnel
+   disables the user's own VPN (and vice versa). Keeping the tunnel inside the app (`ffi/` /
+   `member/src/live/away.rs`) lets CBB coexist with any user VPN.
+3. **Memory limit**: iOS packet tunnel extensions are capped at 50 MiB, leaving minimal headroom for
+   the tunnel, forwarder transport, and member runtime.
+4. **Battery and radio impact**: Keeping cellular radio active for forwarder keepalives (every
+   15 s) and client keepalives (every 25 s) has no acceptable power budget.
 
-Instead, a computer, the router or a Docker container is the hub, a group without one uses
-the blind relay (item 28), and a second hub (D-65) covers the hours the first is off.
+Instead, computers, routers, and Docker containers serve as hubs (with priority failover per D-65),
+groups without a hub use a blind relay (item 28), Android's `connectedDevice` foreground service
+maintains connections without taking the VPN slot, and iPhone delivery while closed uses push
+notifications with a Notification Service Extension (item 57).
 
-Found on the way and worth fixing anyway: the phones' member key is kept with the keychain's
-"when unlocked" accessibility, so nothing in the background can use it while the phone is
-locked.
+Related finding worth preserving: phone member keys use "when unlocked" Keychain accessibility, so
+background tasks cannot use them while the phone is locked.
 
-**Looked at again on 2026-11-03, with Android and the user's own VPN.** The finding stands,
-and one point weighs more than the rest: today's tunnel (`ffi/src/tunnel.rs`) is an app's own
-traffic, so it runs beside any VPN the user has on, and CBB's packets simply go inside that
-VPN. A packet tunnel on the iPhone or a `VpnService` on Android would take the phone's one
-VPN slot: turning on one's own VPN would stop sync away from home, and the other way round.
-
-- **Android needs none of it.** The app's foreground service (`connectedDevice`) already
-  keeps its connections and the tunnel in the background, which an iPhone app cannot do.
-  `VpnService` would add the VPN key icon, the "allow a VPN connection" prompt and the slot
-  conflict, and gain nothing; `addAllowedApplication` narrows what it carries, not the slot.
-- **The iPhone without a VPN.** Background app refresh stays (a few seconds now and then,
-  docs/apps.md). Push notifications, now that the Apple developer account exists, are the
-  real way: a member or the hub asks the project's server to push (the APNs keys stay on
-  the server), and a Notification Service Extension, woken by a visible notification for up
-  to about 30 seconds with about 24 MiB, opens a small copy sealed to the phone (a push
-  carries 4 KiB) or shows that a copy waits. Silent pushes are throttled by iOS and only
-  help now and then. This belongs with the notifications work after TestFlight.
-- **An optional mode.** A packet tunnel offered only as an opt-in "keep the hub on in the
-  background" for people with no VPN of their own still meets guideline 5.4 (an
-  organization's account), TN3120 and the memory limit above; it is not planned. Should
-  the project register as an organization later, this is the one case to look at again.
+An opt-in background packet-tunnel mode remains unplanned due to Guideline 5.4, TN3120, and the
+50 MiB ceiling, and would be reconsidered only if the project enrolled as an organization.

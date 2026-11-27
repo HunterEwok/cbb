@@ -2258,6 +2258,10 @@ with 0.5 is set up again once. The details follow.
   The core's API page gives every C function, member event, admin action and operation
   with its fields as the code has them; an admin action's `public` is the key's uncompressed
   point.
+  The testing page and the roadmap say what is built today; the roadmap's items keep their
+  numbers and move to Done or Partly done where the code has them.
+  The maintainers' guide and the audit plan follow the current workflows, keys and servers;
+  the limits page gives `stable.json` its 14 days and `attest-status.json` its 8.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
 - "How it works" explains first what happens to a copy, then the group, its keys and the
@@ -3362,6 +3366,8 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `tools/e2e/drills.sh` runs the phone's recovery drills again (`TestFFIPhoneChangeRoot`,
+  `TestFFIPhoneYubiKey`); it named a test that no longer exists and so ran none of them.
 - `cbb global on`, `cbb global hub -away-on` and `cbb global relay` warn that the device's keys
   sit in files only where they do; a device with its keys in a TPM or the Secure Enclave is
   told what sync away from home does, without that warning.
