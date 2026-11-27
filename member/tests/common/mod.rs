@@ -410,6 +410,25 @@ impl Drop for Svc {
     }
 }
 
+/// A free UDP port of the loopback for a hub to serve on, from below the
+/// systems' ranges of ephemeral ports (Linux 32768-60999, macOS and the
+/// BSDs 49152-65535): a port the system handed out once can go to another
+/// socket of the test, such as a tunnel's, while its hub is stopped, and
+/// the hub could not serve on it again when it starts. Each call in a
+/// process tries ports of its own, so tests running at once do not share one.
+pub fn free_udp() -> u16 {
+    static NEXT_UDP: AtomicUsize = AtomicUsize::new(0);
+    const FIRST: usize = 20000;
+    const COUNT: usize = 12000;
+    let start = std::process::id() as usize * 211;
+    loop {
+        let port = (FIRST + (start + NEXT_UDP.fetch_add(1, Ordering::Relaxed)) % COUNT) as u16;
+        if std::net::UdpSocket::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+}
+
 /// Polls get until it gives a value, for up to 90 seconds.
 pub fn wait_for<T>(what: &str, get: impl Fn() -> Option<T>, log: impl Fn() -> String) -> T {
     let until = Instant::now() + Duration::from_secs(90);

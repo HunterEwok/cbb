@@ -34,7 +34,7 @@ jobs:
           cache: false
       - name: the Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
-      - name: a corpus of a fresh seed, read by all four
+      - name: a corpus of a fresh seed, read by all three
         run: |
           seed=$(date +%s)
           echo "seed $seed: go run ./tools/difffuzz gen -seed $seed -n 200000 -sets 5000 makes the same corpus"

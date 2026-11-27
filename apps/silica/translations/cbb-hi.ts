@@ -1258,8 +1258,8 @@
         <translation>समूह बनाएँ</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह को अपने पास ले आएगा।</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>जल्द ही समूह की रिकवरी कुंजी सहेजें: अगर यह फ़ोन खो जाए, तो कोई दूसरा फ़ोन इससे समूह को अपने पास ले आएगा।</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1829,8 +1829,8 @@
         <translation>CBB %1 उपलब्ध है।</translation>
     </message>
     <message>
-        <source>Check that the base is on and online.</source>
-        <translation>जाँचें कि बेस चालू है और ऑनलाइन है।</translation>
+        <source>Check that the hub is on and online.</source>
+        <translation>जाँचें कि हब चालू है और ऑनलाइन है।</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
@@ -1857,8 +1857,8 @@
         <translation>सब कुछ सिंक हो रहा है।</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no base.</source>
-        <translation>हर जगह चालू है, पर समूह में कोई बेस नहीं है।</translation>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>हर जगह चालू है, पर समूह में कोई हब नहीं है।</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1877,8 +1877,8 @@
         <translation>इस कंप्यूटर के फ़ायरवॉल में CBB को अनुमति दें।</translation>
     </message>
     <message>
-        <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>घर के किसी कंप्यूटर को उसकी उन्नत सेटिंग्स में बेस बनाएँ।</translation>
+        <source>Make a computer at home the hub, on its page in the app.</source>
+        <translation>ऐप में घर के किसी कंप्यूटर के पेज पर उसे हब बनाएँ।</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1921,16 +1921,8 @@
         <translation>इन पर सिंक बंद है: %1।</translation>
     </message>
     <message>
-        <source>The backup server does not answer.</source>
-        <translation>बैकअप सर्वर जवाब नहीं दे रहा।</translation>
-    </message>
-    <message>
-        <source>The base %1 does not answer.</source>
-        <translation>बेस %1 जवाब नहीं दे रहा।</translation>
-    </message>
-    <message>
-        <source>The connection server does not take this base.</source>
-        <translation>कनेक्शन सर्वर इस बेस को स्वीकार नहीं कर रहा।</translation>
+        <source>The forwarder does not take this hub.</source>
+        <translation>फ़ॉरवर्डर इस हब को स्वीकार नहीं कर रहा।</translation>
     </message>
     <message>
         <source>The group has records of a newer version.</source>
@@ -1961,8 +1953,12 @@
         <translation>समूह की रिकवरी कुंजी दो बार इस्तेमाल हुई, इसलिए समूह हमेशा के लिए रुक गया।</translation>
     </message>
     <message>
-        <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>कनेक्शन सर्वरों के प्रवेश बिंदुओं की सूची पुरानी है।</translation>
+        <source>The hub %1 does not answer.</source>
+        <translation>हब %1 जवाब नहीं दे रहा।</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>फ़ॉरवर्डरों के प्रवेश बिंदुओं की सूची पुरानी है।</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1973,8 +1969,12 @@
         <translation>मुख्य डिवाइस के रिकॉर्ड ऐसे रिकॉर्ड की प्रतीक्षा कर रहे हैं जिन्हें किसी डिवाइस ने आगे नहीं भेजा।</translation>
     </message>
     <message>
-        <source>The tunnel to the base %1 does not get through.</source>
-        <translation>बेस %1 तक सुरंग नहीं पहुँच रही।</translation>
+        <source>The relay does not answer.</source>
+        <translation>रिले जवाब नहीं दे रहा।</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>हब %1 तक सुरंग नहीं पहुँच रही।</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -1997,8 +1997,8 @@
         <translation>यह डिवाइस म्यूट है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
     </message>
     <message>
-        <source>This device is the base, and no device has connected yet.</source>
-        <translation>यह डिवाइस बेस है, और अभी तक कोई डिवाइस नहीं जुड़ा।</translation>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>यह डिवाइस हब है, और अभी तक कोई डिवाइस नहीं जुड़ा।</translation>
     </message>
     <message>
         <source>This device was removed from the group.</source>
@@ -2013,8 +2013,8 @@
         <translation>यह समूह का अकेला डिवाइस है।</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>यह नेटवर्क सुरंगें रोक सकता है: बेस पर सख़्त नेटवर्क चालू करें।</translation>
+        <source>This network may block tunnels: turn on Strict networks on the hub.</source>
+        <translation>यह नेटवर्क सुरंगें रोक सकता है: हब पर सख़्त नेटवर्क चालू करें।</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>

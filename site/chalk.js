@@ -38,6 +38,11 @@ function device(kind, x, y, s = 1) {
       R(24, -26, 19, 47, 3), C(33.5, -15, 6), L(28, -4, 39, -4), L(28, 2, 39, 2),
     ];
     case "mac": return [R(-34, -31, 68, 48, 5), L(-34, 6, 34, 6), L(-24, -20, 6, -20), L(-24, -12, -4, -12), L(-5, 17, -8, 28), L(5, 17, 8, 28), L(-16, 29, 16, 29)];
+    // A blind relay: a cloud, with a lock in it, since it reads nothing.
+    case "cloud": return [
+      P("M-26,16 C-44,16 -44,-6 -28,-6 C-28,-24 -4,-28 2,-14 C10,-26 34,-20 30,-2 C44,0 42,16 28,16 Z"),
+      R(-8, 0, 16, 12, 2), P("M-5,0 L-5,-4 Q-5,-9 0,-9 Q5,-9 5,-4 L5,0"),
+    ];
     case "tv": return [R(-40, -27, 80, 46, 4), L(-28, -15, 6, -15), L(-28, -7, -6, -7), L(-26, 19, -31, 28), L(26, 19, 31, 28)];
   }
 }
@@ -45,6 +50,7 @@ function device(kind, x, y, s = 1) {
 const box = {
   phone: [-19, -33, 19, 33], tablet: [-27, -34, 27, 34], laptop: [-40, -27, 40, 27],
   desktop: [-42, -28, 43, 21], mac: [-34, -31, 34, 29], tv: [-40, -27, 40, 28],
+  cloud: [-40, -24, 40, 16],
 };
 
 // The hero, in a box of 640 by 330: a laptop and a phone joined through
@@ -108,8 +114,8 @@ function group(hub, scale, others) {
 // The three steps of setting up, each in a box of 200 by 150. White and
 // yellow lines never cross. 1: the phone downloads the app, its progress
 // bar nearly full. 2: a desktop computer runs one command, and a check
-// says it is installed. 3: the computer shows a QR code, and the phone's
-// camera frames it.
+// says it is installed. 3: the phone shows a QR code and six digits, and
+// the computer types the six digits, then a check says it joined.
 seed = 61;
 // A QR code at (x, y), of size n: three finder squares, a dot in each
 // when there is room for it, and a few dots.
@@ -143,20 +149,23 @@ const step3 = {
   white: draw([
     ["rect", 6, 24, 92, 72, 6], ["line", 52, 96, 52, 110], ["line", 34, 114, 70, 114],
     ["rect", 106, 30, 17, 78, 3], ["circle", 114.5, 41, 6],
-    ...qr(28, 36, 48),
     ["rect", 140, 28, 52, 96, 10], ["line", 160, 116, 172, 116],
-    ...qr(155, 59, 22, false),
+    ...qr(152, 40, 28, false),
+    ["line", 147, 92, 151, 92], ["line", 154, 92, 158, 92], ["line", 161, 92, 165, 92], ["line", 167, 92, 171, 92], ["line", 174, 92, 178, 92], ["line", 181, 92, 185, 92],
   ]),
-  yellow: "",
+  yellow: draw([["path", "M18 40 L26 45 L18 50"]]),
   links: "",
   parts: [
-    ["g brackets", [["y", draw([["path", "M148 62 V52 H158"], ["path", "M174 52 H184 V62"], ["path", "M148 78 V88 H158"], ["path", "M184 78 V88 H174"]])]]],
-    ["y check", draw([["path", "M159 100 L164 105 L174 95"]])],
+    ["w code", draw([["line", 34, 48, 40, 48], ["line", 44, 48, 50, 48], ["line", 54, 48, 60, 48], ["line", 64, 48, 70, 48], ["line", 74, 48, 80, 48], ["line", 84, 48, 90, 48]])],
+    ["y check", draw([["path", "M22 72 L30 80 L44 64"]])],
   ],
 };
 seed = 38;
-const computer = group("desktop", 1.15, ["phone", "laptop", "phone", "mac"]);
-const phones = group("phone", 1.35, ["desktop", "tv", "tablet", "phone"]);
+// With a computer: the computer at home is the hub, and a phone, a laptop,
+// a tablet and a Mac sync through it. Phones only: the phones and a tablet
+// meet at a blind relay, which reads nothing; no phone is a hub.
+const computer = group("desktop", 1.15, ["phone", "laptop", "tablet", "mac"]);
+const phones = group("cloud", 1.35, ["phone", "tablet", "phone", "phone"]);
 
 // pathLength lets the stylesheet draw each line in, as a hand would.
 const line = (cls, d) => (d ? `<path class="${cls}" pathLength="1" d="${d}"/>` : "");

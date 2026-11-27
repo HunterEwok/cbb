@@ -1258,8 +1258,8 @@
         <translation>יצירת קבוצה</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל יעביר את הקבוצה לעצמו.</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>שמרו בקרוב את מפתח השחזור של הקבוצה: אם הטלפון הזה יאבד, טלפון אחר יעביר בעזרתו את הקבוצה לעצמו.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1829,8 +1829,8 @@
         <translation>CBB %1 זמין.</translation>
     </message>
     <message>
-        <source>Check that the base is on and online.</source>
-        <translation>ודאו שהבסיס דולק ומחובר לרשת.</translation>
+        <source>Check that the hub is on and online.</source>
+        <translation>ודאו שהרכזת דולקת ומחוברת לרשת.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
@@ -1857,8 +1857,8 @@
         <translation>הכול מסתנכרן.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no base.</source>
-        <translation>״בכל מקום״ מופעל, אבל לקבוצה אין בסיס.</translation>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>״בכל מקום״ מופעל, אבל לקבוצה אין רכזת.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1877,8 +1877,8 @@
         <translation>אפשרו את CBB בחומת האש של המחשב הזה.</translation>
     </message>
     <message>
-        <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>הפכו מחשב בבית לבסיס, בהגדרות המתקדמות שלו.</translation>
+        <source>Make a computer at home the hub, on its page in the app.</source>
+        <translation>הפכו מחשב בבית לרכזת, בדף שלו באפליקציה.</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1921,16 +1921,8 @@
         <translation>הסנכרון כבוי במכשירים: %1.</translation>
     </message>
     <message>
-        <source>The backup server does not answer.</source>
-        <translation>שרת הגיבוי לא עונה.</translation>
-    </message>
-    <message>
-        <source>The base %1 does not answer.</source>
-        <translation>הבסיס %1 לא עונה.</translation>
-    </message>
-    <message>
-        <source>The connection server does not take this base.</source>
-        <translation>שרת החיבור לא מקבל את הבסיס הזה.</translation>
+        <source>The forwarder does not take this hub.</source>
+        <translation>המעביר לא מקבל את הרכזת הזו.</translation>
     </message>
     <message>
         <source>The group has records of a newer version.</source>
@@ -1961,8 +1953,12 @@
         <translation>מפתח השחזור של הקבוצה שימש פעמיים, ולכן הקבוצה נעצרה לצמיתות.</translation>
     </message>
     <message>
-        <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>רשימת נקודות הכניסה של שרתי החיבור לא עדכנית.</translation>
+        <source>The hub %1 does not answer.</source>
+        <translation>הרכזת %1 לא עונה.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>רשימת נקודות הכניסה של המעבירים לא עדכנית.</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1973,8 +1969,12 @@
         <translation>הרשומות של המכשיר הראשי ממתינות לרשומות שאף מכשיר עוד לא העביר.</translation>
     </message>
     <message>
-        <source>The tunnel to the base %1 does not get through.</source>
-        <translation>המנהרה לבסיס %1 לא עוברת.</translation>
+        <source>The relay does not answer.</source>
+        <translation>הממסר לא עונה.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>המנהרה לרכזת %1 לא עוברת.</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -1997,8 +1997,8 @@
         <translation>המכשיר הזה מושתק: ההעתקות שלו לא מגיעות לקבוצה.</translation>
     </message>
     <message>
-        <source>This device is the base, and no device has connected yet.</source>
-        <translation>המכשיר הזה הוא הבסיס, ועוד אף מכשיר לא התחבר.</translation>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>המכשיר הזה הוא הרכזת, ועוד אף מכשיר לא התחבר.</translation>
     </message>
     <message>
         <source>This device was removed from the group.</source>
@@ -2013,8 +2013,8 @@
         <translation>זה המכשיר היחיד בקבוצה.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>ייתכן שהרשת הזו חוסמת מנהרות: הפעילו ״רשתות מחמירות״ בבסיס.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the hub.</source>
+        <translation>ייתכן שהרשת הזו חוסמת מנהרות: הפעילו ״רשתות מחמירות״ ברכזת.</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>

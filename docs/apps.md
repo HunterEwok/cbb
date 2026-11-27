@@ -1,1054 +1,828 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# Phone apps
+# App specification
 
-The iPhone and Android apps make the phone the root of the group (see "The phone apps"
-in [design.md](design.md)). This document fixes what they do and how
-they look, so both apps are built to the same plan.
+For developers building and maintaining the Connect Beyond Borders apps (iPhone and iPad, Android,
+Android TV, Aurora OS and Sailfish OS, HarmonyOS, Apple Watch, Wear OS, HarmonyOS watches, macOS,
+and the Linux and Windows tray app). For end-user instructions, see [The apps](guide/apps.md). For
+system architecture and the core ABI, see [Design](design.md) and
+[The core's entry point](core-api.md). For real-device test coverage, see
+[Platform parity](parity.md#on-real-devices). For planned work, see [Roadmap](roadmap.md).
 
 ## Principles
 
-- **Only what is needed.** Pair the first computer, add a computer, send and fetch the
-  clipboard, see the group's devices and remove one. Nothing else: no history, no accounts,
-  no cloud, no statistics.
-- **As few taps as possible.** The everyday action is one tap or none: the widget, the
-  Back Tap or Action button shortcut, the share sheet, the Android quick-settings tile.
-  Adding a computer is "scan" and nothing more; digits are typed only when a camera cannot
-  be used.
-- **Modern and a little hacker-like.** "Glass": a deep background with a soft glow of the
-  accent from the top, tiles and cards on glass; a monospaced face for codes, device IDs and fingerprints; one bright accent
-  colour (default: terminal green) for the main action and live states; rounded, generous
-  buttons on Liquid Glass (from iOS 26; a material before), cards and fields on glass too;
-  short, plain words. Motion is sparing and honours Reduce Motion.
-- **Native underneath.** SwiftUI on iOS and Jetpack Compose on Android, the platform's own
-  controls, Dynamic Type and font scaling, VoiceOver and TalkBack labels, haptics on success
-  and failure.
+- **Only what is needed.** Create or join a group, pair devices, share the clipboard, inspect
+  devices, and manage group roles and rules. No clipboard history, accounts, cloud storage, or
+  telemetry.
+- **Minimal interaction.** Everyday syncing runs automatically where the operating system allows it,
+  and otherwise takes one tap or gesture (home-screen widgets, Shortcuts, Share sheets, Quick
+  Settings, or Control Center). Adding a device uses a QR scan with a 6-digit fallback when no
+  camera is available.
+- **Shared visual system.** Eleven themes defined once in `apps/design/tokens.json` (default:
+  **Chalkboard**) with monospaced type for codes, device IDs, and fingerprints, WCAG AA contrast
+  (4.5:1) across every palette, and reduced motion honored across platforms.
+- **Native UI layers over a shared core.** SwiftUI on iOS, watchOS, and macOS; Jetpack Compose on
+  Android and Wear OS; Qt 5.6 and Silica QML on Aurora OS and Sailfish OS; ArkTS and ArkUI on
+  HarmonyOS; and Go with Wails 3 (plain HTML, CSS, and JavaScript) for the Linux and Windows tray
+  app. Every phone app links the same Rust core (`core/` through `ffi/`). Every desktop app talks to
+  the local `cbb` service over its control socket. All apps support platform accessibility APIs
+  (VoiceOver, TalkBack, font scaling, Dynamic Type, D-pad focus) and haptic feedback.
 
 ## Screens
 
-1. **Start** (no group yet), the same on the iPhone, Android and Aurora: settings and the
-   language at the top, the name and one sentence, then **Create a group** (the main button:
-   the camera opens, and after the scan the app creates the group key in the Secure Enclave
-   or StrongBox, becomes the group's root, admits the device and goes to Home), **Join a
-   group** (one screen: this phone's QR code and six digits; a phone of the group scans the
-   code, a computer of the group types the digits after "+", docs/protocol.md, section 6),
-   **Join with an invitation** (for a phone far from the group: the camera reads the
-   invitation's QR code, or its text is pasted or its file opened; the invitation then
-   waits on a screen of its own, which warns to join only an invitation one asked for, to be
-   joined or declined, and declining sends nothing (the invitation names no group, hub or
-   expiry the phone could show before it joins, format.md section 11.3); joined, the phone shows the words the inviting
-   admin compares, docs/protocol.md, section 12); restoring the group on a phone in no group
-   comes with 0.7 (D-125). A phone always joins as a member; the root makes it an admin later from the
-   phone's device page ("Make it an admin"), with the admin key its hellos offer
-   (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
-   the pull-down menu, as in every Silica app.
+In the user interface, the device that holds the group's root key is called the **main device**
+(*root* in the protocol and command-line tools).
 
-   On 0.6 (every phone app) the new device always dials
-   (docs/protocol.md, section 6, "The window and who dials"). **Add a device** on a phone
-   without a group makes a group of 0.6 first (`CorePairing.newGroup06`: a new root key, the
-   set kept where the member runs) and shows its recovery sheet once. The recovery key is part
-   of the group's ID, so nothing makes a new one or removes it later: Settings on the root only
-   says so, and a lost sheet means that the main device can never change, so the way out is a
-   new group (D-126). On the root phone, or a
-   phone the records name an admin, it then opens the home window: its QR code and six digits
-   on screen, announced by NSD (Bonjour on the iPhone) with `p=1`, `f` and `i` (never the
-   digits), open for five minutes. **Join a group** opens the camera and dials the window of the
-   code it reads; where scanning fails, or there is no camera, the person types the six digits
-   (or pastes the code's text), and the app finds the window with `p=1` and `i` by NSD or
-   Bonjour and builds the code itself (`Discovery.windowLink`). The new device proves the digits
-   and joins; nobody is asked anything. A wrong code joins no one and writes nothing; three
-   close the window, and so does the device that joins. The device list, who is the root and who is
-   an admin come from the member's `group` (docs/core-api.md). On Aurora and HarmonyOS, whose
-   apps have no DNS-SD of the system here, **Create a group** makes the group of 0.6 and shows
-   the sheet, **Add a device** has the core announce the window by mDNS, and **Join a group**
-   takes the six digits the window shows and has the core find that window on the home
-   network; a window's code can still be pasted (Aurora) or scanned (HarmonyOS). Who is an admin comes from the member's
-   `devices` there. No app listens any more for a device that scans the
-   phone's own code: joining at home always goes through the window. A remote invitation and
-   a restore keep their own screens.
-2. **Home**: how many devices are online, with the two switches beside it: the **house**
-   (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
-   15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
-   both ways, `mute.json` keeping the time across restarts, docs/design.md, "Sync on and
-   off") and the **globe** ("Everywhere", sync away from home, which asks once and waits
-   while sync is off). Under them an alert card only when there is something to say, then
-   every device of the group as tiles or as a list (the "…" menu switches them, arranges
-   them and opens Settings). There is no send button. Opening the app (a start or a return from the
-   background, not from the system's own windows or a turn of the screen) swaps nothing: a
-   clipboard changed since the app last saw it goes out, otherwise the group's copy comes in;
-   while the app is on the screen every copy of the group is written to the clipboard, and in
-   the background none is (D-128). The tile, the widget, the notification's action and Back
-   Tap are the one button, which swaps the clipboard with the group's copy. Under the alerts
-   a line shows the last copy that came, from which device and its text (a secret without
-   it), with **Copy**, which puts it into the clipboard. On the iPhone a note at the
-   first Home asks once for the clipboard, so that Settings, CBB lists "Paste from Other
-   Apps", and opens Settings there to set it to Allow; the system's paste button (an icon
-   only) shows on Home only when iOS refuses the app the clipboard or the user chose
-   "Later". On Android it sends once each time the app comes to the front, as its window
-   gets the focus, and a small "Send what I copied" button shows only when that failed; the
-   tile, the widget, "Send" in the notification and Share stay. A
-   tile shows the device's icon (laptop, computer,
-   phone, tablet, TV, board, server, router, game console, watch, retro computer or other;
-   SF Symbols on the iPhone), a live dot, its name, its system and its mark ("this phone",
-   "root", "admin", "frozen"); a tap opens the device (Devices, below). "+" scans the code a
-   new device shows, and its menu sends an invitation to a device far away. The one admin of
-   the group sees "Lost a phone?" once, as a card it closes. The phone's sync is also the
-   app's "Sync clipboard" action, which
-   Shortcuts and Spotlight offer as soon as the app is installed (App Intents with an
-   App Shortcut): Back Tap or the Action button runs it without opening the app; it waits
-   a few seconds for a computer to connect and says what it did in one line. The same
-   action is a home-screen widget "Sync clipboard" on both phones: one tap opens the app
-   for a moment, since iOS lets an app read the clipboard only in the foreground, and
-   syncs; on Android the widget sends. The house is also outside the app: the Quick Settings
-   tile on Android and the Control Center control on the iPhone (iOS 18): a clipboard, lit
-   while sync is on and grey while it is off (struck through on Android, empty on the
-   iPhone). A tap turns sync on this phone on or off; on Android a long press opens the app
-   (iOS gives a control no long press of its own), and without a group the tile opens the
-   app. On the iPhone, **Share → Connect Beyond Borders** (from any app, and from the
-   text selection menu's Share) takes the text, the link, an image or files, up to 50 MB
-   together: on 0.6 the share extension runs no member of its own, so it puts them in a queue
-   in the app group's folder (`ShareQueue`), says that CBB sends them the next time it is
-   opened, and the app sends them to the group when it starts or comes to the front. The app
-   group needs the Apple developer account; a debug build signed ad hoc has none, and its
-   extension says there is no group. Sending straight from the extension comes with 0.7.
+1. **Start** (no group configured). Shown on iPhone, Android, Aurora OS, and HarmonyOS:
+   - **Settings and language:** iOS (`StartView.swift`) and Android (`Screens.kt`) show both the
+     Settings button and the language menu on Start. Aurora OS (`MainPage.qml`) puts **Settings**
+     in the pull-down menu, with language inside `SettingsPage.qml`. HarmonyOS (`Start.ets`) places
+     language inside **Settings**.
+   - **Create a group:** Calls the Rust core (`CorePairing.newGroup` on iOS and Android,
+     `cbb_group_new` on Aurora OS and HarmonyOS) to generate a root key in hardware security storage
+     (Secure Enclave on iPhone/iPad, StrongBox or TEE on Android, OP-TEE behind an app PIN on Aurora
+     OS 5, HUKS on HarmonyOS; file keys on Aurora OS 4 and Sailfish OS). It displays the recovery
+     key screen once (**Write on a sheet** and **Write to YubiKey**). On iOS and Android it opens
+     the home pairing window behind the recovery sheet; on Aurora OS and HarmonyOS the user opens
+     the pairing window from **Add a device**. Because the recovery key is part of the group ID,
+     nothing replaces or removes it afterward; losing it prevents changing the main device, so
+     recovery requires creating a new group (D-126).
+   - **Join a group:** The new device always dials the admin's pairing window
+     ([protocol.md](protocol.md), section 6, "The window and who dials"; D-119). On iOS and Android,
+     **Join a group** opens the camera to scan the window's QR code and accepts a 6-digit code or
+     pasted `cbb://pair?...` link. When the user types 6 digits, the app browses Bonjour (iOS) or
+     NSD (Android) for `_cbb._tcp` records carrying `p=1`, `f`, and `i` (never the digits) and
+     constructs the link with `Discovery.windowLink`. On Aurora OS and HarmonyOS, the Rust core
+     discovers the window over mDNS; Aurora OS also accepts pasted links and HarmonyOS scans QR
+     codes with Scan Kit. A wrong code joins no device and writes nothing; three failed attempts or
+     one admitted device close the window.
+   - **Join with an invitation:** For joining away from home through a group hub
+     ([protocol.md](protocol.md), section 12). The user scans the invitation QR code, pastes its
+     text, or opens an invitation file (up to 4096 bytes). A confirmation screen warns to join only
+     requested invitations (invitations disclose no group, hub, or expiry before joining;
+     [format.md](format.md), section 11.3) and offers **Join** or **Decline** (declining sends
+     nothing). While joining, the phone shows its key fingerprint for the inviting admin to compare.
+   - **Incompatible group directory:** If an app opens a state directory that lacks `group.cbor`
+     (D-126), it shows a dedicated screen (`AlertsCard.swift` `Before06Card`, `Leave.kt`
+     `Before06Screen`, `MainPage.qml`, `Before06.ets`) offering only **Leave the group**. Old files
+     are deleted only when the user confirms leaving.
+   - **Group state:** The device list, main-device role, and admin roles come from the member's
+     `group` or `devices` operation ([core-api.md](core-api.md)). Joining phones join as ordinary
+     members (on iOS and Android, `CorePairing.Joiner` does not pass an admin key during join).
 
-   What stops the group (two admins acting against each other, a key that signed two
-   histories, records this app cannot read) shows in "Why it does not sync", as the core's
-   reasons; a phone of 0.6 shows no alerts card of its own (D-126).
+2. **Home.** Displays the online device count, two header switches, any notices or alerts, the last
+   received copy, and the group's devices as tiles or a list:
+   - **Sync** (house icon): Tap toggles sync on this device; long press pauses sync for 15 minutes,
+     1 hour, 8 hours, or until turned on again. When sync is off, the local clipboard stays private
+     both ways. Sync mode is persisted in `mode`, and timed pause or mute expiries in `mute.json`
+     ([design.md](design.md), "Sync on and off").
+   - **Everywhere** (globe icon): Toggles syncing away from home. Turning it on prompts once for
+     consent; while **Sync** is off, **Everywhere** waits in a disabled state.
+   - **Opening-app sync rule (D-128):** Home has no manual Send button. On launch or return from the
+     background (ignoring system sheets or screen rotation), the app sends the clipboard if it
+     changed since the app last saw it, or fetches the group's current copy if not, without
+     swapping. While the app stays in the foreground, incoming copies write to the clipboard
+     automatically; in the background, no phone app writes to the clipboard (including Android,
+     `LiveGroup.kt`).
+   - **Last received copy:** A compact bar below notices shows the latest received copy, its sender,
+     and a **Copy** button. Secrets hide their text and clear when their lifetime expires (D-129).
+   - **Platform clipboard prompts:** On first Home launch on iOS, `PasteNote.swift` prompts once to
+     trigger the system setting so **Settings > CBB > Paste from Other Apps** appears and can be set
+     to **Allow**; if declined or unreadable, Home shows an icon-only system `PasteButton`. On
+     Android, if automatic foreground reading fails, Home shows **Send what I copied**.
+   - **One-tap triggers outside the app:**
+     - **iOS:** The **Sync clipboard** App Intent (`SyncClipboardIntent`, available in Shortcuts,
+       Spotlight, Back Tap, and Action button) runs without opening the app and fetches the latest
+       copy (or sends text passed from Shortcuts' Get Clipboard action). The **Sync clipboard**
+       home-screen widget (`SyncWidget`, iOS 18 and later) opens the app briefly to swap the
+       clipboard. The **Sync** Control Center control (`SyncControl`, iOS 18 and later) toggles
+       **Sync** when in a group (it has no long press and does nothing without a group).
+       **Share > Connect Beyond Borders** (`ShareViewController.swift`) accepts text, links, images,
+       or files up to 50 MiB, stores them in `ShareQueue` inside the `group.tools.cbb` app group,
+       and sends them on the next foreground launch. Ad-hoc debug builds lack the app group
+       entitlement, so their share extension reports no group.
+     - **Android:** The **Send clipboard** home-screen widget (`SendWidget`), ongoing notification
+       **Send** action, accessibility button/gesture, and **cbb send** launcher alias swap the
+       clipboard through a brief transparent activity. The Quick Settings tile (`SyncTileService`)
+       toggles **Sync** on tap (lit when on, struck through when off) and opens the app on long
+       press or when not in a group.
+     - **Aurora OS and HarmonyOS:** See [Notifications](#notifications) and
+       [HarmonyOS](#harmonyos).
+   - **Adding devices and single-admin hint:** On the main device or an admin phone, **+** opens
+     **Add a device** (home pairing window) and its menu offers **Send an invitation**. When a group
+     has only one admin, Home shows a dismissible **Lost a phone?** reminder card once.
+   - **Group stops:** Conditions that halt sync (conflicting admins, two histories from one key,
+     unreadable newer records) appear in [Why it does not sync](#why-it-does-not-sync).
+   - **Muting a device** ([design.md](design.md), "Muting a device"): On an admin phone, a device's
+     page offers **Mute** (15 minutes, 1 hour, 8 hours, or **Until an admin unmutes it**) for a
+     connected device, or **Unmute** for a muted device—never both. Both sign a `mute` command after
+     biometric, passcode, or PIN confirmation. A muted device keeps its copies local, and Home
+     displays a banner until an admin unmutes it.
+   - **Muting from the tile:** Each device tile includes a corner button (at the trailing end of the
+     row, so on the left in Arabic and Hebrew) with a 28 pt/dp visual icon inside a 44 pt/dp touch
+     target, while the rest of the tile opens the device card. On this device's own tile it toggles
+     **Sync** (or pauses via long press / right click); on another device's tile (visible to admins)
+     it mutes or unmutes that device for the group. On iOS and Android `MuteCorner` uses the speaker
+     glyph on all tiles including this phone; on macOS, the tray app, and Aurora OS, this device's
+     tile toggles its own sync switch. When muted, the button fills with the danger color and the
+     tile border becomes dashed. The UI updates optimistically and reverts with an error only if the
+     command fails. Aurora OS knows another device's mute state while that peer is connected.
+   - **Images and files** ([design.md](design.md), "Images and files"): Copies up to 100 MiB sync to
+     phones (larger copies stay on computers). Images are deduplicated by hash; iOS sends PNG, JPEG,
+     or GIF (converting other formats such as HEIC to JPEG, or PNG when alpha is present). Received
+     images enter the clipboard automatically while the app is open (through `FileProvider` on
+     Android). Received files save once when the app is open:
+     - **Android:** `Downloads/CBB` for files; `Pictures/CBB` or `Movies/CBB` via MediaStore for a
+       single image or video. Share accepts up to 100 MiB.
+     - **iPhone and iPad:** **Files > On My iPhone > CBB > Received** for files; **Photos**
+       (Recents, using write-only `NSPhotoLibraryAddUsageDescription`) for a single image, video, or
+       fetched clipboard image.
+     - **Aurora OS:** `Downloads/CBB/<timestamp>` for files, `Pictures/CBB` for a single image (also
+       copied to the clipboard), and `Videos/CBB` for a single video.
+     - **HarmonyOS:** Single received image goes to the pasteboard; other files wait for the user to
+       save through `DocumentViewPicker`.
 
-   **Muting** (docs/design.md, "Muting a device"): on an admin phone a device's card
-   has "Mute" with the house's times ("Until an admin unmutes it" for the last), a `mute` command
-   signed after Face ID or the fingerprint, and "Unmute"; on all four phones the page shows
-   "Unmute" for a muted device and "Mute" for one that is connected, never both. A muted device says so on its tile,
-   its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
-   says so until an admin unmutes it, an admin phone itself on its own page.
+3. **Add a device.** Opens a 5-minute pairing window on the main device or an admin phone
+   (`PairingView.swift` / `AddDeviceView.swift`, `Pairing06.kt`, `WindowPage.qml`,
+   `OpenWindow.ets`), showing a QR code and 6 digits while announcing `_cbb._tcp` (`p=1`, `f`, `i`)
+   on the home network. The joining device scans the QR code or enters the 6 digits and joins
+   directly without a second confirmation prompt.
 
-   **Muting from the tile**: every tile has a small button in its corner (the end of the
-   line, so on the left in Arabic and Hebrew): a 28 pt face in a 44 pt target, while the rest
-   of the tile still opens the device. On this phone's own tile it is the house: a tap turns
-   sync off until turned on again, or on. On another device's tile it shows only on an admin
-   and mutes the device for the group, or unmutes it. A long press (a right click on a
-   computer) picks the time, as the house does. Muted, the button fills with the warning
-   colour and the tile's line turns dashed; the tile shows the new state at once and goes
-   back, with the error, only when the change is refused, so it never blinks or leaves the
-   list while the command goes out. The Mac, the tray app, Android and Aurora have the same
-   button (Aurora knows another device's mute while it is connected).
+4. **Devices** (tiles on Home and each device's detail card). Each tile shows the device glyph
+   (laptop, computer, phone, tablet, TV, board, server, router, game console, watch, retro computer,
+   or other; SF Symbols on Apple platforms, `FormGlyph` on Android), an online status dot, name, OS,
+   and role/status marks (**This phone**, **main device**, **admin**, **hub**, **frozen**). Tapping
+   a tile opens its detail card:
+   - **Header and details:** Icon, name, online/offline status, badges (**main device**, **admin**,
+     **hub**, **frozen**, plus **This phone** on iOS), OS and CBB version line, and a **More**
+     section listing device type, MAC address, role, copy flags, standing, hub status, and device ID.
+     (On Android, `LiveGroup.devices06` populates `osVersion`, `version`, `mac`, and `form` for
+     this phone only.)
+   - **Admin controls:**
+     - **Sync switch** (house): Turns sync on or off on a connected computer by signing a `mode`
+       command ([protocol.md](protocol.md), section 15).
+     - **Mute / Unmute:** Signs a `mute` command.
+     - **Paste on it…** ([design.md](design.md), "Remote paste"): Sends text (pasted or typed key by
+       key, with optional Enter and secret flag) or picked images/files to a computer or small
+       device by signing a `paste` command. On iOS, `PasteView.swift` reads `UIPasteboard.general`
+       when the text field is left empty and offers `PhotosPicker` and `fileImporter` (up to
+       100 MiB).
+     - **Quick actions** ([protocol.md](protocol.md), section 15; iOS and Android): Lists the preset
+       and user-defined actions enabled on an online computer; reboot and shutdown ask for a second
+       confirmation. **Turn all off** signs `actions-off`.
+     - **Overflow menu (`…`):** **Rename**, **Make it an admin** (main device only; warns when a
+       computer stores its keys in files), **Make it a hub** (for eligible admin computers; a phone
+       is never a hub, D-134; signs a `hub` command per [protocol.md](protocol.md), section 11,
+       "Several hubs"), **Freeze** (for another admin computer), **Unfreeze** (main device only),
+       and **Remove** (asks once, then requires biometric, passcode, or PIN confirmation). Moving
+       the main-device role uses the recovery key rather than device removal.
+   - **Non-admin view:** Displays device information without admin actions and states that only an
+     admin can add or remove devices.
 
-   **Images and files** (docs/design.md, "Images and files"): the button sends an image on
-   the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a
-   computer's image whole before it writes it, an image by its hash: the same image twice is
-   nothing new. A received image goes to the clipboard by itself as a text does, on Android
-   through the app's FileProvider and on the iPhone while the app runs, to this phone only.
-   Received files wait until the app opens, which saves them, with their folders, in Downloads,
-   folder "CBB", on Android and in Files, On My iPhone, CBB,
-   Received, on the iPhone; it saves a copy once. One image or video, and an image the button
-   fetches, goes where the gallery shows it, as Telegram and WhatsApp put what they receive
-   and as the Aurora app does: the album "CBB" (Pictures/CBB or Movies/CBB through MediaStore)
-   on Android, Photos on the iPhone (Recents: with access only to add photos,
-   `NSPhotoLibraryAddUsageDescription`, iOS lets no app make an album). Android's Share sends a single image as an
-   image and anything else as files, up to 100 MiB together. A copy over 100 MiB stays on
-   the computers.
-3. **Add a device**: the camera with a frame on the QR code the new device shows ("Join a
-   group" on its Start screen, or `cbb pair` on a computer); the device appears in the list
-   when it has joined. Fallback: type the six digits.
-4. **Devices** (the tiles of Home, and a device's card): the card has its icon, name,
-   online dot and badges (this phone, root, admin, hub, frozen), one line of its system and
-   CBB version, the house (its sync: this phone's own, or on an admin phone a connected
-   computer's), a row of icons (paste on it, mute, quick actions), the rest (type, MAC
-   address, role, ID) under More, and "…" with rename, make it an admin or a hub, freeze or unfreeze
-   and remove; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
-   system (Linux, Windows, macOS, iOS, Android, or "device" for firmware), a "root", "admin" or "frozen" mark, a live dot when it is online and
-   "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
-   device records (section 10 of [protocol.md](protocol.md)), so every app and
-   `cbb status` show the same. On an admin phone, a row opens the device: rename,
-   "Make it an admin" (on the root phone), "Freeze" for an admin computer that is not the
-   root's, as one does with a stolen one, "Unfreeze" for an admin computer
-   that another admin froze (design.md, "Who may remove an admin"), and "Remove", which asks once, then
-   needs Face ID, the fingerprint or the passcode, and is done; removing an admin phone shows
-   the devices it had admitted, which stay. On the root phone the row of a phone or a computer
-   that is no admin offers "Make it an admin" when its hellos offer an admin key
-   (docs/protocol.md, section 10, "Admins"): it asks once, for a computer whose key is a file
-   it warns of that, needs Face ID, and the device then adds and removes devices (a computer
-   with `cbb pair` and `cbb remove`). A phone offers its admin key from the moment it is in
-   the group, and takes the admin CA from the root's admin message once it names its key, its
-   device and the current root; a TV offers none. On a computer that is the root, the Mac app
-   and the tray offer the same for a phone. If the removed phone held the root, this phone
-   takes it over in the same step. On an admin phone a connected computer's house turns its sync
-   on or off: the phone signs a `mode` command (docs/protocol.md, section 15) after
-   Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
-   An admin phone also offers "Make it a hub" for a connected computer that is an admin, or that
-   the root phone makes one first (a phone is never a hub, D-134): after Face ID or the
-   fingerprint it signs a `hub` command
-   (docs/protocol.md, section 11, "Several hubs") with its forwarder, or the project's, and the
-   computer becomes a hub of the group as well; it refuses while sync away from home is off
-   there, which only its own user turns on.
-   With sync away from home on, the list marks the group's hubs whose offers the phone keeps
-   ("hub", or "hub in use" for the one it reaches now), a
-   device's page says "The group's hub", and Settings, "Away from home", names the hub the
-   phone is connected to through the tunnel. The Mac app and the tray app say the same on a
-   device's page, from `hub` in the service's device list.
-   On an admin phone, the page of a computer or a small device also offers "Paste on it…"
-   (docs/design.md, "Remote paste"): a text, typed or taken from the clipboard (on the iPhone
-   through the system's Paste button, which asks nothing), pasted or typed key by key, with
-   Enter after it and as a secret if asked. The phone signs a `paste` command after Face ID or
-   the fingerprint, and a member connected to the computer passes it on when the phone is not.
-   The computer answers once the text is in, or why it would not.
-   While a computer or a small device is online, its page also offers "Quick actions"
-   (docs/protocol.md, section 15): the actions its hello says are on, the presets by their
-   names in words and the user's own by theirs. A tap runs one, after Face ID or the
-   fingerprint; reboot and shut down ask again first. "Turn all off" signs `actions-off`,
-   after which only the device's own user turns them on again. A phone that is not an admin shows the list without
-   actions and says which phones are admins.
-5. **Settings**, the same on the iPhone, Android and Aurora: first the basic ones, the theme
-   (System, Dark or Light) as icons with the language in a row and the ten themes, without
-   a heading, the notifications, the watch, the recovery key on the root, the switch
-   "Advanced settings", the admin PIN on Aurora ("The admin PIN on Aurora" below), leaving
-   the group, and about (seven taps on the version show the
-   switch "Show error details", which puts the error itself under each error message; it is
-   on in debug builds, and the launch argument `ShowErrorDetails` sets it too; Android takes the
-   extra in debug builds only, since any app can start the activity with one).
-   The advanced ones: why it does not sync (below), away from home (where it stands and the
-   blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Admin keys": root,
-   admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
-   two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
-   away from home is turned on by the globe on Home (docs/design.md, "Sync away from
-   home"); Settings show where it stands: waiting for the
-   hub's answer, which comes on the next connection at home; at home, syncing directly;
-   connecting; connected through the tunnel. Turning it off forgets the phone's tunnel key.
-   The Live member keeps the phone's tunnel key and the hubs' offers itself and runs the
-   tunnel in the app's process, in user space: it tries a hub's endpoints in AmneziaWG over
-   UDP first and VLESS after them, in turn, keeping to the way that works. Nothing changes
-   on the screen.
-   No phone is a hub, not even the root's (D-134): a hub is a computer, a router or a board,
-   which an admin phone makes one with "Make it a hub" on its page (above), so sync away
-   from home works with every app closed. The Live member runs sync away from home (`away`)
-   and the link to the group's relay in the app's process, in user space, keeps their keys
-   itself and refuses a hub command; the cards read where they stand from `away_status`
-   (docs/core-api.md). On the root phone the group's server credentials need the root key
-   every 30 days: the app renews them when it comes to the front, asking with "Renew the
-   group's keys for sync away from home", and a root action (the relay, a forwarder, the
-   hubs) renews them with its key; once they expired, the relay card says so. On Aurora,
-   whose root key signs after the admin PIN, the relay page offers that button instead while
-   they are due or expired.
-   The relay is the group's setting: the root sets it with
-   the fingerprint, the face, the screen lock or Aurora's admin PIN (the manage action
-   `relay`), after what a relay learns, and the other devices show where their link to it
-   stands, with "The group's main device sets the relay for every device"; on Aurora it is
-   Settings, "Blind relay".
-   On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
-   (docs/protocol.md, section 12) through a hub of the group it is connected to. The phone shows the invitation's QR
-   code, which a new phone scans in Join with an invitation, and shares the file
-   `cbb.cbbinvite` as the fallback, for `cbb pair -invite` on a computer; it asks "Admit …?"
-   with the device's fingerprint, which the device shows too, and on yes unlocks the
-   group's key and admits it. On Aurora it is "Send an invitation" in the pull-down menu,
-   and "Copy the invitation's text" stands in for the file.
-   At the end, "Leave the group" (D-83, docs/design.md, "Leaving the group") asks once, then
-   stops syncing and deletes the phone's keys (root, admin, member, sealed messages, the
-   servers'), the group's files and the tunnel's state; Android turns remote paste off too.
-   The sync mode and the other settings stay, and the app goes back to Start with a new
-   member key. The root leaves only when the group has no other devices than its watch.
-   When the records no longer list the phone, Home shows "This phone was removed from the
-   group" with the same button, on all four phones. The watch hears that its phone is in no group, or in
-   another one than its admin key's, and deletes the key.
+5. **Settings.** Organized into basic settings first and an **Advanced settings** switch for
+   less common controls:
+   - **Basic settings:** Appearance (**System**, **Dark**, **Light**) icons, language selector, and
+     the **11 themes** (iOS and Android; Aurora OS follows system ambience and omits the theme
+     selector), **Notifications**, **Apple Watch** / **Wear OS watch** (on main device when
+     applicable), **Recovery key** (main device) or **Move the group to this phone** (other
+     devices), **Advanced settings**, **Admin PIN** (Aurora OS 5; see
+     [The admin PIN on Aurora](#the-admin-pin-on-aurora)), **Leave the group**, and **About**.
+     Tapping the version row 7 times reveals **Show error details**, which prints the underlying
+     error under each user-facing message (enabled by default in debug builds; overridden by launch
+     argument `-ShowErrorDetails` on iOS, debug-only intent extra `ShowErrorDetails` on Android, and
+     `CBB_ERROR_DETAILS` on Aurora OS).
+   - **Advanced settings:** [Why it does not sync](#why-it-does-not-sync), **Away from home** and
+     **Blind relay** (on Android, the Settings section shows **Blind relay** while away-from-home
+     status appears on Home; on Aurora OS, Group and Blind relay stay visible outside **Advanced
+     settings**), **Group** (admins: **Copy lifetime** and **Secret lifetime**, D-129; main device:
+     **Admin keys**), and **Lab** (Android, Aurora OS, HarmonyOS). Brief inline tips explain complex
+     settings until dismissed (`TipKit` on iOS).
+   - **Away from home and blind relay:** The Rust member (`member/src/live/away.rs`) manages tunnel
+     keys, hub offers, and blind relay connections in user space inside the app process, trying
+     AmneziaWG over UDP before VLESS over HTTPS, and exposes state through `away_status`
+     ([core-api.md](core-api.md)). The main device configures the group's blind relay (`relay`
+     manage action) after displaying what a relay observes; other devices show the relay status
+     read-only.
+   - **Server credentials renewal:** Group server credentials rotate every 30 days
+     ([protocol.md](protocol.md), section 18). On iOS and Android, the main device prompts to renew
+     them on foreground launch (**Renew the group's keys for sync away from home**). On HarmonyOS,
+     periodic `AppModel.duties()` checks 1 minute after start and every 6 hours. On Aurora OS,
+     `RelayPage.qml` provides a renew button when credentials are due or expired.
+   - **Remote invitations:** On an admin phone, **+ > Send an invitation** (or the pull-down menu on
+     Aurora OS) creates a 1-hour single-use invitation through a connected hub
+     ([protocol.md](protocol.md), section 12), displays its QR code, and shares `cbb.cbbinvite`
+     (or copies the invitation text on Aurora OS and HarmonyOS) for `cbb pair -invite` on a
+     computer. When a device connects, the app shows its fingerprint and asks **Admit …?** before
+     signing admission.
+   - **Leave the group** (D-83; [design.md](design.md), "Leaving the group"): Asks once, stops
+     syncing, deletes all device keys, group files, and tunnel state, keeps UI preferences, and
+     returns to **Start**. On iOS and Android, the main device can leave only when no other devices
+     remain besides its watch; Aurora OS and HarmonyOS allow leaving after confirmation. When group
+     records revoke this phone, Home displays **This phone was removed from the group** with the
+     same leave button.
 
-The lost phone case is one path, and the app says so in plain words: "Lost a phone? Open
-Devices on your other phone and remove it." When the group has a single admin, Devices
-suggests making a second phone an admin.
-
-Errors are one line in plain words with the next step ("Turn on the computer that holds
-the group", not a status code), never a dialog that must be dismissed.
+Errors appear inline as a single plain-language line with the next step rather than blocking modal
+dialogs.
 
 ### Notices
 
-The member keeps a short list of things the person should know about the group's records
-(its `notices`), and Home shows each in a sentence of the app's own, above the devices, on the
-iPhone, Android, Aurora and HarmonyOS, and under the alerts in the Mac app and the tray app,
-which read them from `cbb status` (`notices`) and hide one with the control socket's
-`dismiss`, without the administrator: a change of the main device on its way, an admin that has been silent so long that its admin
-rights end soon (35 days in all), removals waiting until every admin has seen them and how
-much of the main device's room they take, a removal this phone still has to confirm, a frozen
-admin that holds removals back, a checkpoint waiting for records no device passed on, a device
-removed before the main device changed that counts again, and a recovery key not saved yet.
-A notice the member marks as one that may be hidden has a button that hides it; the others
-stay until what they say is over. A kind the app does not know is not shown.
+The member produces a list of active group notices (`member/src/notices.rs`), exposed through
+`notices` on phones ([core-api.md](core-api.md)) and `cbb status` on desktop apps. Home displays
+each notice above the device list (under alerts on macOS and the tray app):
+
+| Notice kind | Parameters | Dismissable | Meaning |
+|---|---|---|---|
+| `change_arriving` | none | no | A change of the group's main device is arriving. |
+| `removals_waiting` | none | no | Removals are waiting until every admin confirms them. |
+| `root_room_waiting` | `percent` | no | Shown on the main device when waiting removals fill 50% or more of its record room. |
+| `ack_owed` | `removals`, `days_left` | no | This admin device has a removal to confirm on its next admin action. |
+| `frozen_holding` | `device` | no | A frozen admin is holding removals back until unfrozen or removed. |
+| `checkpoint_stuck` | none | no | A checkpoint is waiting for records that no peer has offered. |
+| `returned_after_removal` | `device`, `devices` | yes | A device removed before a main-device change counts again and can be removed again. |
+
+The phone apps also include UI text for `admins_silent` and `recovery_not_saved` if supplied.
+Dismissable notices show a **Hide** button that sends `dismiss` over the member or control socket
+without administrator elevation; non-dismissable notices stay until the condition clears. Unknown
+notice kinds are ignored.
 
 ### Changing the main device
 
-Only the group's recovery key changes the main device, and it does so at once. On an iPhone
-or an Android phone that is not the main device, Settings, in its recovery part, offers "Move
-the group to this phone". The person scans the code on the recovery sheet or types its text; the key stays on
-the phone only for this change. The core then writes the list of who stays, one row per
-device with what the change does to it (stays, stays an admin, stays without its admin
-rights, stays frozen until the new main device unfreezes it, removed, or removed earlier).
-The person only unticks devices; each unticked device is removed in the same act, and the old
-main device starts unticked. When another change is already on its way and its records have
-not all arrived, the list says so, and the change is written over it only after the person
-turns that on. Face ID on the iPhone, the fingerprint or the screen lock on Android, confirms
-the change; it cannot be undone. On Android the window keeps out of screenshots while the key
-is on it.
+Only the group's recovery key changes the main device, and the change takes effect immediately. On a
+non-main phone, **Settings > Move the group to this phone** accepts the recovery sheet (QR scan or
+text entry) or a YubiKey holding the recovery secret; the key stays in memory only for this
+operation.
 
-Every device of the group then shows, until the person has seen it, that the main device
-changed, which device it is now and which it replaces, with "This wasn't me". That button
-explains that someone has the recovery key and offers to leave the group: nothing undoes a
-change of the main device, so the way out is a new group.
+The core previews the resulting device list (`change_preview`), labeling each device's outcome
+(stays, stays an admin, loses admin rights, stays frozen, removed, or already removed). The user can
+uncheck devices to remove them in the same operation; the previous main device starts unchecked. If
+another main-device change is already arriving, the screen warns and requires an explicit toggle to
+overwrite it. Biometric, passcode, or PIN confirmation signs the change (`change_root`). On Android,
+the recovery and change-root dialogs set `SecureFlagPolicy.SecureOn` (`FLAG_SECURE`) to prevent
+screenshots.
+
+Every device in the group displays a notice naming the new and previous main devices until dismissed,
+with a **This wasn't me** button that explains someone holds the recovery key and offers
+**Leave the group**.
 
 ## Why it does not sync
 
-A screen in the advanced settings of every app (the iPhone, Android, Aurora, the Mac and the
-tray app) says in one sentence why this device does not sync and what to do, the reason that
-stops the most first and large, the others under it. The Rust core decides the reasons
-(`cbb_core::why`): from what the member knows about itself, its group and its link away from
-home it gives each a stable code, a level (stop: nothing syncs here; warn: some copies or
-devices do not; info) and its parameters, and the apps only say each code in their words;
-`testdata/why/vectors.json` holds the cases. A computer's status carries them, a phone's member
-answers `why` (docs/core-api.md), with where the phone's tunnel and relay stand, and
-`cbb status` prints the first that stops sync. With "Show error details" on, each reason also
-shows its code and the member's own words.
+Every app (iPhone, Android, Aurora OS, HarmonyOS, macOS, and the tray app) includes a
+**Why it does not sync** screen under **Advanced settings** that displays the highest-priority
+reason first in large type and secondary reasons below it. The Rust core computes all reasons in
+`cbb_core::why` (`core/src/why.rs`), verified by `testdata/why/vectors.json`, returning a sorted
+list of `{code, level, until_ms?, device?, devices?, value?, detail?}` objects. Desktop apps read
+`why` from `cbb status`, phone apps call `why` (or `view.warnings`) on the member
+([core-api.md](core-api.md)), and `cbb status` prints the first blocking reason. When **Show error
+details** is on, each row also shows its code and `detail` text.
 
-| Code | Level | What it says |
-|---|---|---|
-| `not_in_group` | stop | the device is in no group |
-| `removed` | stop | the group removed it: leave, then join again |
-| `recovery_fork` | stop | the recovery key signed two changes at one step: the group stopped for good, make a new one |
-| `root_two_histories` | stop | the root's key signed two histories: the group stops until its root decides, or moves to a new root with the recovery key |
-| `admins_conflict` | stop | two admins disagree about a device: the group waits for its root to decide |
-| `owner_disagrees` | stop | this device and its peers (`devices`) follow different roots: leave, then join again |
-| `frozen` | stop | the group's records froze this device's keys |
-| `nothing_here` | stop | the group's records give this device nothing |
-| `stopped` | stop | the group's records stop the exchange until the root decides |
-| `sync_off` | stop | sync is off here, until a time or until turned on |
-| `away_off` | stop | no device of the group is on this network: turn on Everywhere |
-| `new_network` | stop | a computer has not met its group on this network (the apps' button "This is my home network", `sudo cbb network` in the command line) |
-| `no_hub` | stop | Everywhere is on, but the group has no hub |
-| `tunnel_blocked` | stop | the plain WireGuard tunnel to the hub does not get through: the network may block it |
-| `hub_unreachable` | stop | the hub does not answer, though its tunnel is disguised |
-| `relay_down` | stop | the blind relay does not answer |
-| `hub_waiting` | stop | this device is the hub and nobody connected yet |
-| `alone` | stop | connected, but no other device of the group is online |
-| `secrets_stopped` | warn | the group sends no secrets until the root decides |
-| `no_secrets_here` | warn | the group seals no secrets to this device |
-| `change_arriving` | warn | a change of the group's root is arriving and its records are not all here: they are asked for, so keep the device near the others |
-| `checkpoint_stuck` | warn | the root's checkpoint waits for records no device has offered |
-| `muted` | warn | an admin muted this device: its copies do not reach the group |
-| `forwarder_down`, `entries_stale` | warn | the hub's forwarder does not take it, or the list of entry points is out of date |
-| `newer` | warn, or stop | the group has records or settings of a newer version: update; a stop when this version cannot follow them |
-| `unreached` | warn | members at home cannot connect to this computer: its firewall |
-| `only_device` | info | the group's only device: add a phone or a computer |
-| `copy_waits` | info | copies wait for their senders' records (`devices`) |
-| `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
-| `update` | info | a newer CBB is available |
+| Code | Level | Parameters | Meaning |
+|---|---|---|---|
+| `not_in_group` | `stop` | — | Device is not in a group. |
+| `removed` | `stop` | — | Group records removed this device; leave and join again. |
+| `recovery_fork` | `stop` | — | Recovery key signed two changes at one step; group halted permanently. |
+| `root_two_histories` | `stop` | — | Main device key signed two histories; group waits for main device resolution or recovery. |
+| `admins_conflict` | `stop` | — | Two admins conflict over a device; main device must resolve. |
+| `owner_disagrees` | `stop` | `devices` | Peers follow a different main device; leave and join again. |
+| `frozen` | `stop` | — | Group records froze this device's keys. |
+| `nothing_here` | `stop` | — | Group records grant this device no clipboard exchange. |
+| `stopped` | `stop` | — | Group records halted exchange until the main device decides. |
+| `sync_off` | `stop` | `until_ms` | Sync is turned off locally (timed or indefinite). |
+| `away_off` | `stop` | — | No group peer is on this network; turn **Everywhere** on. |
+| `new_network` | `stop` | `devices` | Computer has not met its group on these interfaces (mark home via app button or `sudo cbb network`). |
+| `no_hub` | `stop` | `detail` | **Everywhere** is on, but the group has no hub. |
+| `tunnel_blocked` | `stop` | `device`, `detail` | Plain WireGuard tunnel to hub did not connect; network may block it. |
+| `hub_unreachable` | `stop` | `device`, `detail` | Hub did not answer even with an obfuscated tunnel. |
+| `relay_down` | `stop` | `detail` | Blind relay did not answer. |
+| `hub_waiting` | `stop` | `detail` | This device is the active hub and no peer has connected yet. |
+| `alone` | `stop` | `detail` | Connected to hub or relay, but no other group device is online. |
+| `secrets_stopped` | `warn` | — | Group stopped sending secrets until the main device decides. |
+| `no_secrets_here` | `warn` | — | Group does not seal secrets to this device. |
+| `change_arriving` | `warn` | — | Main-device change records are still arriving from peers. |
+| `checkpoint_stuck` | `warn` | — | Root checkpoint is waiting for records no peer has offered. |
+| `muted` | `warn` | `until_ms` | An admin muted this device; local copies do not reach the group. |
+| `forwarder_down` | `warn` | `detail` | Hub's forwarder rejected or missed registration. |
+| `entries_stale` | `warn` | `detail` | Forwarder entry-point list is out of date. |
+| `newer` | `warn` or `stop` | `value` | Group holds records or settings from a newer version (`stop` when `update_needed` is set). |
+| `unreached` | `warn` | `devices` | Home peers cannot connect inbound to this computer (firewall). |
+| `only_device` | `info` | — | Only device in the group; add another phone or computer. |
+| `copy_waits` | `info` | `devices` | Copies are waiting for their senders' device records. |
+| `devices_offline` | `info` | `devices` | Listed peers are offline (shown only while at least one peer is connected). |
+| `devices_sync_off` | `info` | `devices` | Listed peers have sync turned off. |
+| `devices_muted` | `info` | `devices` | Listed peers are muted. |
+| `update` | `info` | `value` | A newer CBB release is available. |
 
 ## The lab
 
-Some things work but are no promise of 1.0: the ZX Spectrum Next, the Arduino Nano ESP32, a
-computer as a TV's remote and a phone or a Linux computer as a Bluetooth keyboard. In the apps
-they sit in a "Lab" section at the end of the advanced settings (the Bluetooth keyboard on
-Android, Aurora and HarmonyOS; the others have no screen in the apps). The settings show only what most
-people need: the hub is chosen by itself, so making a device the hub, the hub's tunnel and its
-forwarder show only with the advanced settings on, on every app.
+Experimental features—the ZX Spectrum Next bridge, Arduino Nano ESP32 firmware, network TV remotes
+from computers, and Bluetooth keyboard emulation on Linux, Android, Aurora OS, and HarmonyOS—sit
+outside the core 1.0 guarantee. In the phone apps that support Bluetooth keyboard emulation
+(Android, Aurora OS, HarmonyOS), its screen lives in a **Lab** section at the bottom of
+**Advanced settings**. On macOS and the tray app, non-hub hub controls and hub tunnel/forwarder
+settings are also gated behind **Advanced settings**.
 
 ## Big screens
 
-The layout follows the window's width, never the kind of device or its rights; the rights
-follow how the device keeps its key (docs/design.md: a key in a secure chip with strong
-biometrics gets a phone's set, else a computer's). An Android or HarmonyOS tablet whose key
-is in software gets the same big-screen layout with a computer's rights.
+Layout adapts to window width, independent of device class or group rights. Group rights follow key
+protection ([design.md](design.md)): a key in security hardware paired with strong biometrics earns
+phone-level trust; without both, the device warns before creating a group.
 
-- **iPad** (the same app, universal; `Views/PadHome.swift`): an iPad is a phone for the
-  group, with a phone's rights: it joins as an admin, or makes its own group, and its root
-  key lives in its Secure Enclave. On Start, under "Create a group", it says that the device
-  that makes the group holds its main key, best one always at hand, such as a phone. In a
-  regular-width window Home is a split view:
-  - **The sidebar** (280 to 400 points, 320 by default): the group's line, how many devices
-    are online with the two switches (the house and the globe, which go under the count when
-    the two do not fit); **Devices**: "All devices", "Needs attention" while a device does,
-    and each collection, each with its count (a collection's menu renames or ungroups it);
-    **Settings**: Appearance, Notifications, the recovery key (on the root; elsewhere "Move the
-    group to this phone"), away from home
-    (the hub, moving it, Everywhere, the relay), the group's rules (for admins), why it does
-    not sync, and About with leaving the group. A part opens in the detail column; there is no
-    switch for the advanced settings, each has its own part. In portrait the sidebar folds
-    away behind its button, and "+" moves to the detail's toolbar.
-  - **The devices**: the alerts and the last copy that came, then the section's devices as tiles (the default), a list or
-    orbits (the toolbar's view menu; the orbits only for all devices), with a search in the
-    toolbar. A tap chooses a device: its card stands at the trailing edge, 400 points wide
-    (growing with the text size, at most 520), and the chosen tile is outlined; when the window
-    leaves less than 360 points for the devices beside it, the card is the next page instead.
-    Another section closes the card.
-  - **The keyboard**: Command-1 to 9 open the sidebar's sections in its order, Command-comma
-    the settings, Command-N adds a device; the arrows choose the device before or after, as
-    they stand; Escape closes the card. Holding Command lists them.
-  - **The pointer**: a tile lifts under it; its menu (a right-click, or touch and hold) pastes
-    on the device and mutes or unmutes it for an admin, besides Arrange's moves.
-  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
-    paste are pasted there, as from its card (an admin's); text or a picture dropped beside the
-    tiles goes to the group, as a copy on the iPad would.
-  - **A narrow window** (Slide Over, a third of the screen, a compact width in Stage Manager)
-    gets the phone's page, the card as the next page.
-  - Start and Join stand in a column at most 560 points wide. One window; the app is not
-    offered on a Mac or a Vision Pro as an iPad app (the Mac has its own). An iPad pairs with no
-    Apple Watch, so its Settings leave the watch out; nothing can paste on an iPad, as on an
-    iPhone.
-- **A foldable iPhone** (the iPhone duo): the outer screen is the phone's page. The inner
-  screen is a big screen like the iPad's: the sidebar, the devices and the card beside them,
-  and in landscape the system moves the toolbar to the strip at the right edge. A phone's screen stays upright; a big one turns.
-- **Android tablets, foldables and wide windows** (`TabletHome.kt`) follow the iPad from
-  600 dp wide (Material's medium width class): a tablet's half of a split screen at less gets
-  the phone's page.
-  - **The sidebar** (300 dp, a little wider with a larger font): the group's line with the two
-    switches; **Devices**: "All devices", "Needs attention" while a device does, each
-    collection, each with its count; **Settings**: Appearance, Notifications (with sending by
-    itself and the watch), the recovery key (on the root), away from home (the hub, the
-    relay), remote paste (what may paste here, Share's question and the lab), the group (the
-    copies' time, the admin keys, leaving), why it does not sync, and About with the update. A
-    part opens beside the sidebar; the phone's Settings page shows them all, the advanced ones
-    behind their switch. The sidebar stands while the window has room for it, 360 dp of devices
-    and the details (as in landscape); else it slides in from the edge behind ☰ (as in
-    portrait). A short line at its foot names the keys.
-  - **The devices**: the alerts and the last copy that came, then the section's devices as tiles (the default), a list or
-    orbits (⋯; the orbits only for all devices; a collection's ⋯ also renames or ungroups it),
-    with + beside it on an admin. A tap chooses a device: its details stand at the trailing
-    edge, 400 dp wide (growing with the font, at most 520), and the chosen tile is outlined;
-    when the window leaves less than 360 dp for the devices beside them, the details are a
-    page of their own, which back closes. Another section closes them.
-  - **The keyboard**: Ctrl+1 to 9 open the sidebar's sections in its order, Ctrl+, the settings,
-    Ctrl+N adds a device, Ctrl+F finds one (once the search is offered); the arrows choose the
-    device before or after; Esc closes the details.
-  - **The pointer**: a right click on a tile (or a touch and hold, on a phone too) opens its
-    menu, which for an admin pastes on the device and mutes or unmutes it, besides Arrange's
-    moves.
-  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
-    paste are pasted there (an admin's), as from its details; dropped beside the tiles they go
-    to the group, as Share sends them.
-  - **The rights** follow the keys, one rule for phones and tablets (`Keys.guardsLikeAPhone`):
-    the keys in secure hardware (StrongBox or the TEE) and a strong fingerprint or face sensor
-    make it a phone for the group; without one of them Start says, under "Create a group",
-    restoring with the recovery key and a handed-over group say, before it becomes the group's
-    main device, that it guards the group less well than a phone with both. A tablet that has
-    both says on Start, as an iPad does, that the main device is best one always at hand.
-
-- **Aurora tablets** (and an Aurora phone turned on its side, which is as wide), in
-  `MainPage.qml` by the page's width in Silica's units (`Theme.pixelRatio`): from 760 the
-  chosen device's card (`DeviceCard.qml`, the same card `DevicePage.qml` shows as a page)
-  stands at the trailing edge, 400 wide, with Close in its header and its pull-down menu, and
-  the chosen tile is lit; from 1060 the sidebar stands before the tiles too: "All devices",
-  "Needs attention" while a device does, each collection with its count, and Settings, which
-  opens as a page, since Aurora's Settings are one short page. Narrower, it is the phone's
-  page. Aurora gives an app no fingerprint (its keys wait for the app's own PIN), so making a
-  group and restoring one always say that the device guards the group less well than a phone
-  with both. No keyboard shortcuts or drag and drop: Silica has neither.
-
-  Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
-  system's line icons.
-- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide
-  (`pages/Main.ets`): the orbits (only for all devices), tiles or a list, which the "…" menu
-  switches and the app keeps, and a device's details in a pane beside them, 400 vp, the page a
-  phone's screen opens (`DeviceDetail`), with the chosen tile outlined. Folding the phone closes
-  the pane and goes back to the phone's page.
-  - **The sidebar** (280 vp, ArkUI's `SideBarContainer`): the group's line; **Devices**: "All
-    devices", "Needs attention" while a device does, each collection, each with its count;
-    **Settings**: the language and the error details, notifications, the recovery key (on the
-    root) and the blind relay (each its own page), the group, the lab, why it does not
-    sync, and About; a part opens beside the sidebar (`components/SettingsBody.ets`, which the
-    phone's Settings page shows whole, the advanced parts behind their switch). It stands from
-    1040 vp (the sidebar, 360 of devices and the details); narrower it slides in behind ☰. A
-    short line at its foot names the keys. Another section closes the details.
-  - **The keyboard**: Ctrl+1 to 9 open the sidebar's rows in its order, Ctrl+, the settings,
-    Ctrl+N adds a device (an admin's scan), the arrows choose the device before or after, Esc
-    closes the details.
-  - **The pointer**: a right click on a tile opens its menu, which for an admin pastes on the
-    device and mutes or unmutes it, besides Arrange; a long press still arranges it.
-  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
-    paste are pasted there (an admin's); dropped beside the tiles they go to the group.
-  - **The rights** follow the keys as on Android (`Keys.guardsLikeAPhone`): HUKS keeps them in
-    the TEE, so a fingerprint or face sensor at ATL3, enrolled or not yet, makes it a phone for
-    the group; without one Start under "Create a group", restoring and taking the group over say
-    that it guards the group less well than a phone with both, and a big screen that has one
-    says on Start that the main device is best one always at hand.
+- **iPad** (universal binary, `apps/ios/CBB/Views/PadHome.swift`): An iPad has the same hardware key
+  protection and rights as an iPhone (Secure Enclave). On Start under **Create a group**, it notes
+  that the main device is best kept on a device always at hand, such as a phone. In a regular-width
+  window, Home uses a split view:
+  - **Sidebar** (280–400 pt, 320 pt default): Group header with online count and **Sync** /
+    **Everywhere** switches (wrapping below the count via `ViewThatFits` when narrow); **Devices**
+    (**All devices**, **Needs attention** when any device is frozen, and each collection with its
+    count and rename/ungroup context menu); and **Settings** (Appearance, Notifications, Recovery
+    key, Away from home [status and blind relay], Group rules for admins, Why it does not sync, and
+    About with Leave). Each settings section opens directly in the detail column without an
+    **Advanced settings** switch. Below 1100 pt window width, the sidebar collapses behind its
+    toggle button; **+** always resides in the detail toolbar.
+  - **Devices column and detail pane:** Notices and last received copy above tiles (default), list,
+    or orbit (orbit for **All devices** only), with toolbar search. Selecting a device opens its
+    card on the trailing edge at 400 pt (scaling with Dynamic Type up to 520 pt) and outlines the
+    selected tile. When less than 360 pt remains for the device list, the card pushes as a separate
+    page. Switching sidebar sections closes the detail card.
+  - **Keyboard:** `Command-1` through `Command-9` select sidebar sections in order, `Command-,`
+    opens Settings, `Command-N` adds a device, arrow keys move selection, and `Escape` closes the
+    detail card.
+  - **Pointer and drag-and-drop:** Tiles lift on hover; right-click or touch-and-hold opens a
+    context menu with remote paste, mute/unmute (for admins), and arrangement actions. Dropping
+    text, an image, or files onto a tile that accepts remote paste pastes them there (for admins);
+    dropping text or an image beside tiles copies it to the group.
+  - **Narrow windows and platform limits:** Compact widths (Slide Over, split screen) switch to the
+    phone layout. Start and Join constrain content to 560 pt (`Tokens.readableWidth`). The iPad app
+    is single-window (`UIApplicationSupportsMultipleScenes: false`), disabled on macOS and visionOS,
+    omits Apple Watch settings, and does not accept incoming remote pastes.
+- **Foldable iPhone:** Uses the phone layout on compact screens (locked portrait in
+  `Orientation.swift`) and the split-view layout on regular-width screens (rotating freely).
+- **Android tablets, foldables, and wide windows** (`apps/android/app/src/main/kotlin/tools/cbb/TabletHome.kt`):
+  Switches to the wide layout at 600 dp (`screenWidthDp >= 600`).
+  - **Sidebar** (300 dp, scaling up to 1.3× with font scale): Group header and switches; **Devices**
+    (**All devices**, **Needs attention**, collections with counts); **Settings** (Appearance,
+    Notifications [with auto-send and watch], Recovery key [or Move the group on non-main devices],
+    Away from home [blind relay], **Send to the computers** [Share allow-list and Lab Bluetooth
+    keyboard], Group [lifetimes, admin keys, leave], Why it does not sync, and About [with updates]).
+    The sidebar stays pinned when the window fits sidebar + 360 dp + detail pane; otherwise it opens
+    as a drawer behind `☰`. A footer lists keyboard shortcuts.
+  - **Devices column and detail pane:** Defaults to **Orbit** (`DeviceLayout.ORBIT`, switchable via
+    `⋯` to tiles or list; orbit for **All devices** only), with **+** beside it for admins.
+    Selecting a device opens a 400 dp detail pane (scaling up to 520 dp) on the trailing edge when
+    at least 360 dp remains for devices, or as a separate page otherwise.
+  - **Keyboard, pointer, and drag-and-drop:** `Ctrl+1` through `Ctrl+9` (or `Meta+1..9`),
+    `Ctrl+,`, `Ctrl+N` (admin), `Ctrl+F` (when search is active, over 12 devices), arrows, and
+    `Esc`. Right-click or long-press opens the tile menu (paste, mute/unmute, arrange). Dragging
+    text, images, or files onto a paste-capable tile sends remote paste; dropping beside tiles sends
+    to the group.
+  - **Key-guard check (`Keys.guardsLikeAPhone`):** Requires both hardware-backed keys (StrongBox or
+    TEE) and a strong biometric sensor (`BIOMETRIC_STRONG`, enrolled or unenrolled). On Start under
+    **Create a group**, devices lacking either warn that they guard the group less well than a phone
+    with both; wide devices with both show the same always-at-hand note as iPad.
+  - **Device icons:** Drawn on a 24×24 grid by `DeviceGlyph` (`DeviceKind.kt`) delegating to
+    `FormGlyph` (`apps/android/shared/src/main/kotlin/tools/cbb/Glyph.kt`).
+- **Aurora tablets and landscape phones** (`apps/silica/qml/pages/MainPage.qml`): Width thresholds
+  are measured in `Theme.pixelRatio` units. At 760 units and wider, `DeviceCard.qml` (400 units
+  wide, with a header close button and **Close** pull-down action) stands at the trailing edge beside
+  the tiles. At 1060 units and wider, a 300-unit sidebar (**All devices**, **Needs attention**,
+  collections, and **Settings** pushing `SettingsPage.qml`) appears on the leading edge. Because
+  Aurora OS exposes no biometric API to regular apps, `NewGroupPage.qml` always displays the
+  key-guard note. Silica provides no keyboard shortcuts or drag-and-drop.
+- **HarmonyOS tablets and foldables** (`apps/harmony/entry/src/main/ets/pages/Main.ets`): Switches
+  to the wide layout at 720 vp, with tiles, list, or orbit (`Orbit.ets`, for **All devices** only)
+  and a 400 vp `DeviceDetail` pane on the trailing edge. Folding below 720 vp clears the selection
+  and returns to the phone layout.
+  - **Sidebar** (280 vp `SideBarContainer`): Pinned (`Embed`) from 1040 vp and sliding (`Overlay`
+    behind `☰`) below 1040 vp. Lists **Devices** (**All devices**, **Needs attention**, collections)
+    and **Settings** (Language, Notifications, Recovery key [main device] or Move the group [other
+    devices], Blind relay, Group, Lab, Why it does not sync, and About [including 7-tap **Show error
+    details**]), opening each section in `components/SettingsBody.ets`. A footer shows keyboard
+    shortcuts.
+  - **Keyboard, pointer, and drag-and-drop:** `Ctrl+1` through `Ctrl+9`, `Ctrl+,`, `Ctrl+N`
+    (admin), arrow keys, and `Esc`. Right-click opens an action sheet (paste, mute/unmute, arrange);
+    long-press opens Arrange. Drag-and-drop pastes onto a paste-capable tile or copies to the group
+    beside tiles.
+  - **Key-guard check (`Keys.guardsLikeAPhone`):** HUKS stores keys in the TEE, so a fingerprint or
+    face sensor at ATL3 (enrolled or unenrolled) satisfies phone-level protection. `Start.ets` shows
+    the warning when missing, or the always-at-hand note at 600 vp and wider when present.
 
 ## Dynamic Island
 
-A Live Activity (iPhone, iOS 17; Live View on HarmonyOS) shows what runs in the Dynamic
-Island and on the Lock Screen, in the colour chosen in Settings, and never what was copied:
+Live Activities on iPhone (iOS 18 and later, inside the `Widgets` extension in `apps/ios/Widgets/`)
+and Live View on HarmonyOS (`apps/harmony/entry/src/main/ets/model/Live.ets`) surface active
+operations in the Dynamic Island or Live View and on the Lock Screen using the dark theme palette:
 
-- **Adding a device**: from the scan until the device is in the group, with a timer; then
-  "The device is in the group." or "The device was not added." for a moment.
-- **Away from home**: while the phone syncs through the tunnel of the group's hub, a shield
-  with the time since it connected.
-- **A sync**: its result ("Sent to the computers.", "Fetched from the computers.") for a
-  few seconds.
+- **Away from home:** Shield icon and elapsed timer while connected through a group hub's tunnel
+  (iOS and HarmonyOS).
+- **Sync result:** Displays the sync outcome for 4 seconds on iOS (`Island.flash`) and briefly on
+  HarmonyOS (`Live.synced`). On iOS, `AppModel.sync` triggered from the app passes a 30-character
+  text preview for non-secret copies, whereas Shortcut syncs omit the preview.
+- **Adding a device:** Active on HarmonyOS (`Live.ets` displays a timer and completion status). On
+  iOS, `StatusActivity.Kind.adding` is defined in `StatusActivity.swift` and rendered by
+  `StatusActivityWidget.swift`, though the app does not currently trigger it.
 
 ## Notifications
 
-The app notifies of the group's events (design.md, "Watches", step 1), each kind with a switch
-in Settings, all on by default: a device joined or was removed, became an admin, was frozen
-or unfrozen, the group was taken over, and the hub does not answer through the tunnel for
-two minutes while away from home. The app compares the devices with what it saw last time
-(`GroupEvent`, `Notifier`), so it hears of an event while it runs and syncs. An iPhone app
-has no background sync. With "Notify me when the app is closed" on (the default), a member
-of the group wakes it with a sealed push (design.md, "Watches", step 5); without it, or until
-the push arrives, it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
-few seconds now and then, at times it picks from how the phone is used. It then waits up to
-20 seconds for a computer, takes the records and notifies of what changed; it leaves the
-clipboard alone, which only the app in front may read. So an event may come within the
-hour, or only when the app next opens: iOS runs no refresh with Background App Refresh off
-or in Low Power Mode. iOS asks for notifications once, when the phone is first in a group.
+Phone apps detect group changes by comparing the current device list against the previously stored
+snapshot, posting local notifications for each enabled event kind (all enabled by default):
 
-The Android app (`GroupEvents.kt`, the same events and the same order) looks whenever
-records arrive and at each refresh; its foreground service keeps the connections in the
-background, so it hears of most events at once. It posts on its own channel, "The group's
-events", with the permission it asks for the service's notification. Android shows them
-on a paired watch as well.
-
-The Aurora app (`apps/silica/src/events.cpp`, the same events and the same order, without the
-hub's until it has the tunnel) looks whenever the core's list of devices changes, while the
-app runs, its cover included, and shows them through the system's notifications
-(`Nemo.Notifications`). Its cover shows whether the phone takes copies, the devices it
-reaches, the last copy and the latest event, with two actions: the one button and pause
-or resume. A text shared to CBB from the system's share menu (`ShareProvider`, the desktop
-entry's `X-Share Method text`) goes to the group as the phone's copy, and so do images and
-files (`X-Share Method files`, up to 50 MB together). Opening the app follows the
-one button's rule for an opening (docs/design.md, D-128) through the core's `opened` and
-`took`, with a stored hash of the clipboard; the group's copies are written only while the app
-is in front, and the main page shows the last one that came with Copy. Images and files from
-another device are fetched by themselves while the app is in front and takes the group's copies, with a notification, which is why the app
-asks for the user's folders: one image goes to Pictures/CBB (and into the clipboard) and one
-video to Videos/CBB, where the gallery shows them as an album, as Telegram does; other files
-go to a folder of their own in Downloads/CBB.
+- **iPhone** (`apps/ios/CBB/App/GroupEvents.swift` `GroupEvent` / `Notifier`, `PushSetup.swift`,
+  `BackgroundRefresh.swift`, `apps/ios/NotificationService/NotificationService.swift`): Five event
+  switches—devices joined or removed, admin changes, freezes or unfreezes, main-device changes
+  (`takeover`), and hub unreachable for 2 minutes (`Notifier.hubGrace = .seconds(120)`). With
+  **Notify me when the app is closed** enabled (default in release builds carrying the app group),
+  group peers wake the phone through a sealed push decrypted in `NotificationService` via
+  `PushVault` (showing up to 300 characters with a **Copy** action for ordinary text, never secrets,
+  or an event notice). Otherwise, `BackgroundRefresh` requests iOS `BGAppRefreshTask` (`tools.cbb.refresh`),
+  waiting up to 20 seconds for an online peer plus 3 seconds for records without touching the
+  clipboard. Release builds request notification permission at launch through `PushSetup.start()`;
+  otherwise `Notifier.askOnce()` asks when first joining a group.
+- **Android** (`apps/android/app/src/main/kotlin/tools/cbb/GroupEvents.kt`, `SyncService.kt`,
+  `PushSetup.kt`, `PushPlatform.kt`): Same 5 switches and 7 events (sorted by name, removals last,
+  2-minute hub grace) posted on channel `"The group's events"`. The foreground service (`SyncService`,
+  type `connectedDevice`) keeps group connections alive in the background so events arrive
+  immediately, acquiring a `WifiManager.MulticastLock` only during mDNS browsing. Closed-app sealed
+  push runs on channel `"While the app is closed"` with a **Copy** action (`PushCopyReceiver`),
+  using Firebase Cloud Messaging in the `full` flavor (`src/full/.../PushPlatform.kt`) and
+  UnifiedPush in the `fdroid` flavor (`src/fdroid/.../PushPlatform.kt`).
+- **Aurora OS** (`apps/silica/src/events.cpp`, `qml/system/Notifier.qml`, `qml/cover/CoverPage.qml`,
+  `qml/system/ShareTarget.qml`): Watches `Member::devicesChanged` while the app or its cover runs
+  and notifies through `Nemo.Notifications` for 4 event kinds (devices joined or removed, admin
+  changes, freezes or unfreezes, main-device changes; it does not implement the 2-minute hub-unreachable
+  event). The app cover displays sync/mute state, connected device count, last copy, and latest
+  event, with **one** cover action to pause or resume sync. System sharing (`ShareProvider`,
+  `X-Share Method text` and `X-Share Method files`) sends text, images, and files up to 50 MiB.
+  Opening the app applies the opening rule (D-128) via the core's `opened` and `took` calls against
+  a stored clipboard SHA-256 hash (`board/seen`). Incoming copies write to the clipboard only while
+  `ApplicationActive`; single images save to `Pictures/CBB` (and clipboard), single videos to
+  `Videos/CBB`, and other files to `Downloads/CBB/<timestamp>` with a notification.
 
 ## Apple Watch
 
-The watch app (`apps/ios/Watch`, watchOS 10) has no network of its own: watchOS gives an
-ordinary app no sockets, so it works only through its iPhone, over WatchConnectivity
-(`WatchLink` on the phone, `WatchModel` on the watch). It shows, in the phone's colour:
+The Apple Watch app (`apps/ios/Watch`, watchOS 10) has no direct network sockets and communicates
+solely with its paired iPhone over WatchConnectivity (`WatchLink` on iPhone, `WatchModel` on watch).
+Using the phone's dark theme palette, it displays:
 
-- how many devices are online, and each device with its icon and live dot;
-- the phone's two switches as on its Home: the house (sync on the phone) and the globe
-  (sync away from home, waiting while sync is off), and where away from home stands;
-- the latest events of the group.
+- Online device count and each device with its icon and live status dot (grouped by the phone's
+  collections).
+- The phone's **Sync** (house) and **Everywhere** (globe) switches, plus away-from-home status.
+- Recent group events.
 
-The phone sends the watch its state (`WatchState`: devices, sync, away, events, colour; never
-the clipboard) whenever it changes; the watch shows the last one it got and says so when
-the phone does not answer. The notifications of the group's events reach the watch as
-every iPhone notification does.
+The phone pushes `WatchState` (`hasGroup`, `group`, `devices`, `away`, `sync`, `events`, `signs`,
+`theme`; never the clipboard) whenever state changes. The watch caches the latest state and reports
+when the iPhone is unreachable. Group notifications mirror from the iPhone automatically.
 
-The root phone makes the watch an admin with a key of its own (docs/protocol.md, section 10,
-rule 8), in Settings, "Apple Watch", while the watch app is open. The phone asks the watch;
-the watch checks that it has a passcode and is on the wrist with wrist detection on
-(`LAPolicy.deviceOwnerAuthenticationWithWristDetection`), makes a P-256 key in its Secure
-Enclave that works only while it is unlocked (`WatchKey`), and answers with the key and a
-device ID it picked. The phone, after Face ID, issues the admin CA and signs the watch's
-device record (`PhoneGroup.addWatch`), sends the record to the group and the admin CA to the
-watch. Removing the watch from the devices revokes the key; a new watch gets one after that.
-
-On a watch that is an admin, a device in the list opens its emergency actions: freeze an
-admin computer, remove an ordinary device, turn remote paste, the quick actions or sync away
-from home off, or run one of its quick actions marked for a watch. The phone says which
-apply (`PhoneGroup.watchActions`). After a tap on what it signs, the watch asks the phone for
-the body (`PhoneGroup.watchBody`), checks that it says what was asked, checks the wrist and
-signs with its key; the phone adds the record to the group or passes the command on, and
-says when it is done.
-
-In a group of 0.6 the watch signs nothing (D-124): it shows the group, and the phone's state
-says `signs` false, so the watch offers no action and says that its emergency actions come
-with CBB 0.7, as the root phone's Settings do in place of making it an admin. The same holds
-for the Wear OS and HarmonyOS watches.
+`WatchKey` (`apps/ios/Watch/WatchKey.swift`) supports generating an unlocked-only Secure Enclave
+P-256 key guarded by `LAPolicy.deviceOwnerAuthenticationWithWristDetection`, and `LiveGroup`
+exposes the watch management hooks (`addWatch`, `watchActions`, `watchBody`). In the current
+implementation, wrist signing is disabled (D-124): the phone sets `WatchState.signs = false` and
+omits watch actions, so the watch operates as a read-and-toggle companion (see
+[Roadmap](roadmap.md)). When the phone leaves its group or joins a different group, `WatchModel`
+deletes any stored watch admin key.
 
 ## Wear OS
 
-The Wear OS app (`apps/android/wear`, Wear OS 3, Compose for Wear OS) is the Apple Watch
-app's twin, and works only through its phone as well: a Wear OS watch reaches its phone
-through the Wearable Data Layer of Google Play services, the only channel there is, and the
-watch's own network would make it a member, which it is not. It shows the same page in the
-phone's colour: how many devices are online, the house (sync on the phone) and the globe
-(Everywhere) with where it stands, each device with its glyph and live dot, the latest
-events.
+The Wear OS app (`apps/android/wear`, Wear OS 3 / `minSdk = 30`, Compose for Wear OS) is the
+counterpart to the Apple Watch app and communicates only with its paired Android phone over the
+Google Play services Wearable Data Layer:
 
-- The phone (`WatchLink`) keeps the state in a data item, `/cbb/state` (`WatchState` in
-  `apps/android/shared`: devices, away, sync, events, colour, whether errors show their details;
-  never the clipboard), and replaces it whenever it changes; the watch reads it when it
-  opens and follows each change.
-- The house sends the message `/cbb/sync` and the globe `/cbb/away` (1 on, 0 off); Play
-  services start the phone app's listener (`WatchListener`), which turns the phone's sync or
-  its Everywhere on or off as Home's switches do, and the new state comes back as the data
-  item. Without a phone in reach the
-  watch says so and keeps the last state it got.
-- The two apps share the application id and the release key, as the Data Layer requires;
-  `apps/android/shared` holds what they share (the colours of `tokens.json`, the device
-  glyphs, `WatchState`). A phone without Play services has no watch and works as before:
-  the one Google library it carries is for the watch only.
+- **State sync:** `WatchLink` (`apps/android/app/src/full/kotlin/tools/cbb/WatchLink.kt`) writes
+  `WatchState` (`apps/android/shared`: `hasGroup`, `group`, `devices`, `away`, `sync`, `events`,
+  `signs`, `theme`, and error-detail flag; never the clipboard) to data item `/cbb/state`.
+- **Switch commands:** The watch sends `/cbb/sync` and `/cbb/away` (`1` or `0`) to `WatchListener`
+  on the phone, which toggles the corresponding switch and publishes the updated `/cbb/state`.
+- **Shared module and signing:** The phone and watch share application ID `tools.cbb`, the same
+  signing key, and `apps/android/shared` (design tokens, device glyphs, `WatchState`).
+- **Admin key hooks:** `WearListener` and `WatchKey` implement the Data Layer paths (`/cbb/certify`,
+  `/cbb/key`, `/cbb/admitted`, `/cbb/ask`, `/cbb/body`, `/cbb/signed`, `/cbb/done`) with an
+  unlocked-only Keystore P-256 key requiring a secure lock screen. As on Apple Watch, wrist signing
+  is disabled in the current build (`signs = false`, D-124; see [Roadmap](roadmap.md)).
 
-The notifications of the group's events reach the watch as every Android notification does,
-with or without the app.
-
-The root phone makes the watch an admin as the iPhone does, in Settings, "Wear OS watch":
-the phone sends `/cbb/certify`; the watch's listener (`WearListener`) checks for a secure
-lock screen, makes a P-256 key in the Keystore (StrongBox where there is one, else the
-TEE) that works only while the watch is unlocked (`WatchKey`), and answers on `/cbb/key`.
-After the fingerprint, the face or the screen lock, the phone sends the admin CA on
-`/cbb/admitted`, and the watch confirms on the same path. Wear OS has no common way to read
-the on-wrist setting, so the phone asks the user to keep it on.
-
-The emergency actions work as on the Apple Watch: the watch sends its ask on `/cbb/ask` and
-gets the body on `/cbb/body`, then sends what it signed on `/cbb/signed` and gets the
-phone's answer on `/cbb/done`; the key signs only while the watch is unlocked.
+Group notifications mirror from the Android phone through standard Android notification bridging.
 
 ## The Mac app
 
-The Mac app (`apps/macos`, SwiftUI, macOS 14) is a menu bar item and a window over the
-service that the installer or Homebrew put on the Mac; the service and its pasteboard agent
-keep syncing without it. It speaks the service's control socket (`Control`, the protocol of
-`internal/control`: a JSON header line, then the payload), as a member of the
-`_cbb` group, and reads the status and the devices every few seconds.
+The Mac app (`apps/macos`, SwiftUI, macOS 14 and later) provides a menu bar item and management
+window over the background `cbb` service installed by the `.pkg` installer or Homebrew. The service
+and pasteboard agent continue syncing when the app is closed. The app connects to the service's
+control socket (`Control.swift`, JSON header line plus payload, as a member of the `_cbb` group) and
+polls status and devices every 4 seconds.
 
-- **The window**: as the tray app's (below): the group in a line with the two switches in
-  its header, the house (sync on this Mac, `sync` over the control socket, no password: a
-  click toggles it, holding it opens 15 minutes, an hour, 8 hours or until turned on) and the
-  globe ("Everywhere", sync away from home, `cbb global`, which asks first and waits while
-  sync is off); the devices as tiles, a list or orbits around this Mac (the toolbar
-  switches), and a device's card in a pane beside them. There is no Send or Fetch: the
-  clipboard syncs by itself. An update the group passed around shows as a card on top.
-- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group", "Join with
-  an invitation" and "Recovery key".
-- **The device card**: its name, online dot and badges (this Mac, root, admin, hub,
-  frozen), one line of its system and CBB version, the house (an admin turns another
-  computer's sync off there, `cbb sync -on`), mute, and the rest (type, MAC address, role,
-  ID) under More; then the hub's line and what an admin may do.
-- **Alerts**: the phones' card (Home, above) under the group's line, from `cbb status`;
-  on the root its buttons run `cbb remove` or `cbb resolve` as the administrator.
-- **The menu bar item**: as the tray item: how many devices are online, Sync (a check mark,
-  with a submenu of times to turn it off for), Everywhere (turning it on opens the window,
-  which asks first), Open CBB, Settings, the update when there is one, Quit. Like the tray
-  app it lives there only: no Dock icon (`LSUIElement`) and no window at launch; "Open CBB"
-  opens it. Its glyph is a template image from `tools/icon` in three states (no group or a
-  problem, a group, another device online), which macOS draws white or black for the menu
-  bar. The app makes itself a login item on its first run (`SMAppService`); Settings, "Open
-  at sign-in", turns that off.
-- **Settings**, a sheet on the window (the menu bar item's "Settings…" and Command-comma
-  open the window with it): the appearance as icons, the colour and the language in a row
-  (the phones' `Theme.swift` and `Tokens.swift`, shared; the language through
-  `AppleLanguages`, shown once the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
-  keys for remote paste; "Move the group to this Mac", which lists who stays, each device
-  ticked but the old main device, and takes the key from the sheet or a YubiKey's PIN, as
-  `cbb recovery -leave … -yubikey`; and for an admin the group's "Copy lifetime" and "Secret
-  lifetime", `cbb ttl`, and on the main device "Admin keys", `cbb keys`, which warns before
-  keys in files), and about: the version, where seven clicks show
-  error details (on in debug builds, off in release ones, and the `ShowErrorDetails` default
-  either way).
-- What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
-  home, "Make it a hub" for this Mac or, on an admin, for another admin computer (`cbb global
-  hub -on`), "Stop being the hub" (`cbb global hub off`, with `-on` for another device), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
-  VLESS) and its forwarder (`cbb global hub -keep`, the tray app's page of this computer
-  the same), sync on or off on another computer, on an admin: `cbb sync -on`, adding a
-  device: `cbb pair -app FILE`, joining a group: `cbb pair -code`, the update: `cbb update`) goes only through the admin socket, which only root reaches, so the app runs
-  `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
-  privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
-  details on, `CBB_DEBUG=1` makes cbb name the error underneath.
-- **The hub's line**: every device's page has one, so that what a device cannot do shows
-  as such. On a hub it says "This is the group's hub" with "Stop being the hub" (on this Mac,
-  or on an admin for another device), which warns first when the group has no other hub. On a
-  device that may be a hub it is "Make it a hub"; on this Mac with sync away from home off,
-  its question says that a hub needs it and turns it on in the same step (`cbb global hub
-  -away-on`): the consent to sync away from home is given on this Mac. Elsewhere the line is
-  dimmed with the reason: a phone, a watch and a leaf never (D-134), a member without
-  `hub` among its capabilities and a computer without root never, a frozen device once the root unfreezes it, and
-  a computer that is no admin once the root makes it one.
-- **Remote paste**: only an app may press keys on a Mac, once its user allowed it in
-  Accessibility, so the app is the Mac's paste target (`PasteTarget`), not the service or its
-  agent. While it is open it keeps a `watch` connection with `inject` `desktop` and
-  `paste_only` (docs/protocol.md, section 8). A paste goes through the pasteboard, marked
-  `org.nspasteboard.TransientType` so the agent does not sync it, and Cmd+V; after half a
-  second the pasteboard gets its items back, unless the user copied meanwhile. Typing posts
-  Unicode key events, which no layout changes. It refuses without the permission, on the lock
-  screen, in a session not on the screen, and under Secure Event Input.
-- **Muting** (docs/design.md, "Muting a device"): on an admin, a device's card has "Mute"
-  with the house's times (`cbb mute -on`, "Until an admin unmutes it" for the last) and
-  "Unmute"; a muted device says so on its tile, its row and its card, and this Mac's own
-  mute is an alert, with "Unmute" on an admin.
-- **Join a group**: on a Mac in no group, the button asks for the six digits of a pairing
-  window open on a device of the group and runs `cbb pair -code` as the administrator with
-  them on its standard input. "Join with an invitation" takes the text of an invitation from
-  afar, says that sync away from home turns on with it, and runs
-  `cbb pair -invite - -app FILE` as the administrator with the text and `yes` on its standard
-  input; the sheet shows this Mac's key fingerprint from the line cbb writes into the file
-  (JSON: `fingerprint`, then `done`), which whoever invited it compares, and Cancel removes
-  the file, and cbb gives up. "+" on the root or an admin opens the pairing window: it runs
-  `cbb pair -app FILE` as the administrator and shows the window that cbb writes into the
-  file (JSON: `code`, `qr`, `expires`, then `refused` when a device fails and `done` with
-  `name` when one joins), with its QR code for a new phone and its six digits for a new
-  computer. On the root, "Admit it as an admin" opens it again with `-admin`. Closing the
-  sheet removes the file, and cbb closes the window; a device that joins closes the sheet.
-  "Device far away? Send an invitation", on an admin, runs `cbb invite -app FILE -answers FILE` as
-  the administrator: the sheet shows the invitation's QR code that cbb writes into the first
-  file (JSON: `invite`, `expires`, and `joining` while it asks), with its text as the
-  fallback, asks about the device that uses it by its fingerprint and writes the answer into
-  the second; Cancel removes the first file, and cbb ends the invitation.
+- **Menu bar item (`CBBMacApp.swift`, `SettingsView.swift`):** Runs without a Dock icon
+  (`LSUIElement: true`). Shows online device count, **Sync** (checkmark with pause-duration
+  submenu), **Everywhere** (turning it on opens the window for consent), **Open CBB**, **Settings**,
+  any available update, and **Quit**. Uses template SVG images generated by `tools/icon` in three
+  states (no group or problem, in group, another device online). Registers as a login item on first
+  launch via `SMAppService.mainApp`, toggled by **Open at sign-in**. Launches with no window when
+  already in a group, and opens the main window automatically once if not in a group.
+- **Start window:** When not in a group, offers **Create a group** (`cbb new`), **Join a group**
+  (`JoinSheet.swift`, `cbb pair -code`), **Join with an invitation** (`JoinInviteSheet.swift`,
+  `cbb pair -invite - -app FILE` showing this Mac's fingerprint from the status JSON file while
+  joining), and **Recovery key**.
+- **Main window (`MainView.swift`, `Switches.swift`, `OrbitView.swift`):** Group header with
+  **Sync** (direct control socket `sync`, click toggles, hold opens pause durations) and
+  **Everywhere** (`cbb global`), update banner, alerts card (`GroupAlerts.swift`: stops, conflicts
+  with `cbb resolve` / `cbb remove` on main device, local mute banner, newer records), group notices
+  with **Hide** (`dismiss` over the control socket), crash bug-report prompt (`BugSheet.swift`),
+  and devices as tiles, list, or orbit around this Mac. A detail pane opens beside the list; search
+  and filters appear with more than 12 other devices. Every tile includes the corner mute/sync
+  button (`MuteCorner`).
+- **Device card (`DeviceDetail.swift`):** Shows name, online dot, badges (**This Mac**, **main
+  device**, **admin**, **hub**, **frozen**), OS and CBB version, **Sync** switch (`cbb sync -on` on
+  admins for remote computers), **Mute** / **Unmute** (direct control socket `mute`/`unmute` for
+  this Mac; `cbb mute -on` / `cbb unmute -on` for other devices), and **More** (type, MAC address,
+  role, copies, standing, away/hub status, last seen, device ID).
+- **Hub controls:** On a hub device, the card shows **This is the group's hub** and **Stop being the
+  hub** (`cbb global hub off -yes`, with `-on <id>` for another device). When **Advanced settings**
+  is enabled (or on an existing hub), non-hub cards show the hub line: **Make it a hub**
+  (`cbb global hub -firewall no` with `-away-on` if away sync is off on this Mac; or
+  `cbb global hub -on <id>` for another admin computer, or `-forward-only` for a non-admin,
+  non-rootless computer with the `hub` capability). On non-admin Macs, the hub line appears only on
+  this Mac's own card. Tunnel obfuscation (WireGuard, AmneziaWG, VLESS) and forwarder settings
+  (`cbb global hub -keep -firewall no`) appear on this Mac's card when it is a hub and **Advanced
+  settings** is enabled.
+- **Pairing and invitations (`AddDeviceSheet.swift`, `InviteSheet.swift`):** On an admin Mac, **+**
+  runs `cbb pair -app FILE` (or with `-admin` on the main device) and displays the QR code and 6
+  digits read from the JSON file (`code`, `qr`, `address`, `expires`, `refused`, `done`, `name`);
+  closing removes the file and closes the window. **Device far away? Send an invitation** runs
+  `cbb invite -for 1h -app FILE -answers FILE`, displays the QR code and text, prompts with the
+  joiner's fingerprint, and writes the decision to the answers file.
+- **Settings (`SettingsView.swift`):** Sheet (opened from menu bar or `Command-,`) with appearance
+  icons, **11 themes** (shared `Theme.swift` and `Tokens.swift`), language (`AppleLanguages`, applied
+  on reopen), **Open at sign-in**, **Advanced settings** (Why it does not sync, remote paste
+  permission status, **Move the group to this Mac** via `cbb recovery -leave … -yubikey`, and for
+  admins **Copy lifetime**, **Secret lifetime** [`cbb ttl`], and **Admin keys** [`cbb keys`]), and
+  **About** (7 clicks reveal **Show error details**, also controlled by `ShowErrorDetails` default
+  and passed as `CBB_DEBUG=1`).
+- **Privilege confirmation (`Admin.swift`):** Runs `cbb` as the regular user first for group
+  operations so the service prompts via Touch ID or macOS password confirmation; invokes `osascript`
+  (`do shell script … with administrator privileges`) only for operations that require root
+  (`update`, `pair -code`, `pair -invite`) or when `cbb` exits with code `77` (`needsAdminExit`).
+  Exit code `75` is treated as user cancellation.
+- **Remote paste (`PasteTarget.swift`):** Because macOS restricts synthetic input to GUI apps with
+  Accessibility permission, the Mac app serves as the remote-paste target while open, keeping a
+  `watch` connection with `inject: "desktop"`, `paste_only: true`, `images: true`, `files: true`,
+  and `html: true` ([protocol.md](protocol.md), section 8). Text pastes write through the pasteboard
+  tagged `org.nspasteboard.TransientType` (and `org.nspasteboard.ConcealedType` for secrets), press
+  `Cmd+V`, and restore prior non-Universal-Clipboard items after 0.5 seconds unless `changeCount`
+  advanced. Typing posts layout-independent Unicode key events. Media pastes (`paste_media`) write
+  files into `Caches/Pasted/<UUID>` (cleaned after 600 s) with `com.apple.quarantine` before pasting
+  without restoring the pasteboard. Refuses input without Accessibility permission, on a locked
+  screen, in a background session, or under Secure Event Input.
 
-Each release carries it in `cbb-X.Y.Z.pkg` with the service, signed with the Developer ID and
-notarized (docs/maintainers/maintaining.md, "Signing for macOS"). CI's `test and build (macOS), homebrew, Mac app` job builds it and runs
-its tests, signed ad hoc, and installs and removes the package. It runs on a real Mac when built with a
-developer's own team (`apps/ios/device.sh`): the devices, the menu bar and remote paste to it
-from the iPhone, at home and away from home.
+Each release packages the Mac app inside the Developer ID-signed and notarized `cbb-X.Y.Z.pkg`
+([maintaining.md](maintainers/maintaining.md#signing-for-macos)). CI builds and tests it ad hoc in
+the `test and build (macOS), homebrew, Mac app` job.
 
 ## The tray app
 
-The tray app (`apps/desktop`, `cbb-desktop`) is the Mac app's twin for Linux and Windows: one
-program in Go with [Wails 3](https://v3.wails.io) (pinned to its beta until a release; GTK 4
-and WebKitGTK on Linux, WebView2 on Windows), a tray item and a window over the service. Like
-the Mac app it speaks the control socket, with the service's own `internal/control`, and the
-service and its clipboard agent keep syncing without it.
+The tray app (`apps/desktop`, binary `cbb-desktop`) is the Linux and Windows counterpart to the Mac
+app: a standalone Go module built with [Wails 3](https://v3.wails.io) (pinned to a Wails 3 nightly
+in `apps/desktop/go.mod`; GTK 4 and WebKitGTK 6.0 on Linux, WebView2 on Windows). It talks to the
+local service over the control socket via `internal/control`, while the background service and
+clipboard agent keep syncing independently.
 
-- **The window** (`frontend/`, plain HTML, CSS and JavaScript, no build step): the group in a
-  line with the two switches in its header, the house (sync on this computer, `cbb sync`: a
-  tap toggles it, holding it or its context menu picks 15 minutes, an hour, 8 hours or until
-  turned on) and the globe ("Everywhere", sync away from home, `cbb global`, which asks
-  first and waits while sync is off); the devices as tiles, a list or orbits around this
-  computer, and a device's card beside them. There is no Send or Fetch: the clipboard syncs
-  by itself. What an action says shows at the bottom for a while.
-- **Alerts**: the Mac app's card above the devices, with the same buttons on the root, and an
-  update the group passed around as a card on top.
-- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group", "Join with
-  an invitation" and "Recovery key". It opens by itself when the app starts in no group, as after the install.
-- **The device card**: its name, online dot and badges (root, admin, hub), one line of its
-  system and CBB version, the house (an admin turns another computer's sync off there), mute,
-  and the rest (type, MAC address, role, ID) under More; then the hub's line and the menu.
-- **The tiles** move by a drag at any time; holding one without moving, or its context menu,
-  opens its menu (Move to a collection, Move earlier or later, Back to the group's order).
-- **The tray item**: how many devices are online, Sync (a check mark, with a submenu of times
-  to turn it off for), Everywhere (turning it on opens the window, which asks first), Open
-  CBB, Settings, the update when there is one, Quit. Closing the
-  window keeps the tray item; starting the app again opens the window. Its glyph is the Mac's
-  in the same three states, single-colour: on Windows a black and a white ICO, which the
-  system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
-  portal says the user prefers a light look (`color-scheme`), read once at start.
-- **Settings**: the appearance and the language as icons and a list, the ten themes
-  (`frontend/tokens.js`, which `go run ./tools/tokens` writes with the Swift and Kotlin
-  tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
-  user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
-  Manager writes it), and "Advanced settings", which shows the hub and its tunnel (this
-  computer's card), the claim with the recovery key (`cbb recovery`: who stays, each device
-  ticked but the old main device, an unticked one leaving with `-leave`, and the key from the
-  sheet or a YubiKey's PIN with `-yubikey`) and, for an admin, the group's settings: "Copy
-  lifetime" and "Secret lifetime" (`cbb ttl`) and, on the main device, "Admin keys" (`cbb
-  keys`), which warns before keys in files. Seven taps on the
-  version show "Show error details" (as cbb: on in a build without a release version,
-  `CBB_DEBUG=1` or `0`, or the switch). They are kept in the user's configuration folder
-  (`cbb/desktop.json`).
-- What changes the group runs `cbb` as the administrator: through `pkexec` on Linux (the
-  desktop's password dialog; each argument passed as it is, no shell), and through the UAC
-  prompt on Windows (an elevated PowerShell started with `ShellExecuteEx`'s `runas`, each
-  argument a single-quoted literal, its output read back from a file). A dismissed prompt
-  changes nothing and says nothing.
-- **The hub's line**: on every device's page, as in the Mac app (`hubLine` in `app.js`,
-  `MakeHub` and `StopHub` in `desk.go`).
-- **Muting**: as in the Mac app (`Mute` and `Unmute` in `desk.go`).
-- **Add a device** (+): on the root or an admin, opens a pairing window with
-  `cbb pair -app FILE` as the administrator (`admit.go`): the dialog shows the window's six
-  digits, which a new computer types, and its QR code, which a new phone scans (D-119), from
-  the line cbb writes into the file the app made (JSON: `code`, `qr`, `address`, `expires`,
-  then `refused` for a device that failed, `done` and `name` for the one that joined). Closing
-  the dialog removes the file, which closes the window; on the root, "Admit it as an admin"
-  opens it again with `-admin`. On Linux the file is written over without being created, so
-  root never makes a file in `/tmp`. "Device far away? Send an invitation" runs
-  `cbb invite -app` as the administrator, as the Mac app does (`invite.go`).
-- **Join a group**: asks for the six digits of a pairing window open on a device of the group
-  and runs `cbb pair -code` as the administrator with them on its standard input (`join.go`).
-  "Join with an invitation" works as the Mac app's: `cbb pair -invite - -app FILE`, the
-  fingerprint in the dialog until the join ends, and Cancel removes the file.
-- Languages: English and those of `frontend/l10n/` (keyed by the English text, made from
-  `apps/l10n` by `tools/strings`; the Go side reads them for the tray), the system's language unless Settings picks one.
+- **Window (`frontend/`):** Plain HTML, CSS, and JavaScript with no build step. Displays the group
+  header with **Sync** (direct control socket `OpSync`; click toggles, hold or right-click picks
+  pause durations) and **Everywhere** (`cbb global`), update banner, alerts card, group notices with
+  **Dismiss**, crash bug-report dialog, and devices as tiles, list, or orbit beside a device detail
+  card. Opens automatically on startup when not in a group (`Start` screen: **Create a group**,
+  **Join a group**, **Join with an invitation**, **Recovery key**); closing the window hides it to
+  the tray, and launching `cbb-desktop` again reopens the window. Search and filters appear with
+  more than 12 other devices.
+- **Device card and tiles (`frontend/app.js`):** Shows name, online dot, badges (**This computer**,
+  **main device**, **admin**, **hub**, **frozen**), OS and CBB version, **Sync** switch, **Mute** /
+  **Unmute** (direct control socket for this computer; `cbb mute -on` / `cbb unmute -on` for other
+  devices), **More**, and hub controls (non-hub hub line and tunnel/forwarder controls appear when
+  **Advanced settings** is enabled; supports forward-only hubs via `MakeHub` /
+  `cbb global hub -on <id> -forward-only`). Every tile has the corner mute/sync button
+  (`muteCorner`) and is draggable at all times (`draggable="true"`); holding 600 ms without moving
+  or right-clicking opens `#tile-menu`.
+- **Tray item (`desk.go`, `trayicon*.go`):** Shows online device count, **Sync** (with pause
+  submenu), **Everywhere**, **Open CBB**, **Settings**, available update, and **Quit**. Uses the
+  three-state single-color glyph generated by `tools/icon`: black and white `.ico` files on Windows
+  (switched automatically with taskbar theme) and white or black 48 px `.png` files on Linux
+  (selected once at startup from the desktop portal's `org.freedesktop.appearance` `color-scheme`).
+- **Settings (`frontend/app.js`, `desk.go`):** Stored in `<UserConfigDir>/cbb/desktop.json`.
+  Includes appearance icons, language selector (English plus `frontend/l10n/`), **11 themes**
+  (`frontend/tokens.js`), **Open at sign-in** (`cbb-tray.desktop` with `Hidden=true` in the user's
+  autostart directory on Linux; `StartupApproved\Run` `"cbb tray"` on Windows), **Advanced
+  settings** (Why it does not sync, hub and tunnel settings on this computer's card, **Move the
+  group to this computer** via `cbb recovery -leave … -yubikey`, and for admins **Copy lifetime**,
+  **Secret lifetime** [`cbb ttl`], and **Admin keys** [`cbb keys`]), and **About** (7 clicks reveal
+  **Show error details**, matching `CBB_DEBUG=1`/`0` or non-release builds).
+- **Privilege confirmation (`admin.go`, `admin_linux.go`, `admin_windows.go`):** Runs `cbb` as the
+  regular user first (`userConfirms = true`) so the service confirms through polkit (Linux) or
+  Windows Hello (Windows). Falls back to administrator elevation—`pkexec` without a shell on Linux,
+  or elevated PowerShell via `ShellExecuteExW` `runas` with single-quoted literal arguments and a
+  temp output file on Windows—only for commands that require root (`update`, `pair -app`) or when
+  `cbb` exits `77` (`needsAdminExit`). A dismissed prompt changes nothing silently.
+- **Pairing and invitations (`admit.go`, `invite.go`, `join.go`):** **Add a device** (`+`) runs
+  `cbb pair -app FILE` (or with `-admin` on main device) and reads the status JSON (`code`, `qr`,
+  `address`, `expires`, `refused`, `done`, `name`); on Linux `cbb` overwrites the pre-created file
+  with `O_NOFOLLOW` without creating files in `/tmp`. **Send an invitation** runs
+  `cbb invite -for 1h -app FILE -answers FILE`. **Join a group** runs `cbb pair -code`, and
+  **Join with an invitation** runs `cbb pair -invite - -app FILE`.
 
-CI's `tray app` jobs vet, test and build it on Linux and Windows. The release archives carry
-it: Windows' (`cbb-desktop.exe`, built without cgo beside `cbb.exe` and signed with it), whose
-`install.ps1` starts it at every sign-in (the Run value `cbb tray`) and puts
-"CBB" in the Start menu; and Linux's for amd64 and arm64 (`cbb-desktop`, built
-with cgo on a runner of each architecture), whose `install.sh` adds it with its autostart
-entry and applications menu entry when `ldd` finds GTK 4 and WebKitGTK 6.0, and otherwise
-names the packages and installs the rest. It starts with its window hidden. Run in the
-Windows 11 virtual machine; not yet on a real desktop beyond a virtual X display on Linux.
+CI vets, tests, and builds `cbb-desktop` in the `tray app` jobs on Linux and Windows. Windows
+releases bundle `cbb-desktop.exe` (built without cgo); `install.ps1` adds the `cbb tray` Run entry
+and a Start menu shortcut. Linux amd64 and arm64 releases bundle `cbb-desktop`; `install.sh` checks
+GTK 4 and WebKitGTK 6.0 via `ldd`, installing desktop and autostart entries when present or printing
+the required packages otherwise.
 
 ## Android: the clipboard without taps
 
-Since Android 10 an app reads the clipboard only while it has the input focus, or when it is
-the default keyboard; writing works at any time. So the computers' copies reach the phone by
-themselves, and the phone's copies need either the app's focus for a moment or a tap.
+Android 10 and later restrict clipboard reads to the app holding input focus (or the default IME),
+while clipboard writes are permitted at any time.
 
-**Receiving, always automatic.** A foreground service (type `connectedDevice`, with the
-ongoing notification Android requires) keeps one connection to each computer of the group
-and puts what they copy on the phone's clipboard. It holds a multicast lock only while it
-browses mDNS. Nothing to set up.
+**Receiving.** A foreground service (`SyncService.kt`, type `connectedDevice`, with an ongoing
+notification) maintains connections to group peers and acquires a multicast lock only during mDNS
+browsing. Incoming copies update `lastReceived` in the background and are written to the Android
+clipboard when the app is in the foreground (D-128).
 
-**Sending, automatic: "Clipboard sync".** An accessibility service that the
-user turns on once, from a screen in the app that says what it is for and opens the right
-page of Settings:
+**Automatic sending: "Clipboard sync" (`CopyWatcher.kt`).** An optional accessibility service enabled
+by the user from Settings:
 
-1. The service watches for a copy: a click on a "Copy" action (the platform's and the
-   common apps' labels, in every language the system has), and from Android 13 the
-   system's clipboard overlay that appears after each copy.
-2. It then shows a 1-pixel accessibility overlay window that takes the focus for a moment,
-   reads the clipboard, sends the text to the group and goes away. The service reads no
-   screen content beyond what tells it that a copy happened, and the app says so. A copy
-   marked sensitive (`android.content.extra.IS_SENSITIVE`, as password managers and this
-   app's received secrets mark it) stays on the phone, as the computers leave the password
-   managers' marks; the button still sends it when the user taps it.
-3. Android 12 and later show "CBB pasted from your clipboard" each time; that
-   is the system's notice and cannot be turned off.
+1. Watches for `TYPE_VIEW_CLICKED` events matching platform and common app "Copy" labels across
+   system languages, and on Android 13 and later watches `TYPE_WINDOWS_CHANGED` for the system
+   clipboard overlay window.
+2. Shows a 1-pixel `TYPE_ACCESSIBILITY_OVERLAY` window briefly to gain input focus (falling back to
+   a non-exported transparent `SendActivity` after 700 ms), reads the clipboard, and sends it to the
+   group. Copies marked `android.content.extra.IS_SENSITIVE` (password managers and received
+   secrets) are skipped automatically, while manual taps still send them.
+3. On Android 12 and later, the system displays "CBB pasted from your clipboard" on each read.
 
-What the service asks Android for (`accessibility_copy.xml`), and why each part is needed:
+Permissions declared in `apps/android/app/src/main/res/xml/accessibility_copy.xml`:
 
-- `typeViewClicked`: the click events, whose text or description tells it that "Copy" was
-  pressed. It reads only the clicked element's label.
-- `typeWindowsChanged` with `flagRetrieveInteractiveWindows`: the list of windows, whose
-  titles show the system's clipboard overlay (step 1). It reads only the titles.
-- `canRetrieveWindowContent`: needed by `findFocus`, with which remote paste finds the text
-  field that has the focus and pastes into it. It touches no other field.
-- No list of packages: a copy can happen in any app, so the service listens in every app.
+- `typeViewClicked`: Detects clicks on "Copy" actions by reading only the clicked element's label.
+- `typeWindowsChanged` with `flagRetrieveInteractiveWindows`: Checks window titles for the system
+  clipboard overlay.
+- `flagRequestAccessibilityButton`: Registers the system accessibility button or gesture to trigger
+  a clipboard swap.
+- `canRetrieveWindowContent="true"`: Declared in the service configuration; `CopyWatcher.kt` does
+  not inspect screen fields or perform remote paste (phones do not receive remote paste, D-132).
+- No package filter: Copying occurs in any app.
 
-These are wider than what the code reads, since Android grants window content as a whole.
-Whether a narrower set still notices copies and pastes is to be checked on a real phone
-before it changes (0.7).
+On Android 13 and later, APKs installed outside an app store require **App info > ⋮ > Allow
+restricted settings** before Android lets the user enable an accessibility service. The setup screen
+(`AutoSend` in `Screens.kt`) shows this guidance and an **App info** button on Android 13 and later.
 
-On Android 13 and later, an APK installed from a browser or file manager cannot turn on an
-accessibility service until "Allow restricted settings" is chosen in the app's App info
-(⋮ menu). The setup screen shows that step with a button to App info; an install from
-F-Droid or Google Play skips it. Google Play allows the service only with its accessibility
-declaration; the GitHub and F-Droid builds have it from the start.
+**One-tap sending without the accessibility service:**
 
-A phone takes no remote paste in 0.6: the member answers a `paste` command that this does
-not work on a phone yet (docs/protocol.md, section 15), and the phones get their switches for it
-with 0.7.
+- Home-screen widget **Send clipboard** (`SendWidget.kt`).
+- **Send** action in the ongoing service notification.
+- Text selection (`ACTION_PROCESS_TEXT`) and **Share > Send to the computers**
+  (`OutsideSendActivity`, exported). Prompts **Allow** or **Always for this app**, identifying the
+  calling app only from Android's system referrer (ignoring intent extras). Approved apps appear in
+  Settings with an option to **Ask every app again**.
+- **cbb send** launcher alias (`SendLauncher`): Assignable to Pixel Quick Tap or Samsung Good Lock
+  RegiStar Back-Tap. Launches from the home screen or system UI sync immediately; launches from any
+  other app prompt with **Always for this app** so another app cannot silently pull group copies
+  onto the clipboard.
+- System accessibility button or gesture when **Clipboard sync** is enabled.
+- Opening the app (opening-app rule).
 
-**Sending with one tap, without the service** (and always as well):
+Internal triggers (widget, notification, `CopyWatcher`) open the non-exported `SendActivity`;
+external triggers open the exported `OutsideSendActivity`. Each runs briefly with focus, swaps or
+sends the clipboard, displays a one-line toast, and closes.
 
-- the **home-screen widget** "Send clipboard";
-- the **"Send" button** in the service's notification;
-- **text selection → Connect Beyond Borders** (`ACTION_PROCESS_TEXT`) and **Share → Connect Beyond Borders**,
-  which first ask "Allow" or "Always for this app", naming the app, since any app can hand
-  over a text. "Always" holds only for the app that Android records as the one that opened
-  Connect Beyond Borders (never one an intent names itself), and Settings lists those apps and asks
-  every app again;
-- **double-tap the back**: on a Pixel, Settings → System → Gestures → Quick Tap → Open app →
-  "cbb send" (a second launcher entry that sends and closes); on Samsung, Good Lock's
-  RegiStar → Back-Tap action → Open app → "cbb send". Opened by the home screen or the
-  system it syncs at once; opened by another app (a back-tap app, or any app at all) it
-  asks first, with "Always for this app", because a sync may put the computers' latest copy
-  on the clipboard, where that app could read it;
-- **the accessibility button or gesture**, on every Android whoever made it, once "Send my
-  copies by themselves" is on: the floating accessibility button, the swipe with two (or
-  three) fingers from the bottom, or both volume keys held, whichever the person chose in the
-  system's accessibility settings for Connect Beyond Borders. The service registers for the
-  button (`flagRequestAccessibilityButton`), and a press opens the same transparent activity
-  as the widget, which swaps the clipboard with the group's copy (D-128);
-- **opening the app**, by the Home button's rule.
-
-Each of these opens a transparent activity for a moment: it has the focus, reads the
-clipboard, sends, says what it did in one line (a toast) and closes. The widget and the
-notification open one that other apps cannot (not exported); Share, the selection menu and
-"cbb send" open the exported one, which asks as above.
-
-A secret written to the clipboard goes after its minute even while the app is in the
-background, where it may not read the clipboard: unless the app learned of a change since
-(another text it wrote, or a copy the accessibility service saw), it clears the clipboard
-without reading it.
-
-**To check on a device before building on it:** that the accessibility overlay gets the
-focus the clipboard needs on Android 10 to 17, on a Pixel and a Samsung; which copy events
-each OEM's apps give; that the restricted-settings path is as described on Android 15 to 17.
-If the overlay does not get the focus, the service starts the transparent activity instead.
+Received secrets clear from the clipboard after their configured secret lifetime (`ttlMS`, 60
+seconds by default) even while the app is in the background: `Clipboard.kt` tracks a change counter
+incremented on app writes and `CopyWatcher` copy events, clearing the clipboard without reading it
+when no subsequent change occurred.
 
 ## Android TV
 
-The Android app is also the TV's: the same APK, which a TV (Android TV, Google TV, Fire OS,
-the Android set-top boxes and projectors) finds in its launcher by `LEANBACK_LAUNCHER` and
-its banner. It needs no touch screen and no camera, and every control takes the D-pad's
-focus, with a ring in the accent colour around the focused one. The app tells a TV by
-`UiModeManager` and then differs from a phone in a few ways:
+The same Android APK supports Android TV, Google TV, and Fire OS (and sideloaded Meta Quest Horizon
+OS) by declaring `LEANBACK_LAUNCHER`, a TV banner (`@drawable/banner`), and optional touchscreen and
+camera hardware features. `Tv.isTv` checks `UiModeManager.currentModeType == UI_MODE_TYPE_TELEVISION`.
+Every interactive control supports D-pad navigation with an accent focus ring (`Modifier.focusRing`).
 
-- **Joining.** The start screen offers only to join a phone's group: an admin phone opens a
-  pairing window in Add a device, and the TV, which has no camera, takes its six digits from
-  the remote (docs/protocol.md, section 6). It joins
-  as a plain member, without an admin key, as a TV has no fingerprint or face to guard one;
-  its hello says `tv`.
-- **Receive only.** It starts in the receive sync mode and never sends copies of its own:
-  the settings leave out sending copies by themselves, the accessibility service, the
-  question before Share, and the watch.
+TV behavior differs from phone behavior:
 
-What the TV's system allows:
+- **Joining only:** Start offers only **Join a phone's group**, opening the 6-digit pairing window
+  entry screen with no camera. The TV joins as an ordinary member with no admin key. Locally
+  `LiveGroup` records `form = "tv"` for UI display; on the wire `CoreMember` and `CorePairing`
+  report `os = "android"`.
+- **Receive only:** Starts in `receive` sync mode and hides auto-send, accessibility service setup,
+  Share confirmation, Bluetooth keyboard, and push registration.
 
-- **Restricted settings (Android 13 and later).** A TV that installed the APK from outside a
-  store turns the accessibility service on only after App info's "Allow restricted
-  settings"; on some TVs that menu sits in the system's app settings.
-- **Android TV 14** may stop an accessibility service, for example after an update or to free
-  memory, while the setting still says on. The app checks the list of running services: its
-  settings and the refused paste then say so, and turning the service off and on again in
-  the TV's settings brings it back.
-- **Advanced Protection Mode (Android 17)** keeps accessibility services of apps that are
-  not accessibility tools off; with it on, the TV receives copies but takes no pastes.
-- **Fire TV.** Fire OS is Android and takes the signed APK of each release; Vega OS, on the
-  newer Fire TV sticks, runs no Android apps, so the app does not run there.
-- **Meta Quest.** Horizon OS takes the APK as a phone app and receives into the clipboard;
-  whether its accessibility service may paste into other apps is not yet checked on a
-  headset, so count on the clipboard only.
+Platform constraints on TVs:
 
-**To check on a device before building on it:** the D-pad's order on each screen, the
-banner in the Google TV and Fire TV launchers, the accessibility service on Android TV 12 to
-14 and the restricted-settings path on a TV.
+- Android 13 and later require **Allow restricted settings** for sideloaded APKs when enabling
+  accessibility services.
+- Android 17 Advanced Protection Mode blocks accessibility services for non-accessibility apps.
+- Fire OS runs the signed Android APK; Vega OS on newer Fire TV sticks does not run Android apps.
+- Meta Quest (Horizon OS) runs the APK as a phone app and receives copies into its clipboard.
 
 ## Android: the Bluetooth keyboard
 
-The Android app can be a Bluetooth keyboard (roadmap item 25, way 3) through the HID Device
-profile, `BluetoothHidDevice`. It types into a TV, a tablet, a console or a computer the
-phone is paired with, and nothing is installed there. Settings, Bluetooth keyboard:
+The Android app acts as a Bluetooth HID keyboard through `BluetoothHidDevice`
+(`BluetoothKeyboard.kt`, `KeyboardSettings.kt`, under **Settings > Advanced settings > Lab >
+Bluetooth keyboard**; hidden on TVs). Nothing needs to be installed on the target device (Android
+TV, Google TV, Fire TV, iPhone, iPad, Apple TV, macOS, Windows, Linux, Steam Deck, PlayStation 5;
+Xbox and Nintendo Switch require USB HID such as the Nano ESP32).
 
-- **Act as a Bluetooth keyboard** registers the app as the phone's keyboard. Android allows
-  one such app at a time, and the Bluetooth stack forgets the registration when it restarts,
-  so the app registers again once and otherwise says another app may hold it.
-- **Type into** lists the paired devices. "Make this phone visible" lets a new device find
-  the phone for two minutes; the device then pairs from its own Bluetooth settings. A
-  device that connects by itself becomes the chosen one.
-- **The device's keyboard layout**: English (US) or Russian. A keyboard sends keys, not
-  characters, and the device's layout turns them into characters. The key tables are the
-  Nano ESP32's (`cbb_core::keyboard`), and the kit's `Keyboard` is checked against
-  `testdata/interop/keyboard.json`. A text with a character the layout has no key for is
-  not typed at all, and the app names the characters.
-- **Speed**: 10, 20 or 40 characters a second; slow devices drop keys typed too fast. A text
-  is at most 4096 characters.
-- **Type the clipboard** types the phone's clipboard on the connected device.
+- **Act as a Bluetooth keyboard:** Registers the app with Android's HID device profile (only one app
+  can register at a time). Retries once after 2 seconds if the Bluetooth stack restarts; reports
+  unsupported hardware if the profile proxy does not connect within 5 seconds (some vendor builds
+  omit `BluetoothHidDevice`).
+- **Type into:** Lists paired devices and adopts a host that connects on its own. **Make this phone
+  visible** makes the device discoverable for 120 seconds.
+- **Keyboard layout:** English (US) or Russian (`apps/android/kit/.../Keyboard.kt`, checked against
+  `testdata/interop/keyboard.json` alongside `cbb_core::keyboard`). If any character has no mapping
+  in the selected layout, nothing is typed and the app lists the unsupported characters.
+- **Speed and limit:** 10, 20 (default), or 40 characters per second; maximum 4096 characters.
+- **Type the clipboard:** Types the phone's clipboard onto the connected host.
+- **Permissions:** Requests `BLUETOOTH_CONNECT` and `BLUETOOTH_ADVERTISE` on Android 12 and later.
 
-The phone needs Android's "Nearby devices" permission (`BLUETOOTH_CONNECT` and
-`BLUETOOTH_ADVERTISE`, Android 12 and later). Some makers leave the profile out of their
-builds: the Fairphone 6 and some Huawei, Honor, older Xiaomi phones and TV boxes. On these,
-the profile never connects, and the app says the phone cannot act as a keyboard. With error
-details on, it shows the call that failed. TVs leave this section out.
+**Linux Bluetooth LE keyboard:** `cbb keyboard` ([cli.md](reference/cli.md)) delegates through
+`cbb-helper` (`internal/peripheral/keyboard_linux.go` and `internal/blekeyboard`) to register a HID
+over GATT (HOGP) service with BlueZ, preserving classic Bluetooth input devices. `cbb keyboard pair`
+makes the adapter discoverable for 2 minutes with a temporary default `NoInputNoOutput` pairing
+agent. Bonded hosts (up to 16) are tracked in `keyboard-hosts` so stale authentication bonds are
+removed automatically. Uses the same US and Russian layout tables (`internal/keyboard`, verified
+against `testdata/interop/keyboard.json`) and tests against a fake BlueZ on a private D-Bus
+(`internal/blekeyboard/bluetest`).
 
-Devices that take a Bluetooth keyboard include Android and Google TV, Fire TV, iPads and
-iPhones, Apple TV, Macs, Windows and Linux computers, the Steam Deck and the PlayStation 5.
-The Xbox and the Nintendo Switch take only USB keyboards, so use the Nano ESP32 for them.
-
-**To check on a device before building on it:** pairing and typing on a TV, an iPad, a Mac
-and a PC; the registration after the Bluetooth stack restarts; and a phone without the
-profile.
-
-A Linux computer does the same with `cbb keyboard` (docs/reference/cli.md). It is a Bluetooth
-LE keyboard: the service registers the HID over GATT service with BlueZ
-(`internal/blekeyboard`). Classic Bluetooth HID would need bluetoothd's input plugin off,
-which would cost the computer its own Bluetooth keyboards and mice. `cbb keyboard pair`
-makes it discoverable for two minutes, with its own pairing agent as the default
-meanwhile. The layouts are the same tables (`internal/keyboard`, checked against the same
-vectors). The tests run against a fake BlueZ on a private bus; a real adapter and host are
-not yet tried.
-
-The Aurora app is a Bluetooth LE keyboard as the Linux computer is (`src/blekeyboard.cpp`): it
-registers the same HID over GATT service with the phone's BlueZ, through the sandbox's
-`Bluetooth` permission, and takes the reports and the report map from the core's `keyboard`
-call (`cbb_core::keyboard`). Settings, Bluetooth keyboard has the switch, **Make this phone
-visible** (two minutes, as "CBB keyboard"), the device's layout, the speed (10, 20 or 40) and
-**Type the clipboard**; the main page's pull-down menu types the clipboard too while a device
-is connected. Aurora's own pairing dialog asks about a new device, so the app has no agent.
-The package manager takes the `Bluetooth` permission for a regular
-app; not yet tried on the phone: whether the sandbox lets BlueZ call the app's objects.
+**Aurora OS Bluetooth LE keyboard:** `apps/silica/src/blekeyboard.cpp` registers the same HID over
+GATT service with BlueZ using the sandbox `Bluetooth` permission, obtaining HID reports and the
+report map from the core's `keyboard` operation. **Settings > Advanced settings > Lab > Bluetooth
+keyboard** (`KeyboardPage.qml`) provides the enable switch, 2-minute visibility as `"CBB keyboard"`,
+layout, speed (10, 20, or 40 chars/s), and **Type the clipboard** (also available from the main
+page's pull-down menu while connected). Aurora's system pairing dialog handles pairing.
 
 ## A computer as a TV's remote
 
-A computer can also type on a TV without Bluetooth, as the TV's own remote over the home
-network (roadmap item 25, way 2; `cbb remote` in docs/reference/cli.md;
-`internal/tvremote`). Nothing is installed on the TV, and the TV is a target of that
-computer, never a member: it holds no key of the group.
+A computer can type onto a TV over the home network without installing an app on the TV
+(`cbb remote` in [cli.md](reference/cli.md), implemented in `internal/tvremote`). The TV is a local
+target of that computer, not a group member, and holds no group keys. Paired TVs (up to 16) are
+stored in `tvs.json`.
 
-- **Android TV and Google TV** speak the Android TV Remote v2 protocol of the Google TV app:
-  pairing on TCP 6467 shows a six-digit code on the TV, and the remote on TCP 6466 puts a
-  text into the open field through the TV's input method, with Enter as a key. Both run
-  inside TLS with the computer's own RSA certificate for the TV, kept in `tvs.json` in the
-  service's state; the TV's certificate is pinned at pairing, so a reset TV or another
-  device at its address is refused until it pairs again. The protocol is not documented;
-  `internal/tvremote/androidtv` follows its wire format as androidtvremote2 and AOSP's
-  pairing code use it.
-- **Apple TV** speaks the Companion protocol of Apple's own remote, on TCP 49153 (the port
-  the TV announces in `_companion-link._tcp`; an address may name another). Pairing is
-  HomeKit's pair-setup: SRP-6a with the four-digit PIN the TV shows, then each side signs
-  its Ed25519 key, kept in `tvs.json` with the TV's. Each connection runs pair-verify
-  (X25519, both keys checked) and seals the frames with ChaCha20-Poly1305; the remote then
-  opens the TV's text input session and sets the field's text with one `_tiC` event, an
-  RTI archive in a binary property list, with no key presses. The TV pairs only while
-  Settings, AirPlay and HomeKit, Allow Access is "Everyone on the Same Network" (or
-  "Everyone"). The protocol is not documented; `internal/tvremote/appletv` follows what
-  pyatv found, and a spike checked it with pyatv on a real Apple TV.
-- **Roku** takes keys through its External Control Protocol, one HTTP request a character
-  on port 8060. It has no pairing and no encryption, so a Roku is added only with the
-  user's consent, and since Roku OS 14.1 it needs "Control by mobile apps" on.
-- **Only at home.** An address outside the home network is refused when the TV is added,
-  and every connection to it is checked again (`netguard.ControlHome`), whatever a name
-  resolves to later.
-- **Errors** name the TV and the protocol and say what to do: open a text field first, pair
-  again after a reset, or turn the Roku's setting on; the underlying error is the detail, as
-  everywhere.
-
-The tests run against a fake Android TV (`androidtv/atvtest`), a fake Apple TV
-(`appletv/atvtest`) and a fake Roku; the Go remotes are not yet tried on real TVs. Samsung
-and LG follow (roadmap item 25).
+- **Android TV and Google TV (`internal/tvremote/androidtv`):** Speaks Android TV Remote v2 over TLS
+  using a self-signed 2048-bit RSA client certificate and pins the TV's SHA-256 certificate at
+  pairing. Pairing on TCP 6467 displays a 6-character hexadecimal code (`0–9`, `A–F`) on the TV;
+  control on TCP 6466 injects text through the TV's input method with Enter as key 66.
+- **Apple TV (`internal/tvremote/appletv`):** Speaks the Companion protocol on TCP 49153 (discovered
+  via `_companion-link._tcp`, overridable by explicit port). Pairing uses HomeKit SRP-6a pair-setup
+  with the 4-digit PIN shown on the TV and exchanges Ed25519 keys saved in `tvs.json`; each session
+  runs X25519 pair-verify and ChaCha20-Poly1305 framing, then replaces the focused text field with
+  one `_tiC` event carrying an RTI archive in a binary property list. Requires Apple TV **Settings >
+  AirPlay and HomeKit > Allow Access** set to **Everyone on the Same Network** or **Everyone**.
+- **Roku (`internal/tvremote/roku`):** Sends HTTP External Control Protocol (`POST /keypress/...`)
+  requests on TCP 8060 with no pairing or encryption. Adding a Roku requires explicit consent
+  (`-consent`), and Roku OS 14.1 and later require **Control by mobile apps** to be enabled.
+- **Home network restriction:** `CheckHost` rejects non-home addresses at add time, and every
+  connection enforces `netguard.ControlHome` regardless of DNS changes.
+- **Errors and tests:** Errors name the TV, protocol, and required user action, with underlying
+  errors in details. Unit tests run against fake servers (`androidtv/atvtest`, `appletv/atvtest`,
+  and an `httptest` Roku stub).
 
 ## The admin PIN on Aurora
 
-Aurora OS 5.1.5 gives a regular app no way to have the user confirm an action: its
-authentication service (authd) is outside the app's sandbox, the phone's unlock code is not
-offered, and the fingerprint has no API (a probe on the R570E, and Open Mobile Platform's
-answer). So the Aurora app asks for a PIN of its own wherever the iPhone asks
-for Face ID (D-94, docs/protocol.md section 3):
+Aurora OS 5.1.5 provides regular sandboxed apps no biometric or OS authentication prompt (authd sits
+outside the app sandbox, and neither unlock code nor fingerprint exposes a public API). The Aurora
+app therefore uses an app-specific PIN enforced by OP-TEE wherever iPhone uses Face ID (D-94):
 
-- **The keys.** The member key stays in the token QCA initializes for the app (label "CBB",
-  PIN `0000`), so sync, copies and the keyboard need no PIN. The app makes that token only on its first
-  run; once it saw the token, or while the phone is in a group, a TEE that does not answer is an
-  error the app retries and shows, never a reason to make the token again, which would wipe the
-  member key. The root or admin key sits in a
-  second token of the app, the TEE's slot "APP", which the app initializes itself
-  (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
-  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Whether it
-  did is the token's to say, not the app's settings, which can be cleared while the token
-  stays: an SO PIN that no longer matches the user PIN counts as random. Another app
-  sees neither token.
-- **When it asks.** Before the admin key is made or signs: making a group, whose root key it
-  is; the first time it sets the PIN (typed twice): at least six digits, and none easy to guess (`src/pinrule.h`: no repeats, runs or
-  short patterns such as 111111, 123456, 121212 or 112233, no five equal digits, two simple
-  pieces (111222, 123400), palindromes, counting pairs (131415), dates (DDMMYY, MMDDYY,
-  YYMMDD and their eight-digit forms) nor common keypad PINs: about one six-digit PIN in ten;
-  `tests/pinrule_test.cpp` checks it). A PIN set before this rule still opens the key, and a
-  token stopped halfway through its first PIN is finished with that PIN; a new or changed one
-  must pass it. Then adding a device, an action on a device's page, the root's settings and
-  moving the group's main device to this phone with the recovery key. The app hands the PIN
-  to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
-  last use and is logged out when the app leaves the screen. The dialog asks not to reuse the phone's unlock
-  code. Settings change it ("Change the
-  admin PIN"), after the current one.
-- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left,
-  from the token's flags (a wrong PIN tried, one try left) and the app's count between them;
-  when the app's count was lost, it says that some tries are used up, never a full seven.
-  The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
-  member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
-  new device. A lost root is replaced with the recovery key.
-- **Leaving the group** deletes the admin key while its token is logged in; otherwise the key stays,
-  useless without the PIN, and the next admin key replaces it.
-- Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
+- **Two tokens (`src/platform/keystore_tee.cpp`):** The member key lives in the QCA-initialized
+  token (`"CBB"`, PIN `0000`), so everyday sync and keyboard actions never ask for a PIN. Once
+  initialized or in a group, an unresponsive TEE returns an error and retries rather than
+  re-initializing the token (which would wipe the member key). The root or admin key lives in a
+  second token in slot `"APP"`, initialized with the user's PIN and an SO PIN that is replaced with
+  an unstored random value once the user's PIN succeeds (verified directly against the token rather
+  than clearable app settings). Other apps cannot access either token.
+- **PIN rules and prompts (`src/pinrule.h`, `tests/pinrule_test.cpp`):** Required before generating
+  or signing with the admin key (creating a group, adding devices, device admin actions, main-device
+  settings, changing the main device). A new or changed PIN must be 6 to 64 digits and pass
+  `pinrule.h` checks rejecting repeats, runs, doubled patterns, 5 or more identical digits, two
+  simple segments, palindromes, counting pairs, 6- and 8-digit dates, year-suffix repeats, and 80
+  common keypad PINs (existing pre-rule PINs of 4+ characters still unlock their token). The PIN
+  dialog advises not to reuse the phone's unlock code. Once handed to OP-TEE, the PIN is wiped from
+  memory; the token stays logged in for 5 minutes from last use and logs out immediately when the
+  app leaves the foreground. **Settings > Change the admin PIN** updates it after verifying the
+  current PIN.
+- **Wrong PIN lockout:** OP-TEE enforces 7 attempts. The dialog reports remaining tries from token
+  flags and the app's counter (saying only that some tries were used if the local counter was lost).
+  A seventh wrong PIN locks the admin token permanently; the phone remains in the group as a member,
+  Settings reports the lockout, and restoring admin rights requires reinstalling and joining as a
+  new device (or moving the main device with the recovery key).
+- **Leaving and file-backed targets:** Leaving deletes the admin key if the token is logged in;
+  otherwise the key stays unusable and is marked stale for replacement. Aurora OS 4 and Sailfish OS
+  use `src/platform/keystore_file.cpp` (level `file`) and require no PIN.
 
 ## Collections and the order of the tiles
 
-The user can put the device tiles in their own order and gather devices into
-**collections** (roadmap phase 9b). The word is not "folder",
-which means a copied folder of files, nor "group", the sync group. The arrangement is a
-view setting like tiles, list or orbit:
+Users can reorder device tiles and organize devices into **collections** (D-72)—distinct from
+"folder" (copied directory) and "group" (sync group):
 
-- **Kept on this device only**, by its member: `arrangement.json` in the state folder of
-  the computer's service or the phone's member. It is never sent to the group, the hub,
-  the forwarder or the relay. The watches show their phone's.
-- **One level.** A device is in at most one collection, and a collection holds devices
-  only, as folders on a phone's home screen.
-- **This device** ("this phone", "this computer", "this Mac") is a tile as the others are:
-  first by default, and the user may move it, or put it in a collection, as any other.
-- **Display only in 0.6**: the order, the collections, a collection tile's summary, the
-  watch's sections and the remote paste device picker. Actions on a whole collection may
-  come later; a remote paste to several devices never.
+- **Local only:** Stored by each device's member in `arrangement.json` inside the state directory;
+  never sent to peers, hubs, forwarders, or relays. Paired watches display their phone's layout.
+- **Single level:** A device belongs to at most one collection, and collections cannot nest.
+- **This device:** Treated as an ordinary tile (first by default, movable or placeable in a
+  collection).
+- **Display only:** Controls tile order, collection summaries, watch sections, and remote-paste
+  pickers.
 
-The model is the Rust core's `cbb_core::arrange`, checked against
-`testdata/arrangement/vectors.json`; the member keeps it (`member/src/view.rs`), and the apps
-only draw what it answers (see "What the member shows" below). It is stored as JSON:
+`cbb_core::arrange` (`core/src/arrange.rs`, verified by `testdata/arrangement/vectors.json`) defines
+the rules, and `member/src/view.rs` persists the JSON:
 
 ```json
 {"v": 1, "group": "<group tag>", "items": [
@@ -1057,488 +831,331 @@ only draw what it answers (see "What the member shows" below). It is stored as J
   {"device": "a0c4…"}]}
 ```
 
-The rules:
+Rules:
 
-1. **View.** The stored items are shown in order. Device IDs that are not in the devices
-   list are skipped, and so is a collection none of whose devices is listed (one made
-   empty a moment ago stays). Listed devices that appear nowhere follow at the end of the
-   top level, in the app's order, so a new device shows up last and outside every
-   collection; this device, while the stored items do not place it, comes first instead.
-2. **Prune.** IDs that are not listed are dropped only when the list is whole (the group
-   loaded and this device in it), so the empty list of a start or a reconnection loses
-   nothing. A collection that loses its last device that way goes away.
-3. **Another group** (another tag) or another version starts afresh.
-4. **Limits.** At most 32 collections; a name is trimmed and has 1 to 64 bytes. Names need
-   not be unique.
-5. **Changes**, each checked whole and refused whole: *move* an item before another or to
-   the end of its level (a device before a device in a collection joins it; a collection
-   never goes into another); *into* a collection, at its end; *out* of one, right after
-   it; *new* collection where its first device was, or at the end with no devices;
-   *rename*; *ungroup*, which puts the devices where the collection was; and *reset*,
-   which brings back the app's order and keeps the collections, each where its first
-   device now comes. A collection that a move or *out* empties goes away. New
-   collections take the smallest free ID `cN`.
-6. **The default.** Until the user changes something nothing is stored, and the order is
-   the app's, this device first. *reset* brings that order back.
+1. **View:** Stored items render in order. Unlisted device IDs and collections with no listed
+   devices (except newly created empty ones) are skipped. Unplaced listed devices append to the top
+   level in default order, except this device, which prepends first until placed.
+2. **Prune:** Unlisted device IDs (and collections emptied by pruning) are dropped only when the
+   complete device list is loaded.
+3. **Group or version change:** A different group tag or format version starts empty.
+4. **Limits:** At most 32 collections (`MAX_COLLECTIONS`). Collection names are trimmed to 1–64
+   bytes (`MAX_NAME`) and need not be unique.
+5. **Operations** (validated and applied atomically): `move` (an item before another item or to the
+   end of its level; moving a device before a device inside a collection joins that collection;
+   collections cannot nest), `into` (append device to collection), `out` (place device immediately
+   after its collection), `new` (create collection with smallest free `cN` ID at its first device's
+   position, or at the end if empty), `rename`, `ungroup` (replace collection with its devices in
+   place), and `reset` (restore default device order while keeping collections, each positioned
+   where its first device falls). Moving the last device out of a collection removes the collection.
+6. **Default:** Nothing is written until the first user edit.
 
-The apps reach every change in an Arrange mode, with a menu path, VoiceOver and TalkBack
-actions and the keyboard for each drag.
+Platform interactions:
 
-**On the iPhone and the iPad** (`Views/Arrange.swift`, drawing the member's `view` in `AppModel`, which sends `arrange`):
-
-- Arrange mode starts from **Arrange devices** in the "…" menu or **Arrange** in a tile's
-  menu (a long press), and ends with **Done**. In it a tap does not open a tile, tiles have
-  a dashed outline, and a drag moves a tile as it passes the others; a device dropped on a
-  collection goes into it. The drag carries a type of its own that stays in the app.
-- Each tile's menu has every change without a drag: **Move to collection** (each
-  collection, or **New collection…**), **Take out of collection**, **Move to start**,
-  **Move to end**, and on a collection **Rename collection…** and **Ungroup**. In Arrange
-  mode VoiceOver has the actions Move earlier, Move later, Move to start, Move to end and
-  Take out of collection.
-- A collection tile shows up to four of its devices' icons, its name, "2 of 5 online" and
-  the danger colour's mark when a device inside needs attention (it is frozen). In the
-  list a collection is a section with a header. A tap opens its page, with its devices,
-  Arrange mode for them, Rename and Ungroup.
-- With more than 12 devices Home has a search (names and systems) and the filters
-  **Online** and **Needs attention**; their results are flat, and Arrange mode is off
-  while one is on.
-- **Back to the group's order** in the "…" menu is *reset*.
-- The orbit on a big screen keeps the group's order for now.
-
-**On Android** (`Arrange.kt`, drawing the member's `view` in `AppModel`, which sends `arrange`):
-
-- Arrange mode starts from **Arrange devices** in the ⇅ menu beside the view button or
-  **Arrange** in a tile's menu (a long press), and ends with **Done**. In it a tap does
-  not open a tile, tiles have a dashed outline, and a long press then a drag carries a
-  tile over the others; it takes the place of the tile it is dropped on, and a device
-  dropped on a collection goes into it.
-- Each tile's menu has every change without a drag, as on the iPhone; in Arrange mode
-  each tile also has a ⋮ button for it, which a keyboard or the D-pad reaches. TalkBack
-  has the actions Move earlier, Move later, Move to start, Move to end and Take out of
-  collection.
-- The collection tile, the list's sections, the collection's page, the search and filters
-  and **Back to the group's order** are the iPhone's. The orbit keeps the group's order.
-
-**In the tray app** (`frontend/app.js`, drawing the service's `view`; `Desk.Arrange` sends
-`arrange`):
-
-- The ⇅ button beside the views turns Arrange mode on and off, and Escape ends it. In it
-  a click does not open a tile, tiles and rows have a dashed outline and are dragged, a
-  device dropped on a collection goes into it, and the bar on top has **Back to the
-  group's order** and **Done**.
-- A right click on a tile, or its ⋮ button in Arrange mode, opens its menu with every
-  change. With the keyboard, Alt and the arrow keys move the focused tile, and Alt with
-  Home or End moves it to the start or the end.
-- A collection is a tile or a section in the list, and a click opens its page, with its
-  devices, Arrange mode for them and its menu. The search and filters come with more than
-  12 devices. The orbit keeps the group's order.
-
-**In the Mac app** (`Views/Arrange.swift`, drawing the service's `view` in `MacModel`, which
-sends `arrange`): as on the
-iPhone, with **Arrange devices** and **Back to the group's order** in the toolbar, each
-tile's menu on a right click, and Option with the arrow keys, Home or End moving the
-focused tile in Arrange mode.
-
-**In the Aurora app** (`qml/pages/DeviceItems.qml`, `ArrangePage.qml` and the collection's
-pages, drawing the member's `view` through `App::arranged`, which sends `arrange`): a long
-press on a tile or a row opens a page with every
-change (Move to start, Move earlier, Move later, Move to end, Move to each collection, New
-collection…, Take out of collection, and on a collection Rename collection… and Ungroup).
-Among the tiles a long press then a drag carries the tile itself, lifted, as on the iPhone but
-with no Arrange mode: the others make way as it passes over them, a device held over the
-middle of a collection goes into it, and the tile settles into its place when let go. This phone's own tile is first until the user moves it, as on the
-other phones. A collection is a tile, or a section in the list, and a tap opens its page, with
-Rename and Ungroup in its pull-down menu. The main page's pull-down menu has **New
-collection…** and **Back to the group's order**.
-
-**On the watches**: the phone sends its devices in the user's order, each with the name
-of its collection (`collection` in WatchState), and the
-watch lists the devices in no collection under **Devices**, then a section for each
-collection. The watch does not change the arrangement.
+- **iPhone and iPad** (`Views/Arrange.swift`, `AppModel`): Start Arrange mode from **… > Arrange
+  devices** or a tile's long-press **Arrange** action; end with **Done**. Tiles show dashed
+  outlines, ignore open-on-tap, and drag to reorder or drop onto collections. Context menus and
+  VoiceOver custom actions (**Move earlier**, **Move later**, **Move to start**, **Move to end**,
+  **Take out of collection**) expose every operation without dragging. Collection tiles display up
+  to 4 device icons, name, online count, and a danger indicator if a member is frozen; tapping opens
+  the collection page. Groups with more than 12 devices show search and **Online** / **Needs
+  attention** filters (flat results, Arrange disabled). **… > Back to the group's order** sends
+  `reset`. Orbit keeps default group order.
+- **Android** (`Arrange.kt`, `AppModel`): Same Arrange mode, started from **… > Arrange devices** or
+  a tile's long-press menu and ended with **Done**. In Arrange mode, each tile also adds a `⋮`
+  button reachable by keyboard or D-pad, and TalkBack exposes the same custom actions.
+- **Mac app** (`Views/Arrange.swift`, `MacModel`): Same Arrange mode as iOS, with **Arrange
+  devices** and **Back to the group's order** in the toolbar, right-click context menus, and
+  `Option` with arrow keys, `Home`, or `End` moving the focused tile in Arrange mode.
+- **Tray app** (`frontend/app.js`, `arrange.go`, `Desk.Arrange`): Uses no separate Arrange mode.
+  Tiles are draggable at all times (`draggable="true"`), dropping a device onto a collection adds it
+  to that collection, holding 600 ms without moving or right-clicking opens `#tile-menu` with every
+  move/collection action, and `Alt` with arrow keys, `Home`, or `End` moves the focused tile.
+  `Escape` closes the open detail pane or collection page. Search and filters appear with more than
+  12 other devices. Orbit keeps default group order.
+- **Aurora OS** (`qml/pages/DeviceItems.qml`, `ArrangePage.qml`, `CollectionPage.qml`,
+  `App::arranged`): Long press without dragging opens `ArrangePage.qml` with all actions; long press
+  plus drag lifts and reorders tiles directly with no Arrange mode (holding over the middle of a
+  collection drops into it). The main page pull-down menu includes **New collection…** and **Back to
+  the group's order**; collection pages put **Rename** and **Ungroup** in their pull-down menu.
+- **Watches:** Phones send devices in the user's order with each device's `collection` name in
+  `WatchState`. Apple Watch and Wear OS list uncollected devices under **Devices** followed by one
+  section per collection; HarmonyOS watches render devices in exact tile order with inline
+  collection headers. Watches do not modify the arrangement.
 
 ## What the member shows
 
-The apps draw the device tiles from one answer of their member, the same on the phones
-(`cbb_member_call`) and the computers (the control socket): `view` gives
-`{"tiles", "online", "others", "custom"}`, the tiles in the user's order with this device among them,
-each `{"device": {…}}` (a device as `devices` lists it) or
-`{"collection": {"id", "name", "devices": [{…}]}}`, and how many of the other devices are
-online, out of how many, and whether the user changed the order (`reset` undoes it). `arrange` takes the user's change (`{"op": "move", "item",
-"before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as rule 5 above names
-them), keeps it and answers as `view`; a change that does not fit is refused and changes
-nothing. Devices that left the group leave the arrangement when the member answers. No app
-keeps an order of its own or works one out.
+Every app renders its device list from one member response (`cbb_member_call` on phones, control
+socket on computers). The `view` operation returns:
+
+```json
+{
+  "tiles": [{"device": {"...": "..."}}, {"collection": {"id": "c1", "name": "Office", "devices": []}}],
+  "online": 1,
+  "others": 3,
+  "custom": true,
+  "warnings": []
+}
+```
+
+- `tiles`: Devices and collections in the user's order, including this device.
+- `online` / `others`: Count of online peers and total other group members.
+- `custom`: Whether a stored arrangement exists.
+- `warnings`: Output of `cbb_core::why` (omitted when empty).
+
+The `arrange` operation accepts one `Op` (`move`, `into`, `out`, `new`, `rename`, `ungroup`, or
+`reset`), persists the change, and returns the updated `view` response (or returns an error without
+modifying state). Devices removed from the group drop out automatically on the next `view` call. No
+app computes or stores its own tile order.
 
 ## HarmonyOS
 
-The app for HarmonyOS 5 and later (`apps/harmony`, in development), the system without
-Android's layer, is the Aurora app's twin and ported from it: its own interface around the
-Rust core, which does the protocol, the pairing, sync, the member's view of the tiles and the
-tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
-`ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
-system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
-joining by a group's window or by an invitation), Home with the tiles or the list, a device's
-page with the admin's actions, the home window for adding a device, invitations, the recovery
-key, changing the root with it, the arrangement and collections, and Settings with the error
-details, the notifications, the root's settings and, under the advanced settings, why it does
-not sync and the lab. A group from before 0.6 opens a page that says a new group is needed and
-offers Leave, which alone deletes its files (D-126).
+The app for HarmonyOS 5 and later (`apps/harmony`, native ArkTS/ArkUI without an Android
+compatibility layer) mirrors the Aurora OS architecture over the Rust core. A Node-API native module
+(`libcbb_napi.so`, `entry/src/main/cpp/napi_init.cpp`) wraps every C function of
+`ffi/include/cbb_core.h`, running blocking and signing calls on worker threads with Promises. Its
+protocol OS identifier is `harmonyos`. It provides all standard phone screens—Start, Home (tiles,
+list, and wide-screen orbit), Device detail (without Quick actions), Open window, Join window,
+Invitations, Recovery key, Change main device, Arrange and collections, Settings, Why it does not
+sync, Lab, and `Before06.ets` for incompatible pre-`group.cbor` directories.
 
-- **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
-  asking; the admin key (the root's in a group the phone made) only after the user's face,
-  fingerprint or PIN through User Authentication Kit, and the consent lasts half a minute, so
-  that one action that signs several times (a new group signs three times) asks once.
-- **Clipboard**: the app writes an incoming copy freely (a secret only on this device, cleared
-  when its time ends unless the user copied something else), but reads the clipboard only
-  when the user taps the system's Paste button (`PasteButton`) on Home, or with the
-  restricted permission `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request.
-  Sending is therefore a tap, as on the iPhone. **Share → CBB** from another app sends the
-  text, the link, or images and files (up to 50 MB together) without opening the app, as the
-  iPhone's share extension: a sheet in the share panel (`ShareExtensionAbility`,
-  `shareextability/`) starts the phone's member in a folder of its own beside the app's
-  (`model/OneShot.ets`), waits up to 8 seconds for a computer of the group, hands it the copy
-  (and for files up to a minute for the computers to fetch them), stops, and says how it went.
-  A single image that arrives goes into the clipboard, other images and files wait for the
-  user to save them where they choose.
-- **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
-  phone's own code for joining is drawn from the core's modules.
-- **Remote paste**: an admin phone pastes on a computer from the device's
-  page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
-  system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
-  signs the paste command (`cbb_member_manage`, `paste`).
-- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, a
-  computer, a router or a board (D-134); a group without a hub meets at a blind relay once
-  the user read what it learns. That relay is the group's, which the root phone sets (the manage
-  action `relay`) and the other phones show read-only. The member of 0.6 runs both and keeps
-  the group's server credentials itself; the root phone signs the next period of the group's
-  server credentials (docs/protocol.md, section 18) with the root key when it is due, after
-  the face, fingerprint or PIN.
-- **Attestations**: as on the iPhone, the root phone checks the attestation an Android phone
-  sends of its member key, with the revocation list the app fetches from the mirror once a
-  day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
-  core checks it (`cbb_core::attest`) when the root key signs the certificates' renewals.
-- **YubiKey**: on a group of 0.6 the card holds the recovery secret (docs/protocol.md, "The
-  recovery key on a YubiKey (0.6)"): the root phone seals the sheet's secret onto it and a
-  phone in the group opens it with the PIN to change the root. HarmonyOS has no PIV of its
-  own, so the core speaks it (`cbb_piv`'s `seal` and `open`, docs/core-api.md) and
-  the app only carries each APDU to the card's IsoDep tag in NFC reader mode
-  (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`), or, for a YubiKey plugged into the
-  USB-C port, moves the bytes of its CCID interface through `usbManager` after asking for the
-  right to use it (`setCard`'s bulk flag, the transport `ccid_bulk`). The sheet page seals
-  onto it and the change-root screen opens it.
-- **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
-  Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
-  how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
-  has "Sync clipboard"; and two intents (Intents Kit), SyncClipboard and ToggleSync, which
-  Celia and the system's suggestions offer, as the iPhone's App Intents. Each opens the app,
-  since HarmonyOS lets it read the clipboard only in front, and with the system's paste
-  button or `READ_PASTEBOARD` alone. The paste button's tap is the one button and swaps the
-  pasteboard with the group's copy (D-128); without a read, a quick sync changes nothing, since
-  taking would lose what the pasteboard held. Opening the app swaps nothing: the group's copy
-  comes in when the pasteboard is as the app last saw it (its change events, counted while the
-  app runs), and one changed since stays for the paste button. The group's copies are written
-  only while the app is in front, and the main page shows the last one that came with Copy. Live View (Live View Kit), the Live Activity's twin, shows adding a
-  device with a timer and its result, and sync away from home through the hub's tunnel with
-  the time since it connected (see "Dynamic Island"); Huawei grants Live View on request, and
-  until then it shows nothing.
-- **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
-  GATT server and its advertising) with the core's report map and reports, as Aurora does
-  through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,
-  and takes the clipboard at a tap or an admin's remote paste. HarmonyOS names a
-  characteristic by its UUID alone, so the service has the input report and not the LEDs'
-  output report. Whether the system lets an app serve the HID service is known only on a
-  phone.
-- **Background**: the system freezes an app soon after it leaves the screen. While the member
-  runs, the app keeps it going as a continuous task of the kind "multi-device connection",
-  with the system's notification; where the system or the store refuses that, it asks for the
-  short delay the system grants, so that a copy on its way arrives, and syncs while it is open,
-  as on the iPhone.
-- **Notifications**: the group's events as on the other phones (joined, removed, an admin, a
-  takeover, frozen), each kind with its switch, and the received files.
-- **Errors**: the core's message, and in debug mode its details under it; the details switch,
-  which seven taps on the version in Settings show, turns them on in a release build. A member that panics is started again, and in
-  release mode the app asks to send the bug report (docs/core-api.md, "Bug reports").
-- **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
-  DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a
-  profile from AppGallery Connect, so both need a Huawei developer account. `check.sh` checks
-  the ArkTS with OpenHarmony's compiler and linter without one. DevEco Studio's emulator runs
-  on a Mac with Apple silicon, and Huawei offers its ready-made images only in mainland China
-  for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later (sold in China;
-  the same models elsewhere run HarmonyOS 4, where the Android app works).
-
-Not yet: a run on a phone.
+- **Keys (`cpp/keys.cpp`, `ets/core/Keys.ets`):** P-256 keys in HUKS inside the TEE (level
+  `hardware`). The member key signs silently; the admin/root key requires User Authentication Kit
+  (face, fingerprint, or PIN at ATL3) with a 30-second auth timeout (`tokenReuse = 25` s) so
+  multi-signature operations prompt once.
+- **Clipboard and Share (`common/Clipboard.ets`, `common/Share.ets`, `shareextability/`,
+  `model/OneShot.ets`):** Incoming copies write freely while in the foreground (secrets set
+  `ShareOption.LOCALDEVICE` and clear on TTL if unchanged). Reading the clipboard uses the system
+  `PasteButton` (the app does not request `ohos.permission.READ_PASTEBOARD`). Opening the app uses
+  `pasteboard.on('update')` change counts to apply the opening rule (D-128); tapping `PasteButton`
+  swaps the clipboard. **Share > CBB** (`ShareExtAbility`, `pages/ShareSheet.ets`) starts a
+  short-lived member in `${filesDir}/share-member` (`OneShot.ets`), sends text, links, images, or
+  files up to 50 MiB, waits up to 8 seconds for a peer (plus up to 60 seconds for file fetches), and
+  stops. Single received images go to the pasteboard; other files wait for saving via
+  `DocumentViewPicker`.
+- **QR codes (`common/Scan.ets`, `components/QrView.ets`):** Scan Kit reads pairing windows,
+  invitations, and recovery sheets. `QrView.ets` renders QR codes from core modules for **Add a
+  device**, **Send an invitation**, and the recovery sheet.
+- **Remote paste (`pages/Paste.ets`):** Admin phones send pasted or typed text (with optional Enter
+  and secret flag) and up to 20 picked files (`DocumentViewPicker`) via `cbb_member_manage` `paste`.
+- **Away from home and blind relay (`pages/Relay.ets`, `model/AppModel.ets`):** Uses the Rust
+  member's user-space tunnel and blind relay. The main device configures the relay (`relay` action)
+  and renews 30-day server credentials inside periodic `AppModel.duties()` (1 minute after start,
+  then every 6 hours).
+- **Attestations (`model/AppModel.ets`, `model/Member.ets`):** Inside `AppModel.duties()`, the main
+  device fetches `keys.json` and `attest-status.json` from `https://cbb.tools/attest/` at most once
+  every 24 hours and runs `manage` action `attest` via `cbb_core::attest` whenever peer attestations
+  are pending ([protocol.md](protocol.md), section 17).
+- **YubiKey (`common/YubiKey.ets`):** Connects `cbb_piv` to NFC reader mode
+  (`ohos.permission.NFC_TAG`, IsoDep, transport `apdu`) and USB-C CCID devices (`usbManager`,
+  `setCard` bulk flag, transport `ccid_bulk`) for sealing on `Recovery.ets` and opening on
+  `ChangeRoot.ets`.
+- **Outside the app (`widget/`, `insightintents/`, `model/Live.ets`):** Form Kit home-screen widget
+  **Sync clipboard** (`SyncCard.ets`: sync button plus sync-toggle/online-count row), app-icon
+  long-press shortcut, Intents Kit (`SyncClipboard` and `ToggleSync`), and Live View (`Live.ets`:
+  adding a device, away from home, and quick-sync result; requires Huawei Live View approval).
+- **Bluetooth LE keyboard (`model/Keyboard.ets`, `pages/Keyboard.ets`):** Serves HID over GATT via
+  `@kit.ConnectivityKit` (`ble` GATT server and advertising) using core report maps and reports,
+  typing the clipboard on `PasteButton` tap. Omits the report-mode LED output characteristic (`2a4d`
+  ref `0002`) because HarmonyOS indexes characteristics by UUID alone, while keeping `BOOT_OUTPUT`
+  (`2a32`).
+- **Background (`entryability/EntryAbility.ets`, `module.json5`):** Requests a
+  `MULTI_DEVICE_CONNECTION` continuous task while the member runs, falling back to
+  `requestSuspendDelay` if unavailable.
+- **Notifications and errors (`model/Events.ets`, `core/Errors.ets`, `model/Bugs.ets`):** Posts
+  local notifications for 4 event kinds (devices joined/removed, admin changes, freezes/unfreezes,
+  main-device changes) plus received files. Seven taps on version in Settings reveal **Show error
+  details**. Member panics restart the member and prompt to send a bug report in release builds
+  ([core-api.md](core-api.md), "Bug reports").
+- **Building and checking:** The Rust core builds with OpenHarmony's free native SDK
+  (`ffi/ohos-sdk.sh`, `apps/harmony/build.sh`). `apps/harmony/check.sh` runs OpenHarmony's ArkTS
+  compiler and linter without a Huawei developer account, and `apps/harmony/nodetest/run.sh` runs
+  the Hypium and watch logic tests under Node.js. Building and signing the `.hap` package requires
+  DevEco Studio or HarmonyOS CLI tools and a Huawei developer account.
 
 ### HarmonyOS watches
 
-The watch app (`apps/harmony/wearable`, the module of the same project, for the watches with
-HarmonyOS 5 or later, such as the Huawei Watch 5) is the Apple Watch and Wear OS apps' twin:
-it works only through its phone, over Wear Engine's messages between the phone app and the
-watch app of the same name, and shows the same page in the dark palette: how many devices are
-online, the house (sync on the phone) and the globe (Everywhere) with where it stands, each
-device with its glyph and live dot by collection, the latest events.
+The watch module (`apps/harmony/wearable`, HarmonyOS 5 and later) communicates with the paired
+HarmonyOS phone over Wear Engine (`model/Watch.ets` on phone, `model/Link.ets` on watch, sharing
+byte-identical `common/WatchState.ets`, `common/Wear.ets`, `core/Errors.ets`, and `core/Text.ets`,
+verified by `apps/harmony/check.sh`).
 
-- The phone (`model/Watch.ets`) looks for a connected watch with the app every 30 seconds and
-  sends it the state (`common/WatchState.ets`: devices, away, sync, events; never the
-  clipboard) whenever it changes. A Wear Engine message carries about a kilobyte, so the
-  state that does not fit drops the events and then the last devices, and says how many it
-  left out.
-- The watch (`model/Link.ets`) asks for the state when it opens, keeps the last one it got,
-  and sends `sync` and `away` with on or off; the phone turns its sync or its Everywhere on or
-  off as Home's switches do, and the new state comes back. Without a phone in reach the watch
-  says so and shows the last state.
-- `common/WatchState.ets` and `common/Wear.ets`, the only caller of Wear Engine, are the
-  same file in both modules, which `check.sh` checks, with the stub of Wear Engine in `check/`.
-- Wear Engine needs the developer's access from Huawei, the app's client ID from AppGallery
-  Connect in `module.json5`, and the signing certificate's fingerprint in
-  `WatchState.FINGERPRINT`; all three come with the Huawei developer account.
-
-- The watch as an admin (docs/protocol.md, section 10, "Watches"): with a watch connected, the
-  root's Settings offer "Make the watch an admin". The watch asks its wearer, makes a P-256 key
-  in HUKS that needs the watch's screen lock (`model/AdminKey.ets`) and hands the phone its
-  public key; the root key certifies it (manage `add_watch`), and the phone keeps the watch's
-  device ID and admin CA and tells the watch its device ID, the group's tag and its key's hash.
-  The phone's state then carries, for each device, what the watch may do to it (manage
-  `watch_actions`: freeze an admin without `remove-admins`, remove a device that is no admin,
-  turn remote paste, quick actions and sync away from home off); the watch shows them under
-  the device, asks once, and sends `act`. The phone has the core sign it on the watch
-  (`cbb_member_manage_watch`): the record or command goes to the watch whole, in parts of 600
-  bytes, and the watch signs it only when it is that action, for that device, by this watch,
-  in this group; a second watch is replaced only after the first is removed.
-
-Not yet: a run on a watch.
+- **State and switches:** The phone scans for a connected watch every 30 seconds (`LOOK_MS = 30000`),
+  diffs state every 2 seconds, and sends `WatchState` (never the clipboard). Because Wear Engine
+  messages cap near 1 KB (`MAX_MESSAGE = 1000`), `WatchState.fit()` drops events first and then
+  trailing devices, recording the omitted count in `more`. The watch sends `sync` and `away`
+  toggles, caches the latest state in preferences, and displays devices in the phone's tile order
+  with inline collection headers.
+- **Wear Engine setup:** Requires Wear Engine approval from Huawei, the AppGallery Connect client ID
+  in `module.json5`, and the signing certificate fingerprint in `WatchState.FINGERPRINT`.
+- **Admin key hooks:** `wearable/.../model/AdminKey.ets`, `model/Link.ets`, `model/Watch.ets`, and
+  `cbb_member_manage_watch` implement HUKS screen-lock-gated P-256 key creation, `add_watch`,
+  `watch_actions`, and 600-byte chunked signing verification (`PART_BYTES = 600`). As on Apple Watch
+  and Wear OS, wrist signing is disabled in the current build (`WatchState.signs = false`, D-124;
+  see [Roadmap](roadmap.md)).
 
 ## Releasing the Android app
 
-Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,
-`cbb-wear-X.Y.Z.apk`, both signed with the project's release key; the key and
-its secrets are in [maintaining.md](maintainers/maintaining.md#android-signing-key). The watch app is
-installed on the watch with `adb install` over the watch's wireless debugging until the apps
-are on Google Play.
+Each release publishes `cbb-X.Y.Z.apk` (`full` flavor), `cbb-fdroid-X.Y.Z.apk` (`fdroid` flavor),
+and `cbb-wear-X.Y.Z.apk` (Wear OS), signed with the project's release key
+([maintaining.md](maintainers/maintaining.md#android-signing-key)).
 
 ### Updates
 
-An APK installed from a release updates itself (`ApkUpdate.kt`): Settings, "Updates", checks
-for a newer release, and "Update automatically" (off until the user turns it on) checks once a
-day when the app comes to the front and installs what it finds. Each check fetches the signed
-`keys.json`, `stable.json` and `release.json` from GitHub, else `dl.cbb.tools`, and checks them
-as `cbb update` does (docs/protocol.md, section 16), sending no version, system or group data.
-The release's `cbb-X.Y.Z.apk` must match release.json's size and SHA-256, be this
-app with a higher version code, and carry this app's signing certificate before the system's
-`PackageInstaller` gets it with `USER_ACTION_NOT_REQUIRED`: the system asks only for the first
-update after an install from elsewhere, which also lets the app install updates ("Install
-unknown apps"). A copy that a store installed (Google Play, F-Droid, Amazon, Samsung, Huawei,
-Aurora) is left to its store and shows no section, and so do the F-Droid build, wherever it
-came from, and a build without the project's root keys. From 2027 a sideloaded app installs only when its developer is registered in
-Google's developer verification; the project's registration is under way.
+The `full` APK installed directly from a GitHub release updates itself (`ApkUpdate.kt`):
+**Settings > About > Updates** checks manually, and **Update automatically** (off by default) checks
+once a day on foreground launch.
 
-**To check on a device before building on it:** the first update's question, the second
-update without one, the question when the app is in the background, and an APK signed with
-another key refused with its message.
+- **Verification:** Fetches `keys.json` and `stable.json` from
+  `https://raw.githubusercontent.com/HunterEwok/cbb/channel/`, and `release.json` and
+  `cbb-X.Y.Z.apk` from `https://github.com/HunterEwok/cbb/releases/download/v<ver>/`, falling back
+  to `https://dl.cbb.tools`, sending no version, device, or group data. Verifies signatures using
+  the same rules as `cbb update` ([protocol.md](protocol.md), section 16).
+- **Installation:** Confirms the APK matches `release.json` size and SHA-256, has package
+  `tools.cbb`, carries a higher `longVersionCode`, and shares this app's signing certificate before
+  committing to `PackageInstaller` with `USER_ACTION_NOT_REQUIRED` (Android 12 and later). Android
+  prompts once to allow **Install unknown apps** for the first self-update.
+- **When hidden:** Copies installed by an app store (Google Play, F-Droid, Amazon, Samsung, Huawei,
+  Aurora), the `fdroid` flavor (`BuildConfig.SELF_UPDATE = false`), and builds without pinned
+  release roots hide the Updates section.
 
 ### F-Droid
 
-One source gives two builds of the app, two Gradle flavors of `apps/android/app`:
+`apps/android/app/build.gradle.kts` defines two Gradle flavors from one source tree:
 
-- **full**, `cbb-X.Y.Z.apk`: the releases on GitHub and, later, the stores. It
-  has the Wear OS watch, through `play-services-wearable` (`src/full`: `WatchLink.kt` and its
-  service in the manifest), and its own update with the installer's permissions.
-- **fdroid**, `cbb-fdroid-X.Y.Z.apk`: no Google Play services and no other
-  non-free code, which F-Droid requires. Its `WatchLink` (`src/fdroid`) reaches no watch, so
-  Settings offers none; `BuildConfig.SELF_UPDATE` is false and it has no installer
-  permission, so it leaves its updates to F-Droid. Everything else is the same code.
+- **`full` (`cbb-X.Y.Z.apk`):** Includes `play-services-wearable` (`src/full/kotlin/tools/cbb/WatchLink.kt`)
+  for Wear OS, `firebase-messaging` (`src/full/kotlin/tools/cbb/PushPlatform.kt`) for FCM sealed
+  push, and self-update (`BuildConfig.SELF_UPDATE = true` with installer permissions in
+  `src/full/AndroidManifest.xml`).
+- **`fdroid` (`cbb-fdroid-X.Y.Z.apk`):** Contains no Google Play services or Firebase dependencies.
+  Uses a no-op `WatchLink` (`src/fdroid/.../WatchLink.kt`), UnifiedPush
+  (`org.unifiedpush.android:connector` in `src/fdroid/.../PushPlatform.kt`) for sealed push, and
+  `BuildConfig.SELF_UPDATE = false` with no installer permissions.
 
-F-Droid builds the fdroid flavor itself from each release's tag, by the recipe in
-`packaging/fdroid` (in fdroiddata once accepted), and checks it against our
-`cbb-fdroid-X.Y.Z.apk`: when the two are the same apart from the signature, it
-publishes ours. Both builds carry the same application id and key, so a phone moves between
-them by installing the other one over it, the group and the settings kept; F-Droid offers
-its updates to either. That needs the build to be reproducible:
+Both flavors share application ID `tools.cbb` and signing key so users can switch between them
+in place while keeping group state and settings. To support F-Droid reproducible builds
+(`packaging/fdroid/tools.cbb.yml`), the build fixes:
 
-- the version in the source, `apps/android/version.properties`, which the release pull
-  request moves on with `CHANGELOG.md` (`tools/repocheck` checks the two agree);
-- the Rust core's libraries (`ffi/`, with the tunnel) built with one NDK, `cbb.ndk` in
-  `apps/android/gradle.properties`, and the Rust of `cbb.rust` there, with the paths of the checkout and of cargo's sources written as fixed names
-  (`ffi/bind.sh`);
-- no dependency block (`dependenciesInfo`) and no commit details (`vcsInfo`) in the APK.
+- Version metadata in `apps/android/version.properties` (kept in sync with `CHANGELOG.md` by
+  `tools/repocheck`).
+- Exact NDK (`cbb.ndk`) and Rust toolchain (`cbb.rust`) in `apps/android/gradle.properties`, with
+  remapped checkout and Cargo paths in `ffi/bind.sh`.
+- Disabled APK metadata blocks (`dependenciesInfo { includeInApk = false }`,
+  `vcsInfo.include = false`).
 
-CI's `fdroid` job builds the fdroid APK twice, the second time from a copy without `.git` in
-another directory, time zone and umask, and fails when the two differ
-(`packaging/fdroid/reproduce.sh`); the `android` job checks that its dependencies carry no
-Google Play services. The store texts and the icon are F-Droid's fastlane layout in
-`apps/android/app/fastlane/metadata/android`, in English and Russian; screenshots wait for
-the app on real devices.
+CI's `fdroid` job runs `packaging/fdroid/reproduce.sh` to build the `fdroid` APK twice (the second
+from a clean copy without `.git`, different directory, timezone, and umask) and verifies byte-for-byte
+equality; the `android` job verifies no Google Play services enter `fdroid`. Fastlane store
+metadata and icon live in `apps/android/app/fastlane/metadata/android` (`en-US` and `ru-RU`).
 
 ## Languages
 
-- Every user-facing string comes from the platform's catalog from the first screen on: a
-  String Catalog (`Localizable.xcstrings`) on iOS and the Mac, `strings.xml` resources on
-  Android, Qt's `.ts` files on Aurora, `resources/*/element/string.json` on HarmonyOS,
-  `frontend/l10n` in the tray app. No string literal in
-  views.
-- All of them are made from one source, `apps/l10n/<language>.json`, by `tools/strings`:
-  `en.json` lists each string once with the apps that show it (`"in"`), each other language's
-  file its translation under the same ID, so a text the apps share is translated once. A new
-  string goes into `en.json` and every language's file, then `go run ./tools/strings` writes
-  the catalogs; `tools/repocheck` fails when a catalog differs from what it makes, when a
-  translation is missing, or when a translation's format directives (`%@`, `%1$s`, `%1`)
-  are not the English text's.
-- The words follow one termbase, `apps/l10n/terms.json` (D-133): for each concept the word
-  every language uses (the main device, an admin, the relay, the forwarder, joining a
-  group, a YubiKey held to the phone) and the words it does not use. `go run ./tools/strings
-  -lint`, a step of CI, checks the strings against it, as described under "Words in the
-  apps" below.
-- English is the source language, translated into the languages of the website: Chinese
-  (Simplified), Spanish, Russian, Arabic, Swahili, Hebrew and Hindi. Plurals, numbers and
-  dates use the platform's formatters.
-- The layout survives longer translations and right-to-left scripts (no fixed widths for
-  text; leading and trailing, not left and right).
-- The language follows the system, with an in-app choice (System or one of the eight) in
-  Settings, and on the Start screen when the system's language has no translation.
-  Arabic and Hebrew lay the screens out right to left, the tray app too.
+- Every user-facing string comes from platform localization catalogs generated from a single source,
+  `apps/l10n/<language>.json`, by `go run ./tools/strings` (`tools/strings/catalog/catalog.go`):
+  - Apple String Catalogs (`*.xcstrings`) for iOS, ShareExtension, NotificationService, Watch,
+    Widgets, AppShortcuts, InfoPlist, and macOS.
+  - Android XML (`apps/android/app/src/main/res/values*/strings.xml` and `apps/android/wear/...`).
+  - Qt translation files (`apps/silica/translations/cbb-<language>.ts`).
+  - HarmonyOS resources (`apps/harmony/{entry,wearable}/src/main/resources/*/element/string.json`).
+  - Tray app JSON (`apps/desktop/frontend/l10n/<language>.json`).
+- `apps/l10n/en.json` defines each string ID, its `"in"` targets, optional `"en"` override, and
+  `"translate": false` for untranslated names. `tools/repocheck` verifies that generated files match
+  the source, no translations are missing, and format directives (`%@`, `%s`, `%1$s`, `%1`) match
+  the English text.
+- Eight supported languages: English (source), Chinese (Simplified), Spanish, Russian, Arabic,
+  Swahili, Hebrew, and Hindi. Arabic and Hebrew render right-to-left across all apps (including the
+  tray app). Layouts avoid fixed text widths and use leading/trailing alignment.
+- Language defaults to the system language with an in-app override in Settings (and always on Start
+  on iOS and Android).
 
 ### Words in the apps
 
-The apps say what the platforms say. A label names the action with a verb ("Move the group
-to this phone", not "OK"); a dialog's title and its button agree; a sentence is short and
-plain, with no slang or colloquial words. Where the platform names an
-action itself, the apps use its word: a YubiKey is inserted over USB-C, held to the phone
-for NFC (the phones' own NFC sheets) and touched when it blinks (Yubico Authenticator's
-wording). Apple's Human Interface Guidelines ("Writing"), Material Design ("Writing"), the
-Microsoft Writing Style Guide and the platforms' published translations decide a dispute.
+App copy follows each platform's own conventions (Apple Human Interface Guidelines, Material Design
+Writing guidelines, Microsoft Writing Style Guide, and platform-published translations): action
+labels use verbs matching dialog titles, sentences stay short and plain without slang, and hardware
+actions follow platform sheets (plug in over USB-C, hold to the phone for NFC, touch when blinking).
 
-`go run ./tools/strings -lint` checks every language's strings, and CI runs it:
+`go run ./tools/strings -lint` enforces wording in CI (D-133):
 
-- **The termbase**, `apps/l10n/terms.json`. Each concept gives each language its word
-  (`use`), a pattern that finds it (`find`) and the patterns of the words it does not use
-  (`avoid`, with `except` for a phrase where such a word means something else). Where the
-  English names a concept, a translation must name it too, by its `find`.
-- **Vale** ([vale.sh](https://vale.sh), at the version `tools/strings/lint.go` names, which
-  `go run` builds and checks against Go's checksum database, so nothing is installed). The
-  tool writes each language's strings to a file, one paragraph a string, and runs Vale with
-  `tools/strings/vale/vale.ini`: the termbase's `avoid` words, made into
-  `tools/strings/vale/styles/<language>/Terms.yml` by `go run ./tools/strings`, and the
-  rules of `tools/strings/vale/styles/Cbb` for every language (one character for an
-  ellipsis, the language's quotes, one space between words).
-- **One English text, one translation.** Strings whose English is the same but for the
-  platform's directives (`%@`, `%s`, `%1$s`, `%1`) are translated alike. A string whose ID
-  names its place in brackets gives the same English another translation, and must then
-  differ from the plain string in some language.
-
-A new concept goes into the termbase with its word in each language that has one; then
-`go run ./tools/strings` writes the rules and `-lint` shows every string to change.
+- **Termbase (`apps/l10n/terms.json`):** Defines each concept's required term (`use`), detection
+  regex (`find`), disallowed variants (`avoid`), and valid exceptions (`except`). When English names
+  a concept, every language with a `find` pattern must use its corresponding term.
+- **Vale (`tools/strings/lint.go`, `tools/strings/vale/vale.ini`):** Runs a pinned Vale version
+  directly through `go run` against generated per-language term rules
+  (`tools/strings/vale/styles/<language>/Terms.yml`) and shared formatting rules
+  (`tools/strings/vale/styles/Cbb`: ellipsis character, language quotes, single spaces).
+- **One English text, one translation:** Strings that share the same English text apart from
+  platform placeholders must share the same translation in each language unless given a distinct
+  bracketed ID whose translation actually differs in at least one language.
 
 ## Themes
 
-- Eleven themes, each a full set of design tokens defined once in `apps/design/tokens.json` and
-  generated into Swift, Kotlin and JavaScript, so every app matches: **Chalkboard** (the
-  default, the look of the website: chalk on slate over felt in the dark, graphite on pale
-  slate over sand-coloured cloth in the light, walnut lines, a faint grid), **Blueprint** (a
-  drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
-  **Precise**, **Glass** (a deep background, a glow of the
-  accent, glass tiles), **Soft**, **Swiss**, **Hardware**, **Art Deco**, **Liquid Glass**,
-  **Terminal** and **Retro**.
-- A theme is its style (the faces, the corners of buttons, cards, tiles and chips, the width
-  of its lines, its material: flat, glass, liquid or metal, whether large surfaces show a
-  grid, whether something off or waiting is dashed, whether small labels are in capitals)
-  and a palette for the dark and the light appearance. The appearance is System (the
-  system's light or dark mode), Dark or Light.
-- `tokens.json` names the default theme in one field, `default`; the generated files list it
-  first and every app starts with it, so changing the default is one word.
-- A theme draws only the app's own surfaces: the background, the tiles, the cards, the
-  lines, the type and the accent. The system's controls (switches, menus, sheets, the
-  keyboard, dialogs, Face ID) keep the system's look in every theme.
-- Glass and Liquid Glass use Liquid Glass from iOS 26 on Apple's systems; the flat themes
-  draw their surface with their line instead. Android has no Liquid Glass: its glass tiles
-  are the palette's glass colour with a hairline, over the same glow of the accent.
-- On Android 12 and later a further choice, **Wallpaper** (Material You), takes the colours
-  from the wallpaper through dynamic colour, in the Precise theme's shape.
-- The watches and the Live Activity take only the theme's dark colours.
-- Contrast meets WCAG AA for text in every palette, 4.5:1 on the background and on a
-  surface, the dim text, the danger colour and the accent (badges and links) included; the
-  generator checks it.
+- **Eleven themes** defined in `apps/design/tokens.json`: **Chalkboard** (`board`, default—matching
+  the website), **Blueprint**, **Precise**, **Glass**, **Soft**, **Swiss**, **Hardware**,
+  **Art Deco**, **Liquid Glass**, **Terminal**, and **Retro**.
+- Each theme specifies style tokens (display/body/mono fonts, corner radii for buttons/cards/tiles/chips,
+  stroke width, material [`flat`, `glass`, `liquid`, `metal`], optional surface grid, dashed
+  inactive lines, uppercase small labels) plus separate `dark` and `light` palettes. Appearance
+  follows **System**, **Dark**, or **Light**.
+- `tokens.json` sets `"default": "board"`; `go run ./tools/tokens` places the default theme first in
+  all generated files.
+- Themes style only app surfaces, borders, typography, and accent; native system controls (switches,
+  sheets, dialogs, biometric prompts) retain the platform look.
+- **Glass** and **Liquid Glass** use Liquid Glass on iOS 26 and macOS 26; Android renders glass
+  surfaces with palette opacity and a hairline border.
+- Android 12 and later add **Material You** (dynamic wallpaper colors using **Precise** geometry).
+  Aurora OS follows the system ambience.
+- Watch apps and Live Activities / Live Views use the dark palette only.
+- `go run ./tools/tokens -check` fails if any palette falls below 4.5:1 WCAG AA contrast for text,
+  dim text, danger text, or accent text on background or surface.
 
 ## Layout of the repository
 
-- `apps/ios/` — the app (SwiftUI): `project.yml` describes the Xcode project for XcodeGen
-  (`cd apps/ios && xcodegen generate`; the generated project is not committed), built and
-  tested on an iPhone simulator in CI without signing; and
-  `apps/ios/CBBKit`, the Swift package around the Rust core (`CoreMember`, `CorePairing`,
-  Bonjour, the share's media, the recovery card's bytes). It has no UI and runs on Linux
-  too; its tests drive the core's member and pairing (`CoreMemberTests`, `CorePairingTests`,
-  `WindowTests`).
-- The app finds the members by browsing `_cbb._tcp` (CBBKit's
-  `BonjourBrowser` on iOS) and hands their addresses to its member in the Rust core
-  (`CoreMember`, docs/core-api.md, "The member"), which keeps one connection to each member
-  of its group. iOS asks once for local network access: the Info.plist lists
-  `_cbb._tcp` under `NSBonjourServices` and explains the use in
-  `NSLocalNetworkUsageDescription`.
-- A phone joins a group from its Start screen with "Join a group": it scans the QR code an
-  admin of the group shows in "Add a device" (a phone's "+", a computer's "Add a device"), or
-  types the six digits under it, which it finds on the home network by Bonjour (NsdManager
-  on Android, mDNS through the core on Aurora). The window admits the phone as a member; the
-  root makes it an admin later ("Make it an admin" on its device page) when the phone offered
-  an admin key while it joined. The phones make the group, admit and join through the Rust
-  core (each kit's `CorePairing` over ffi's `cbb_group_new`, `cbb_window_*`, `cbb_joiner_*`
-  and `cbb_invite_*`), and every record a phone signs is written by the core after Face ID or
-  the system's biometrics (`CoreMember.act`, docs/core-api.md, `cbb_member_manage`). On 0.6
-  nothing takes the group over or hands it on: only the recovery key changes the root.
-- On a group of 0.6 a phone still in the group changes the root to itself with the
-  recovery key ("Move the group to this phone" in its settings; the member's `change_preview`
-  and `change_root`, docs/core-api.md, docs/protocol.md, section 10, rule 33). The screen
-  takes the sheet's QR code or its text, or, on the iPhone, Android and HarmonyOS, the
-  YubiKey that holds the key; it then shows who stays, lets the person leave devices out
-  (never this phone), and after Face ID or the system's biometrics signs the change with
-  the recovery key and the phone's new root key. A new phone joins afterwards through the
-  new root's window, and restoring on a phone in no group comes with 0.7 (D-125).
-- The recovery key on a YubiKey, over NFC or USB-C (docs/protocol.md, section 9, "The
-  recovery key on a YubiKey (0.6)"; `cbb_piv`, docs/core-api.md): the core speaks PIV and the
-  app only carries the card's bytes (the kits' `RecoveryCard`). Right after a group is made the
-  root phone does not show the sheet at once: it offers "Write on a sheet" and "Write to
-  YubiKey", both allowed, and leaving without either asks first ("Leave without saving the
-  recovery key?"), since without the key a lost phone means a new group. The sheet, once
-  chosen, prints or saves with the system's own tools (Android's printing and its "Save as
-  PDF", the iPhone's printing and Save to Files, HarmonyOS's printing and its save picker,
-  a PDF in Documents on Aurora OS), with the warning that a saved file is the group's key, to
-  be copied off the phone. "Write to YubiKey" first waits for the key ("Insert your YubiKey or
-  hold it to the phone": USB-C and NFC at once on Android and HarmonyOS, the first found
-  taking the step; USB-C only on Aurora OS; on the iPhone a key plugged in is found by itself
-  and "Scan with NFC" opens the system's NFC sheet after the PIN), then asks its PIN (over NFC,
-  holding it to the phone again), and the core seals the sheet's secret into the card's first
-  empty retired slot (`seal`, naming the group), with its management key as
-  the card keeps it, never asked about (D-127). Sealing needs no touch: the key's touch
-  policy asks for one only when it is used, so while it writes the screen says "Writing to
-  the YubiKey" and then the result. A YubiKey older than firmware 5.3, or one whose
-  management key the app cannot use, takes the sheet only. The change-root screen's "Use a
-  YubiKey instead" opens the secret with the PIN and a touch (`open`) and hands it to
-  `change_root`. A YubiKey plugged in already is used; otherwise the phone waits for a tap
-  and, on Android and HarmonyOS, for a plug, and takes whichever comes first; on USB the
-  screen asks for the touch when the key blinks.
-  On Android NFC is the activity's reader mode and USB-C the key's CCID interface through
-  `UsbManager`, after the system asks the person to allow it (`YubiKey.kt`: `YubiKeys`,
-  `YubiKeyNfc`, `YubiKeyUsb`; the transport `ccid_bulk`, where the core frames each APDU); on
-  HarmonyOS the NFC tag's IsoDep and `usbManager` the same way (`YubiKey.ets`); on the iPhone
-  NFC is Core NFC's sheet (`App/YubiKeyNfc.swift`), which needs the NFC entitlement of the
-  Apple developer account: a build signed ad hoc cannot read the YubiKey, and `device.sh` with
-  `CBB_NFC=1` asks the team's profile for it. A YubiKey in an iPhone's USB-C port goes through
-  CryptoTokenKit (`App/YubiKeyUsb.swift`), where iOS drives the CCID interface and the app
-  sends whole APDUs; when iOS gives the app no slot manager the app stays with NFC. Whether
-  iOS asks for an entitlement for it is left to the real-card test before rc.1. On Aurora OS
-  the system's pcscd takes a YubiKey plugged into the USB-C port itself (the R570E's
-  ifd-ccid lists the YubiKey, and pcscd's socket is open inside the sandbox), so the app
-  passes the transport `pcsc` and the core is pcscd's client (`PivThread` in `src/app.cpp`):
-  the sheet page seals onto it and the change-root screen opens it; not yet tried with a real
-  card on the phone (docs/parity.md).
-- `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
-  the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
-  `packaging/fdroid` the F-Droid recipe.
-- `apps/macos/` — the Mac app (SwiftUI): `project.yml` for XcodeGen, like the iPhone app's.
-- `apps/desktop/` — the tray app for Linux and Windows (Go, Wails 3), a Go module of its own.
-- `apps/design/` — tokens and the icon (`icon/light.png` and `icon/dark.png`, the clipboard
-  drawings; `go run ./tools/icon` sets each on a fill of its colour as the iPhone app's icon
-  for light and dark mode, and the Android app takes the same drawings; `icon/aurora.svg` is the Aurora app's launcher icon in the style of Aurora's own (a dark teal tile, the clipboard and the key with circuit traces), with `icon/aurora.png` drawn from it at 1024 px for `apps/silica/build.sh`; `icon/tray/` holds the single-colour glyph of
-  the Mac's menu bar and the tray in three states, which the tool copies into the Mac app's asset catalog as template
-  images and turns into the tray's symbolic SVGs and white and black PNGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
-  `apps/ios/CBB/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the
-  WCAG AA contrast, and CI checks that the generated files are up to date; [the glossary](reference/glossary.md) holds the shared terms, so
-  every app uses the same words.
-- The protocol both apps speak is [protocol.md](protocol.md).
+- `apps/ios/` — iPhone, iPad, Apple Watch, Widgets, ShareExtension, and NotificationService
+  (SwiftUI). `project.yml` generates `CBB.xcodeproj` via XcodeGen (not committed).
+  `apps/ios/CBBKit/` wraps the Rust core (`CoreMember`, `CorePairing`, `Discovery`,
+  `BonjourBrowser`, `RecoveryCard`, `PhoneGroup`). Platform-independent tests run on Linux;
+  network-backed tests (`CoreMemberTests`, `CorePairingTests`, `WindowTests`, `DiscoveryTests`) are
+  guarded by `#if canImport(Network)` and run on Apple platforms. The app browses `_cbb._tcp` via
+  `BonjourBrowser` (declared in `NSBonjourServices` with `NSLocalNetworkUsageDescription`).
+- `apps/android/` — Gradle project (Kotlin, Compose) containing `kit` (JVM protocol/FFI wrapper),
+  `shared` (tokens, glyphs, `WatchState`), `app` (`full` and `fdroid` flavors, phone/tablet/TV), and
+  `wear` (Wear OS). Reproducible F-Droid recipe lives in `packaging/fdroid/`.
+- `apps/silica/` — Aurora OS 5, Aurora OS 4, and Sailfish OS app (Qt 5.6, Silica QML, C++ over
+  `ffi/`), with platform-specific keystore and shell layers in `src/platform/` and per-target RPM
+  specs in `packaging/`.
+- `apps/harmony/` — HarmonyOS 5 and later phone/tablet app (`entry/`) and watch module
+  (`wearable/`) in ArkTS/ArkUI over a Node-API C++ wrapper (`entry/src/main/cpp/`), with
+  account-free ArkTS checking (`check.sh`) and Node.js logic tests (`nodetest/`).
+- `apps/macos/` — macOS menu bar and desktop app (SwiftUI), generated from `project.yml` via
+  XcodeGen.
+- `apps/desktop/` — Linux and Windows tray app (Go, Wails 3, plain HTML/CSS/JS frontend), a
+  standalone Go module.
+- `apps/design/` — Shared design tokens (`tokens.json`) and master icons (`icon/light.png`,
+  `icon/dark.png`, `icon/aurora.svg`, `icon/tray/*.svg`):
+  - `go run ./tools/tokens` generates `apps/ios/CBB/Theme/Tokens.swift` (shared with macOS),
+    `apps/android/shared/src/main/kotlin/tools/cbb/Tokens.kt`, `apps/desktop/frontend/tokens.js`,
+    and HarmonyOS default-theme color resources
+    (`apps/harmony/entry/src/main/resources/{base,dark}/element/color.json` and
+    `apps/harmony/wearable/src/main/resources/base/element/color.json`).
+  - `go run ./tools/icon` generates launcher icons for iOS (light and dark), Apple Watch, macOS,
+    Android adaptive foreground, and HarmonyOS (app, phone, watch); menu bar template SVGs for macOS
+    and symbolic SVGs, white/black PNGs, and white/black ICOs in `apps/desktop/trayicon/`; and the
+    ZX Spectrum Next logo.
+- **YubiKey recovery integration (`cbb_piv`, D-127; [protocol.md](protocol.md), section 9, "The
+  recovery key on a YubiKey"):** The Rust core speaks PIV (`seal` and `open` via `RecoveryCard` or
+  native bindings), placing the sealed recovery secret in the first unused retired slot (95 down to
+  82) without altering the card's management key (requires firmware 5.3 or later). Each platform
+  supplies only the card transport:
+  - **Android (`YubiKey.kt`: `YubiKeys`, `YubiKeyNfc`, `YubiKeyUsb`):** Activity NFC reader mode
+    (`apdu`) and USB-C CCID via `UsbManager` (`ccid_bulk`), listening to both simultaneously.
+  - **HarmonyOS (`common/YubiKey.ets`):** NFC IsoDep (`apdu`) and USB-C `usbManager` (`ccid_bulk`),
+    listening to both simultaneously.
+  - **iPhone and iPad (`App/YubiKeyNfc.swift`, `App/YubiKeyUsb.swift`):** Core NFC sheet (requires
+    the NFC entitlement from the Apple developer account; `CBB_NFC=1` in `device.sh`) and
+    CryptoTokenKit (`TKSmartCardSlotManager`) for USB-C. Note that `ChangeRootView.swift` currently
+    gates **Use a YubiKey instead** on `YubiKeyNfc.available`.
+  - **Aurora OS (`PivThread` in `src/app.cpp`):** USB-C only through the system `pcscd` socket
+    (transport `pcsc`).
+- Shared user-facing terminology lives in [the glossary](reference/glossary.md) and
+  `apps/l10n/terms.json`; the wire protocol is specified in [protocol.md](protocol.md).

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 7ef374d1aa17 -->
+<!-- source: 03894eb46cc0 -->
 # 工作原理
 
 写给想了解复制内容会经历什么，以及 Connect Beyond Borders 如何连接各台设备的人。Connect Beyond Borders 在你自己的设备之间共享同一个剪贴板，不需要账号、云服务或中央服务器。
@@ -36,7 +36,7 @@ Connect Beyond Borders 分层保护每一份复制内容：
 
 | 角色 | 哪些设备 | 做什么 |
 |---|---|---|
-| **主设备**（在命令行工具和图示中称为 *root*） | 创建群组的手机，或[不使用应用](without-app.md)时使用的电脑 | 保管群组的主密钥，添加和移除设备，指定管理员，并设定群组规则 |
+| **主设备**（在命令行工具中称为 *root*） | 创建群组的手机，或[不使用应用](without-app.md)时使用的电脑 | 保管群组的主密钥，添加和移除设备，指定管理员，并设定群组规则 |
 | **管理员** | 主设备选定的另一部手机或一台电脑 | 添加和移除普通设备，冻结被盗的管理员电脑，并发送[远程粘贴](remote-paste.md)等管理操作；管理员手机还可以移除另一名管理员 |
 | **成员** | 每台电脑、手机和小型设备（例如路由器或 Raspberry Pi；见[小型设备](../../member/README.md)） | 同步剪贴板 |
 | **无 root 成员** | 不使用管理员权限（`sudo`）安装的 Linux 电脑 | 像普通成员一样同步，但不能成为主设备、管理员或中心节点（[无 root 成员](#rootless-members)） |
@@ -47,9 +47,9 @@ Connect Beyond Borders 分层保护每一份复制内容：
 设备保存密钥的位置，决定了设备被盗时窃贼能拿走什么：
 
 - **手机**在安全硬件内生成密钥——iPhone 上的安全隔区（Secure Enclave）、Android 密钥库（StrongBox 或 TEE）、Aurora OS 上的安全元件，或 HarmonyOS 上的 HUKS——且密钥始终留在其中。签署管理变更时需要验证你的面容、指纹、密码，或（在 Aurora OS 上）应用自己的 PIN 码；日常同步无需验证即可工作。
-- **电脑**会在硬件可用时将成员密钥和管理员密钥保存在硬件中：配备 Apple 芯片或 T2 芯片的 Mac 使用安全隔区，Linux 和 Windows 电脑使用硬件安全芯片（TPM）。没有这类硬件的电脑、小型设备以及充当主设备的电脑，则将密钥保存在只有 Connect Beyond Borders 能读取的文件中。
+- **电脑**会在硬件可用时将成员密钥和管理员密钥保存在硬件中：配备 Apple 芯片或 T2 芯片的 Mac 使用安全隔区（Secure Enclave），Linux 和 Windows 电脑使用硬件安全芯片（TPM）；充当主设备的电脑也会把主密钥保存在其中。没有这类硬件的电脑和小型设备，则将密钥保存在只有 Connect Beyond Borders 能读取的文件中。
 
-关于密钥存储和验证的完整说明，见[密钥与证明](keys.md)。
+关于密钥存储和验证的完整说明，见[密钥与认证](keys.md)。
 
 ### 无 root 成员
 
@@ -127,16 +127,16 @@ Steam Deck 支持常规安装，因为其用户拥有 `sudo` 权限；详见[在
 
 设备会优先尝试中心节点的直接地址，只有在直连没有响应时才使用转发器。
 
-## 封锁 VPN 的网络
+## 屏蔽 VPN 的网络
 
-部分酒店和办公室 Wi-Fi 网络、移动运营商以及某些国家会封锁标准 WireGuard 流量。默认情况下，中心节点会伪装其隧道，让连接得以通过：
+部分酒店和办公室 Wi-Fi 网络、移动运营商以及某些国家会屏蔽标准 WireGuard 流量。默认情况下，中心节点会伪装其隧道，让连接得以通过：
 
 - **AmneziaWG**：随机化数据包头并添加填充，使隧道在网络传输中看起来不像 WireGuard。
 - **VLESS**（使用转发器时）：将伪装后的隧道承载在看起来像访问转发器网站的普通 HTTPS 连接中。
 
-设备会先尝试速度更快的 UDP 上的 AmneziaWG，在 UDP 被封锁时再切换到 HTTPS 上的 VLESS。启用 VLESS 后，设备绝不会回退到普通 WireGuard，因此过滤网络不会看到未伪装的 VPN 流量。
+设备会先尝试速度更快的 UDP 上的 AmneziaWG，在 UDP 被屏蔽时再切换到 HTTPS 上的 VLESS。启用 VLESS 后，设备绝不会回退到普通 WireGuard，因此过滤网络不会看到未伪装的 VPN 流量。
 
-电脑、小型设备（MIPS 路由器除外，这类设备仅支持在家同步；见[设备、端口与文件](../reference/devices.md)）以及所有手机应用都支持 AmneziaWG 和 VLESS。无论隧道如何伪装，复制内容始终位于 WireGuard、双向 TLS 和端到端加密的保护之下。要修改这些设置，见[封锁 VPN 的网络](blocked-networks.md)和[命令行参考](../reference/cli.md)。
+电脑、小型设备（MIPS 路由器除外，这类设备仅支持在家同步；见[设备、端口和文件](../reference/devices.md)）以及所有手机应用都支持 AmneziaWG 和 VLESS。无论隧道如何伪装，复制内容始终位于 WireGuard、双向 TLS 和端到端加密的保护之下。要修改这些设置，见[屏蔽 VPN 的网络](blocked-networks.md)和[命令](../reference/cli.md)。
 
 ## 没有中心节点：盲中继
 

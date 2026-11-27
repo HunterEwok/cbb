@@ -10,7 +10,7 @@ certificate roots, a user (65532) and its two directories. It runs as that user,
 capabilities, no `/dev/net/tun` and no `--privileged` (the tunnel runs in the process), and
 works with a read-only root file system. Its state is one volume, `/var/lib/cbb`.
 
-Each release publishes it as `ghcr.io/hunterewok/cbb` (from 0.5), tagged with its
+Each release publishes it as `ghcr.io/hunterewok/cbb`, tagged with its
 version and `latest`, with a build provenance attestation; the release notes give its
 digest. The version and `latest` move to an image only after the release is signed with the
 offline release key, by the digest the signed `release.json` names; until then the build
@@ -26,12 +26,13 @@ network, since mDNS and the member port must be on the home network:
 
 ```sh
 docker compose -f compose.home.yaml up -d
-docker compose -f compose.home.yaml exec cbb cbb pair
+docker compose -f compose.home.yaml exec cbb cbb pair -code
 ```
 
-The container is named `cbb`, so `docker exec -it cbb cbb pair` works
-too. `cbb pair` shows the QR code for the phone app and takes the code of `cbb pair` on the
-group's root or an admin. Join it as an ordinary member: the keys that admit devices belong
+The container is named `cbb`, so `docker exec -it cbb cbb pair -code` works
+too. Open a pairing window on the group's main device or an admin (`cbb pair`, or **Add a
+device** in the app), then type its 6-digit code here; the container finds the window on the
+home network. Join it as an ordinary member: the keys that admit devices belong
 on the devices you hold, not on a server. The container cannot change the host's firewall;
 let the home network reach TCP 8764 (or `CBB_PORT`) and UDP 5353.
 
@@ -47,8 +48,10 @@ has them. So it holds none of the keys that admit and remove devices: `cbb new` 
 refuses to make a group, and it offers no admin key, so the root cannot make it an admin
 (the image sets `CBB_CONTAINER`). Make the group on the phone or on a computer you hold.
 
-That also keeps it from being the hub for sync away from home, since the members take the
-hub's offer from the root or an admin only. If you accept the risk and guard the volume,
+It can still pass copies on for sync away from home without reading them: on the main device,
+`sudo cbb global hub -on NAME -forward-only` makes it a forwarding-only hub. To be a full hub it
+has to be an admin, since the members take a full hub's offer from the root or an admin only.
+If you accept the risk and guard the volume,
 set `CBB_KEYS_IN_FILE: "yes"` in its `environment`, make it an admin (`cbb admin -allow-file-key NAME` on the
 root), turn on sync away from home and run `cbb global hub -firewall no PUBLIC_ADDRESS:8764`
 (or with `-forwarder`), which prints the

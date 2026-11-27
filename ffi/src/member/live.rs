@@ -169,8 +169,8 @@ struct ManageArgs {
     /// its admin key is `key`, a SubjectPublicKeyInfo in base64.
     #[serde(default)]
     os: String,
-    /// The signing key's SubjectPublicKeyInfo in base64; absent for a step
-    /// that signs nothing, as change_preview.
+    /// The signing key's uncompressed P-256 point (65 bytes) in base64;
+    /// absent for a step that signs nothing, as change_preview.
     #[serde(default, with = "cbb_core::bytes::b64")]
     public: Vec<u8>,
 }

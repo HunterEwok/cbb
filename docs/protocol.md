@@ -8,7 +8,7 @@ repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 
 This document specifies protocol version 1 of Connect Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
-implementations follow it today: Go (`cbb-helper`, the forwarder, and the references the tests check against), Rust
+implementations follow it: Go (`cbb-helper`, the forwarder, and the references the tests check against), Rust
 (`cbb` on the computers and small devices, `core/`, whose member the phones' apps run too,
 through `ffi/`), Swift
 (`CBBKit`) and Kotlin (`apps/android/kit`), with shared test vectors in `testdata/interop`.
@@ -184,8 +184,7 @@ so are the texts a person or a server reads (a link, a pin).
   strings; and the SHA-256 of a file (release files, Docker digests), which `sha256sum`
   prints.
 - **Fingerprints.** A TLS key outside the records (a forwarder's or a relay's, whose
-  fingerprint is its pin, or the key of the ESP32 firmware's certificate, section 7) has one
-  fingerprint: SHA-256 over its SubjectPublicKeyInfo (DER), in standard base64. A device's key
+  fingerprint is its pin) has one fingerprint: SHA-256 over its SubjectPublicKeyInfo (DER), in standard base64. A device's key
   in the records is named by its key hash (above).
 - **Signed bodies.** The body of a release file (section 16) is signed as bytes and passed on
   unchanged, so every member MUST read it alike; a manifest in JSON is read by the same rules,
@@ -232,16 +231,16 @@ so are the texts a person or a server reads (a link, a pin).
 | Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `core/src/certs.rs` |
 | Copy ID | 16 random bytes per copy | `cbb_core::copies` |
 | Group tag | the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters | `member::live::tag` |
-| Member host name | `cb-<device ID>.local` (the mDNS host name) | `DeviceID.HostName` |
-| Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
+| Member host name | `cb-<device ID>.local` (the mDNS host name) | `cbb_core::certs::DeviceId::host_name` |
+| Service instance | `<device ID>._cbb._tcp.local` | `member/src/discovery.rs` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while their pairing window is open. CBB's only port: it also serves the pairing windows | `member/src/lib.rs`, `member/src/discovery.rs` |
-| mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
-| Member ALPN | `cbb/4` | `cbb_core::alpn`, `group.MemberProtocol` |
+| mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `member/src/discovery.rs` (the `mdns-sd` crate) |
+| Member ALPN | `cbb/4` | `cbb_core::alpn` |
 | Pairing ALPN | `cbb-pair/3` | `cbb_core::alpn` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/3` (section 13) | `internal/forward` |
 | Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/3`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
-| Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
-| Join QR text | `cbb://join?code=` followed by the six-digit code (section 7) | `phone.JoinQR`, `phone.ParseJoinQR` |
+| Pairing code | six ASCII digits; spaces a user types are removed | `cbb_core::join::invitation::home_secret` |
+| A home window's QR text | `cbb://pair?` with the window's addresses, key hash, ID and six digits (section 7) | `cbb_core::join::invitation::WindowLink` |
 
 Device IDs, event IDs and group tags compare as byte strings. Accepting peers: the member
 port MUST accept TCP connections only from addresses that mDNS would publish (private IPv4,
@@ -269,7 +268,7 @@ TLS needs a certificate, so each side presents the key container of its member k
 checks byte for byte and never as a certificate. Two certificates remain, outside the group:
 the one a device registers with on a forwarder or a relay, of its server key, which names
 neither a device nor a group (section 18; `internal/group`, `ServerCertificate`), and the
-certificates of the ESP32 firmware (section 7).
+self-signed certificates of the ESP32 firmware's self-test (`esp32/src/selftest.rs`).
 
 ## 3. Discovery (mDNS)
 
@@ -316,13 +315,13 @@ TXT strings (each at most 255 bytes):
 | `i` | window ID | with `p`: the home window's ID, 32 lowercase hex characters, by which a new device that has only the six digits typed into it finds the window and builds its password (section 6, "Pairing in 0.6"); never the digits |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` names a phone, which the members do not dial, since it dials them; no app publishes it, since no phone is a hub (D-134) |
 
-A computer or a phone whose pairing window of 0.6 is open publishes `v=1`, `g=<tag>`, `p=1`,
+A computer or a phone whose pairing window is open publishes `v=1`, `g=<tag>`, `p=1`,
 `f=<key hash>`, `i=<window ID>` (`member/src/discovery.rs`), so that a new device whose person
 typed the window's six digits (`cbb pair -code`, the Aurora app, the ZX Spectrum Next's `.cbb
 pair`) dials the one window, checks its key and joins with the digits and that ID; a device
 that scanned the window's QR code has all three from the code. Nobody compares a code on two
-screens. The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
-member without `dials` publishes `v=1`, `g=<tag>`, `r=listen`. A receiver MUST ignore keys it does not
+screens. `cbb` publishes them in the order `v=1`, `g=<tag>`, then `r=listen` on a member
+without `dials`, then a window's `p=1`, `f` and `i`. A receiver MUST ignore keys it does not
 know, MUST match keys without regard to case, and MUST take as the value what follows the first `=`.
 A member MUST NOT dial a peer whose `g` is not its group's tag.
 
@@ -523,7 +522,7 @@ would grant more, change the mode, or change what the person compares or approve
 | 25 | `entries` | as `release`, for `entries.json` | 16 |
 | 26 | `waiting` | the holder (a hub) to a device that may admit | 12 |
 | 27 | `dismiss` | that admin to the holder | 12 |
-| 28, 29 | `push`, `push-renew` | member to phone, about push ([format](format.md), section 9.6) | 4 |
+| 28, 29 | `push`, `push-renew` | `push` phone to member, `push-renew` member to phone ([format](format.md), section 9.6) | 4 |
 | 30 | `want` | record IDs or a list's hash: "give me these" | 10 |
 | 64–69 | pairing | `cbb-pair/3` only | 6 |
 | 80–84 | forwarder | device and forwarder | 13 |
@@ -998,51 +997,40 @@ joins with one Join button (`cbb_joiner_new`, `ffi/src/joiner.rs`).
 
 ### The window's QR code (0.6)
 
-Source: `ffi/src/window.rs` (`qr_text`), `ffi/src/joiner.rs` (`read_code`).
+Source: `core/src/join/invitation.rs` (`WindowLink`, `WINDOW_PREFIX`, `MAX_WINDOW_TEXT`,
+`MAX_WINDOW_ADDRS`); the apps call it through `ffi/src/window.rs` and `ffi/src/joiner.rs`
+(`read_code`).
 
 The QR code a member shows while its pairing window is open (section 6, "The window and who
-dials"), which the new phone scans:
+dials"), which the new device scans:
 
 ```
-cbb://pair?addr=192.168.1.20%3A8764&addr=%5Bfd00%3A%3A20%5D%3A8764&fp=<64 hex digits>
+cbb://pair?addr=192.168.1.20%3A8764&addr=%5Bfd00%3A%3A20%5D%3A8764&fp=<64 hex digits>&i=<32 hex digits>&c=<six digits>
 ```
 
 | Field | Count | Meaning |
 |-------|-------|---------|
-| `addr` | one to four | the member's addresses with its member port, `host:port`, best first; an IPv6 host in brackets |
+| `addr` | one to four | the member's addresses with its member port, `host:port`, best first; an IPv6 host in brackets; percent-encoded (Conventions, "Bytes") |
 | `fp` | one | the key hash of the member's TLS key ([format](format.md), section 12), 64 lowercase hex digits |
+| `i` | one | the window's ID, 32 lowercase hex digits, not all zero (the same ID as the mDNS record's `i`, section 3) |
+| `c` | one | the window's six digits, CPace's password (section 6) |
 
-The values are percent-encoded (Conventions, "Bytes"). A reader matches the scheme and the host
-`pair` without regard to case, decodes only percent escapes, ignores fields it does not know,
-keeps at most the first four addresses and drops one it cannot read; a text without `fp` or
-without an address is not a window's QR code. Nothing in it is secret: the code both persons
-compare binds the session.
+A reader takes a text of at most 512 bytes (`MAX_WINDOW_TEXT`) that starts with
+`cbb://pair?` exactly, after leading and trailing white space. It refuses a text with a
+fifth `addr`, an `addr` it cannot decode or an empty one, a second `fp`, `i` or `c`, a value of
+the wrong form, or a missing `fp`, `i`, `c` or address; it skips a field it does not know.
+The code carries the window's digits, so whoever sees it can join while the window is open,
+as whoever is told the digits can: the window takes one attempt at a time and closes after
+three failed ones (section 6).
 
 ### The join QR code of the ESP32 firmware
 
-Source: `core/src/pair.rs` (`join_qr`, `parse_join_qr`).
-
-The QR code that the ESP32 firmware shows while it waits to join carries a URL. No device
-of 0.6 dials it, so the board joins no group of 0.6; it joins by a pairing window from 0.7.
-
-```
-cbb://join?code=123456&addr=192.168.1.20:8764&addr=[fd00::20]:8764&fp=<fingerprint>
-```
-
-| Field | Count | Meaning |
-|-------|-------|---------|
-| `code` | one, first | the six-digit pairing code |
-| `addr` | zero to four | where the joiner listens, `host:port`, best first; an IPv6 host in brackets |
-| `fp` | one | the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints") |
-
-The values are percent-encoded (Conventions, "Bytes"). A reader matches the scheme and the
-host `join` without regard to case, decodes only percent escapes, never a `+` as a space,
-ignores fields it does not know, keeps at most the first four addresses and drops an address
-without a port; a text without `code` is not a join QR code.
+The ESP32 firmware joins no group in this release and shows no join QR code (`esp32/src`
+has no join); the only join QR code is the window's, above.
 
 ## 8. Local control socket
 
-Source: `internal/control`, `internal/service/socket.go`, `internal/connector/connector.go`.
+Source: the service, `member/src/control.rs`; the clients, `internal/control` and `internal/connector/connector.go`.
 
 ### Socket and permissions
 
@@ -1441,9 +1429,8 @@ The root writes a watch's `device` record with role `watch`, `rights` `read`, it
 one the watch made, and the powers and commands of `AdminKind::Watch`; its member key, from
 which its device ID comes, is made for the record and dropped at once, so nothing signs a keys
 statement or a copy as the watch, and no copy is sealed to it (D-124). It is never a hub
-(section 11). In 0.6 a watch signs nothing
-from the wrist: records sign a digest (`records::key::sign_es256`), which a watch that must see
-what it signs refuses; signing on the watch comes with 0.7.
+(section 11). A watch signs nothing from the wrist in this release: records sign a digest
+(`records::key::sign_es256`), which a watch that must see what it signs refuses.
 
 #### Rooms and units
 
@@ -1885,7 +1872,7 @@ Field 5 is not used. The device reads it so:
 - the way over VLESS goes to the offer's forwarder endpoint, the first in field 2 that field 9
   gives a key of its own (else the first): on `vless/port` when present, with `vless/host` as
   the TLS server name and HTTP Host (the endpoint's host when absent), always over XHTTP in
-  0.6; a later transport comes in a new field that 0.6 skips. An offer whose way over VLESS
+  this version; a later transport comes in a new field that this version skips. An offer whose way over VLESS
   has no `vless/host` is refused: the forwarder's XHTTP front is checked by the system's
   certificate authorities under a site's name, which an address is not. One without
   `vless/path` is refused too: the path comes from the forwarder's answer to the hub's
@@ -1980,8 +1967,8 @@ passes them between. A group has two kinds of hub, chosen when a device is made 
   copies as every reader does, and as an admin it admits devices; the group's key level
   (section 17) applies to it as to every admin.
 - A hub that **only passes copies on** is a computer whose device record has `forward_only`
-  (section 10), which on 0.6 the group's root alone signs, naming it in the hubs record too;
-  an admin's order for one is refused as not done yet (D-122). No copy is sealed to it, so it
+  (section 10), which the group's root alone signs, naming it in the hubs record too; an
+  admin's order for one is refused (D-122). No copy is sealed to it, so it
   reads none; it makes no copies (every member refuses one whose origin has `forward_only`,
   [format](format.md), section 10.4), writes none to a clipboard and takes no `paste` or `action` command.
   It holds no admin key, so it makes no remote invitation (section 12): a device far away
@@ -2246,8 +2233,8 @@ runs it.
 A server that holds no keys and passes the encrypted WireGuard packets of a group's clients
 to that group's hub, for hubs that clients cannot reach directly ([design.md](design.md),
 "The forwarder"). Implemented in Go (`internal/forward`, `cbb forward`, which reads the
-format with `internal/blind`, D-106), and on the hub in Rust (`member/src/forward`). Routing is by `mac1`; the fallback by a computed port is
-not built.
+format with `internal/blind`, D-106), and on the hub in Rust (`member/src/forward`). Routing is
+by `mac1`.
 
 - The forwarder listens on one port number, UDP for packets and TCP for registrations.
   Its key is an ECDSA P-256 key with a self-signed certificate; hubs pin it by its
@@ -2298,7 +2285,7 @@ forwarder's registration answer.
 
 ### Registration
 
-A hub of 0.6 registers by `cbb-forward/3`, the one protocol the forwarder speaks. Each message
+A hub registers by `cbb-forward/3`, the one protocol the forwarder speaks. Each message
 is one frame of the format (section 4, "Frames"), a map with its type `t` in field 0, its
 length on the format's grid; the forwarder reads at most 1 MiB from the hub in all and closes
 the connection beyond that:
@@ -2507,7 +2494,7 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 The meeting point, on the user's own server or the project's open relay, for a group that has
 no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
 `cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), and on the
-phones through the Live member in a group of 0.6. It holds none of the group's keys: it ends each device's WireGuard
+phones through the Live member. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
 
@@ -2547,9 +2534,7 @@ can change its key or move without a release and without the user:
   Firewall rule), `cbb global allow` lets it reach the new address.
 - Status shows a short reason while it fails, the whole error as its detail.
 
-A relay of the user's own is kept as it was given: a new key means `cbb global relay` with the
-new key on every device. In a group of 0.6 it is the group's setting instead (the `settings`
-record's `servers`, section 10): the root's service, on the `away` request with `name` `relay`
+The group's relay is the group's setting (the `settings` record's `servers`, section 10): the root's service, on the `away` request with `name` `relay`
 and `consent`, signs a new `settings` record whose relays (kind 2) are the ones given, `relay`
 with `relay_key` and then each of `relays` (`address pin`, as `cbb global relay` with several
 `address -key KEY` sends them), each address once, keeping the entries of other kinds; for
@@ -2558,21 +2543,21 @@ with `relay_key` and then each of `relays` (`address pin`, as `cbb global relay`
 so that the root's consent is in the group's settings. With `relay` `off` (`cbb global relay
 off`, no consent asked) it removes every relay. Its answer names their addresses in `relays`.
 A group meets at a relay only when its settings name one: no relay entries mean no relay,
-never the project's by default. A member of 0.6 with sync away from home on meets the group at
+never the project's by default. A member with sync away from home on meets the group at
 the first relay the settings name (`member/src/live/relay.rs`), and at the next when one keeps
 failing for a minute: it registers under the period's server credentials of that relay's face
 (`faces::Faces::for_relay`), waiting until they list its server key, and the relay joins it to
 each device of the group it neither reaches at home nor is connected to (through a hub, say),
 the device with the lower pseudonym dialing. A call the relay brings comes to a loopback port of
 its own, served as a member connection only when the caller's certificate names the device the
-relay said calls (`Mesh::accept_checked`). Hubs and a relay serve side by side on 0.6. A device
-not on the records of 0.6 refuses `relays`: it meets at one relay. A device that is not the root is refused; an admin's
-request to the root has not moved yet (`NotYet`). Every device makes a face for each relay
+relay said calls (`Mesh::accept_checked`). Hubs and a relay serve side by side. A device that
+is not the root is refused ("only the group's root sets the group's relay",
+`member/src/live/relays.rs`). Every device makes a face for each relay
 the settings name (`faces::group_servers`), after the project's servers.
 
 ### Registration
 
-A device of 0.6 registers by `cbb-relay/3`, the one protocol the relay speaks. Each message is
+A device registers by `cbb-relay/3`, the one protocol the relay speaks. Each message is
 one frame of the format (section 4, "Frames"), a map with its type `t` in field 0, its
 length on the format's grid; the relay takes at most 64 KiB from the device:
 
@@ -2706,16 +2691,16 @@ the type, the group, the signer's key, the signer's counter, the times, the rece
 and a random ID, and its orders are sealed to the receiver's `seal` key (X-Wing HPKE), so that
 the members in between read only the header. It is signed by the group's root key or an admin
 key whose `commands` bit allows the type, or, at a leaf, by a commander its grant names. Every
-0.6 writer gives it a lifetime of 30 s. A receiver refuses a command whose counter is not above
+writer gives it a lifetime of 30 s. A receiver refuses a command whose counter is not above
 the last one it kept of that signer, so a command is carried out once, also across restarts.
 
 A computer sends and carries out `mode`, `paste`, `paste-off`, `action`, `actions-off`,
 `away-off`, `mute`, `unmute` and `hub` (`member/src/service/on_live/orders.rs`). A `device`
 command is refused with "this device has no command NAME", since no computer or Pi defines
-commands of its own; the leaves that do, and a way to send one, come with 0.7. The phones carry
-out `mode`, `mute` and `unmute` through their member in the core (`ffi/src/member/live.rs`),
-take `paste-off`, `actions-off` and `away-off` as done, since a phone of 0.6 has none of these
-on, refuse `action` and `device`, answer `paste` that it does not work on a phone yet, and refuse
+commands of its own. The phones carry out `mode`, `mute` and `unmute` through their member in
+the core (`ffi/src/member/live.rs`), take `paste-off`, `actions-off` and `away-off` as done,
+since a phone has none of these on, refuse `action` and `device`, refuse `paste` with
+`live::NotYet` (a phone takes no remote paste), and refuse
 `hub`, since a phone is no hub (D-134).
 
 ### In the member protocol
@@ -2741,7 +2726,7 @@ forwarder's key on first use) or 13 (stop being a hub, alone). Field 12 is retir
 connection (`core/src/hubkey.rs`). The receiver, a computer the records make a hub with sync
 away from home on, refuses a command whose field 10 names another device's key, and otherwise
 becomes a hub at that address with the first forwarder of field 11, as `cbb global hub` makes it
-one (`cbb global hub -on DEVICE` sends it, with one address on 0.6); with field 13 it stops
+one (`cbb global hub -on DEVICE` sends it, with one address); with field 13 it stops
 being a hub (`cbb global hub off -on DEVICE`). `cbb global move DEVICE` sends the new hub its
 command, by default with this hub's forwarder, and once it is done stops this hub. A hub that
 stops sends each client connected an offer with `moved` and the tag of that connection's key;
@@ -2846,7 +2831,7 @@ only to sign; on a server, an encrypted credential of the service that signs
   mirror of Google's revocation list and signs only `attest-status.json` (section 17,
   "Revoked attestations"), never a release.
 - A **channel key**, P-256, which `keys.json` certifies with `use` `channel`. It lives on
-  cbb.tools and signs only channel files, to renew them every week with the release they
+  cbb.tools and signs only channel files, to renew them twice a week with the release they
   already name; it signs no `release.json`, so whoever takes it can at most hold a channel
   on a release the project signed, which a device that has seen a newer version refuses.
 - **The project's forwarder's keys**, P-256, which `keys.json` lists with `use` `forwarder`
@@ -3117,8 +3102,7 @@ the project, where it is reached now (section 14, "The project's relay").
 Where a device keeps its keys decides what a thief with the device gets: a key in a file can
 be copied and used elsewhere until an admin removes the device, a key in hardware (the
 Secure Enclave, the Android Keystore with StrongBox or the TEE, a TPM) signs only on that
-device. The roadmap's key levels (item 31) build on this; this section is what 0.6
-has.
+device.
 
 - A **hello** says where the sender's keys live in `key_store` (section 4); a receiver MUST
   NOT trust it for anything but what the root records, below: the phones send
@@ -3274,8 +3258,8 @@ member whose hello says `rootless` gets `store` `rootless` without an admin key,
 commands. On the records of 0.6 the same evidence goes in the `evidence` message (t 19),
 below. Nothing goes to the
 TPM's maker: a TPM whose EK certificate is not in its NV, as Intel's and AMD's firmware TPMs
-often, stays `hardware` (the strict key level will fetch theirs). The phones do not check
-TPM evidence yet; a phone as the group's root ignores it.
+often, stays `hardware`. The phones do not check TPM evidence; a phone as the group's root
+ignores it.
 
 ### Evidence on the records of 0.6
 
@@ -3451,10 +3435,10 @@ does not know unless its section says it refuses it.
 | ID | Port | Section |
 |---|---|---|
 | `cbb/4` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
-| `cbb-pair/3` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
-| `http/1.1` (or none) | the member port, on a member that serves the iPhone | 7 |
+| `cbb-pair/3` | the member port; TCP 8764 inside a guest tunnel | 6, 12 |
 | `cbb-forward/3` | TCP on the forwarder's port (8764 by default) | 13 |
 | `cbb-relay/3` | TCP on the relay's port (8764 by default) | 14 |
+| `cbb-push/1` | TCP on the project's push service's port (8767 by default) | [format](format.md), section 9.6 |
 | (WireGuard, AmneziaWG) | UDP on the hub's, forwarder's or relay's port (8764 by default) | 11, 13, 14 |
 | (VLESS over XHTTP) | TCP 443 on the web server in front of a forwarder | 11, 13 |
 | (mDNS) | UDP 5353, 224.0.0.251 and ff02::fb | 3 |
@@ -3466,16 +3450,19 @@ does not know unless its section says it refuses it.
 | `EXPERIMENTAL-cbb-pair-v3` | TLS exporter label of a 0.6 pairing: CPace's `sid` and the exporter of the session mark | 6 |
 | `cbb pair channel v3` + `0x00` | CPace's channel identifier prefix in 0.6 | 6 |
 | `cbb forwarder key` | TLS exporter label: a hub's proof of its WireGuard key | 13 |
-| `cbb forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
 | `cbb forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |
 | `cbb forwarder state` | HMAC input: the key of the forwarder's state file | 13 |
 | `cbb relay key` | TLS exporter label: a device's proof of its WireGuard key | 14 |
 | `cbb attest v1` | the attestation challenge's prefix | 17 |
-| `cbb copy v1` | the start of a copy's header, whose hash binds its payload and wraps | 4 |
-| `cbb copy sig v1` | the start of what a copy's origin signs | 4 |
-| `cbb copy payload v1` | HKDF info: a copy's payload key | 4 |
-| `cbb copy blob v1` | HKDF info: a copy's blob key | 4 |
+| `cbb copy v2` | the start of a copy's header, whose hash binds its payload and wraps | 4 |
+| `cbb copy sig v2` | the start of what a copy's origin signs | 4 |
+| `cbb copy payload v2` | HKDF info: a copy's payload key | 4 |
+| `cbb copy blob v2` | HKDF info: a copy's blob key | 4 |
+| `cbb copy commit v2` | HKDF info: the commitment that binds a copy's key | 4 |
 | `cbb blob` | associated data of a blob's segments | 4 |
+
+The labels of the records, statements, commands, credentials, the Welcome, push, the
+recovery key and the seals are in the registries of [format](format.md#14-registries).
 
 Only the pairing label carries the `EXPERIMENTAL-` prefix that RFC 5705, section 4, asks of
 labels not registered with IANA; the forwarder's and the relay's labels do not, which is a
@@ -3499,25 +3486,25 @@ Each message's type and number, with the section that describes it, are in secti
 | Name | Values | Section |
 |---|---|---|
 | Role (hello) | `member`, `phone` | 4 |
-| Role (device record) | `member`, `phone`, `watch` | 10 |
+| Role (device record) | `member`, `phone`, `watch`, `leaf` | 10 |
 | Capabilities (hello `caps`, record `caps`, ADa `caps`) | `admin`, `dials`, `hub` | 4 |
 | System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `harmonyos`, `watchos`, `wearos`, `none` | 4, 10 |
 | Device form | `laptop`, `desktop`, `phone`, `tablet`, `tv`, `board`, `server`, `router`, `console`, `watch`, `retro`, `other` | 4 |
 | Event `kind` | `text`, `secret`, `media` | 4 |
 | Event `via` | `copy`, `phone`, `universal-clipboard` | 4 |
-| Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
+| Media part `type` | `image/png`, `image/jpeg`, `image/gif`, `text/html` | 4 |
 | Sync mode | `shared` (sync on), `own` (sync off) | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |
-| mDNS TXT keys | `v`, `g`, `p`, `j`, `f`, `r` (`listen`, `phone`) | 3 |
-| Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |
-| Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off` | 15 |
+| mDNS TXT keys | `v`, `g`, `p`, `f`, `i`, `r` (`listen`, `phone`) | 3 |
+| Record `type` | `device`, `revoke`, `freeze`, `thaw`, `resolve`, `settings`, `copies`, `checkpoint`, `hubs`, the recovery head, `ack` ([format](format.md), section 4) | 10 |
+| Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off`, `mute`, `unmute`, `device` | 15 |
 | Command result `status` | `done`, `refused`, `failed` | 15 |
 | Quick action presets | `lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`, `restart`, `keyboard-layout` | 15 |
 | Signer kinds of an action | `root`, `phone`, `computer`, `watch` | 15 |
 | Pairing errors | `wrong-code`, `closed`, `busy`, `expired`, `too-many`, `refused`, `declined`, `taken` | 6 |
 | Evidence `format` | `android-key`, `tpm`, `tpm-credential`, `tpm-activated` | 17 |
 | Release file `type` | `keys`, `release`, `channel`, `attest-status` | 16 |
-| Release key `use` | `release`, `status`, `channel` | 16 |
+| Release key `use` | `release`, `status`, `channel`, `forwarder`, `relay`, `push` | 16 |
 | Server credential `type` | `period`, `server`, `hubs`, `members` | 18 |
 
 ### Addresses and URIs
@@ -3527,8 +3514,8 @@ Each message's type and number, with the section that describes it, are in secti
 | Members' tunnel addresses | `fd00:cbb::/32` followed by the first 96 bits of the device ID | 11 |
 | Guests' tunnel addresses | `fd00:cbc::/32` followed by the first 96 bits of SHA-256 of the guest key | 12 |
 | A relay's own tunnel address | `fd00:cbb::1` | 14 |
-| The hub's guest address, inside a guest tunnel (0.6) | `fd00:cbc::1` | 12 |
-| Join QR code | `cbb://join?code=...&addr=...&fp=...` | 6, 7 |
+| The hub's guest address, inside a guest tunnel | `fd00:cbc::1` | 12 |
+| A home window's QR code | `cbb://pair?addr=...&fp=...&i=...&c=...` | 6, 7 |
 | Remote invitation | `cbb://join#...`, file `.cbbinvite` | 12 |
 
 ### Bounds
@@ -3564,7 +3551,7 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `copies::fresh::MAX_SECRETS` | 1024 | reader | secrets listed by ID above the floor |  |
 | `copies::fresh::MAX_ORIGINS` | 1024 | reader | origins with a newest time |  |
 | `copies::blob::SEGMENT` | 65536 | frozen | a blob's plaintext segment, the last one padded with zeros |  |
-| `copies::blob::SEALED_SEGMENT` | 65552 | frozen | a segment and its AES-256-GCM tag, the unit a fetch gets |  |
+| `copies::blob::SEALED_SEGMENT` | 65552 | frozen | a segment and its ChaCha20-Poly1305 tag, the unit a fetch gets |  |
 | `copies::blob::MAX_SEGMENTS` | 16384 | frozen | the largest media copy in segments |  |
 | `content::MAX_STATE` | 4096 | frozen | a device's state | `content/data` |
 | `media::MAX_NAME` | 765 | stated | a file name of 255 characters of 3 bytes | `content/manifest` |
@@ -3606,7 +3593,7 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `records::MAX_SEQ` | 2147483647 | frozen | 2^31 − 1 | `records/seq` |
 | `records::MAX_SEEN` | 1024 | reader | a `seen` list; the body's bound comes first: 1024 of the smallest entries pass MAX_BODY, so the count is a reader's guard that already stands if a later version widens the body | `records/revoke/seen` |
 | `records::body::MAX_RECOVERY` | 64 | stated | 64 recovery records for the group's life | `records/recovery/seq` |
-| `records::body::MAX_KEYS` | 256 | frozen | keys of a settings record | `records/revoke/keys` |
+| `records::body::MAX_KEYS` | 256 | frozen | keys of a revoke or freeze record, or records a thaw or resolve names | `records/revoke/keys` |
 | `records::body::MAX_HUBS` | 16 | stated | hubs of a group | `records/hubs/hubs` |
 | `records::body::MAX_SERVERS` | 16 | stated | servers of a group | `records/settings/servers` |
 | `records::body::MIN_COPY_TTL_MS` | 60000 | frozen | the owner's shortest lifetime of an ordinary copy, a minute | `records/copies/ttl_ms` |

@@ -229,7 +229,7 @@ func files(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // usageCommands are the commands of cbb's usage, each of which prints its
 // usage for -h without doing anything.
 var usageCommands = []string{"copy", "paste", "paste-receive", "action", "status", "remove", "rename", "admin",
-	"takeover", "upgrade", "freeze", "unfreeze", "global", "forward", "relay", "new", "mode", "config", "pair",
+	"takeover", "recovery", "freeze", "unfreeze", "global", "forward", "relay", "new", "sync", "config", "pair",
 	"invite", "update", "version", "network", "service", "agent", "paste-helper", "install"}
 
 // commandLine (U2): cbb version and help, each command's -h, and unknown
@@ -552,7 +552,7 @@ func controlSocket(ctx context.Context, r *Report, f *Fleet) {
 	}
 	for _, c := range []struct{ name, want string }{
 		{"junk", "closed"}, {"long", "closed"}, {"big", "closed"}, {"negative", "closed"},
-		{"unknown", "answered: "}, {"admin", "answered: \"revoke\" changes the group"}, {"short", "closed"},
+		{"unknown", "answered: "}, {"admin", "answered: \"remove\" changes the group"}, {"short", "closed"},
 		{"idle-100", "100 open, 36 closed, status refused while open, answered after"}, {"status", "answered"},
 	} {
 		r.Do(p+c.name, func() error {

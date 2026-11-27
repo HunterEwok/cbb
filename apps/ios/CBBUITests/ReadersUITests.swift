@@ -235,19 +235,25 @@ final class ReadersUITests: XCTestCase {
     /// group (-showcase -showcaseAlerts): a group from before 0.6 with its
     /// Leave, and the member's notices, each in its sentence, pass the
     /// audit in English and in Arabic; Hide hides the notice that may be
-    /// hidden and only it.
+    /// hidden and only it. The group lists no devices (-showcaseNoDevices):
+    /// the audit counts text that runs past the screen's edge as clipped,
+    /// and the tiles under the cards do at the larger text sizes; the tiles
+    /// are audited where they are on the screen whole (PadUITests and the
+    /// languages' tests). With no devices the silent admin is named by its
+    /// ID, as the member names a device the app does not list;
+    /// AppModelTests checks the name of one it lists.
     func testGroupCards() {
         // Text on the clipboard, so that the system's paste button under
         // the cards is on and is audited as a person sees it, not dimmed
         // for a clipboard with nothing it takes.
         UIPasteboard.general.string = "cbb"
         for language in ["en", "ar"] {
-            let app = launch(language: language, extra: ["-showcase", "-showcaseAlerts", "-PasteChoice", "button"])
+            let app = launch(language: language, extra: ["-showcase", "-showcaseAlerts", "-showcaseNoDevices", "-PasteChoice", "button"])
             let before = app.staticTexts[tr("A group from before 0.6", language)]
             XCTAssertTrue(before.waitForExistence(timeout: 30), "\(language): no card about a group from before 0.6 in \(app.debugDescription)")
             let recovery = app.staticTexts[tr("The group's recovery key is not saved yet: without it, losing this phone means making the group again.", language)]
             XCTAssertTrue(recovery.exists, "\(language): no notice of the recovery key")
-            let silent = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'steamdeck'")).firstMatch
+            let silent = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'deck'")).firstMatch
             XCTAssertTrue(silent.exists, "\(language): no notice of the silent admin")
             picture("group-cards-\(language)")
             audit(app, checks, "Home's cards about the group in \(language)")

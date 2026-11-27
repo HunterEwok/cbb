@@ -6,6 +6,8 @@ All notable changes to cbb are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-27
+
 In short, for 0.6: every computer and small device runs one `cbb` in Rust on the same core as
 the phones' apps, with the Go helper beside it on computers; the group's signed records are
 new (version 2, in one strict form of CBOR) and a phone can be the group's root; there are
@@ -72,6 +74,12 @@ with 0.5 is set up again once. The details follow.
   Vale's rules (the termbase's banned words, one-character ellipses, the language's quotes) pass
   on every language, and one English text has one translation (D-133;
   [apps](docs/apps.md), "Words in the apps").
+- The Mac App Store build and offering the iPhone app in France are planned for 0.7 (roadmap 43).
+- CodeQL's Kotlin analysis keeps Gradle and its dependencies in the Actions cache, as the Android
+  jobs do, so Maven Central's limit (status 429) no longer stops it.
+- The iPhone and iPad test of Home's cards about the group shows them with no device tiles under them (`-showcaseNoDevices`), since Xcode's audit counts the tiles' text running past the screen's edge as clipped; a unit test checks how a notice names a device.
+- The away-from-home tests give their hubs UDP ports from below the systems' ephemeral ranges,
+  so a tunnel's socket cannot take a stopped hub's port before the hub starts again.
 - docs/format.md: the wire format of 0.6 byte by byte, written from the core's tables: the CBOR
   profile, keys, envelopes, every record, statement, command, grant, credential, message and copy,
   pairing, the key container, the ceilings and the registries. The code's "format section N"
@@ -2247,6 +2255,37 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The user guide's pages are rewritten to one standard: each is a tutorial, a how-to or an
+  explanation, says what the program does today, and its facts were checked against the code.
+  So are the reference (commands, settings, errors, limits, devices, glossary), the
+  administrators' pages, the README, the docs' map, the apps' page, the shorter engineering
+  pages, the design, the protocol and the wire format; the administrators' pages set a blind
+  relay once, on the main device, and say that every device of a group runs the same release.
+  The wire format now gives the CBOR element ceiling as 65 535, takes a second signature on
+  keys statements, commands and grants, and says a phone sends `push` to a member.
+  The core's API page gives every C function, member event, admin action and operation
+  with its fields as the code has them; an admin action's `public` is the key's uncompressed
+  point.
+  The testing page and the roadmap say what is built today; the roadmap's items keep their
+  numbers and move to Done or Partly done where the code has them; the rest of the 0.6 core
+  (Waves 6 and 7, item 70) is planned for 0.7.
+  The maintainers' guide and the audit plan follow the current workflows, keys and servers;
+  the limits page gives `stable.json` its 14 days and `attest-status.json` its 8.
+  The test bench's pages name the commands and suites `tools/bench` has, the root changed only
+  with the recovery key, and the timeouts and thresholds the code uses.
+  The guide's Russian, Spanish, Chinese, Arabic, Hebrew, Hindi and Swahili translations follow
+  the current English pages.
+  The website's words in those seven languages follow its current English pages.
+- The website says what 0.6 does: a computer at home is the hub and phones are never one, a
+  group of phones meets at a relay, a computer joins by the six digits the phone shows, the
+  main device moves only with the recovery key, the iPhone app comes in 0.7 and the HarmonyOS
+  app waits for AppGallery. It adds the recovery key, admins, signed updates, copy lifetimes,
+  watches, the lab, FreeBSD and OpenWrt, compares with LocalSend too and adds servers and
+  terminals to the comparison; the pictures of the steps and of a group of phones show this.
+  The guide's and the design's diagrams show the six-digit code, the main device, the Rust
+  service with its Go helper, and the Aurora and HarmonyOS apps.
+- The apps say hub, forwarder and relay where they said base, connection server and backup
+  server, and the termbase holds the hub and turns the old words away.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
 - "How it works" explains first what happens to a copy, then the group, its keys and the
@@ -3351,6 +3390,32 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `tools/e2e/drills.sh` runs the phone's recovery drills again (`TestFFIPhoneChangeRoot`,
+  `TestFFIPhoneYubiKey`); it named a test that no longer exists and so ran none of them.
+- `cbb global on`, `cbb global hub -away-on` and `cbb global relay` warn that the device's keys
+  sit in files only where they do; a device with its keys in a TPM or the Secure Enclave is
+  told what sync away from home does, without that warning.
+- The test bench (`tools/bench`) runs today's commands again: `cbb sync` for the sync mode,
+  `cbb status` for the devices, `cbb remove` instead of revoke, and the recovery key for a
+  change of root. G26 takes the root with `cbb recovery` and the sheet that `cbb new` showed,
+  G27 checks that `cbb takeover`, `cbb takeover -delay` and `cbb handover` are refused with a
+  pointer to `cbb recovery`, the random walk (G40) changes the root the same way, and the
+  control-socket case expects the refusal of `remove`, the operation it sends.
+- `cbb takeover`, `cbb takeover -delay` and `cbb handover` print only the service's answer,
+  which points to the recovery key, and no longer a claim that waits; a recovery the service
+  did not finish says so. `cbb`'s help shows that `cbb remote code` reads the TV's code from
+  standard input, and the container's README joins a group with `cbb pair -code` and names the
+  forwarding-only hub.
+- The privacy page says the apps send no bug reports in this version: the key that seals
+  them is not in the build yet.
+- The release builds the iPhone app for TestFlight with Xcode 27.2 and the iOS 27 SDK, as
+  App Store Connect asks of every upload from April 2027; it was built with the iOS 26.5 SDK.
+- No text still points to what 0.6 removed: `cbb` suggests the recovery key, not a takeover,
+  when the root is the only admin; the Aurora app asks to save the recovery key when a group
+  is made; the Android and HarmonyOS apps no longer mention remote paste onto the phone.
+- The iPad's UI test of the sidebar waits up to 20 seconds for the chosen tile to show as
+  chosen: one read of the screen's accessibility tree takes 4 to 12 seconds on CI's small
+  machine, so 5 seconds ran out while the next tile already stood chosen.
 - On an iPhone at the accessibility text sizes the count of devices online stands above the
   sync switches, set by the text size rather than by what fits, so the layout does not
   change while the text grows.
@@ -5323,7 +5388,8 @@ archives, so it has no release.
 - The release build packs the macOS archives with `packaging/macos`; CI now builds every
   release archive on each pull request with the same script, `packaging/archive.sh`.
 
-[Unreleased]: https://github.com/HunterEwok/cbb/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/HunterEwok/cbb/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/HunterEwok/cbb/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/HunterEwok/cbb/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/HunterEwok/cbb/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/HunterEwok/cbb/compare/v0.3.0...v0.4.0

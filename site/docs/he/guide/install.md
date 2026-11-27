@@ -1,178 +1,282 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: c58263ffc4ea -->
+<!-- source: d11a83f383ef -->
 # התקנה
 
-Connect Beyond Borders רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.
+למי שמתקין, מעדכן, מאמת או מסיר את Connect Beyond Borders במחשב, בנתב או בשרת ביתי. לאפליקציות לטלפון, לטאבלט, לשעון ולטלוויזיה, ראו [האפליקציות](apps.md).
+
+‏Connect Beyond Borders פועל כשירות רקע קטן בכל מחשב. כלי שורת הפקודה שלו הוא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותו שירות; בחרו את זו שמתאימה למערכת שלכם.
 
 ## Linux
 
-כל Linux עם systemd (‏x86-64, ARM64, ARMv7, ARMv6): מחשב נייד, מחשב שולחני, Raspberry Pi, שרת, Steam Deck.
+נתמך במערכות Linux עם `systemd` בארכיטקטורות x86-64,‏ ARM64,‏ ARMv7 ו-ARMv6 (מחשבים ניידים, מחשבים שולחניים, לוחות Raspberry Pi, שרתים ו-Steam Deck).
+
+1. הריצו את תוכנית ההתקנה במסוף:
+
+   ```sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+   ```
+
+2. ענו לשאלות על כללי חומת האש (כשנמצאת חומת אש פעילה) ועל עדכונים אוטומטיים יומיים.
+3. התנתקו והתחברו מחדש פעם אחת כדי שהחשבון שלכם (שנוסף לקבוצה `cbb`) יוכל להריץ את `cbb` בלי `sudo`.
+
+בשולחנות עבודה של x86-64 ו-ARM64 שבהם מותקנים GTK 4 ו-WebKitGTK 6.0 (‏`libgtk-4-1 libwebkitgtk-6.0-4` ב-Debian וב-Ubuntu; ‏`gtk4 webkitgtk6.0` ב-Fedora), תוכנית ההתקנה מתקינה גם את אפליקציית המגש (`cbb-desktop`), שמופעלת עם ההתחברות לשולחן העבודה ומופיעה בתפריט האפליקציות שלכם. אם הספריות האלה חסרות, תוכנית ההתקנה מציינת אילו חבילות להתקין; הריצו שוב את תוכנית ההתקנה אחרי שתוסיפו אותן כדי להתקין את אפליקציית המגש.
+
+אפשר להעביר ל-`get.sh` אפשרויות נוספות אחרי `sh -s --`:
+
+- **מסוף טקסט (`--console`):** למכונה בלי שולחן עבודה, מוסיף העתקה והדבקה בתוך `tmux` ומתקין את `cbb-console.service` להדבקה מרחוק במסוף הטקסט:
+
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --console
+  ```
+
+- **דילוג על חלונות אישור הדבקה בשולחן העבודה (`--uinput`):** ב-GNOME וב-KDE, הדבקה מרחוק שואלת פעם אחת בתיבת דו-שיח של המערכת לפני לחיצה על מקשים. הוספת `--uinput` מתקינה את `cbb-uinput.service` וטוענת את מודול הליבה `uinput` כך ש-Connect Beyond Borders לוחץ ישירות על מקשי ההדבקה (לעולם לא במסך התחברות או נעילה). אפשרות זו דורשת את `cbb-helper`.
+- **מכשירים קטנים בלי העוזר (`--no-helper`):** משמיט את `cbb-helper` (תוכנית העזר שמטפלת במפתחות TPM, בלוחות העתקה של שולחן העבודה, בהזרקת מקשים בהדבקה מרחוק, במקלדות Bluetooth ובשלטים לטלוויזיה) במכשירים קטנים שרק מסנכרנים:
+
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --no-helper
+  ```
+
+  ראו [מכשירים קטנים](../../member/README.md). ארכיונים לנתבי MIPS משמיטים את `cbb-helper` כברירת מחדל. ברגע שמכשיר הותקן בלי `cbb-helper`, עדכונים עתידיים משאירים אותו כך.
+
+גם Homebrew ב-Linux ‏(x86-64 ו-ARM64) נתמך:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+brew install hunterewok/tap/cbb
+sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/linux/install.sh" "$(brew --prefix)/opt/cbb/bin/cbb"
 ```
 
-לאחר מכן התנתקו והתחברו מחדש פעם אחת, כדי שהמשתמש שלכם יוכל להשתמש ב-`cbb` בלי `sudo`. מכונה בלי שולחן עבודה מקבלת העתקה והדבקה בתוך tmux באמצעות `--console` (‏`... | sudo sh -s -- --console`).
-
-בשולחן עבודה עם GTK 4 ו-WebKitGTK 6.0 (x86-64 ו-ARM64) הוא מתקין גם את אפליקציית המגש, שנפתחת עם ההפעלה שלכם ונמצאת בתפריט היישומים. בלעדיהם הוא מציין אילו חבילות להוסיף; לאחר מכן הריצו אותו שוב כדי לקבל את אפליקציית המגש.
-
-הדבקה מרחוק ב-GNOME וב-KDE שואלת פעם אחת, בחלון במחשב, לפני שההדבקה הראשונה של מנהל רשאית ללחוץ על המקשים. כדי לדלג על החלון, הוסיפו `--uinput` (‏`... | sudo sh -s -- --uinput`): אז עוזר קטן לוחץ על מקשי ההדבקה (Shift+Insert ו-Enter) עבור מי שמשתמש במסך, ואף פעם לא במסך כניסה או נעילה.
-
-מכשירים קטנים שצריכים רק לסנכרן, כמו נתב או Raspberry Pi Zero, משתמשים באותו מתקין ויכולים לוותר על `cbb-helper`, ששומר מפתחות ב־TPM ומטפל בלוח ההעתקה, במקשים של שולחן העבודה וב־Bluetooth: ‏`... | sudo sh -s -- --no-helper` ([cbb במכשירים קטנים](../../member/README.md)). בארכיון של הנתבים (MIPS) אין עוזר ממילא.
+הריצו שוב את הפקודה השנייה אחרי כל `brew upgrade`.
 
 ### בלי sudo (ללא root)
 
-במחשב Linux שבו אי אפשר או לא רוצים להשתמש ב-`sudo`, התקינו אותו עבור המשתמש שלכם בלבד, בלי `sudo`:
+במחשב Linux שבו אין לכם הרשאות מנהל (`sudo`), התקינו את Connect Beyond Borders לחשבון המשתמש שלכם בלי `sudo`:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-הוא רץ כשירות הרקע שלכם בזמן שאתם מחוברים, ומסתנכרן כמו כל חבר. השתמשו בו רק כשההתקנה הרגילה אינה אפשרית: כל תוכנית שאתם מריצים יכולה להעתיק את המפתחות שלו, ולכן הוא לעולם אינו יכול להיות שורש הקבוצה, מנהל או הרכזת ([איך זה עובד](how-it-works.md#rootless-members)), ואין לו כללי חומת אש, אין לו TPM ואין לו `--console` או `--uinput`. כדי שימשיך לרוץ גם אחרי שתתנתקו, מנהל המערכת מריץ פעם אחת `sudo loginctl enable-linger YOUR-USER`. להסרה: ‏`sh ~/.local/share/cbb/uninstall.sh`. ‏`--no-helper --rootless` משאיר את העוזר בחוץ גם כאן ([בלי sudo](../../member/README.md#without-sudo-rootless)).
+פעולה זו מתקינה את `cbb` ב-`~/.local/bin` ומריצה אותו כשירות משתמש של `systemd` בזמן שאתם מחוברים. אי אפשר להתקין אותו לצד התקנה כלל-מערכתית.
+
+השתמשו בהתקנה ללא root רק כשאי אפשר לבצע התקנה רגילה. מכיוון שכל תוכנית שרצה תחת חשבון המשתמש שלכם יכולה לקרוא את קובצי המפתחות שלו, מכשיר ללא root לעולם לא יכול להיות **המכשיר הראשי**, **מנהל** או **רכזת** ([חברים ללא root](how-it-works.md#rootless-members)). להתקנה ללא root אין גם כללי חומת אש, אין תמיכה ב-TPM ואין את העוזרים `--console` או `--uinput`.
+
+- **המשך פעולה אחרי התנתקות:** אם תוכנית ההתקנה אינה יכולה להפעיל השארת שירותים פעילים (lingering) אוטומטית, בקשו ממנהל מערכת להריץ פעם אחת `sudo loginctl enable-linger YOUR-USER`.
+- **בלי העוזר:** העבירו `--no-helper --rootless` כדי להשמיט גם את `cbb-helper` (ראו [בלי sudo במכשירים קטנים](../../member/README.md#without-sudo-rootless)).
+- **הסרה:** הריצו `sh ~/.local/share/cbb/uninstall.sh`.
 
 ### SteamOS ‏(Steam Deck)
 
-עברו למצב שולחן עבודה, פתחו את Konsole, תנו למשתמש `deck` סיסמה פעם אחת אם אין לו (`passwd`), והריצו את אותה פקודה. SteamOS מחליפה את קבצי המערכת שלה בכל עדכון, ולכן תוכנית ההתקנה מציבה את Connect Beyond Borders ב-`/opt/cbb` במקום ב-`/usr/local`, ואומרת ל-SteamOS אילו מהקבצים שלה ב-`/etc` לשמור (`/etc/atomic-update.conf.d/cbb.conf`). הוא נשאר מותקן ובקבוצה שלו לאורך עדכוני SteamOS.
+1. עברו אל **Desktop Mode** ופתחו את **Konsole**.
+2. אם לא הגדרתם סיסמה למשתמש `deck`, הריצו `passwd` כדי להגדיר אחת.
+3. הריצו את פקודת ההתקנה של Linux:
 
-- `cbb` נמצא בנתיב של Konsole חדש אחרי שמתנתקים ומתחברים מחדש. `sudo` לא מחפש שם, ולכן פקודות שזקוקות לו מקבלות את הנתיב המלא: ‏`sudo /opt/cbb/bin/cbb pair`.
-- במצב שולחן עבודה לוח ההעתקה מסתנכרן כמו בכל שולחן עבודה של KDE Plasma.
-- במצב משחק אין לוח העתקה של שולחן עבודה, ולכן שם שום דבר לא מסתנכרן; השירות ממשיך לרוץ ומדביק את הפער במצב שולחן עבודה.
-- להסרה: ‏`sudo sh /opt/cbb/share/uninstall.sh`.
+   ```sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+   ```
+
+‏SteamOS מחליפה את מערכת הקבצים הראשית שלה בכל עדכון מערכת, ולכן תוכנית ההתקנה ממקמת את Connect Beyond Borders ב-`/opt/cbb` במקום ב-`/usr/local` ורושמת את קובצי ההגדרות שלו ב-`/etc` בתוך `/etc/atomic-update.conf.d/cbb.conf`. ההתקנה והחברות שלכם בקבוצה נשמרות לאורך עדכוני SteamOS.
+
+- אחרי שתתנתקו ותתחברו מחדש, `cbb` נמצא ב-`PATH` שלכם ב-Konsole. מכיוון ש-`sudo` אינו מחפש ב-`/opt/cbb/bin`, פקודות שדורשות `sudo` חייבות להשתמש בנתיב המלא, כמו `sudo /opt/cbb/bin/cbb pair -code`.
+- ב-Desktop Mode, לוח ההעתקה מסתנכרן כמו בכל שולחן עבודה של KDE Plasma.
+- ב-Game Mode, אין לוח העתקה של שולחן עבודה, ולכן שום דבר לא מסתנכרן שם; השירות ממשיך לרוץ ומשלים את הפער כשאתם חוזרים ל-Desktop Mode.
+- כדי להסיר אותו, הריצו `sudo sh /opt/cbb/share/uninstall.sh`.
 
 ## Mac
 
-Apple silicon או Intel, macOS 14 ומעלה: הורידו את `cbb-X.Y.Z.pkg` מ
-[הגרסה האחרונה](https://github.com/HunterEwok/cbb/releases/latest) ופתחו אותו. הוא מתקין את אפליקציית CBB
-בשורת התפריטים ואת השירות, שניהם חתומים על ידי הפרויקט ונבדקו על ידי Apple.
+נתמך במחשבי Mac עם שבב Apple או Intel שמריצים macOS 14 ומעלה.
 
-או ב-Terminal, בלי האפליקציה, אותה פקודה כמו ב-Linux:
+- **חבילת התקנה (מומלץ, כוללת את אפליקציית שורת התפריטים):** הורידו את `cbb-X.Y.Z.pkg` מתוך [הגרסה האחרונה ב-GitHub](https://github.com/HunterEwok/cbb/releases/latest) ופתחו אותו. החבילה מתקינה את אפליקציית שורת התפריטים **CBB** (‏`/Applications/CBB.app`) ואת שירות הרקע, שניהם חתומים ומאושרים בנוטריזציה.
+- **מסוף (השירות ו-`cbb` בלבד, בלי אפליקציית שורת התפריטים):**
 
-```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
-```
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+  ```
 
-או באמצעות Homebrew, שגם מעדכן אותו. הריצו שוב את השורה השנייה אחרי כל `brew upgrade`:
+- **Homebrew (השירות ו-`cbb` בלבד, בלי אפליקציית שורת התפריטים):**
 
-```sh
-brew install hunterewok/tap/cbb
-sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
-```
+  ```sh
+  brew install hunterewok/tap/cbb
+  sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
+  ```
+
+  הריצו שוב את הפקודה השנייה אחרי כל `brew upgrade` כדי להפעיל מחדש את השירות ואת סוכן הלוח על הגרסה המעודכנת.
 
 ## Windows
 
-‏Windows 10 (גרסה 1809 ומעלה) או 11, ‏x86-64 או ARM64, ב-PowerShell שנפתח באמצעות "Run as administrator":
+נתמך ב-Windows 10 (גרסה 1809 ומעלה) וב-Windows 11, בארכיטקטורות x86-64 ו-ARM64.
 
-```powershell
-irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
-```
+1. פתחו PowerShell עם **הפעל כמנהל**.
+2. הריצו את תוכנית ההתקנה:
 
-הוא מאפשר למשתמש שמחובר במסך להשתמש ב-`cbb` (בטרמינל חדש) ומפעיל עבורו את סוכן לוח ההעתקה. פקודות ששינו את הקבוצה רצות בטרמינל שנפתח כמנהל, במקום שבו Linux ו-macOS משתמשים ב-`sudo`.
+   ```powershell
+   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
+   ```
 
-הוא מתקין גם את אפליקציית המגש, שנפתחת בכניסה למערכת ונמצאת בתפריט התחל בשם CBB.
+3. ענו לשאלות על כללי Windows Firewall ועל עדכונים אוטומטיים יומיים.
+4. פתחו חלון מסוף חדש כדי להשתמש ב-`cbb`.
 
-עם winget, אחרי שהחבילה תהיה במאגר של winget:
+תוכנית ההתקנה מוסיפה את המשתמש המחובר לקבוצה `cbb`, מפעילה את שירות הרקע ואת סוכן הלוח, ומתקינה את אפליקציית המגש (שנפתחת בהתחברות ומופיעה בתפריט התחל בשם **CBB**). פקודות שמשנות חברות בקבוצה או הגדרות רצות במסוף מנהל, במקום שבו Linux ו-macOS משתמשות ב-`sudo`.
+
+להתקנה עם **winget** (באמצעות החבילה `HunterEwok.cbb`):
 
 ```powershell
 winget install HunterEwok.cbb
-cbb install           # in the administrator terminal; again after each winget upgrade
+cbb install
 ```
+
+הריצו `cbb install` במסוף מנהל כדי להתקין את השירות, את סוכן הלוח, את אפליקציית המגש ואת כללי חומת האש מתוך החבילה שנפרסה, והריצו אותו שוב אחרי כל `winget upgrade`.
 
 ## OpenWrt
 
-נתב עם OpenWrt 25.12 ומעלה ומקום לתוכנה של 25 MB (‏128 MB של פלאש או יותר, או eMMC; ‏256 MB של זיכרון), כ-root דרך SSH:
+נתמך בנתבים המריצים OpenWrt 25.12 ומעלה (המשתמשים ב-`apk`) עם מקום לתוכנה של 25 MB (לפחות 128 MB של אחסון פלאש או eMMC, ו-256 MB של RAM).
+
+התחברו דרך SSH כ-`root` והריצו:
 
 ```sh
 uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-הוא מתקין את `cbb` כשירות שפועל רק באזור `lan` ולעולם לא עונה ב-`wan`. המפתחות נמצאים ב-`/etc/cbb`, ש-sysupgrade שומר; אחרי sysupgrade מבוקר (ASU, ‏owut) הריצו את הפקודה שוב. אזור אחר, כמו רשת IoT, חומת האש והבדיקות מפורטים ב[נתבים ו-FreeBSD](../admin/routers.md#openwrt).
+תוכנית ההתקנה מגדירה את `cbb` (בלי `cbb-helper`) כשירות `procd` שמאזין באזור `lan` בלבד ולעולם אינו עונה ב-`wan`. המפתחות נמצאים ב-`/etc/cbb/state`, ש-`sysupgrade` שומר; אחרי sysupgrade מבוקר (ASU או `owut`), הריצו שוב את פקודת ההתקנה. כשמריצים אותה במסוף אינטראקטיבי, תוכנית ההתקנה מתחילה צימוד מיד (`--no-pair` מדלג על כך). לאזורים נוספים (כמו רשת IoT), לפרטי חומת האש ולבדיקות, ראו [נתבים ו-FreeBSD](../admin/routers.md#openwrt).
 
-או ממאגר החבילות שלנו, ש-`apk upgrade` שומר אז מעודכן. הארכיטקטורה של המאגר נקבעת לפי המעבד של הנתב (‏`grep DISTRIB_ARCH /etc/openwrt_release`): ‏`arm64` עבור `aarch64_*`, ‏`armv7` עבור `arm_cortex-a*` שיש בשמו `neon` או `vfp`, ‏`mipsle` עבור `mipsel_*`, ‏`mips` עבור `mips_*`, ‏`amd64` עבור `x86_64`. הציבו את שלכם במקום `arm64` בשורה השנייה:
+אפשר גם להתקין ממאגר החבילות `apk` של הפרויקט כך ש-`apk upgrade` ישמור אותו מעודכן:
 
-```sh
-uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
-echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
-apk update && apk add cbb
-```
+1. בדקו את הארכיטקטורה של הנתב שלכם באמצעות `grep DISTRIB_ARCH /etc/openwrt_release` ומפו אותה לתיקיית המאגר:
+   - `aarch64_*` → `arm64`
+   - `arm_cortex-a*` (עם `neon` או `vfp` בשם) → `armv7`
+   - `mipsel_*` → `mipsle`
+   - `mips_*` → `mips`
+   - `x86_64` → `amd64`
+2. הוסיפו את מפתח המאגר ואת המאגר עצמו (החליפו את `arm64` בארכיטקטורה שלכם) והתקינו:
 
-‏`apk del cbb` מסיר אותו ומשאיר את המפתחות ב-`/etc/cbb`.
+   ```sh
+   uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
+   echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
+   apk update && apk add cbb
+   ```
+
+‏`apk del cbb` מסיר את החבילה ושומר את המפתחות ב-`/etc/cbb`. שימו לב שגרסאות נתבים של `mips` ו-`mipsle` מסנכרנות ברשת הביתית בלבד (בלי סנכרון מחוץ לבית).
 
 ## FreeBSD
 
-‏FreeBSD 15, ‏amd64 או arm64, כ-root (עם `sudo` או `doas`):
+נתמך ב-FreeBSD 15 ‏(`amd64` ו-`arm64`). הריצו כ-`root` (עם `sudo` או `doas`):
 
 ```sh
 fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-הוא מתקין את `cbb`, סקריפט rc.d שמריץ את השירות דרך daemon(8), ומוסיף את השורה `cbb_enable="YES"` ל-rc.conf. המפתחות נמצאים ב-`/var/db/cbb`.
+תוכנית ההתקנה מתקינה את `cbb`, מוסיפה סקריפט `rc.d` שמריץ את השירות דרך `daemon(8)`, ומוסיפה את `cbb_enable="YES"` אל `rc.conf`. המפתחות נמצאים ב-`/var/db/cbb` וההגדרות ב-`/usr/local/etc/cbb`.
 
-ב-OPNsense תוכנית ההתקנה הזאת מוסיפה גם וו לתוסף: השירות מופיע תחת System > Diagnostics > Services, וכללי חומת האש שלו (בעוגן `cbb` של pf) עוקבים אחרי כל טעינה מחדש של המסנן. כבו את מהדר ה-mDNS (‏Services > mDNS Repeater) בזמן שהשירות רץ: שניהם זקוקים ליציאת UDP 5353, והשירות עונה ל-mDNS בעצמו בכל ממשק ביתי. pfSense אינו נתמך: תוכנית ההתקנה רצה גם שם, אבל היא מדפיסה את כללי חומת האש עבור Firewall > Rules במקום להוסיף אותם, ועדכון של pfSense עלול להסיר את Connect Beyond Borders.
-
-בשולחן עבודה של FreeBSD (‏X11, או Wayland עם פרוטוקול data control, כמו ב-KDE, ב-sway וב-Hyprland) ההפעלה מתחילה את `cbb agent` מהפעלה האוטומטית של XDG ולוח ההעתקה מצטרף לקבוצה; התחברו מחדש אחרי ההתקנה. הדבקה מרחוק מקלידה דרך XTEST ב-X11 ודרך המקלדת הווירטואלית בשולחנות עבודה של wlroots; ‏GNOME אינו מקבל הדבקה מרחוק ב-FreeBSD, כי בלי logind שום דבר לא אומר אם המסך שלו נעול.
+- **OPNsense:** אותה תוכנית התקנה מוסיפה וו לתוסף כך שהשירות מופיע תחת **System > Diagnostics > Services** וכללי חומת האש שלו (בעוגן `cbb` של `pf`) נשמרים בין טעינות מחדש של המסנן. כבו את **Services > mDNS Repeater** בזמן ש-Connect Beyond Borders פועל, משום ששניהם זקוקים ליציאת UDP 5353 והשירות עונה ל-mDNS בעצמו בכל ממשק ביתי.
+- **pfSense (לא נתמך):** תוכנית ההתקנה רצה ב-pfSense, מדפיסה את הכללים שיש להוסיף ידנית תחת **Firewall > Rules**, ועלולה להימחק בעדכון מערכת של pfSense.
+- **שולחנות עבודה של FreeBSD:** ב-X11, או במנהלי תצוגה של Wayland עם פרוטוקול data-control (כמו KDE,‏ sway ו-Hyprland), ההפעלה האוטומטית של XDG מפעילה את `cbb agent` כשאתם מתחברים מחדש. הדבקה מרחוק משתמשת ב-XTEST ב-X11 ובמקלדת וירטואלית בשולחנות עבודה של wlroots; ‏GNOME ב-FreeBSD אינו מקבל הדבקה מרחוק משום שמצב נעילת המסך אינו זמין בלי `logind`.
 
 ## Docker
 
-עבור NAS או שרת ביתי שתמיד דלוק ([ה-README של התמונה](../../packaging/docker/README.md); מתפרסם עם כל גרסה מ-0.5). הוא מצטרף כחבר רגיל: צרו את הקבוצה בטלפון או במחשב שאתם מחזיקים.
+עבור NAS או שרת ביתי שדולק תמיד בלי שולחן עבודה (ראו את [ה-README של אימג׳ ה-Docker](../../packaging/docker/README.md)). מכולה מצטרפת כחבר רגיל; צרו את הקבוצה בטלפון שלכם או במחשב שנמצא אצלכם.
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/HunterEwok/cbb/main/packaging/docker/compose.home.yaml
 docker compose -f compose.home.yaml up -d
-docker compose -f compose.home.yaml exec cbb cbb pair
+docker compose -f compose.home.yaml exec cbb cbb pair -code
 ```
+
+פתחו קודם חלון צימוד בטלפון שלכם או במחשב מנהל, ואז הקלידו את שש הספרות כש-`cbb pair -code` מבקש אותן.
 
 ## חומת האש
 
-Connect Beyond Borders צריך יציאת TCP אחת, ‏8764, ואת mDNS (‏UDP 5353), שתיהן מהרשת הביתית בלבד. תוכנית ההתקנה מזהה את חומת האש (‏ufw, ‏firewalld, ‏nftables או iptables ב-Linux, ‏pf או ipfw ב-FreeBSD, חומת האש של האפליקציות ב-Mac, ‏Windows Firewall), מפרטת כל כלל, ושואלת `Add these rules now? [y/N]`:
+‏Connect Beyond Borders צריך יציאה נכנסת **TCP 8764** (או יציאת החבר המותאמת שלכם) ואת **UDP 5353** (‏mDNS), מהרשת הביתית שלכם בלבד.
 
-- **כן**: היא מוסיפה אותם, שומרת עליהם עדכניים בכל עדכון ומסירה אותם כשמסירים את ההתקנה. היא לעולם לא נוגעת בכללים אחרים.
-- **לא** (ברירת המחדל, וגם כשאין טרמינל לשאול בו): היא לא מוסיפה דבר ומדפיסה את הפקודות המדויקות, כדי שתריצו אותן בעצמכם.
-- ‏`--express` (‏`-Express` ב-Windows) מוסיף אותם בלי לשאול; ‏`--no-firewall` עונה לא.
+תוכנית ההתקנה מזהה את חומת האש שלכם (`ufw`,‏ `firewalld`,‏ `nftables` או `iptables` ב-Linux; ‏`pf`,‏ `ipfw` או OPNsense ב-FreeBSD; חומת האש של האפליקציות ב-macOS; ‏Windows Firewall), מפרטת כל כלל שהיא צריכה, ושואלת `Add these rules now? [y/N]` (‏`Add this rule now? [y/N]` ב-macOS):
 
-ב-nftables וב-iptables מקבלים תמיד רק את הפקודות, כי כללים שנוספו בזמן ריצה לא שורדים הפעלה מחדש. ב-FreeBSD, pf מקבל את הכללים בעוגן משלו, ש-pf קורא באמצעות שלוש שורות מסומנות שתוכנית ההתקנה מוסיפה בסוף `/etc/pf.conf` ומסירה שוב; ipfw מקבל אותם בקבוצת הכללים 17, שנוספת מחדש בכל הפעלה. אם תפעילו חומת אש מאוחר יותר, הריצו שוב את תוכנית ההתקנה.
+- **כן:** תוכנית ההתקנה מוסיפה את הכללים, שומרת עליהם מעודכנים בשדרוגים, ומסירה אותם בהסרת ההתקנה בלי לשנות אף כלל אחר.
+- **לא** (ברירת המחדל, וגם כשאין מסוף אינטראקטיבי מחובר): תוכנית ההתקנה אינה מוסיפה כללים ומדפיסה את הפקודות המדויקות כדי שתריצו אותן בעצמכם.
+- **אפשרויות ללא התערבות:**
+  - ב-Linux, ב-macOS וב-FreeBSD: העבירו `--express` כדי להוסיף כללים בלי לשאול, או `--no-firewall` כדי לסרב ולהדפיס את הפקודות.
+  - ב-Windows: הגדירו `$env:CBB_FIREWALL = "express"` או `$env:CBB_FIREWALL = "no"` לפני הרצת `get.ps1` (או העבירו `-Express` או `-NoFirewall` אל `install.ps1`).
 
-**יציאה אחרת**, אם 8764 תפוסה: ‏`... | sudo sh -s -- --port 9000` (ב-Windows, ‏`$env:CBB_PORT = "9000"` לפני תוכנית ההתקנה). אפליקציית הטלפון לומדת את היציאה מקוד ה-QR.
+התנהגות ספציפית לפי חומת אש:
 
-כל אפשרויות תוכנית ההתקנה נמצאות ב[מדריך הפקודות](../reference/cli.md#installers).
+- `nftables` ו-`iptables` תמיד מדפיסות פקודות ידניות בלבד, משום שכללי זמן ריצה אינם שורדים הפעלה מחדש.
+- `pf` ב-FreeBSD שם את הכללים בעוגן `cbb` משלו, שנטען דרך שלוש שורות מסומנות שמתווספות לסוף `/etc/pf.conf` (ומוסרות בהסרה). `ipfw` ב-FreeBSD מוסיף אותם בערכת הכללים 17 וטוען אותם מחדש בכל הפעלה.
+- אם תפעילו חומת אש אחרי שהתקנתם את Connect Beyond Borders, הריצו שוב את תוכנית ההתקנה.
+
+כדי להשתמש ביציאת חבר אחרת כש-TCP 8764 כבר בשימוש:
+
+- ב-Linux, ב-macOS, ב-FreeBSD וב-OpenWrt: העבירו `--port 9000` (לדוגמה, `... | sudo sh -s -- --port 9000`).
+- ב-Windows: הגדירו `$env:CBB_PORT = "9000"` לפני הרצת `get.ps1` (או העבירו `-Port 9000` אל `install.ps1`).
+
+כל אפשרויות תוכנית ההתקנה מפורטות ב[מדריך הפקודות](../reference/cli.md#installers).
 
 ## עדכון
 
-הגרסאות חתומות מ-0.6 ואילך. כדי לעבור ל-0.6 מגרסה קודמת, הריצו שוב את פקודת ההתקנה; מכאן ואילך `cbb update` עושה זאת.
+שמרו את כל המכשירים בקבוצה על אותה גרסה. ראו [גרסאות ותאימות](../reference/compatibility.md) לפרטי התאימות.
 
-השאירו את כל מכשירי הקבוצה על אותה גרסה: 0.6 לא מבטיחה יותר ממה ש-0.5 הבטיחה, ולכן עדכנו את כולם. קבוצה שנוצרה ב-0.5 מוקמת מחדש פעם אחת ב-0.6.
+### עדכון ידני
 
-‏`sudo cbb update` (ב-Windows ‏`cbb update` בטרמינל שנפתח כמנהל) מתקין את הגרסה החדשה ביותר במחשב או במכשיר קטן שהותקנו באמצעות `get.sh`, ‏`get.ps1` או ארכיון גרסה; ‏`cbb update -check` רק אומר אם יש אחת. ההגדרות שלכם נשמרות. הוא מתקין רק גרסה שהפרויקט חתם עליה, ולעולם לא גרסה ישנה יותר. אם הגרסה החדשה לא עולה תוך דקה, הקודמת חוזרת מעצמה. איך הוא בודק את החתימות מתואר ב[פרוטוקול](../protocol.md), סעיף 16.
+- **הותקן עם `get.sh`,‏ `get.ps1` או ארכיון גרסה:**
+  - בדיקה אם יש גרסה חדשה יותר: `cbb update -check`
+  - התקנת הגרסה החתומה החדשה ביותר: `sudo cbb update` (ב-Windows, הריצו `cbb update` במסוף מנהל; ב-Linux ללא root, הריצו `cbb update` בלי `sudo`; ב-SteamOS, הריצו `sudo /opt/cbb/bin/cbb update`).
 
-אילו גרסאות עובדות יחד, ומה עושה מכשיר ישן עם משהו חדש יותר: [גרסאות ותאימות](../reference/compatibility.md).
+  `cbb update` שומר על ההגדרות והמפתחות שלכם, מתקין רק גרסאות שהפרויקט חתם עליהן, מסרב לגרסאות ישנות יותר, ומשחזר אוטומטית את הגרסה הקודמת אם השירות המעודכן לא מצליח לעלות תוך דקה. גם הרצה חוזרת של פקודת `get.sh` או `get.ps1` המקורית מעדכנת.
+- **Homebrew:** הריצו `brew upgrade cbb`, ואז הריצו שוב את פקודת `install.sh` מהסעיף [Mac](#mac) או [Linux](#linux).
+- **winget:** הריצו `winget upgrade HunterEwok.cbb`, ואז הריצו `cbb install` במסוף מנהל.
+- **Docker:** הריצו `docker compose -f compose.home.yaml pull` וצרו מחדש את המכולה.
+- **מאגר החבילות של OpenWrt:** הריצו `apk update && apk upgrade`.
 
-תוכניות ההתקנה שואלות פעם אחת אם להתעדכן אוטומטית (‏`--auto-update on|off`, או `-AutoUpdate on|off` ו-`$env:CBB_AUTO_UPDATE` ב-Windows, כדי לענות מראש); ‏`sudo cbb update -auto on|off` משנה זאת מאוחר יותר. כשהאפשרות פועלת, טיימר בודק פעם ביום בשעה משלו: טיימר של systemd ב-Linux, משימת launchd ב-Mac, משימה מתוזמנת כ-SYSTEM ב-Windows, ו-cron ב-OpenWrt וב-FreeBSD. כל בדיקה מורידה את אותם קבצים קטנים מ-GitHub (או מ-`dl.cbb.tools` כש-GitHub לא עונה), ולכן GitHub לומד את כתובת המכשיר הזה ושהוא משתמש ב-Connect Beyond Borders, כמו בכל הורדה; הוא לא שולח דבר על הקבוצה. ‏`sudo cbb update -mirror https://...` לוקח עדכונים ממראה אחרת במקום זאת, מה שאינו דורש אמון, כי החתימות נבדקות. יומן הטיימר הוא `update.log` ב-`/var/lib/cbb-update` (Linux), ב-`/etc/cbb-update` (OpenWrt), ב-`/var/db/cbb-update` (FreeBSD), ב-`/Library/Application Support/cbb-update` (Mac) או ב-`C:\Program Files\cbb-update` (Windows).
+### עדכונים אוטומטיים
 
-מכשירי הקבוצה מספרים זה לזה על הגרסה החתומה החדשה ביותר שמישהו מהם ראה, ולכן בדיקה של מכשיר אחד מספיקה כדי ש-`cbb status` ואפליקציית המגש במכשירים האחרים יגידו שיצאה גרסה חדשה יותר (‏"Update to X" באפליקציית המגש מריץ את `cbb update` כמנהל). כל מכשיר עדיין בודק את החתימות בעצמו ומוריד את הארכיון שלו.
+בהתקנות של `get.sh` ו-`get.ps1`, תוכנית ההתקנה שואלת פעם אחת אם להפעיל עדכונים אוטומטיים יומיים. אפשר לקבוע את התשובה מראש או לשנות אותה מאוחר יותר:
 
-הרצה חוזרת של אותה פקודת התקנה גם מעדכנת. עם Homebrew או winget, שדרגו שם והריצו שוב את השורה השנייה; ‏`cbb update` אומר זאת. ‏Docker וחבילת OpenWrt מתעדכנים באמצעות `docker compose pull` ו-`apk upgrade`.
+- **בזמן ההתקנה:** העבירו `--auto-update on` או `--auto-update off` אל `get.sh`; ב-Windows, הגדירו `$env:CBB_AUTO_UPDATE = "on"` או `"off"` לפני הרצת `get.ps1` (או העבירו `-AutoUpdate on|off` אל `install.ps1`).
+- **אחרי ההתקנה:** הריצו `sudo cbb update -auto on` או `sudo cbb update -auto off` (בלי `sudo` ב-Linux ללא root; במסוף מנהל ב-Windows).
+
+כשעדכונים אוטומטיים מופעלים, מתזמן יומי בודק אם יש גרסאות חתומות: טיימר של `systemd` ב-Linux (טיימר משתמש ללא root), משימת `launchd` ב-macOS, משימה מתוזמנת כ-`SYSTEM` ב-Windows, או `cron` ב-OpenWrt וב-FreeBSD.
+
+כל בדיקה מורידה קובצי מטא-דאטה חתומים קטנים מ-GitHub (ועוברת אל `dl.cbb.tools` אם GitHub לא עונה). GitHub רואה את כתובת ה-IP של המכשיר ושהוא מבקש מטא-דאטה של Connect Beyond Borders, אבל שום דבר על הקבוצה שלכם. כדי להשתמש במראה מותאמת אישית במקום זאת, הריצו `sudo cbb update -mirror https://...`; אין צורך לסמוך על המראה משום שהחתימות עדיין מאומתות.
+
+יומני העדכונים האוטומטיים נכתבים לקובץ `update.log` בתיקייה:
+
+| מערכת | תיקיית יומן העדכונים |
+|---|---|
+| Linux | `/var/lib/cbb-update` |
+| Linux (ללא root) | `~/.local/state/cbb-update` |
+| SteamOS | `/opt/cbb-update` |
+| OpenWrt | `/etc/cbb-update` |
+| FreeBSD | `/var/db/cbb-update` |
+| macOS | `/Library/Application Support/cbb-update` |
+| Windows | `C:\Program Files\cbb-update` |
+
+מכשירים בקבוצה משתפים הודעות על הגרסה החתומה החדשה ביותר שאחד מהם ראה, כך ש-`cbb status` ואפליקציות שולחן העבודה מודיעים לכם כשזמין עדכון. כל מכשיר עדיין מאמת את החתימות בעצמו ומוריד את הארכיון שלו.
 
 ## בדיקת הורדה
 
-תוכניות ההתקנה בשורה אחת בודקות את ההורדה מול `SHA256SUMS` של הגרסה. לכל קובץ בגרסה יש גם אישור מקור בנייה שקושר אותו למאגר הזה ולבנייה שיצרה אותו; באמצעות [GitHub CLI](https://cli.github.com/):
+כל ארכיון גרסה נבדק בשלוש דרכים:
 
-```sh
-gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
-```
+1. **סכומי ביקורת (`SHA256SUMS`):** גם `get.sh` וגם `get.ps1` מאמתים את הארכיון שהורד מול קובץ ה-`SHA256SUMS` של הגרסה.
+2. **חתימות הגרסה של הפרויקט:** הגרסאות חתומות במפתחות השורש הלא מקוונים של הפרויקט ובמפתח הגרסה (שלעולם אינם נוגעים ב-CI): ‏`keys.json` מאשר את מפתחות הגרסה תחת מפתחות השורש של הפרויקט, `release.json` מפרט את הגודל ואת גיבוב ה-SHA-256 של כל קובץ, ו-`stable.json` מציין את הגרסה היציבה הנוכחית ([הפרוטוקול](../protocol.md), סעיף 16). גם `get.sh` (באמצעות `openssl`) וגם `get.ps1` נושאים את מפתחות השורש המובנים של הפרויקט ומסרבים להתקין כל גרסה שחתימותיה אינן מאומתות. `get.sh` בודק גם ES256 וגם SLH-DSA-SHA2-128s כשמותקן OpenSSL 3.5 ומעלה (ES256 ב-OpenSSL ישן יותר); `get.ps1` בודק ES256. כדי להתקין בלי לבדוק את חתימות הפרויקט, הגדירו `CBB_VERIFY=skip`.
+3. **אישור מקור בנייה (Build provenance attestation):** לכל קובץ בגרסה יש אישור מקור בנייה של GitHub הקושר אותו לתהליך הוצאת הגרסאות של המאגר הזה. באמצעות [GitHub CLI](https://cli.github.com/) (‏`gh`), אפשר לאמת כל קובץ ידנית:
 
-‏`get.sh` בודק זאת בעצמו כש-`gh` מותקן ומחובר עבור root (‏`sudo gh auth login`); ‏`CBB_ATTESTATION=require` מסרב להתקין בלעדיו.
+   ```sh
+   gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
+   ```
 
-הגרסאות חתומות גם במפתחות של הפרויקט עצמו, שלעולם לא נוגעים ב-CI (מפתחות השורש נמצאים במפתחות חומרה לא מקוונים, מפתח הגרסה ב-Secure Enclave של המתחזק): ‏`keys.json` מציין את מפתחות הגרסה תחת מפתחות השורש של הפרויקט, ‏`release.json` מפרט כל קובץ בגרסה עם הגיבוב שלו, ו-`stable.json` אומר איזו גרסה היא הנוכחית. אחרי שמפתחות השורש ייבנו לתוך תוכניות ההתקנה, ‏`get.sh` (עם `openssl`) ו-`get.ps1` יבדקו אותם לפני ההתקנה וידחו גרסה שאינה חתומה; עד אז הם בודקים רק את `SHA256SUMS` ואת אישור המקור. ‏`CBB_VERIFY=skip` מתקין בלי הבדיקה.
+   גם `get.sh` וגם `get.ps1` מריצים את הבדיקה הזו אוטומטית כש-`gh` מותקן ומחובר (`gh auth login`; עבור `get.sh` תחת `sudo`, הריצו `sudo gh auth login`). הגדירו `CBB_ATTESTATION=require` כדי לסרב להתקנה בלי אישור מאומת, או `CBB_ATTESTATION=skip` כדי לדלג על בדיקת האישור.
 
 ## הסרה
 
-ב-Linux וב-Mac:
+הריצו את פקודת ההסרה עבור המערכת שלכם:
 
-```sh
-sudo sh /usr/local/share/cbb/uninstall.sh
-```
+| מערכת | פקודה או שלבים |
+|---|---|
+| Linux ו-macOS | `sudo sh /usr/local/share/cbb/uninstall.sh` |
+| Linux (ללא root) | `sh ~/.local/share/cbb/uninstall.sh` |
+| SteamOS | `sudo sh /opt/cbb/share/uninstall.sh` |
+| FreeBSD | `sudo sh /usr/local/share/cbb/uninstall.sh` (או עם `doas`) |
+| OpenWrt | `sh /usr/share/cbb/uninstall.sh` (או `apk del cbb` אם הותקן מהמאגר) |
+| Windows | פתחו **הגדרות > אפליקציות > CBB > הסרת התקנה**, או הריצו `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1"` כמנהל |
 
-ב-SteamOS זה `sudo sh /opt/cbb/share/uninstall.sh`. עם Homebrew, הריצו אחריו `brew uninstall cbb`.
+אם התקנתם עם Homebrew, הריצו קודם את סקריפט ההסרה ואז הריצו `brew uninstall cbb`.
 
-ב-Windows: הגדרות, אפליקציות, "CBB", הסרת התקנה.
+הסרת ההתקנה מוחקת את התוכנה, את שירות הרקע, את סוכן הלוח, את מתזמן העדכונים, את כללי חומת האש שתוכנית ההתקנה הוסיפה, וב-macOS גם את `/Applications/CBB.app` אם הותקן מה-`.pkg`. המפתחות ומצב הקבוצה של המכשיר שלכם נשארים בדיסק כך שהתקנה מחדש מחזירה אותו לאותה קבוצה.
 
-פעולה זו מסירה את התוכנה, את השירות, את כללי חומת האש שתוכנית ההתקנה הוסיפה, וב-Mac גם את האפליקציה שה-`.pkg` התקין. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb remove NAME`, או בטלפון). כדי לצאת מהקבוצה ולהשאיר את CBB, הריצו במקום זאת ‏`sudo cbb leave`: הוא מוחק את המפתחות ואת קובצי הקבוצה, והמכשיר יכול להצטרף שוב לקבוצה.
+- **מחיקת המפתחות ומצב הקבוצה גם כן:** הוסיפו `--purge` במערכות Unix, או הריצו `uninstall.ps1 -Purge` ב-PowerShell מנהל ב-Windows. אחר כך הסירו את המכשיר מהקבוצה במכשיר מנהל (`sudo cbb remove NAME` או באפליקציית הטלפון).
+- **עזיבת הקבוצה בלי הסרת ההתקנה:** הריצו `sudo cbb leave` (בלי `sudo` ב-Linux ללא root, או `cbb leave` במסוף מנהל ב-Windows). פעולה זו מוחקת את המפתחות ואת קובצי הקבוצה של המכשיר תוך השארת Connect Beyond Borders מותקן, כך שהמכשיר יכול להצטרף שוב לקבוצה.

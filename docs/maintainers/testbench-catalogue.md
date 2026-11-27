@@ -1,22 +1,20 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The bench's test catalogue
 
-Every case the hardware test bench ([testbench.md](testbench.md)) runs for release 0.6 and
-later, one line each, grouped by area. It is written for the product as the 0.6 plan
-describes it, every phase included, and for a bench that has every device and developer
-account it needs: a case whose function, device or account is not there yet is still
-listed, says what it needs in its last column, and is reported as skipped with that reason
-until it is there.
+For the project maintainer and release testers. This reference lists every test case for the
+hardware test bench ([testbench.md](testbench.md)), one row per case, grouped by product area,
+along with how it runs and any hardware, account, or dependency it requires. Cases whose required
+hardware, account, or dependency is absent stay in the catalogue and list the requirement in the
+**Needs** column so coverage reports track them as skipped with a reason.
 
-The functions these cases cover, one line per function of the product, are in
-[testbench-functions.md](testbench-functions.md). `testbench coverage` reads both files and
-prints how many functions have a case, how many of those cases run by themselves, and how
-many the harness runs today, by area, with the list of what is left (section 17).
+Product functions mapped to these cases live in [testbench-functions.md](testbench-functions.md).
+`go run ./tools/bench coverage` parses both documents and reports how many functions have a case,
+how many cases run automatically, and how many the harness currently executes, by area (section 17).
 
-The step-by-step form of the cases that have one, and the common procedures R1 to R7 (reset,
-form the group, end a run, copy and read, "arrives", errors in both modes, capture), are in
-[testbench-cases.md](testbench-cases.md). That document keeps its own IDs; the IDs of a case
-here that replaces one there are in brackets, such as [C1].
+Step-by-step procedures and common rules `R1`–`R7` (reset, group setup, teardown, copy/paste,
+arrival checks, error verification, and packet capture) live in
+[testbench-cases.md](testbench-cases.md). Where a catalogue case corresponds to an ID in
+`testbench-cases.md`, that ID appears in brackets at the end of the description, such as `[C1]`.
 
 ## 0. How the cases run
 
@@ -24,40 +22,40 @@ here that replaces one there are in brackets, such as [C1].
 
 | Kind | What | Used for |
 |---|---|---|
-| **real** | the bench's devices (testbench.md, section 3): the Linux desktop, the Windows PC, the Mac, the small board, the away computer, the router as a device under test, the relay server, the phones, the watches, a TV | everything a user does on a real system: clipboards, desktops, sessions, installers, sleep, the apps |
-| **fleet** | containers on the controller, each a member with its own network namespace and state volume: up to 32 members with cbb-helper and 8 without, a FreeBSD and an OpenWrt virtual machine in QEMU, and "phones" played by the core's phone on Linux (`ffi`'s example `phone-on-linux`) | combinations that need many devices, groups made and thrown away by the hundred, faults that must not touch the real devices (netem, port blocks, a full disk, a clock far off, a killed process), several groups on one network |
-| **time** | a test build (`cargo build --release --bin cbb --features benchtime`, never released; `cbb version` says so) in which the long times run 100000 times faster: certificate lives and renewal thresholds (a member certificate lasts about 10 minutes), the 12 h renewal timer (every 5 s), server-credential periods (about 30 s) and the hub key's handover; and `CBB_TEST_CLOCK` (a duration such as `3h`, or an RFC 3339 time; or a file named by `CBB_TEST_CLOCK_FILE`, read when the service starts), which moves one member's wall clock for its service, its hybrid clock, its hellos and its certificate checks. `CBB_TEST_SCALE` sets another scale, such as 1 for cases that only move a clock by hours or days. Short times (pairing windows, invitations, secrets' 60 s, the media cache, replay caches) keep their length and are waited out | expiry, renewal and every rule that waits for time, in minutes |
-| **feed** | a release feed on the controller signed with the bench's own test keys, in the format of the real one (protocol.md, section 16) | updates, rollbacks, refused downgrades, tampered and expired manifests, without the real release keys |
-| **ui** | UI Automator over adb (Android phone, Wear OS, Android TV), XCUITest (the iPhone app on a simulator and a real iPhone, the Mac app), WebDriver for the tray app | the apps' screens, buttons and notifications |
-| **helper** | a small program the `setup-*` scripts put on a device: the Windows clipboard task, a clipboard manager's stand-in, a password manager's marks, a key-event reader | what only code inside the user's session can do |
-| **person** | the owner, guided by the report | only what a program cannot press: a disk password at boot, a hardware prompt, moving a device |
+| **real** | Physical and virtual bench devices ([testbench.md](testbench.md), section 3): Linux desktop, Windows PC/VM, Mac, small board, away server, OpenWrt router, FreeBSD host, forwarder/relay server, phones, watches, and TV | End-to-end user behavior on real systems: live clipboards, desktop sessions, installers, sleep/wake, and apps |
+| **fleet** | Containers on `controller`, each a member with its own network namespace and state volume (up to 32 members with `cbb-helper` and 8 without), FreeBSD and OpenWrt VMs in QEMU, and Linux phone members (`ffi`'s `phone-on-linux` example) | Multi-member topologies, disposable groups, destructive faults (`netem`, port blocks, full disk, killed processes), and side-by-side groups |
+| **time** | Time-scaled test build (`cargo build --release --bin cbb --features benchtime`, never released; identified by `cbb version`) where long intervals run 100,000 times faster by default (`CBB_TEST_SCALE`): certificate lifetimes (~10 minutes) and renewals, 12 h renewal timer (~5 s), 30-day server-credential periods (~30 s), and hub key handovers; `CBB_TEST_CLOCK` (duration or RFC 3339 timestamp) or `CBB_TEST_CLOCK_FILE` shifts one member's wall clock (set `CBB_TEST_SCALE=1` to shift only the clock). Short intervals (pairing windows, invitations, 60 s secrets, media cache, replay caches) keep real durations | Certificate expiry, renewal, credential rotation, and clock-skew rules in minutes |
+| **feed** | Local release feed on `controller` signed with bench test keys in the production format ([protocol.md](../protocol.md), section 16) | Updates, rollbacks, refused downgrades, and tampered or expired manifests without touching production release keys |
+| **ui** | UI Automator over `adb` (Android phone, Wear OS, Android TV), XCUITest (iPhone simulator, physical iPhone, Mac app), and headless browser tests for the tray app | App screens, controls, accessibility, localization, and notifications |
+| **helper** | Small bench helpers installed by `tools/bench/setup-*` scripts: Windows clipboard scheduled tasks, clipboard-manager stand-ins, password-manager marks, and key-event readers | Actions that require running inside an interactive desktop session |
+| **person** | Maintainer guided by the test procedure | Physical steps automation cannot perform: boot disk passwords, hardware prompts, physical power cycling, and moving devices |
 
 ### 0.2 How a case checks errors
 
-Every case that expects a refusal or an error also checks it as R6 says, in both modes:
-the short message says what to do; with `CBB_DEBUG=0` (in the apps, "Show error details"
-off) it carries no internal error text and no detail line; with `CBB_DEBUG=1` (details on)
-the cause is under it; the log has the cause in both; nothing says only "Something went
-wrong". `tools/bench/errshow.go` does it for the command line.
+Every case expecting a refusal or error checks both error modes (`R6`): the default message is
+short and states what to do; with `CBB_DEBUG=0` (or **Show error details** off in apps) it
+contains no internal error text or detail line; with `CBB_DEBUG=1` (details on) the underlying
+cause appears underneath; service logs record the cause in both modes; and no error says only
+"Something went wrong". `tools/bench/errshow.go` enforces this for CLI commands.
 
 ### 0.3 Combinations
 
-Where a case says **every pair** it runs from each kind of sender to each kind of receiver
-the bench has: Linux on Wayland, Linux on X11, Linux without a desktop, Windows, macOS, cbb
-without its helper, a container, the router, FreeBSD, the Android app, the iPhone app, Android TV; and over each path: one LAN, across subnets (`-peer`), the hub's
-tunnel directly, through the forwarder, with AmneziaWG, over VLESS, through the blind relay.
+Where a case specifies **every pair**, it runs from every sender type to every receiver type on
+the bench (Linux Wayland, Linux X11, headless Linux, Windows, macOS, `cbb` without `cbb-helper`,
+container, router, FreeBSD, Android app, iPhone app, Android TV) over every path (single LAN,
+cross-subnet `-peer`, direct hub tunnel, forwarder, AmneziaWG, VLESS over XHTTP, and blind relay).
 
-Where it says **every role**: the root (a computer, a phone), an admin (a computer with a
-file key, a computer with a TPM key, a phone, a watch), a member, a member without cbb-helper,
-a frozen admin, a removed device.
+Where a case specifies **every role**, it covers the main device (*root*, computer or phone), an
+admin (computer with file keys, computer with TPM keys, phone, watch), an ordinary member, a
+member without `cbb-helper`, a frozen admin, and a removed device.
 
 ### 0.4 The columns
 
-**How** names the kinds of 0.1 the case runs on; several mean the case runs on each.
-**Needs** is empty when the bench and the product have everything the case needs; otherwise
-it names what is missing: a phase of the 0.6 plan not yet merged (`phase 7` and so on), an
-account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Apple TV`,
-`Nano`, `iPad`, `ZX Next`, `smart plug`).
+- **How** lists the execution kinds from section 0.1 that verify the case.
+- **Needs** is empty when the bench and codebase have everything the case requires; otherwise it
+  names the missing account (`Apple account`, `Google account`, `signing`), hardware (`iPhone`,
+  `Android phone`, `iPad`, `Apple Watch`, `Wear OS watch`, `Aurora phone`, `TV`, `Apple TV`,
+  `Nano`, `ZX Next`, `smart plug`), or roadmap dependency (`roadmap item 10`).
 
 ## 1. Installation, updates and the service's life (I)
 
@@ -68,8 +66,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I3 | `get.sh` and `get.ps1` check the release: a good build installs; a tampered archive, a wrong signature, an expired manifest, an unknown key and a missing openssl are refused with a clear message; `CBB_VERSION` installs that release | feed | |
 | I4 | Uninstall and purge on each system leave nothing: service, agent, units, firewall rules, users and groups, the Apps entry on Windows, the state with `--purge`/`-Purge` and the keys kept without it [L10] | real, fleet | |
 | I5 | Install again over an install: the group, mode, settings, quick actions, remote paste switch and keys stay | real | |
-| I6 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), upgrade from the previous release one device at a time in a mixed group: the same group and devices, copying between old and new after each step and then between all; state and keys survive; the agent restarts in every running session [L9] | real, fleet | |
-| I7 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), downgrade to the previous release over the new state: it starts in the same group or refuses clearly, and no key is lost [P14] | real, fleet | |
+| I6 | Upgrade between compatible releases one device at a time in a mixed group (D-131; see [compatibility.md](../reference/compatibility.md)): the same group and devices stay intact, copying works between old and new after each step, state and keys survive, and the agent restarts in every running session [L9] | real, fleet | |
+| I7 | Downgrade to a compatible previous release over newer state (D-131): starts in the same group or refuses with a clear message, and no key is lost [P14] | real, fleet | |
 | I8 | `cbb update -check` and `cbb update` on Linux, macOS and Windows from the feed: renamed into place (the running exe moved aside on Windows), the health check passes, the new version runs | feed, real | |
 | I9 | Updates refused: a tampered file, a bad signature, an expired manifest, an older version (the highest seen is kept), `min_from` not met, a wrong platform; each named in the message | feed | |
 | I10 | A new build that never becomes healthy is rolled back and listed as failed; the next check skips it | feed | |
@@ -88,8 +86,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I23 | Our signed apk feed on OpenWrt: `apk add` from it, its key checked; the mips and mipsle builds boot and sync under QEMU (big-endian) | fleet | |
 | I24 | Windows binaries carry a valid Authenticode signature; `cbb update` checks it; SmartScreen lets the installer run | real | signing |
 | I25 | The installers' errors: a failed step names its exit status; `CBB_ERROR_DETAILS=1` shows every command and the full Windows error record | real | |
-| I26 | The upgrade from 0.5 to 0.6, once: a group made before 0.6 is not carried over (records version 2 have no migration); each member leaves it at its first start, says so in `cbb status`, keeps its settings, and a new group made on 0.6 works; a 0.5 member left in the old group reaches no 0.6 member | real, fleet | |
-| I27 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), a device of version N works in one group with N-1: the previous release's cbb (`tools/e2e/previous.sh`) and this build's join one group, sync both ways, take the record of a device admitted later, and the previous one takes its removal (TestPreviousRelease in CI; I6 with the bench's two versions) | fleet | |
+| I26 | Incompatible prior-format group migration: a group from an older incompatible record format is left on first start, reported in `cbb status`, local settings stay intact, a new group works, and a peer still on the older format cannot connect | real, fleet | |
+| I27 | Cross-version interoperability between compatible releases (D-131): the previous release's `cbb` (`tools/e2e/previous.sh`) and the current build join one group, sync both ways, accept records for newly admitted devices, and honor removals (`TestPreviousRelease` in CI) | fleet | |
 
 ## 2. Groups, pairing and roles (G)
 
@@ -101,7 +99,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G2 | A phone app makes the group: the root key in the Secure Enclave or the Keystore, made with an attestation challenge; the first-launch card | ui | iPhone, Android phone |
 | G3 | Each kind of device joins by code to each kind of admitter (root computer, admin computer, root phone, admin phone) [L1] | real, fleet, ui | |
 | G4 | Join paths: found by mDNS; by address; across subnets; through an SSH forward to 127.0.0.1; through the user's own VPN with private addresses; a 100.64/10 address refused unless `CBB_HOME_CGNAT=1` | fleet, real | |
-| G5 | The pairing window: three wrong codes close it; a code after 5 min is refused; an attempt started just before the end may finish; a used code is refused for a second device; the window counts time the machine slept [L2] | real, fleet, time | |
+| G5 | The pairing window: three wrong codes close it; a code after 5 min is refused; an attempt started shortly before the end may finish; a used code is refused for a second device; the window counts time the machine slept [L2] | real, fleet, time | |
 | G6 | Pairing limits: a second joiner while one pairs hears `busy`; a code already used hears `taken`; five attempts per address before the count; 30 s per attempt; 32 handshakes at once | fleet | |
 | G7 | Two windows announced at once: the joiner asks for an address | fleet | |
 | G8 | A joiner that only pretends to pair gets one guess; a relay between two TLS sessions fails (CPace's channel binding) | fleet, helper | |
@@ -123,10 +121,10 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G22 | `cbb freeze` from any admin; a frozen admin's records, commands, pastes and connections refused everywhere; `cbb unfreeze` on the root; a mutual freeze keeps both frozen; a frozen admin cannot take over; the root and admin phones cannot be frozen | fleet | |
 | G23 | Remove by name and by device ID: a member, an admin (the devices it admitted stay), a phone (both keys), a watch; the removed device's connections close at once and every member, with and without its helper, and the hub refuse it [L3, L7] | real, fleet | |
 | G25 | A device that was off during a removal gets the record from the first member it meets; a removed device that was off reaches nobody | fleet | |
-| G26 | `cbb takeover` when the root computer is lost; the new root admits and makes admins; the old root comes back and is refused [L6] | real, fleet | |
-| G27 | A takeover undone: the old root is still there and removes the admin that took over, before or after it hears of the takeover (its status names that admin); the takeover stops counting | fleet | |
-| G28 | A phone's group: an admin phone takes over from a lost root phone (`root` records); no device pairs again; members that were off follow | ui, fleet | |
-| G29 | The records `cbb upgrade` gave a group made before 0.4 (version 1) are refused, in Go and in the Rust core the phones and cbb use: records version 2 has no legacy groups and no `cbb upgrade`, and such a group is set up again [L9] | fleet | |
+| G26 | Move the group with `cbb recovery` when the main device (*root*) is lost (D-117; `cbb takeover` returns an error pointing to `cbb recovery`): the new main device admits devices and promotes admins, and the removed old main device is refused if it returns [L6] | real, fleet | |
+| G27 | Retired takeover commands and conflicting histories: `cbb takeover`, `cbb takeover -delay` and `cbb handover` are refused with a pointer to `cbb recovery` and the main device stays (D-117); conflicting histories signed by a returning key appear in `cbb status` and are voided by the main device (`cbb resolve`, in the Go test `TestRestoredAdminSignsAgain`) | fleet | |
+| G28 | Phone group root change: another phone moves the group to itself using the recovery key (`root` records); no device re-pairs and offline members follow on reconnect | ui, fleet | |
+| G29 | Legacy version-1 group records are refused in Go and in `cbb_core`; unsupported legacy groups require creating a new group [L9] | fleet | |
 | G30 | `cbb rename` on an admin for any device, the root and itself; every device and app shows the new name; 1 and 64 characters taken, 0 and 65 refused, Unicode names | real, fleet | |
 | G31 | Records converge in any order: 200 records delivered to 10 members in random orders give one devices list | fleet | |
 | G32 | Record limits: 4096 records, 1024 per signer; an admin that floods records cannot push out the root's removal | fleet | |
@@ -147,7 +145,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| G40 | Random walk: 200 steps chosen at random among join, remove, freeze, unfreeze, make admin, rename, takeover, restart, sleep, network cut and copy; after each step every live member agrees on the devices list and the last text, and every refusal is the one the rules give | fleet | |
+| G40 | Random walk: 200 steps chosen at random among join, remove, freeze, unfreeze, make admin, rename, root change, restart, sleep, network cut, and copy; after each step every live member agrees on the device list and latest text, and every refusal matches the protocol rules | fleet | |
 | G41 | Every pair of joiner kind, admitter kind and path joins, syncs both ways, is removed and is then refused | fleet, real | |
 | G42 | Leave and come back: a device removed, reset and joined again under the same name gets a new device ID, and the old one stays removed | real, fleet | |
 | G43 | Groups side by side: two and ten groups on one network; no text, record or device crosses; neither pairs into the other without a code [S13] | fleet | |
@@ -189,7 +187,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | D15 | Junk on the member port: random bytes, a wrong ALPN, a TLS client without a certificate, a hello or an event that does not decode, a frame over 7 MiB: each closed or dropped, the service unharmed [S14] | fleet | |
 | D16 | Address change: a member's DHCP address changes; an away device moves between networks without a new invitation [F11] | fleet, real | |
 | D17 | mDNS answers and records: the TXT fields (`g=`, `r=listen`, `r=phone`, `j=1`), announcements at start, goodbyes at stop, answers to a query, browsing that ignores its own records | fleet | |
-| D18 | Capabilities (`-caps`: `admin`, `dials`, `hub`) in the hello, the device record and the pairing Info: a member without `dials` dials no one; one without `hub` is refused as the hub and by `cbb global move`; one without `admin` cannot be made an admin; the ZX Next's Pi joins with `admin,dials`, an ESP32 with none; `cbb devices` and the apps show "Member" and decide what a device can do from its capabilities | fleet, ui | |
+| D18 | Capabilities (`-caps`: `admin`, `dials`, `hub`) in the hello, device record, and pairing Info: a member without `dials` dials no one; one without `hub` is refused as a hub and by `cbb global move`; one without `admin` cannot become an admin; the ZX Next's Pi joins with `admin,dials`, an ESP32 with `none`; `cbb status` and the apps show "Member" and derive permissions from capabilities | fleet, ui | |
 
 ## 5. Sync of text (Y)
 
@@ -262,7 +260,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 |---|---|---|---|
 | O1 | Images: a PNG screenshot, a 5 MB JPEG, a TIFF on a Mac (sent as PNG), HEIC from an iPhone (sent as JPEG or PNG), between every pair of desktops and phones; JPEG turned into PNG for a receiver that asks [P2] | real, ui | |
 | O2 | Files and folders: a folder of 100 files with subfolders and an empty file; 10 000 entries; 10 001 refused; links and special files left out; names made safe (`..`, `/`, control characters, `CON`, `notes.`, 255 bytes); nothing executable; quarantine on macOS, Mark of the Web on Windows [P2] | real | |
-| O3 | `cbb copy FILE...`, `-text`, `-type png/jpeg/html`; `cbb paste -o DIR`: never replaces a file, waits for a copy still arriving, in `own` saves the group's copy | real | |
+| O3 | `cbb copy FILE...`, `-text`, `-type png/jpeg/gif/html`; `cbb paste -o DIR`: never overwrites an existing file, waits for a copy still arriving, and saves the group's copy while sync is off | real | |
 | O4 | Formatted text: HTML from a browser and an office program arrives as HTML where a desktop takes it, as text on phones, cbb without its helper and older connectors; HTML over 8 MiB or text over 256 KiB goes as text alone; never with a secret | real, helper | |
 | O5 | Limits: `max-copy` from 1 MiB to 1 GiB, `max-copy-away` up to `max-copy`, others refused; a copy over a receiver's limit is not fetched and is said once in `cbb status` and the log; the sender's own limit [P2] | real | |
 | O6 | Text-only devices (a small device's `cbb watch` and `cbb paste`, the Nano, the ZX Next) take the text that goes with a copy and keep their last text when none does; the file stays in the service's content cache (O9), never elsewhere | real, fleet | |
@@ -326,7 +324,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W1 | `cbb global on` with its warnings (consent for keys in files); `off` forgets the keys and asks first on a device that reaches the hub only through the tunnel; `-yes` [P11, P22] | real | |
 | W2 | The system's limit: the systemd drop-in, the Windows rule `cbb-home-only`, the program's own limit on macOS; `cbb global allow` after the hub's addresses change; `cbb global` and `cbb status` say when the limit lags | real | |
 | W3 | Fail closed: the service reaches only the home network and the group's servers; with the tunnel broken nothing goes elsewhere [S9] | real, fleet | |
-| W4 | `cbb global hub` with addresses, `-port`, `-firewall ask/yes/no` (the port closed again when no longer needed), AmneziaWG and VLESS by default and `-no-obfuscate`, `-no-vless`, `-forwarder -forwarder-key`; a name looked up once; the router as the hub through its init script | real, fleet | |
+| W4 | `cbb global hub` with addresses, `-port`, `-firewall ask/yes/no` (closing the port when stopped), AmneziaWG and VLESS by default and `-no-obfuscate`, `-no-vless`, `-forwarder -forwarder-key`; hostnames resolved once; the router as hub through its init script | real, fleet | |
 | W5 | `cbb global` and the apps say where it stands: waiting for the hub's offer, at home, connecting, connected through the tunnel, and what went wrong | real, ui | |
 
 ### 10.2 Hubs
@@ -363,8 +361,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W39 | A new credential period (30 days): new tag, period key and server keys; the servers cannot link two periods; the lists padded | time | |
 | W40 | The servers keep nothing: no file or log line with addresses, tags, IDs, names or markers, in either mode; the units' exposure score [S18] | real | |
 | W41 | The push sender: an encrypted push reaches the iPhone and wakes it; cbb.tools stores nothing | ui, real | Apple account |
-| W42 | Phones away in a group of 0.6: the Live member's tunnel in the app's process to the hub; the Android foreground service away; the iPhone while the app runs; the devices list marks the hub, and a computer behind it shows online | ui | |
-| W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay and cbb's tunnel in unit tests (roadmap item 61) | fleet | |
+| W42 | Phones away from home: in-process tunnel to the hub; Android foreground service away; iPhone while the app runs; device list marks the hub and computers behind it appear online | ui | |
+| W44 | Ways out carry only CBB traffic: a hostile client holding member keys, sending traffic to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback over TCP or UDP, IPv4 or IPv6, and nothing reaches the internet stand-in; VLESS, relay, and tunnel isolation verified in unit tests | fleet | |
 | W45 | A hub on a network that lets only HTTPS through: with UDP and the forwarder's TCP port blocked, it registers inside VLESS and its client away syncs both ways | fleet | |
 | W46 | A forwarder whose VLESS runs over XHTTP behind its site's web server (`cbb forward -vless-xhttp`): with UDP and the forwarder's TCP port blocked, the hub registers through the web server and its client away syncs both ways through it; anyone else gets the site; in the time-scaled build at the real times, whose VLESS alone trusts the web server's own CA (`CBB_TEST_XHTTP_CA`) | time | |
 | W47 | `cbb update` on a client away whose hub uses VLESS asks the mirror on the forwarder's server (`cbb forward -vless-mirror`) only inside VLESS, the mirror's certificate checked on the way; as W46 | time | |
@@ -374,7 +372,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| U1 | `cbb status` matches the real state on every system: devices, systems, roles, root, admin and frozen marks, key store, last seen, clock skew, mode, quiet networks, dial-back warning, away state, transfers [P13] | real, fleet | |
+| U1 | `cbb status` matches actual state on every system: devices, OS, roles, main device (*root*), admin and frozen marks, key storage, last seen, clock skew, sync state, quiet networks, dial-back warning, away state, and transfers [P13] | real, fleet | |
 | U2 | `cbb version`, `help`, each command's `-h`; unknown flags and commands print the usage; `cbb version` reads the same with and without the helper, and a command that needs the helper says so where it is missing | real | |
 | U3 | Local access: a user outside the `cbb` group is refused with the group named; a member of it cannot use the admin socket; the Windows socket's access list [S11] | real | |
 | U4 | Errors as 0.2 says for every refusal of this catalogue, in both modes; a development build shows details by default | real, fleet | |
@@ -418,7 +416,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| A1 | The iPhone app: make a group, add devices (camera and the six digits), Devices, rename, remove, make admin, freeze and unfreeze, takeover, the away switch, send and fetch, settings [P27] | ui | |
+| A1 | The iPhone app: create a group, add devices (camera and six-digit code), Devices list, rename, remove, make admin, freeze and unfreeze, move the group, away switch, send and fetch, and Settings [P27] | ui | |
 | A2 | The Android app: the same, plus the foreground service, sending through accessibility, one tap, the share sheet | ui | |
 | A3 | The watches: devices, events, the away switch, the emergency actions, the quick-action buttons, the phone out of reach [P29, P33] | ui, person | Apple Watch, Wear OS watch |
 | A4 | The Mac app: window and menu bar, send and fetch, admin actions behind the password, a cancelled prompt changes nothing, a stopped service explained with details on and off, the remote paste target, Accessibility lost after an update shown [P31] | ui | |
@@ -436,7 +434,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A16 | Plain-language paths: a lost phone ("remove it on your other phone"), a group with one admin advised to add a second, errors in one line with the next step | ui | |
 | A17 | The Aurora OS app: the signed package installs through the store's installer; it joins by its QR code (a computer of the group scans and dials in); the group's copies reach its clipboard while it is in front; a copy goes out when it comes to the front and from the pull-down menu; the main page shows the members and the last copy; "Leave the group" deletes the membership; the key stays in its OP-TEE token across restarts | person | Aurora phone |
 | A18 | Two buttons on every app (the Mac, the tray app, the iPhone, Android, the watches, Aurora): sync on and off and away from home, each showing where it stands and changing it on every device of the group the button speaks for | ui, real | |
-| A19 | The Aurora app's further pages: taking a lost root's group over from the root's page (its admin key in the TEE the new root), collections and the tiles' order, the Bluetooth keyboard typing the clipboard into a paired device in its layout and speed, remote pastes typed once the user turned them on, received images and videos in the gallery | person | Aurora phone |
+| A19 | The Aurora OS app's further pages: moving the group to this phone using the recovery key (hardware admin key as the new main device), collections and tile ordering, Bluetooth keyboard typing into a paired device in its layout and speed, remote pastes once enabled, and received images and videos in the gallery | person | Aurora phone |
 
 ## 14. Security (S)
 
@@ -483,29 +481,35 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | E9 | Restarts during everything: members killed at random every 30 s for 10 minutes while copying | fleet | |
 | E10 | Soak for 24 h: a copy every 30 s from a random member, a fault every hour, memory and descriptors sampled every 5 minutes; flat, no restarts [Soak] | real, fleet | |
 | E11 | The service hung [F13]: SIGSTOP; commands answer within seconds; after SIGCONT it catches up | real | |
-| E12 | Budgets of the small devices: a small device capped as a Raspberry Pi Zero (512 MiB, a quarter of a core) and as a router (128 MiB, a quarter of a core) joins a group; its memory and CPU at rest, the time 20 copies take to arrive (p95), its memory after 200 more and the container's peak stay within each class's budget (testbench.md, "Budgets"); a real Pi Zero and router confirm it before a release | fleet, real | |
+| E12 | Small-device budgets: a small device capped as a Raspberry Pi Zero (512 MiB, 0.25 CPU) and as a router (128 MiB, 0.25 CPU) joins a group; idle memory and CPU, 20-copy arrival p95, memory after 200 more copies, and container peak stay within each class's budget ([testbench.md](testbench.md#budgets)); a real Pi Zero and router confirm measurements before a release | fleet, real | |
 
-## 16. What the bench needs for this
+## 16. What the bench needs
 
-- The controller runs the fleet: Docker with bridge and macvlan networks, QEMU for OpenWrt and
-  FreeBSD, a JVM for the Kotlin phone. If the controller is too small for 40 containers and
-  two virtual machines, a second controller (any x86 mini PC) takes the fleet.
-- The Mac runs the iPhone simulator and XCUITest, the Android emulator (phone, Wear OS, TV)
-  and the Swift phone.
-- A smart plug for the small board's power (I17); `rtcwake` on the Linux desktop.
-- The router as a device under test, with a timer that takes back every change.
-- A test signing key and feed on the controller.
-- Real phones and watches for what the simulators cannot do (Secure Enclave, Face ID,
-  WatchConnectivity, the Data Layer, wrist detection).
-- A TV for T17, T19 and H13 (Android TV starts in the emulator for the rest).
+- `controller` runs the fleet: Docker with bridge and macvlan networks, QEMU for OpenWrt and
+  FreeBSD, and a JVM for the Kotlin phone. When `controller` cannot host 40 containers and two
+  virtual machines, a second Linux host (such as an x86 mini PC) runs the fleet.
+- `mac` runs the iPhone simulator and XCUITest, the Android emulator (phone, Wear OS, Android TV),
+  and the Swift kit tests.
+- A smart plug power-cycles `small` (`I17`); `rtcwake` wakes the Linux desktop (`I18`).
+- `router` serves as a device under test with automatic revert timers for any configuration change.
+- A test signing key and local release feed live on `controller`.
+- Physical phones and watches verify hardware-only behavior (Secure Enclave, Face ID,
+  WatchConnectivity, Wear OS Data Layer, and wrist detection).
+- Physical TVs verify `T17`, `T19`, and `H13` (the Android TV emulator covers UI tests).
 
 ## 17. How it is run
 
-`testbench all BUILD` runs everything the harness has, one suite after another, each after a
-reset, and writes one report with the coverage table and the list of what is skipped and
-why. `testbench coverage` prints the table alone, from these two documents and the harness's
-list of what it runs. A case the harness runs counts as run in full when its suites cover
-every kind of section 0.1 it names (either of "real" and "fleet" when it names both, and a
-person never); the table counts those apart and lists the others with what they lack. That
-compares where a case runs, not each step of its text. Each suite runs alone too (`testbench faults BUILD`), and `-only`
-limits the devices.
+After staging and installing a build with `go run ./tools/bench -build DIR reset`, run
+`go run ./tools/bench all` (passing `-cbb FILE` and `-cbb-time FILE` to include `fleet` and
+`time`). It runs `check` and every automated suite in sequence, resets devices with `-quick`
+between real-device suites, and writes one combined report along with the coverage table
+(`coverage.txt`) and a list of skipped cases with reasons.
+
+`go run ./tools/bench coverage` prints the coverage table alone from this catalogue,
+[testbench-functions.md](testbench-functions.md), and the `automated` map in
+`tools/bench/catalogue.go`. A case counts as covered in full when its suites supply every execution
+kind listed in **How** (either `real` or `fleet` satisfies `real, fleet`; `person` is never
+automated). That check compares execution kinds, not every individual step in a case description.
+
+Run any single suite on its own (for example `go run ./tools/bench faults`), and use `-only a,b` to
+restrict real-device runs to selected inventory hosts.

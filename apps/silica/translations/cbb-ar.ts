@@ -1258,8 +1258,8 @@
         <translation>إنشاء مجموعة</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>اجعل هاتفًا آخر مشرفًا قريبًا: إذا فُقد هذا الهاتف، ينقل هاتف مشرف المجموعة إليه.</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>احفظ مفتاح الاسترداد للمجموعة قريبًا: إذا فُقد هذا الهاتف، ينقل به هاتف آخر المجموعة إليه.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1829,8 +1829,8 @@
         <translation>يتوفر CBB %1.</translation>
     </message>
     <message>
-        <source>Check that the base is on and online.</source>
-        <translation>تأكد من أن القاعدة تعمل ومتصلة بالشبكة.</translation>
+        <source>Check that the hub is on and online.</source>
+        <translation>تأكد من أن المحور يعمل ومتصل بالشبكة.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
@@ -1857,8 +1857,8 @@
         <translation>كل شيء تتم مزامنته.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no base.</source>
-        <translation>«في كل مكان» مفعّل، لكن ليس للمجموعة قاعدة.</translation>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>«في كل مكان» مفعّل، لكن ليس للمجموعة محور.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1877,8 +1877,8 @@
         <translation>اسمح لـ CBB في جدار حماية هذا الحاسوب.</translation>
     </message>
     <message>
-        <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>اجعل حاسوبًا في المنزل قاعدةً من إعداداته المتقدمة.</translation>
+        <source>Make a computer at home the hub, on its page in the app.</source>
+        <translation>اجعل حاسوبًا في المنزل محورًا من صفحته في التطبيق.</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1921,16 +1921,8 @@
         <translation>المزامنة متوقفة على: %1.</translation>
     </message>
     <message>
-        <source>The backup server does not answer.</source>
-        <translation>الخادم الاحتياطي لا يستجيب.</translation>
-    </message>
-    <message>
-        <source>The base %1 does not answer.</source>
-        <translation>القاعدة %1 لا تستجيب.</translation>
-    </message>
-    <message>
-        <source>The connection server does not take this base.</source>
-        <translation>خادم الاتصال لا يقبل هذه القاعدة.</translation>
+        <source>The forwarder does not take this hub.</source>
+        <translation>مُعيد التوجيه لا يقبل هذا المحور.</translation>
     </message>
     <message>
         <source>The group has records of a newer version.</source>
@@ -1961,8 +1953,12 @@
         <translation>استُخدم مفتاح استرداد المجموعة مرتين، لذا توقفت المجموعة نهائيًا.</translation>
     </message>
     <message>
-        <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>قائمة نقاط الدخول لخوادم الاتصال قديمة.</translation>
+        <source>The hub %1 does not answer.</source>
+        <translation>المحور %1 لا يستجيب.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>قائمة نقاط الدخول لمُعيدي التوجيه قديمة.</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1973,8 +1969,12 @@
         <translation>سجلات الجهاز الرئيسي تنتظر سجلات لم يمرّرها أي جهاز بعد.</translation>
     </message>
     <message>
-        <source>The tunnel to the base %1 does not get through.</source>
-        <translation>النفق إلى القاعدة %1 لا يمر.</translation>
+        <source>The relay does not answer.</source>
+        <translation>المُرحِّل لا يستجيب.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>النفق إلى المحور %1 لا يمر.</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -1997,8 +1997,8 @@
         <translation>هذا الجهاز مكتوم: لا تصل نُسخه إلى المجموعة.</translation>
     </message>
     <message>
-        <source>This device is the base, and no device has connected yet.</source>
-        <translation>هذا الجهاز هو القاعدة، ولم يتصل به أي جهاز بعد.</translation>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>هذا الجهاز هو المحور، ولم يتصل به أي جهاز بعد.</translation>
     </message>
     <message>
         <source>This device was removed from the group.</source>
@@ -2013,8 +2013,8 @@
         <translation>هذا هو الجهاز الوحيد في المجموعة.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>قد تحجب هذه الشبكة الأنفاق: فعّل «الشبكات الصارمة» على القاعدة.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the hub.</source>
+        <translation>قد تحجب هذه الشبكة الأنفاق: فعّل «الشبكات الصارمة» على المحور.</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>

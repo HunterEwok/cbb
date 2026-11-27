@@ -3,8 +3,8 @@
 # Copyright (C) 2026 HunterEwok
 
 # Downloads the previous release's cbb for Linux on amd64, for the test of
-# the promise that from 0.6 on a device of version N works in one group
-# with a device of N-1 (internal/service's TestPreviousRelease):
+# the promise, planned for 0.7, that a device of version N works in one
+# group with a device of N-1 (internal/service's TestPreviousRelease):
 #
 #   sh tools/e2e/previous.sh OUTDIR
 #

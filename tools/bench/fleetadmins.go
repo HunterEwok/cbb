@@ -67,17 +67,18 @@ func offline(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	})
 }
 
-// takeoverUndone (G27): an admin takes the group over while the root is
-// cut off but still there; the root removes that admin, and once the
-// network is whole again the takeover counts for nothing.
-func takeoverUndone(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
-	const p = "fleet/G27-takeover-undone/"
-	g := fleetGroup(ctx, r, f, "fleet/G27-takeover-undone", 3)
+// takeoverRefused (G27): the root changes only with the group's recovery
+// key (D-117): cbb takeover, cbb takeover -delay and cbb handover are
+// refused on an admin and on the root with a pointer to cbb recovery, and
+// the root stays the root. Conflicting histories and cbb resolve are
+// TestRestoredAdminSignsAgain's (internal/service/resign_test.go).
+func takeoverRefused(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
+	const p = "fleet/G27-takeover-refused/"
+	g := fleetGroup(ctx, r, f, "fleet/G27-takeover-refused", 3)
 	if g == nil || len(g.members) < 3 {
 		return
 	}
-	root, admin, m := g.members[0], g.members[1], g.members[2]
-	defer heal(ctx, g.members...)
+	root, admin := g.members[0], g.members[1]
 	if r.Do(p+"admin", func() error {
 		if err := succeeds(ctx, root, "cbb admin -allow-file-key "+admin.Name, "", "is an admin now"); err != nil {
 			return err
@@ -86,75 +87,12 @@ func takeoverUndone(ctx context.Context, r *Report, f *Fleet, timeout time.Durat
 	}) != nil {
 		return
 	}
-	if r.Do(p+"root-cut-off", func() error {
-		if err := cut(ctx, root, admin); err != nil {
-			return err
-		}
-		return cut(ctx, root, m)
-	}) != nil {
-		return
-	}
-	r.Do(p+"takeover", func() error {
-		if _, err := Run(ctx, admin, "cbb takeover "+root.Name, ""); err != nil {
-			return err
-		}
-		return listsAs(ctx, []*Device{admin, m}, admin.Name, "root", false, timeout)
-	})
-	r.Do(p+"root-removes-it", func() error {
-		_, err := Run(ctx, root, "cbb remove "+admin.Name, "")
-		return err
-	})
-	r.Do(p+"undone", func() error {
-		if err := heal(ctx, g.members...); err != nil {
-			return err
-		}
-		if err := listsAs(ctx, []*Device{root, m}, root.Name, "root", false, 3*timeout); err != nil {
-			return err
-		}
-		if err := listsAs(ctx, []*Device{root, m}, admin.Name, "", true, timeout); err != nil {
-			return err
-		}
-		text := "cbb-bench " + g.run + " from the root after the takeover"
-		if err := Copy(ctx, root, text); err != nil {
-			return err
-		}
-		return arrives(ctx, m, text, timeout)
-	})
-	// Again with m as the admin, and the root back before it removes it:
-	// it hears of the takeover, says so, and undoes it then.
-	if r.Do(p+"second-admin", func() error {
-		if err := succeeds(ctx, root, "cbb admin -allow-file-key "+m.Name, "", "is an admin now"); err != nil {
-			return err
-		}
-		if err := listsAs(ctx, []*Device{root, m}, m.Name, "admin", false, timeout); err != nil {
-			return err
-		}
-		return cut(ctx, root, m)
-	}) != nil {
-		return
-	}
-	r.Do(p+"second-takeover", func() error {
-		if _, err := Run(ctx, m, "cbb takeover "+root.Name, ""); err != nil {
-			return err
-		}
-		return listsAs(ctx, []*Device{m}, m.Name, "root", false, timeout)
-	})
-	r.Do(p+"root-told", func() error {
-		if err := heal(ctx, root, m); err != nil {
-			return err
-		}
-		return eventually(ctx, 3*timeout, func() error {
-			return succeeds(ctx, root, "cbb status", "", m.Name+", an admin, took the group over from this computer")
-		})
-	})
-	r.Do(p+"undone-after", func() error {
-		if _, err := Run(ctx, root, "cbb remove "+m.Name, ""); err != nil {
-			return err
-		}
-		if err := listsAs(ctx, []*Device{root}, root.Name, "root", false, 3*timeout); err != nil {
-			return err
-		}
-		return listsAs(ctx, []*Device{root}, m.Name, "", true, timeout)
+	want := []string{"cbb recovery"}
+	fails(ctx, r, p+"takeover", admin, errorCase{cmd: "cbb takeover " + root.Name, want: want})
+	fails(ctx, r, p+"takeover-delay", root, errorCase{cmd: "cbb takeover -delay 72h", want: want})
+	fails(ctx, r, p+"handover", root, errorCase{cmd: "cbb handover " + admin.Name, want: want})
+	r.Do(p+"root-stays", func() error {
+		return listsAs(ctx, g.members, root.Name, "root", false, timeout)
 	})
 }
 

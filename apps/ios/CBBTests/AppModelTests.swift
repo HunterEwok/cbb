@@ -91,6 +91,16 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(auth.context(), "a clock set back does not stretch it")
     }
 
+    /// A notice names a device the group lists by its name, and one it
+    /// does not list by its ID.
+    func testNoticeNamesTheDevice() throws {
+        let n = try JSONDecoder().decode(Notice.self, from: Data(#"{"id":"s","kind":"admins_silent","args":{"device":"deck","days_left":12}}"#.utf8))
+        XCTAssertEqual(NoticesCard.text(n, names: ["deck": "steamdeck"]),
+                       String(localized: "No word from the admin \("steamdeck") for a long time: its admin rights end in \(12) days unless it connects.", bundle: .app))
+        XCTAssertEqual(NoticesCard.text(n, names: [:]),
+                       String(localized: "No word from the admin \("deck") for a long time: its admin rights end in \(12) days unless it connects.", bundle: .app))
+    }
+
     func testSaidNamesWhereAndWhat() {
         XCTAssertEqual(AppModel.said(.sent(to: ["Mac.lan"])), String(localized: "Sent to \("Mac.lan").", bundle: .app))
         XCTAssertEqual(AppModel.said(.fetched(from: "Mac.lan", preview: "hello")),

@@ -1,17 +1,19 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The product's functions, for the bench
 
-Every function of Connect Beyond Borders as release 0.6 has it, one line each, with the cases of
-[testbench-catalogue.md](testbench-catalogue.md) that check it. It is gathered from
-[design.md](../design.md), [protocol.md](../protocol.md), [apps.md](../apps.md),
-[reference/cli.md](../reference/cli.md) and the 0.6 plan. "A function" is something a user can
-do or rely on, or a rule of the protocol that a device on the bench can break on purpose and
-watch being kept.
+For the project maintainer and release testers. This reference maps every product function of
+Connect Beyond Borders, one row per function, to the cases in
+[testbench-catalogue.md](testbench-catalogue.md) that verify it. Functions are compiled from
+[Design](../design.md), [Protocol](../protocol.md), [App specification](../apps.md), and
+[Command reference](../reference/cli.md). A function is a user-visible capability or a protocol
+rule that a bench device can deliberately test and verify.
 
-`testbench coverage` reads this table: a function counts as covered when one of its cases
-is in the catalogue, as automatic when one of those runs without a person, and as run when
-the harness runs one today. A function with no case says so with `-`, and is listed. Add a
-line here with every new function, and a case for it in the catalogue.
+`go run ./tools/bench coverage` reads this table together with
+[testbench-catalogue.md](testbench-catalogue.md): a function counts as covered when at least one
+listed case exists in the catalogue, as automatic when at least one case runs without a person,
+and as run when the harness executes one. A function with no case uses `-` and is listed as
+uncovered. Add a row here with every new product function and add its verifying case to the
+catalogue.
 
 ## I. Installation, updates and the service's life
 
@@ -75,8 +77,8 @@ line here with every new function, and a case for it in the catalogue.
 | I.56 | mips and mipsle builds | I23 |
 | I.57 | Authenticode on Windows | I24 |
 | I.58 | `CBB_ERROR_DETAILS` and the installers' errors | I25 |
-| I.59 | The one-time move from 0.5: the old group left, settings kept, said in status | I26 |
-| I.60 | A device of version N in one group with N-1, from 0.6 on | I27 |
+| I.59 | Incompatible prior-format group left on first start, settings kept, reported in status | I26 |
+| I.60 | Cross-version group interoperability between compatible releases (D-131) | I27 |
 
 ## G. Groups, pairing and roles
 
@@ -132,10 +134,10 @@ line here with every new function, and a case for it in the catalogue.
 | G.49 | Removing a phone (both keys) | G23 |
 | G.50 | Connections of a removed device closed at once | G23 |
 | G.52 | A removal reaching a device that was off | G25 |
-| G.53 | `cbb takeover` | G26 |
-| G.54 | A takeover undone | G27 |
-| G.55 | A phone takes the group over (`root` records) | G28 |
-| G.56 | An old group's records refused (no `cbb upgrade`) | G29 |
+| G.53 | Moving the group with the recovery key (`cbb recovery`; `cbb takeover` refused, D-117) | G26 |
+| G.54 | Retired takeover refusal and conflicting history resolution (`cbb resolve`) | G27 |
+| G.55 | A phone moves the group to itself (`root` records) | G28 |
+| G.56 | Legacy version-1 group records refused | G29 |
 | G.57 | `cbb rename` and the phones' rename | G30, A1 |
 | G.58 | Name lengths and Unicode names | G30 |
 | G.59 | Records converge in any order | G31 |
@@ -148,12 +150,12 @@ line here with every new function, and a case for it in the catalogue.
 | G.66 | A watch is certified only with a passcode and wrist detection | G37 |
 | G.67 | A watch's limits | G38, T7 |
 | G.68 | Delivery between the watch and the phone | G39 |
-| G.69 | Every sequence of joins, removals, freezes and takeovers | G40 |
+| G.69 | Every sequence of joins, removals, freezes, and root changes | G40 |
 | G.70 | Every pair of joiner, admitter and path | G41 |
 | G.71 | Leaving and joining again | G42 |
 | G.72 | Groups side by side on one network | G43, S13 |
 | G.73 | A new computer types a pairing window's six digits (mDNS finds the window, `cbb pair -code`) | G44 |
-| G.74 | Taking the group over from a phone through the core (iPhone, Android, Aurora) | G26, A1, A19 |
+| G.74 | Moving the group to a phone through `cbb_core` (iPhone, Android, Aurora OS) | G26, A1, A19 |
 
 ## K. Certificates and keys
 
@@ -504,7 +506,7 @@ line here with every new function, and a case for it in the catalogue.
 | A.24 | Add a device: camera and six digits | A1, G3 |
 | A.25 | The Aurora OS app: join by QR, sync in front, leave | A17 |
 | A.26 | Two buttons: sync and away from home on every app | A18 |
-| A.27 | The Aurora app's takeover, collections, keyboard, pastes and gallery | A19 |
+| A.27 | The Aurora OS app's move-group flow, collections, Bluetooth keyboard, remote paste, and gallery | A19 |
 
 ## S. Security
 

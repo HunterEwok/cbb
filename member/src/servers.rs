@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! cbb forward and cbb relay: the forwarder and the blind relay are Go
-//! programs of their own, cbb-forward and cbb-relay beside cbb. cbb hands
+//! cbb forward and cbb relay: the forwarder and the blind relay are
+//! programs of their own beside cbb, cbb-forward (Go) and cbb-relay (Rust). cbb hands
 //! the command line to them in its place, so that their systemd units, which
 //! run cbb forward or cbb relay under a user of their own, run them apart
 //! from this service and from the keys of cbb-helper.

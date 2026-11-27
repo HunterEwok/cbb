@@ -79,7 +79,7 @@ var automated = map[string][]string{
 	// Xvfb), and the F-Droid build reproduced without Play services, whose
 	// screens the Android ScreensTest drives.
 	"I23": {"ci"}, "H9": {"ci"}, "H10": {"ci"}, "A10": {"ci"},
-	// The Go tests and the interop vectors that refuse the records cbb upgrade gave.
+	// The Go tests and the interop vectors that refuse version-1 group records.
 	"G29": {"ci"},
 	// CI's upgrade job moves members of the latest release to the build under
 	// test (tools/e2e/upgrade.sh), and a Go test admits a device by the code it shows.
@@ -87,7 +87,7 @@ var automated = map[string][]string{
 	// The kits' tests and the core's: no phone is a hub, and a phone invites through a computer hub.
 	"W16": {"ci"}, "G14": {"ci"},
 	// The phone kits' tests and the Go tests that read what they sign: the
-	// Swift and Kotlin phones admit a Go joiner by its QR code (G10), a takeover (G28), a computer made an admin (G36), the
+	// Swift and Kotlin phones admit a Go joiner by its QR code (G10), a root change by the recovery key (G28), a computer made an admin (G36), the
 	// watch's shared vectors (G38), the attestation and EK chains (K10).
 	"G10": {"ci"}, "G28": {"ci"}, "G36": {"ci", "phone"}, "G38": {"ci"}, "K10": {"ci"},
 	// The published workflow's check of every release (release-check).

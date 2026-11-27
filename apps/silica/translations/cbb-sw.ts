@@ -1258,8 +1258,8 @@
         <translation>Unda kikundi</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>Ifanye simu nyingine kuwa msimamizi hivi karibuni: simu hii ikipotea, simu ya msimamizi itahamishia kikundi kwake.</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>Hifadhi ufunguo wa urejeshaji wa kikundi hivi karibuni: simu hii ikipotea, simu nyingine itahamishia kikundi kwake kwa ufunguo huo.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1829,8 +1829,8 @@
         <translation>CBB %1 inapatikana.</translation>
     </message>
     <message>
-        <source>Check that the base is on and online.</source>
-        <translation>Hakikisha kituo kimewashwa na kiko mtandaoni.</translation>
+        <source>Check that the hub is on and online.</source>
+        <translation>Hakikisha kitovu kimewashwa na kiko mtandaoni.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
@@ -1857,8 +1857,8 @@
         <translation>Kila kitu kinasawazishwa.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no base.</source>
-        <translation>Kila mahali kimewashwa, lakini kikundi hakina kituo.</translation>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>Kila mahali kimewashwa, lakini kikundi hakina kitovu.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1877,8 +1877,8 @@
         <translation>Ruhusu CBB kupitia ngome ya kompyuta hii.</translation>
     </message>
     <message>
-        <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>Fanya kompyuta ya nyumbani kuwa kituo, kwenye mipangilio yake ya kina.</translation>
+        <source>Make a computer at home the hub, on its page in the app.</source>
+        <translation>Fanya kompyuta ya nyumbani kuwa kitovu, kwenye ukurasa wake katika programu.</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1921,16 +1921,8 @@
         <translation>Usawazishaji umezimwa kwenye: %1.</translation>
     </message>
     <message>
-        <source>The backup server does not answer.</source>
-        <translation>Seva ya akiba haijibu.</translation>
-    </message>
-    <message>
-        <source>The base %1 does not answer.</source>
-        <translation>Kituo %1 hakijibu.</translation>
-    </message>
-    <message>
-        <source>The connection server does not take this base.</source>
-        <translation>Seva ya muunganisho haikubali kituo hiki.</translation>
+        <source>The forwarder does not take this hub.</source>
+        <translation>Kisambazaji hakikubali kitovu hiki.</translation>
     </message>
     <message>
         <source>The group has records of a newer version.</source>
@@ -1961,8 +1953,12 @@
         <translation>Ufunguo wa urejeshaji wa kikundi ulitumika mara mbili, kwa hivyo kikundi kimesimama kabisa.</translation>
     </message>
     <message>
-        <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>Orodha ya milango ya kuingilia ya seva za muunganisho imepitwa na wakati.</translation>
+        <source>The hub %1 does not answer.</source>
+        <translation>Kitovu %1 hakijibu.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>Orodha ya milango ya kuingilia ya visambazaji imepitwa na wakati.</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1973,8 +1969,12 @@
         <translation>Rekodi za kifaa kikuu zinasubiri rekodi ambazo hakuna kifaa kimezipitisha.</translation>
     </message>
     <message>
-        <source>The tunnel to the base %1 does not get through.</source>
-        <translation>Handaki kwenda kituo %1 halipiti.</translation>
+        <source>The relay does not answer.</source>
+        <translation>Relei haijibu.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>Handaki kwenda kitovu %1 halipiti.</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -1997,8 +1997,8 @@
         <translation>Kifaa hiki kimenyamazishwa: nakala zake hazifiki kwa kikundi.</translation>
     </message>
     <message>
-        <source>This device is the base, and no device has connected yet.</source>
-        <translation>Kifaa hiki ndicho kituo, na bado hakuna kifaa kilichounganishwa.</translation>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>Kifaa hiki ndicho kitovu, na bado hakuna kifaa kilichounganishwa.</translation>
     </message>
     <message>
         <source>This device was removed from the group.</source>
@@ -2013,8 +2013,8 @@
         <translation>Hiki ndicho kifaa pekee cha kikundi.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>Mtandao huu unaweza kuzuia mahandaki: washa Mitandao mikali kwenye kituo.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the hub.</source>
+        <translation>Mtandao huu unaweza kuzuia mahandaki: washa Mitandao mikali kwenye kitovu.</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>

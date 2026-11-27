@@ -44,7 +44,7 @@
 </style>
 <rect class="zone" x="10" y="10" width="726" height="200" rx="14"/>
 <text class="zone-t" x="26" y="34" direction="rtl" text-anchor="end">רשת הבית</text>
-<g class="key"><rect class="card key" x="30.0625" y="50.0" width="150" height="64" rx="10"/><g transform="translate(42.0625,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0625" y="78" direction="rtl" text-anchor="end">טלפון</text><text class="s" x="80.0625" y="96" direction="rtl" text-anchor="end">עם האפליקציה</text><rect class="badge" x="138.4625" y="41.0" width="33.6" height="18" rx="9"/><text class="badge-t" x="155.2625" y="54.0" text-anchor="middle" direction="rtl">שורש</text></g>
+<g class="key"><rect class="card key" x="30.0625" y="50.0" width="150" height="64" rx="10"/><g transform="translate(42.0625,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0625" y="78" direction="rtl" text-anchor="end">טלפון</text><text class="s" x="80.0625" y="96" direction="rtl" text-anchor="end">עם האפליקציה</text><rect class="badge" x="100.0625" y="41.0" width="72.0" height="18" rx="9"/><text class="badge-t" x="136.0625" y="54.0" text-anchor="middle" direction="rtl">מכשיר ראשי</text></g>
 <path class="e-home" d="M105.0625,114.0 L105.0625,150"/>
 <g class=""><rect class="card " x="204.0625" y="56.0" width="150" height="52" rx="10"/><g transform="translate(216.0625,68)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="254.0625" y="87" direction="rtl" text-anchor="end">מחשב נייד</text></g>
 <path class="e-home" d="M279.0625,108.0 L279.0625,150"/>

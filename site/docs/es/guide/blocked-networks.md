@@ -1,65 +1,97 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f9bd5319804d -->
+<!-- source: 6e944da2c5ca -->
 # Redes que bloquean las VPN
 
-Fuera de casa, tus dispositivos llegan al hub por el túnel WireGuard del propio grupo. Algunas redes bloquean WireGuard: el Wi-Fi de hoteles y oficinas, algunos operadores móviles y países enteros que filtran las VPN. Connect Beyond Borders tiene dos formas de sortearlo, y un hub usa ambas salvo que las desactives; los dispositivos toman un cambio la próxima vez que se encuentran con el hub en casa.
+Para cualquiera que sincronice fuera de casa en redes que filtran o bloquean WireGuard, como el Wi-Fi de hoteles, redes de oficinas, operadores móviles o países con un filtrado estricto del tráfico. En esta página compruebas o cambias cómo disfraza el túnel tu hub.
 
-| Forma | Lo que ve la red | Qué necesitas | Funciona en |
+Fuera de casa, tus dispositivos llegan a tu hub por el túnel WireGuard de tu grupo. Por defecto, un hub usa tanto **AmneziaWG** como (cuando se usa con un reenviador compatible con VLESS) **VLESS** para que tu túnel atraviese redes con filtrado. Sea cual sea el disfraz, tus copias permanecen dentro de WireGuard, TLS 1.3 mutuo y cifrado de extremo a extremo; consulta [Cómo funciona](how-it-works.md#networks-that-block-vpns).
+
+| Transporte | Qué ve la red | Requisitos | Dispositivos compatibles |
 |---|---|---|---|
-| **AmneziaWG** (activado por defecto; `-no-obfuscate` junto con `-no-vless` lo desactiva) | paquetes UDP que no se parecen a nada en particular | el hub o un reenviador | ordenadores, teléfonos |
-| **VLESS** (activado por defecto en un reenviador; `-no-vless` lo desactiva) | una conexión HTTPS a un sitio web | un reenviador con VLESS activado (el del proyecto lo tiene) | ordenadores, teléfonos |
-| WireGuard normal (`-no-obfuscate -no-vless`) | paquetes WireGuard | el hub o un reenviador | ordenadores, teléfonos, dispositivos pequeños |
-
-Elijas lo que elijas, el portapapeles permanece dentro del túnel del grupo y del TLS propio de los dispositivos, así que nada entre tus dispositivos puede leerlo. El disfraz solo cambia el aspecto de los paquetes en la red.
+| **AmneziaWG** (activado por defecto) | Paquetes UDP con cabeceras y relleno aleatorios | Hub o reenviador | Ordenadores, dispositivos pequeños (salvo routers MIPS), teléfonos |
+| **VLESS** (activado por defecto con un reenviador VLESS) | Una conexión HTTPS al sitio web del reenviador | Reenviador con VLESS activado (el reenviador del proyecto en `cbb.tools` lo tiene) | Ordenadores, dispositivos pequeños (salvo routers MIPS), teléfonos |
+| **WireGuard normal** (`-no-obfuscate -no-vless`) | Paquetes UDP estándar de WireGuard | Hub o reenviador | Ordenadores, dispositivos pequeños (salvo routers MIPS), teléfonos |
 
 ## Cómo eligen los dispositivos
 
-Los dispositivos prueban primero **AmneziaWG** por UDP, que es lo más rápido donde la red lo deja pasar: la mayoría de los filtros que buscan WireGuard no lo reconocen. Donde incluso eso está bloqueado, como en países que bloquean todo tipo de tráfico desconocido, llegan al reenviador mediante **VLESS**, que necesita un reenviador que acepte VLESS en el puerto TCP 443: el del proyecto en cbb.tools lo hace, o el tuyo. Un hub sin reenviador ofrece solo AmneziaWG.
+Cuando un hub usa un reenviador compatible con VLESS, los dispositivos fuera de casa prueban primero **AmneziaWG** por UDP, porque UDP es más rápido donde la red lo permite. Si UDP está bloqueado —como en redes que solo permiten tráfico web—, cambian automáticamente a **VLESS** por HTTPS (puerto TCP 443) hacia el reenviador y se quedan con el transporte que haya funcionado.
 
-Nada sirve en una red que solo deja pasar una lista de direcciones aprobadas.
+Cuando VLESS está activado, los dispositivos nunca retroceden a WireGuard normal, de modo que las redes con filtrado no ven tráfico VPN sin ocultar. Un hub sin reenviador ofrece solo AmneziaWG.
+
+Ningún disfraz de túnel sirve en una red que solo permite conexiones a una lista fija de direcciones IP o dominios aprobados.
+
+## Configurar el disfraz del túnel en la app de escritorio
+
+En un hub que ejecute la app para Mac o la app de la bandeja para Linux y Windows:
+
+1. Abre **CBB** y selecciona la página de dispositivo de este ordenador.
+2. En **Redes estrictas**, activa o desactiva:
+   - **Redes que bloquean las VPN (AmneziaWG)** para activar o desactivar AmneziaWG.
+   - **Redes que solo dejan pasar la web (VLESS)** para activar o desactivar VLESS (requiere un reenviador compatible con VLESS).
+3. Confirma con tu contraseña de administrador, Touch ID, Windows Hello o el aviso de polkit.
+4. Conecta cada portátil y teléfono a tu red doméstica una vez para que reciba los ajustes actualizados del túnel del hub.
+
+**Resultado:** El hub guarda los ajustes actualizados y los comparte con tus dispositivos la próxima vez que se encuentren en casa.
 
 ## AmneziaWG
 
-Un hub habla AmneziaWG en cuanto lo es:
+Cada hub activa AmneziaWG por defecto en cuanto lo configuras:
 
 ```sh
 sudo cbb global hub 203.0.113.7:8764
 ```
 
-Genera al azar los ajustes del grupo y los cambia más o menos una vez al mes, avisando de antemano a los dispositivos de los siguientes. En una red donde no se bloquea nada, WireGuard normal es un poco más rápido:
+El hub genera parámetros aleatorios de AmneziaWG para tu grupo y los rota automáticamente con cada periodo de credenciales del servidor (más o menos una vez al mes), compartiendo el siguiente conjunto con antelación.
 
-```sh
-sudo cbb global hub -no-obfuscate -no-vless 203.0.113.7:8764
-```
+Para cambiar a WireGuard normal en redes donde nada bloquea las VPN (lo que reduce la sobrecarga de los paquetes):
 
-Tras un cambio, lleva a casa una vez cada portátil y cada teléfono, o deja la app abierta en casa, para que tome los ajustes nuevos.
+1. Ejecuta en el hub (usa `-keep` para conservar las direcciones y el reenviador actuales del hub):
+
+   ```sh
+   sudo cbb global hub -keep -no-obfuscate -no-vless
+   ```
+
+2. Conecta cada portátil y teléfono de fuera de casa a tu red doméstica una vez (mantén la app del teléfono abierta brevemente) para que reciba los ajustes nuevos.
+
+**Resultado:** Tus dispositivos usan WireGuard normal en cuanto recogen la oferta actualizada en casa.
 
 ## VLESS
 
-VLESS funciona entre tus dispositivos y el reenviador, dentro de lo que para la red parece una conexión HTTPS normal a un sitio web.
+VLESS transporta tu túnel disfrazado con AmneziaWG dentro de lo que para la red parece una conexión HTTPS normal al sitio web del reenviador. Mantener AmneziaWG dentro de VLESS oculta los tamaños de los paquetes de WireGuard, que de otro modo podrían destacar dentro de HTTPS.
 
-1. **El reenviador.** El reenviador del proyecto en cbb.tools tiene VLESS activado: para la red, tus dispositivos visitan `cbb.tools`. Un reenviador propio lo ejecuta detrás del servidor web de un sitio tuyo:
+1. **Elige un reenviador con VLESS:**
+   - **El reenviador del proyecto en `cbb.tools`** ya tiene VLESS activado; para la red, tus dispositivos parecen visitar `cbb.tools`.
+   - **Tu propio reenviador:** Ejecuta `cbb forward` detrás de un servidor web que tenga el certificado TLS de tu sitio:
 
-   ```sh
-   cbb forward -vless-xhttp vpn.example.org
-   ```
+     ```sh
+     cbb forward -vless-xhttp vpn.example.org
+     ```
 
-   El servidor web, que tiene el certificado de tu sitio, le pasa la ruta que imprime el reenviador; cualquier otro recibe las páginas propias de tu sitio. Abre el TCP 443 en el cortafuegos del servidor, junto al UDP y el TCP 8764. La preparación del servidor está en [cómo ejecutar tus propios servidores](../admin/self-hosting.md#vless-on-the-forwarder).
+     Configura tu servidor web para redirigir por proxy la ruta que imprime `cbb forward` hacia el oyente local del reenviador (`127.0.0.1:3276` por defecto), mientras sirve tus propias páginas web a todos los demás. Abre el **puerto TCP 443** en el cortafuegos del servidor junto a los puertos UDP y TCP 8764. Consulta [Tus propios servidores: VLESS en el reenviador](../admin/self-hosting.md#vless-on-the-forwarder).
 
-2. **En el hub**: nada que hacer. Un hub en un reenviador pide VLESS:
+2. **Apunta tu hub al reenviador:** En el hub, regístrate con el reenviador del proyecto o con el tuyo propio:
 
    ```sh
    sudo cbb global hub -forwarder default
    ```
 
-   (`-forwarder 198.51.100.9:8764 -forwarder-key <key>` para el tuyo.) El reenviador le dice al hub su sitio y su ruta; uno sin VLESS registra el hub solo para UDP. VLESS viene con AmneziaWG: dentro de VLESS oculta el tamaño de los paquetes de WireGuard, que de otro modo se notaría a través del HTTPS. `-no-vless` desactiva VLESS.
+   Para tu propio reenviador, pasa en su lugar su dirección y su clave:
 
-3. **En los dispositivos**: encuéntrate una vez con el hub en casa, como tras cualquier cambio. Desde entonces prueban primero AmneziaWG por UDP, que es más rápido donde la red lo deja pasar, y VLESS cuando no, y se quedan con la forma que funcionó. Nunca prueban WireGuard normal, así que la red de la que quieres ocultar el túnel nunca lo ve.
+   ```sh
+   sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key KEY
+   ```
 
-## Consejos para países que filtran
+   **Resultado:** El hub solicita VLESS automáticamente. Si el reenviador admite VLESS, envía al hub el nombre de su sitio y su ruta; de lo contrario, el hub se registra solo para UDP. Para desactivar VLESS manteniendo AmneziaWG, pasa `-no-vless` (por ejemplo, `sudo cbb global hub -keep -no-vless`).
 
-- **Deja todo configurado en casa, antes de viajar.** Los dispositivos toman los ajustes del hub solo en la red doméstica.
-- Elige un reenviador fuera del país que filtra, en un proveedor de alojamiento que no esté bloqueado allí.
-- El sitio del reenviador se ve en el primer paquete de cada conexión: una red que bloquea el sitio bloquea también el camino. Entonces la solución es un reenviador propio, en otro sitio.
-- La VPN propia del teléfono sigue funcionando: el túnel de la app es tráfico normal de la app y no ocupa el hueco de VPN del teléfono.
-- Si el túnel deja de funcionar durante un viaje, `cbb global` en un portátil dice qué falla, y `CBB_DEBUG=1` muestra los detalles ([solución de problemas](troubleshooting.md#sync-away-from-home)).
+3. **Sincroniza una vez en casa:** Trae cada portátil y teléfono a tu red doméstica (y abre la app del teléfono brevemente) después de cambiar los ajustes del hub.
+
+   **Resultado:** Tus dispositivos reciben la oferta VLESS del hub y la usan automáticamente siempre que UDP esté bloqueado.
+
+## Consejos para países que filtran el tráfico
+
+- **Configura y prueba en casa antes de viajar.** Los dispositivos reciben los ajustes del túnel de un hub solo en tu red doméstica.
+- **Aloja tu reenviador fuera del país que filtra**, en un proveedor cuyas direcciones IP no estén bloqueadas allí.
+- **Cuenta con el bloqueo de dominios:** El nombre de dominio del reenviador aparece en el saludo TLS (SNI). Si una red bloquea `cbb.tools`, ejecuta tu propio reenviador detrás de otro nombre de dominio.
+- **Conserva tu VPN del sistema:** El túnel de Connect Beyond Borders se ejecuta dentro de la app como tráfico ordinario y no ocupa el espacio de VPN de tu teléfono, así que tu propia VPN sigue funcionando al mismo tiempo.
+- **Renueva puntos de entrada bloqueados:** Si cambian los puntos de entrada del reenviador del proyecto y un dispositivo no puede alcanzarlos, exporta puntos de entrada firmados desde un ordenador conectado con `cbb global entries export` (o `-qr`) e impórtalos en el ordenador afectado con `sudo cbb global entries import STRING`.
+- **Inspecciona los fallos:** Ejecuta `cbb global` en un portátil para ver por qué falló el túnel, y activa `CBB_DEBUG=1` en el servicio para ver los registros del saludo de WireGuard ([Solución de problemas: sincronizar fuera de casa](troubleshooting.md#sync-away-from-home)).

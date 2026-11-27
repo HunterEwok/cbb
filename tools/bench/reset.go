@@ -31,8 +31,7 @@ const stateBase = "$HOME/.cache/cbbbench"
 const winStateBase = "$env:LOCALAPPDATA\\cbbbench"
 
 // Build is the build under test: the release archives in a directory, as
-// the release workflow and CI make them (packaging/archive.sh,
-// packaging/archive.sh), checked against its SHA256SUMS.
+// the release workflow and CI make them (packaging/archive.sh), checked against its SHA256SUMS.
 type Build struct {
 	dir    string
 	sums   map[string]string // archive name to its SHA-256

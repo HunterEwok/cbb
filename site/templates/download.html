@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 {{define "title"}}{{t "Download"}}: Connect Beyond Borders{{end}}
-{{define "description"}}{{t "Download Connect Beyond Borders for Android, iPhone, Windows, Mac and Linux. Free and open source."}}{{end}}
+{{define "description"}}{{t "Download Connect Beyond Borders for Android, Windows, Mac, Linux and FreeBSD. Free and open source."}}{{end}}
 
 {{define "content"}}
 <section class="wrap page">
@@ -27,7 +27,15 @@
     <div class="card" id="iphone" data-os="iphone">
       <p class="badge mine-badge">{{t "Your device"}}</p>
       <h3>iPhone</h3>
-      <p>{{t "The app comes with TestFlight, which is not open yet. Until then a computer can hold the group: see %s." (link (printf "/%s/docs/guide/without-app.html" .Lang.Code) (t "without the app"))}}</p>
+      <p>{{t "The app comes in version 0.7. Until then a computer can hold the group: see %s." (link (printf "/%s/docs/guide/without-app.html" .Lang.Code) (t "without the app"))}}</p>
+    </div>
+    <div class="card" id="aurora">
+      <h3>{{t "Aurora and Sailfish"}}</h3>
+      <p>{{t "For now you build the app from the source with the Aurora or Sailfish SDK: see %s." (link (printf "/%s/docs/guide/apps.html" .Lang.Code) (t "the apps"))}}</p>
+    </div>
+    <div class="card" id="harmonyos">
+      <h3>HarmonyOS</h3>
+      <p>{{t "The app for HarmonyOS 5 phones, tablets and watches is ready and waits for AppGallery, the only place HarmonyOS installs apps from."}}</p>
     </div>
   </div>
 
@@ -39,7 +47,7 @@
       <h3>{{t "Linux and Mac"}}</h3>
       <p>{{t "Any Linux with systemd (x86-64, ARM64, ARMv7, ARMv6) and any Mac. In a terminal:"}}</p>
       <pre><code>curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh</code></pre>
-      <p>{{t "Or on a Mac with Homebrew, which also updates it; run the second line again after each upgrade:"}}</p>
+      <p>{{t "On a Mac you can also open the .pkg from the latest release, which installs the menu bar app too. Or use Homebrew, which also updates it; run the second line again after each upgrade:"}}</p>
       <pre><code>brew install hunterewok/tap/cbb
 sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"</code></pre>
     </section>
@@ -59,13 +67,19 @@ sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-pla
       <h3>{{t "Small devices"}}</h3>
       <p>{{t "A router or a Raspberry Pi Zero that should only sync takes the same installer and can leave out the helper. On Linux:"}}</p>
       <pre><code>curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --no-helper</code></pre>
+      <p>{{t "OpenWrt routers install it from the project's package feed: see %s." (link (printf "/%s/docs/guide/install.html#openwrt" .Lang.Code) (t "installing"))}}</p>
+    </div>
+    <div class="card">
+      <h3>{{t "FreeBSD and OPNsense"}}</h3>
+      <p>{{t "FreeBSD 15, x86-64 or ARM64. As root:"}}</p>
+      <pre><code>fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh</code></pre>
     </div>
   </div>
-  <p>{{t "The installer checks the download, starts Connect Beyond Borders and asks before it opens the firewall for it. Then run %s and scan its QR code in the app." (code "sudo cbb pair")}}
+  <p>{{t "The installer checks the download, starts Connect Beyond Borders and asks before it opens the firewall for it. Then tap + and Add a device in the app, run %s and type the six digits the phone shows." (code "sudo cbb pair -code")}}
      {{t "All the ways and options: %s." (link (printf "/%s/docs/guide/install.html" .Lang.Code) (t "installing"))}}</p>
 
   <h2 id="check">{{t "Checking a download"}}</h2>
-  <p>{{t "The installers check every file against the release's checksums. Each file also has a build attestation that ties it to this repository and the build that made it, which %s checks:" (code "gh attestation verify")}}</p>
+  <p>{{t "The installers check every file against the release's checksums, and the checksums against the project's signatures, made with keys kept offline: one with today's cryptography and, where OpenSSL 3.5 or later is installed, one post-quantum. Each file also has a build attestation that ties it to this repository and the build that made it, which %s checks:" (code "gh attestation verify")}}</p>
   <pre><code>gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb</code></pre>
   <p>{{t "Free code signing provided by %s, certificate by %s." (link "https://about.signpath.io" "SignPath.io") (link "https://signpath.org" "SignPath Foundation")}}
      {{t "Which programs are signed, and who approves it: %s." (link "code-signing.html" (t "Code signing policy"))}}</p>

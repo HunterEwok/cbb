@@ -5,7 +5,7 @@ import CCbbCore
 import Crypto
 import Foundation
 
-/// Pairing in the Rust core (docs/core-api.md, "Joining and admitting"): a
+/// Pairing in the Rust core (docs/core-api.md, "The member"): a
 /// phone that makes a group (`newGroup`, `newGroup06`), opens a pairing
 /// window for a device at home (`Window`), joins a group by a window's QR
 /// code (`Joiner`), or makes a remote invitation (`Inviting`). The core runs

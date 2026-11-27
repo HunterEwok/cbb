@@ -131,6 +131,7 @@ type benchGroup struct {
 	members []*Device // the hub first
 	tag     string
 	codes   []string  // the pairing codes of the run, which no log may hold
+	sheet   string    // the recovery key that cbb new showed, on one line
 	left    []*Device // joined, but out of the cases: only revoked at the end
 	undo    []func()
 }
@@ -193,8 +194,9 @@ func formGroup(ctx context.Context, r *Report, suite string, devices []*Device) 
 	}
 
 	if r.Do(suite+"/"+hub.Name+"/new", func() error {
-		_, err := Run(ctx, hub, adminCmd(hub)+" new", "")
+		out, err := Run(ctx, hub, adminCmd(hub)+" new", "")
 		if err == nil {
+			g.sheet = sheetOf(out)
 			err = shareClipboard(ctx, hub)
 		}
 		return noSudo(hub, err)
@@ -270,12 +272,12 @@ func atHome(devices []*Device) []*Device {
 func (g *benchGroup) end(ctx context.Context, r *Report) {
 	ctx = context.WithoutCancel(ctx)
 	for _, d := range append(g.members[1:], g.left...) {
-		r.Do(g.suite+"/"+d.Name+"/revoke", func() error {
+		r.Do(g.suite+"/"+d.Name+"/remove", func() error {
 			id, err := deviceOf(ctx, d)
 			if err != nil {
 				return err
 			}
-			_, err = Run(ctx, g.hub, adminCmd(g.hub)+" revoke "+id, "")
+			_, err = Run(ctx, g.hub, adminCmd(g.hub)+" remove "+id, "")
 			return noSudo(g.hub, err)
 		})
 	}
@@ -482,6 +484,45 @@ func syncWord(mode string) string {
 // with sudo, without a password (docs/maintainers/testbench.md, section 13). In the
 // container cbb runs as the service's user; on Windows the SSH user is an
 // administrator.
+// sheetLine is one line of a recovery sheet as cbb new prints it: four
+// groups of four characters of the sheet's alphabet.
+var sheetLine = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{4}( [0-9A-HJKMNP-TV-Z]{4}){3}$`)
+
+// sheetOf finds the recovery key in what cbb new printed and returns it on
+// one line, as cbb recovery reads it, or "" when there is none.
+func sheetOf(out string) string {
+	var lines []string
+	for l := range strings.Lines(out) {
+		if l = strings.TrimSpace(l); sheetLine.MatchString(l) {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) != 4 {
+		return ""
+	}
+	return strings.Join(lines, " ")
+}
+
+// recoverAs has d take the group's root with the group's recovery key
+// (cbb recovery), leaving out the devices named, and waits for its
+// service to come back with its new root key.
+func recoverAs(ctx context.Context, g *benchGroup, d *Device, leave ...string) error {
+	if g.sheet == "" {
+		return errors.New("cbb new showed no recovery key")
+	}
+	cmd := adminCmd(d) + " recovery"
+	for _, name := range leave {
+		cmd += " -leave " + shellQuote(name)
+	}
+	if err := succeeds(ctx, d, cmd, g.sheet+"\n", "is the group's root now"); err != nil {
+		return err
+	}
+	return eventually(ctx, 30*time.Second, func() error {
+		_, err := Run(ctx, d, cbbCmd(d)+" status", "")
+		return err
+	})
+}
+
 func adminCmd(d *Device) string {
 	switch d.OS {
 	case "linux", "darwin", "freebsd":

@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-// The phone suite (docs/maintainers/testbench.md, "The phone on an emulator"): the
+// The phone suite (docs/maintainers/testbench.md, section 3, "Devices under test"): the
 // Android app on an emulator in a group with members of the fleet. The
 // emulator runs already (adb sees it); the suite starts a member in a
 // container with its member port published on this computer's loopback,

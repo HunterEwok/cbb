@@ -1,103 +1,162 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0d34c8a9ae24 -->
-# 键盘与电视
+<!-- source: 30d3986ec6a3 -->
+# 键盘和电视
 
-适合想往电视、平板、游戏机，或没有安装 Connect Beyond Borders 的电脑里输入长密码、链接或搜索词的人。群组中的一台设备以键盘或电视遥控器的身份把文本输入到那里，由你点一下触发，或在管理员发送远程粘贴时触发。
+适合想往未运行 Connect Beyond Borders 的电视、平板电脑、游戏机或电脑中输入长密码、网址或搜索词的人。你群组中的一台设备可以充当蓝牙键盘、USB 键盘或网络电视遥控器。
 
-## 选一种方式
+键盘和电视遥控器是[实验室](lab.md)中的实验性功能。关于在真实硬件上的当前测试状态，见[平台对等](../parity.md#on-real-devices)。
 
-| 方式 | 输入到 | 需要 |
+## 选择一种方式
+
+| 方式 | 输入目标 | 所需条件 |
 |---|---|---|
-| [Android 手机作为蓝牙键盘](#an-android-phone-as-a-bluetooth-keyboard) | 任何接受蓝牙键盘的设备：电视、平板、手机、电脑、Steam Deck、PlayStation 5 | Android 10 或更高版本，并带蓝牙键盘配置文件 |
-| [Linux 电脑作为蓝牙键盘](#a-linux-computer-as-a-bluetooth-keyboard) | 任何接受蓝牙 LE 键盘的设备 | BlueZ 5.50 或更高版本，以及蓝牙 4.0 或更高版本的适配器 |
-| [Nano ESP32 作为 USB 或蓝牙键盘](#the-nano-esp32-as-a-usb-or-bluetooth-keyboard) | 通过 USB 还能输入到 BIOS、磁盘加密提示、Xbox 和 Nintendo Switch | 你的群组中有一块 Arduino Nano ESP32 |
-| [电脑作为电视遥控器](#a-computer-as-the-tvs-remote) | 你家庭网络中的 Android TV、Google TV 或 Roku | 家里的一台 Linux、macOS、Windows 或 FreeBSD 电脑 |
+| [将手机作为蓝牙键盘](#a-phone-as-a-bluetooth-keyboard) | 任何接受蓝牙键盘的设备：电视、平板电脑、手机、电脑、Steam Deck、PlayStation 5 | Android 10 或更高版本（带蓝牙 HID 配置文件）、Aurora OS 或 HarmonyOS 手机 |
+| [将 Linux 电脑作为蓝牙键盘](#a-linux-computer-as-a-bluetooth-keyboard) | 任何接受蓝牙 LE 键盘的设备 | 带 BlueZ 5.50 或更高版本、蓝牙 4.0+ 适配器和 `cbb-helper` 的 Linux |
+| [将 Arduino Nano ESP32 作为 USB 或蓝牙键盘](#the-nano-esp32-as-a-usb-or-bluetooth-keyboard) | 任何支持 USB 或 BLE 键盘输入的设备——通过 USB 时还包括 BIOS/UEFI、磁盘加密提示、Xbox 和 Nintendo Switch | 刷写了 `esp32/` 固件的 Arduino Nano ESP32 |
+| [将电脑作为电视遥控器](#a-computer-as-the-tvs-remote) | 你家庭网络中的 Android TV、Google TV、Apple TV 或 Roku | 家中运行 `cbb-helper` 的 Linux、macOS、Windows 或 FreeBSD 电脑 |
 
-Xbox 和 Nintendo Switch 只接受 USB 键盘，所以它们要用 Nano ESP32。macOS、Windows 和 iPhone 不允许任何应用充当蓝牙键盘。
+Xbox 和 Nintendo Switch 只接受 USB 键盘，因此这些游戏机请使用 Arduino Nano ESP32。iPhone、macOS 和 Windows 不允许应用充当蓝牙键盘。
 
-## 键盘布局必须一致
+## 匹配键盘布局和速度
 
-键盘发送的是按键，而不是字符：被输入的设备会按它自己的布局把每个按键变成字符。所以要告诉键盘那台设备当前使用哪种布局，英语（美国）还是俄语。如果文本中有该布局没有对应按键的字符，整段文本都不会输入，并会告诉你是哪些字符；不会用别的字符代替。换行会按下 Enter，制表符会按下 Tab。
+蓝牙或 USB 键盘发送的是物理按键代码，而不是字符：目标设备会使用当前启用的键盘布局将每个按键代码转换成字符。
 
-输入速度是故意放慢的，默认每秒 20 个字符：有些电视会丢掉来得更快的按键。如果漏字，请调低速度。
+- **布局：**在 Connect Beyond Borders 中设置键盘布局，使其与目标设备上当前启用的布局一致——**英语（美国）**（`us`）或**俄语**（`ru`）。如果你的文本包含所选布局无法输入的字符，Connect Beyond Borders 会拒绝整段文本并列出不支持的字符，而不会输入错误字符。换行会发送回车（Enter），制表符会发送 Tab。
+- **速度：**输入速度默认为**每秒 20 个字符**，因为有些电视会丢掉来得更快的按键。如果出现漏字，请调低速度（例如每秒 10 个字符）。
+- **长度限制：**蓝牙或 USB 键盘一次最多输入 **4,096 个字符**。
 
-## Android 手机作为蓝牙键盘
+## 将手机作为蓝牙键盘
 
-1. 在应用中，打开设置，蓝牙键盘，并开启 **Act as a Bluetooth keyboard**。如果提示，请允许蓝牙（“附近的设备”）。如果应用说这部手机无法充当键盘，说明厂商没有包含该配置文件（例如 Fairphone 6 以及一些华为、荣耀和较旧的小米手机）；请改用其他方式。如果它说另一个应用可能是手机的键盘，请关闭那个应用的键盘：同一时间只能有一个应用担任此角色。
-2. 点按 **Make this phone visible**。在两分钟内，到设备自己的蓝牙设置中添加这部手机，就像添加一个键盘那样。
-3. 在 **Type into** 下选择设备。应用会显示“Connected to …”。
-4. 设置 **The device's keyboard layout**，必要时设置 **Speed**（每秒 10、20 或 40 个字符）。
-5. 点按 **Type the clipboard**。文本会出现在设备获得焦点的地方，所以请先在设备上打开一个文本框。
+支持 **Android**、**Aurora OS** 和 **HarmonyOS** 手机。
 
-如果想让管理员的远程粘贴输入到那里，而不是输入到手机上，请在应用中开启远程粘贴，然后开启 **Type remote pastes there**。含换行的文本要求远程粘贴允许 Enter。
+1. 打开 **CBB**，前往**设置**，开启**高级设置**，然后打开**实验室 > 蓝牙键盘**。
+2. 开启**充当蓝牙键盘**，如有询问请允许蓝牙权限。
+   - 在 Android 上，如果应用提示此手机无法充当键盘，说明设备制造商在系统中省略了蓝牙 HID 设备配置文件；请改用其他方式。如果另一个应用占用了键盘配置文件，请先在那个应用中将其关闭，因为 Android 同一时间只允许一个键盘应用。
+3. 将目标设备与你的手机配对：
+   - **Android：**点按**让这部手机可被发现**（可被发现 2 分钟），在目标设备的蓝牙设置中配对你的手机，然后在**输入到**下选择该目标设备。
+   - **Aurora OS：**点按**让这部手机可被发现**（可被发现 2 分钟），然后在目标设备的蓝牙设置中连接到 `CBB keyboard`。
+   - **HarmonyOS：**在键盘开关开启期间，从目标设备的蓝牙设置中按设备名称连接到你的手机。
 
-## Linux 电脑作为蓝牙键盘
+   **结果：**屏幕会显示“已连接到 …”`Connected to …`（或“已有设备连接。”`A device is connected.`）。
 
-```sh
-sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
-sudo cbb keyboard pair             # discoverable for two minutes
-# add "CBB <this computer's name>" on the device, in its Bluetooth settings
-cbb keyboard                       # shows whether it is connected
-echo 'the text' | sudo cbb keyboard type
-```
+4. 设置**设备的键盘布局**（`English (US)` 即**英语（美国）**，或 `Russian` 即**俄语**），如有需要再设置**速度**（每秒 `10`、`20` 或 `40` 个字符）。
+5. 在目标设备上将光标定位到文本框，然后点按**输入剪贴板内容**（在 HarmonyOS 上，点按**输入剪贴板内容**旁边的系统**粘贴**按钮）。
 
-`on` 还接受 `-rate N`（速度，每秒 5 到 60 个字符）和 `-pastes`，后者把群组的远程粘贴发送到该设备，而不是这台电脑的屏幕：`sudo cbb keyboard on -layout us -rate 10 -pastes`。`sudo cbb keyboard off` 会停止它。这台电脑自己的蓝牙键盘和鼠标仍然可用。
+**结果：**你的手机会将剪贴板文本输入到目标设备上获得焦点的文本框中。
 
-## Nano ESP32 作为 USB 或蓝牙键盘
+## 将 Linux 电脑作为蓝牙键盘
 
-这块板子是你群组中的一个成员。在它的控制台上：
+在安装了 `cbb-helper` 的 Linux 电脑上运行以下命令：
 
-- `usb keyboard` 让它的 USB 口成为键盘，控制台则作为旁边的第二个串口；把它插到设备上。它在任何系统启动之前就能工作：在 BIOS、UEFI 设置或磁盘加密提示中也可以。
-- `ble on`，然后 `ble pair`，让它成为蓝牙 LE 键盘；在两分钟内到设备上添加“CBB Nano ESP32”。它最多记住四台设备；`ble forget` 会忘记它们。
-- `layout ru` 或 `layout us` 以及 `rate N` 用来设置布局和速度。
-- `type TEXT` 会在已连接的蓝牙设备上输入，否则在 USB 设备上输入。
+1. 向 BlueZ 注册蓝牙 LE 键盘：
 
-发往这块板子的群组远程粘贴也以同样的方式输入。板子自己的指南在 [esp32/](../../esp32/README.md)。
+   ```sh
+   sudo cbb keyboard on -layout us
+   ```
 
-## 电脑作为电视遥控器
+   可选参数：`-rate N`（每秒 5 到 60 个字符；默认 20）和 `-pastes`（将收到的[远程粘贴](remote-paste.md)路由到已配对的蓝牙设备，而不是这台电脑的屏幕；换行需要 `sudo cbb paste-receive on -enter`）。
 
-家里的一台电脑可以像遥控器那样，通过网络在电视上输入。电视上什么都不用安装，电视也不会加入群组。
+2. 让这台电脑在 2 分钟内可被发现：
 
-Android TV 或 Google TV 只需配对一次：
+   ```sh
+   sudo cbb keyboard pair
+   ```
 
-```sh
-sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code                     # type 123456 within two minutes
-```
+3. 在目标设备上打开蓝牙设置，与 `CBB <your computer name>` 配对。
+4. 检查连接并输入文本：
 
-Apple TV 的配对方式相同，使用它显示的四位 PIN 码。请先在 Apple TV 上把“设置”、“隔空播放与 HomeKit”、“允许访问”设为“同一网络中的所有人”：若设为“仅共享此家庭的成员”，它会拒绝任何配对。
+   ```sh
+   cbb keyboard
+   echo 'the text' | sudo cbb keyboard type
+   ```
 
-```sh
-sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code                     # type 1234 within two minutes
-```
+**结果：**`cbb keyboard` 会确认设备已连接，`cbb keyboard type` 发送完文本后会打印 `Typed.`。你的 Linux 电脑自己的蓝牙键盘和鼠标仍可正常使用。
 
-Roku 没有配对也没有加密：文本会以明文 HTTP 在你的家庭网络中传输，所以只有在你用 `-consent` 明确同意时才会添加。请先在 Roku 上把“设置”、“系统”、“高级系统设置”、“移动应用控制”设为“已启用”或“宽松”。
+要关闭蓝牙键盘，请运行 `sudo cbb keyboard off`。
 
-```sh
-sudo cbb remote add -roku -consent 192.168.1.40
-```
+## 将 Nano ESP32 作为 USB 或蓝牙键盘
 
-然后用电视自己的遥控器打开搜索或文本框，再输入：
+[Arduino Nano ESP32 固件](../../esp32/README.md)运行一个由串口控制台控制的 USB 启动键盘和蓝牙 LE 键盘（加入群组和剪贴板同步已在[路线图](../roadmap.md)中）。
 
-```sh
-echo 'the film' | sudo cbb remote type
-sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
-```
+1. 连接到开发板的串口控制台并选择一种模式：
+   - **USB 键盘：**运行 `usb keyboard`。开发板会重启，其 USB-C 接口同时充当启动键盘（可在 BIOS/UEFI、磁盘加密提示和游戏机中使用）和串口控制台。将开发板插入目标设备。
+   - **蓝牙 LE 键盘：**运行 `ble on`，再运行 `ble pair`，并在 2 分钟内在目标设备的蓝牙设置中配对 `CBB Nano ESP32`。开发板最多记住 4 台配对主机（`ble forget` 可清除它们）。
+2. 设置目标设备的布局和输入速度：
 
-`cbb remote` 会列出电视，有多台时用 `-tv NAME` 选择其中一台，`sudo cbb remote remove NAME` 会忘记一台。被重置过或忘记了这台电脑的 Android TV 或 Apple TV 必须重新配对。
+   ```text
+   layout us
+   rate 20
+   ```
+
+   俄语请使用 `layout ru`。
+3. 在使用 `--features console-type` 构建的固件上，使用以下命令输入文本：
+
+   ```text
+   type hello world
+   ```
+
+**结果：**如果有活跃的已连接蓝牙主机，开发板会向该主机输入；否则通过 USB 键盘输入。
+
+## 将电脑作为电视遥控器
+
+你家庭网络中任何安装了 `cbb-helper` 的 Linux、macOS、Windows 或 FreeBSD 电脑，都可以通过局域网向 Android TV、Google TV、Apple TV 或 Roku 输入文字。电视上无需安装任何软件，电视也不会加入你的群组。在 Unix 系统上请使用 `sudo`（在 Windows 的管理员终端中省略 `sudo`）。
+
+### 1. 配对或添加电视
+
+根据你的电视选择对应命令：
+
+- **Android TV 或 Google TV：**
+
+  ```sh
+  sudo cbb remote add -name living-room-tv living-room-tv.lan
+  sudo cbb remote code
+  ```
+
+  在 2 分钟内输入电视屏幕上显示的 6 位数字代码。
+
+- **Apple TV：**先在 Apple TV 上将**设置 > 隔空播放与 HomeKit > 允许访问**设为**同一网络中的所有人**（设为**仅共享此家庭的成员**会拒绝配对）。然后运行：
+
+  ```sh
+  sudo cbb remote add -appletv -name lounge 192.168.1.30
+  sudo cbb remote code
+  ```
+
+  在 2 分钟内输入 Apple TV 显示的 4 位 PIN 码。
+
+- **Roku：**Roku 的外部控制协议使用未加密的 HTTP 且没有配对。请先在 Roku 上将**设置 > 系统 > 高级系统设置 > 移动应用控制**设为**已启用**（Enabled）或**宽松**（Permissive）。然后使用 `-consent` 添加它：
+
+  ```sh
+  sudo cbb remote add -roku -consent 192.168.1.40
+  ```
+
+**结果：**不带参数运行 `cbb remote`，确认该电视出现在你的列表中。
+
+### 2. 向电视输入或转发远程粘贴
+
+1. 用电视自己的遥控器打开电视上的搜索框或文本框。
+2. 从电脑输入文本：
+
+   ```sh
+   echo 'the film' | sudo cbb remote type
+   ```
+
+   配置了多台电视时，请加上 `-tv NAME`。在 Android TV 和 Roku 上，换行会按下回车；在 Apple TV 上，换行会保留在文本中。
+
+   **结果：**文本会出现在电视获得焦点的文本框中，且 `cbb remote type` 会打印 `Typed.`。
+
+3. 你也可以选择将来自群组管理员的[远程粘贴](remote-paste.md)路由到这台电视（一次仅限一台电视；换行需要 `sudo cbb paste-receive on -enter`）：
+
+   ```sh
+   sudo cbb remote pastes living-room-tv on
+   ```
+
+要忘记某台电视，请运行 `sudo cbb remote remove NAME`。如果 Android TV 或 Apple TV 被重置或忘记了你的电脑，请重新配对。
 
 ## 安全
 
-- 蓝牙键盘会输入到设备获得焦点的地方，就像你坐在它的键盘前一样。只与你打算往里输入的设备配对，不再使用时要在两端都忘记它。
-- 当远程粘贴被发送到键盘或电视时，群组的任何管理员都可以在那里输入。只在需要的地方开启；它会随远程粘贴一起关闭。
-- 只能在家庭网络中访问电视：家庭网络之外的地址会被拒绝，无论该名称之后解析成什么。
-- Roku 的文本在家庭网络中没有加密。不要向 Roku 发送密码。
+- **蓝牙键盘：**蓝牙键盘会输入到已配对设备上当前获得键盘焦点的任何位置。只与你打算控制的设备配对，不再使用时请在两端都取消配对。
+- **转发到键盘和电视的远程粘贴：**开启远程粘贴转发（`-pastes` 或 `cbb remote pastes TV on`）期间，群组中的任何管理员都可以向该设备输入。关闭远程粘贴时，转发也会随之停止。
+- **电视仅限家庭网络：**`cbb remote` 只连接你家庭网络中的地址，并拒绝其外的任何地址。
+- **不要向 Roku 发送密码：**发送到 Roku 的文本以明文 HTTP 经过你的家庭网络。切勿向 Roku 发送密码或其他机密内容。
 
-## 局限
-
-- 在真实电视上只试过 Apple TV 4K，通过 `cbb remote` 输入文字；其余部分在测试中针对模拟的 BlueZ、Android TV、Apple TV 和 Roku 运行。
-- 手机应用目前还不能充当电视遥控器；Samsung 和 LG 电视将随后支持（[路线图](../roadmap.md)，第 25 项）。
-- 键盘一次最多输入 4,096 个字符。
-
-所有参数见[命令](../reference/cli.md)；电视使用的端口见[设备、端口与文件](../reference/devices.md#ports)；其内部运作方式见[应用规范](../apps.md#android-the-bluetooth-keyboard)。
+所有命令行参数见[命令](../reference/cli.md)。电视网络端口见[设备、端口和文件](../reference/devices.md#ports)。

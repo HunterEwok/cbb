@@ -1,84 +1,127 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Remote paste
 
-For anyone who wants to put a text into an app on another device: a password into a TV's
-login form, a command into a server's terminal, an address into a computer across the room.
-An admin of the group sends the text, and it lands where that device's focus is, pasted or
-typed key by key.
+For anyone who wants to paste text, images, or files from a phone or admin computer straight into
+the focused app on another computer—for example, a password into a login field, a command into a
+terminal, or a screenshot into a chat.
 
-Remote paste is off on every device until its own user turns it on there. Nobody can turn
-it on from afar.
+An admin signs the paste request, and the target computer puts the content where its keyboard
+focus is by pasting or typing key by key. Remote paste is off on every computer until that
+computer's own user turns it on locally; nobody can enable it remotely. Phones send remote pastes
+to computers and do not receive remote pastes.
 
-## Turn it on where the text should land
+## 1. Turn remote paste on at the target computer
 
-| Device | How | What it pastes into |
+Run the setup for the target computer's operating system:
+
+| Target system | Setup steps | Where pastes land |
 |---|---|---|
-| Linux | `sudo cbb paste-receive on` | the focused app of the desktop (X11, Wayland, GNOME and KDE), the active tmux pane; with `-console`, the text console too |
-| FreeBSD | `sudo cbb paste-receive on` | the focused app on X11 and on wlroots desktops (sway, Hyprland); not GNOME, since nothing there tells whether its screen is locked |
-| Windows | `cbb paste-receive on` in a terminal opened as administrator | the window that has the focus |
-| Mac | `sudo cbb paste-receive on`, and the Mac app open, allowed in System Settings, Privacy & Security, Accessibility | the app that has the focus |
-| A small device without a desktop | `sudo cbb paste-receive on`; with `-console`, the text console too | the tmux pane in use |
+| **Linux** | Run `sudo cbb paste-receive on` | The focused desktop app (X11, Wayland, GNOME, KDE), the active `tmux` pane, and (with `-console`) the Linux text console |
+| **FreeBSD** | Run `sudo cbb paste-receive on` | The focused app on X11 and wlroots Wayland compositors (such as sway and Hyprland); GNOME on FreeBSD is not supported because lock-screen state is unavailable |
+| **Windows** | Open a terminal as administrator and run `cbb paste-receive on` | The focused window |
+| **macOS** | Run `sudo cbb paste-receive on`, keep the **CBB** menu bar app open, and allow it in **System Settings > Privacy & Security > Accessibility** | The focused app |
+| **Small Linux device without a desktop** | Run `sudo cbb paste-receive on` (add `-console` for the Linux text console) | The active `tmux` pane or text console |
 
-A phone takes no remote paste in this version; it sends them.
+Optional flags for `cbb paste-receive on`:
 
-`-enter` lets a paste press Enter after the text.
-Without it a text with a line break is refused, because a line break may run what comes
-before it as a command wherever a terminal does not take the paste as one piece.
+- `-enter`: Allows a remote paste to press Enter after the content. Without `-enter`, any text
+  containing a line break is refused so a paste cannot accidentally run a command in a terminal.
+- `-console`: Allows remote paste into the Linux text console and `root`'s `tmux` sessions (not
+  available on rootless installs).
+- `-no-lock-check`: On Linux and FreeBSD without `logind`, allows remote paste when the system
+  cannot report session lock state (a running screen locker still blocks pastes).
 
-On GNOME and KDE the first paste opens the system's dialog for remote control on the screen;
-allow it once and it is remembered. To skip the dialog, install the uinput helper:
-install again with `--uinput`
-(`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`),
-which adds a virtual keyboard that presses only
-Shift+Insert and Enter for the user on the screen.
+**Result:** Run `cbb paste-receive` with no arguments to confirm that remote paste is on and see
+which options are active.
 
-Without a desktop, tmux and the text console need their helpers. Every installation adds
-CBB's part of `/etc/tmux.conf`, which starts the tmux helper with tmux;
-`install.sh --console` adds the console helper's service.
+### Extra helpers on Linux
 
-## Paste from an admin
+- **GNOME and KDE desktop dialogs:** The first remote paste opens your desktop's remote-control
+  confirmation dialog; allow it once so the desktop remembers it. To skip that dialog (and allow
+  keystrokes on desktops without another input path), reinstall with `--uinput`:
 
-On an admin computer:
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput
+  ```
+
+  This adds `cbb-uinput.service`, a virtual keyboard that presses only Shift+Insert and Enter for
+  the signed-in user.
+- **Headless `tmux` and text consoles:** Every Linux install adds Connect Beyond Borders' hook to
+  `/etc/tmux.conf` so `tmux` starts its paste helper automatically. For the Linux text console,
+  install with `--console` (see [Installing on Linux](install.md#linux)).
+
+## 2. Send a remote paste from an admin
+
+### From an admin computer
+
+Run `cbb paste -on DEVICE` in a terminal (`DEVICE` is the target's name or device ID from
+`cbb status`):
 
 ```sh
-echo 'the text' | cbb paste -on DEVICE          # pastes it
-cbb paste -on DEVICE                            # pastes this computer's clipboard text
-cbb paste -on DEVICE -type < note.txt           # types it key by key, up to 4 KiB
-cbb paste -on DEVICE -enter -secret < pass.txt  # presses Enter after it; kept as a secret
+echo 'the text' | cbb paste -on DEVICE              # paste text from standard input
+cbb paste -on DEVICE                                # paste this computer's clipboard text
+cbb paste -on DEVICE -type < note.txt               # type text key by key (up to 4 KiB)
+cbb paste -on DEVICE -enter -secret < pass.txt      # paste as a secret and press Enter
+cbb paste -on DEVICE photo.jpg notes/               # paste files into the focused app
+cbb paste -on DEVICE -image screenshot.png          # paste a PNG or JPEG as an image
+cbb paste -on DEVICE -copy                          # paste the group's current image or files
 ```
 
-`DEVICE` is the device's name or its ID from `cbb status`. The command says when the text is
-in, or why the device refused it.
+**Result:** The command prints `Pasted on DEVICE.` when the target accepts and delivers the paste,
+or reports the exact reason the target refused it.
 
-On an admin phone, open the device's page and choose "Paste on it…": type the text, or leave
-the field empty to send what the clipboard holds, choose paste or type, and confirm with Face
-ID or the fingerprint. An iPhone asks each time whether the app may read the clipboard, until
-Settings, Apps, CBB, "Paste from Other Apps" is set to Allow.
+### From an admin phone
 
-Typing works in any keyboard layout on X11, Wayland compositors with a virtual keyboard,
-Windows and the Mac. On GNOME and KDE through the dialog, a paste works but typing does not,
-since the keys would follow the user's layout.
+1. Open **CBB**, tap the target computer on **Home**, and tap **Paste on it…**.
+2. Choose what to send:
+   - **Text:** Type the text (or leave the text field empty to send your phone's clipboard),
+     optionally select typing key by key, **A secret**, or **Press Enter after it**, and tap
+     **Paste**.
+   - **Images or files:** Tap **Paste a picture or files…** (on iPhone, **Paste a picture…** or
+     **Paste files…**) and pick the items.
+3. Confirm with your face, fingerprint, passcode, or (on Aurora OS) your admin PIN.
 
-## When it is refused
+On iPhone, set **Settings > Apps > CBB > Paste from Other Apps** to **Allow** so iOS does not ask
+every time the app reads your clipboard.
 
-A device never pastes:
+**Result:** The target computer pastes or types the content into its focused window and the app
+shows **Pasted.**
 
-- while its screen is locked, a screen saver or a login screen is on;
-- into a window that runs as administrator on Windows, or under an administrator prompt;
-- on a Mac while a password field or Secure Keyboard Entry holds the keyboard;
-- when nobody is attached to tmux or logged in on the console;
-- more than once a second, or more than 30 times a minute, from one sender.
+### Pasting versus typing
 
-The answer on the sender says which one it was.
+- **Paste** works in most desktop apps and supports text (up to 1 MiB), images, and files.
+- **Type** (`-type`) sends keystrokes one by one (text only, up to 4 KiB) for apps that block
+  clipboard paste. Typing works across keyboard layouts on X11, Wayland compositors with a virtual
+  keyboard protocol, Windows, and macOS. On GNOME and KDE through the system remote-control
+  dialog, pasting works while typing is unavailable.
 
-## Safety
+## When a target refuses a paste
 
-- Whoever is an admin of your group can type into your device while remote paste is on, as
-  if at your keyboard. Turn it on only where you need it, and keep the list of admins short.
-- Each device keeps a log of its last 100 pastes: who sent them and when, never the text.
-- Any admin can turn remote paste off on another device or on all of them, for example
-  when a phone is lost: `cbb paste-receive off -on DEVICE` or `-all`. Only the device's own
-  user turns it on again.
+A target computer refuses a remote paste when:
 
-The limits are in [limits and lifetimes](../reference/limits.md#remote-paste-and-quick-actions);
-how it works inside is in the [design](../design.md#remote-paste).
+- Its screen is locked, a screen saver is active, or a login screen is showing.
+- On Windows, the focused window runs as administrator or an administrator elevation prompt is
+  open.
+- On macOS, a password field or Secure Keyboard Entry holds keyboard focus.
+- Nobody is attached to `tmux` or logged in on the text console (on headless targets).
+- The text contains a line break and `-enter` is not enabled on the target.
+- One sender exceeds the rate limit of **1 paste per second** or **30 pastes per minute**.
+
+The error returned to the sender names the reason.
+
+## Safety and turning remote paste off
+
+- **Limit your admins:** Any admin in your group can type into a computer while remote paste is on.
+  Enable remote paste only on computers where you need it, and keep your list of admins short.
+- **Paste audit log:** Each target records its last 100 paste requests (sender, timestamp, length,
+  method, and result—never the pasted text). Secrets leave no trace in the target's clipboard
+  after pasting.
+- **Turn off locally:** Run `sudo cbb paste-receive off` on the target computer (turning it off
+  also resets `-enter`, `-console`, and `-no-lock-check`).
+- **Turn off remotely from any admin:** Run `sudo cbb paste-receive off -on DEVICE` (or `-all` to
+  turn remote paste off on every computer in the group). Only each computer's own user can turn it
+  back on.
+
+For exact size and rate limits, see
+[Limits and lifetimes](../reference/limits.md#remote-paste-and-quick-actions). For how remote
+paste works internally, see [Design: remote paste](../design.md#remote-paste).

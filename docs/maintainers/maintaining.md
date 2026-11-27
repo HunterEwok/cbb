@@ -1,824 +1,1022 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Maintaining
 
-Settings and routines that live outside the repository files. Only the owner can change them;
-a checked box means the setting is in place.
+For the project maintainer. This page documents repository settings, GitHub Actions workflows,
+release procedures, offline signing keys, server monitoring, abuse handling, and platform
+distribution that live outside the source tree. Checked boxes mark one-time settings that are
+already in place.
 
 ## Account
 
-- [x] Two-factor authentication on the GitHub account, preferably with a passkey or a
-  security key. This protects the repository more than any setting below.
-- [ ] Optional: sign commits with an SSH key (`git config gpg.format ssh`) and add the key
-  to GitHub as a signing key, so commits show as Verified.
+- [x] Enable two-factor authentication on the GitHub account with a passkey or hardware security
+  key.
+- [ ] Optional: sign commits with an SSH key (`git config gpg.format ssh`) and add the public key
+  to GitHub as a signing key so commits appear as Verified.
 
 ## Repository settings
 
+### General
+
 **Settings → General**
 
-- [x] Features: Wiki and Projects off; Issues on.
-- [x] Pull Requests: only **squash merging**; **Automatically delete head branches** on.
-- [x] Releases: **release immutability** on.
+- [x] Features: disable Wiki and Projects; enable Issues.
+- [x] Pull Requests: allow **squash merging** only; enable **Automatically delete head branches**.
+- [x] Releases: enable **release immutability**.
+
+### Moderation
 
 **Settings → Moderation**
 
-- Interaction limits are for a temporary cool-down only and are normally off.
-- Conduct reports go to GitHub Support through **Report content**, as
-  [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) says. A repository of a personal account has no
-  option to send reports to the repository admins, and no email address is published.
+- Interaction limits stay off unless needed for a temporary cool-down.
+- Code of conduct reports go to GitHub Support through **Report content**, as described in
+  [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md). A personal repository has no maintainer report
+  inbox and publishes no email address for conduct reports.
 
-**Settings → Advanced Security** (named Code security on some accounts)
+### Code security
 
-- [x] **Private vulnerability reporting**. [SECURITY.md](../../SECURITY.md) relies on it.
-- [x] **Dependency graph**, **Dependabot alerts** and **Dependabot security updates**.
-- [x] **Secret scanning** and **Push protection**.
-- [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
-  setup) scan GitHub Actions, Go, Rust and Kotlin on every pull request, and
-  `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes (on a pull
-  request called from `ci.yml` beside the other jobs, and on `main` after the merge, a newer
-  push cancelling an older run), weekly, by hand and before each release, where `release.yml`
-  takes `main`'s passed analysis of the tagged commit when there is one rather than running
-  it again. The Go files only macOS builds compile are analyzed on a pull request in `ci.yml`'s
-  macOS job, and on `main` (`codeql.yml`'s `analyze (go, macos)`) only when a push changed
-  them, weekly and by hand: macOS runners are few. GitHub rejects their results while the
-  default setup is on.
-  The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
-  OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
-  weekly and on each push to `main`, and publishes the score for the README's badge.
-  Its Binary-Artifacts check lets the Android app's `gradle-wrapper.jar` pass only on a
-  successful run of the wrapper's check on `main`'s latest commit: `android-wrapper.yml` runs
-  it on each push to `main`, and its name sorts before `ci.yml`'s, which Scorecard would
-  otherwise find first and which runs on pull requests only.
+**Settings → Advanced Security** (named **Code security** on some accounts)
+
+- [x] Enable **Private vulnerability reporting** ([SECURITY.md](../../SECURITY.md) relies on it).
+- [x] Enable **Dependency graph**, **Dependabot alerts**, and **Dependabot security updates**.
+- [x] Enable **Secret scanning** and **Push protection**.
+- [ ] Keep **CodeQL** default setup off. GitHub rejects advanced workflow results while default
+  setup is active, and default setup cannot build the Android Kotlin app or the XcodeGen-generated
+  iPhone app. Instead, two custom workflows upload SARIF results:
+  - [`.github/workflows/codeql.yml`](../../.github/workflows/codeql.yml) scans GitHub Actions, Go
+    (Linux and Windows), Rust, and Java/Kotlin on every pull request, on pushes to `main`, and
+    weekly. Go files compiled only on macOS run inside `ci.yml`'s macOS job on pull requests, and
+    in `codeql.yml`'s `analyze (go, macos)` job on pushes to `main` that touch macOS Go files and
+    on the weekly schedule.
+  - [`.github/workflows/codeql-swift.yml`](../../.github/workflows/codeql-swift.yml) scans the
+    iPhone app and `CBBKit` on pull requests (called from `ci.yml` when `apps/ios` changes), on
+    pushes to `main` touching `apps/ios/**`, weekly, by manual dispatch, and during releases when
+    `main` has no passing analysis for the tagged commit.
+- [`.github/workflows/scorecard.yml`](../../.github/workflows/scorecard.yml) runs OpenSSF Scorecard
+  weekly, on pushes to `main`, and on manual dispatch, uploading findings to Code scanning and
+  publishing the score for the README badge. Its `Binary-Artifacts` check passes Android's
+  `gradle-wrapper.jar` only when the first workflow containing the wrapper validation step passes
+  on `main`'s latest commit:
+  [`.github/workflows/android-wrapper.yml`](../../.github/workflows/android-wrapper.yml) runs on
+  every push to `main`, sorts alphabetically before `ci.yml`, and completes before `scorecard.yml`
+  runs.
+
+### Actions
 
 **Settings → Actions → General**
 
 - [x] Workflow permissions: **Read repository contents and packages permissions**.
-- [x] **Allow GitHub Actions to create and approve pull requests** off.
+- [x] Disable **Allow GitHub Actions to create and approve pull requests**.
 - [x] Fork pull request workflows: **Require approval for all external contributors**.
+
+### Environments
 
 **Settings → Environments**
 
-- [ ] Environment **release**, which holds every release secret (below, "Release secrets").
-- [ ] Environment **aurora**, which holds the Aurora developer certificate (below, "Signing
-  for Aurora OS"): required reviewer the maintainer, every branch allowed.
+- [ ] **release**: holds every release signing and distribution secret
+  ([Release secrets](#release-secrets)). Restrict **Deployment branches and tags** to *Selected
+  branches and tags*: tag pattern `v*` and branch `main`. Configure no required reviewers because
+  pushing a release tag is the maintainer's approval.
+- [ ] **aurora**: holds the Aurora OS developer certificate
+  ([Signing for Aurora OS](#signing-for-aurora-os)). Require the maintainer as reviewer and allow
+  every branch.
+
+### Rulesets
 
 **Settings → Rules → Rulesets**
 
-Branch ruleset **Production Branch Protection** (made from the GitHub template), active,
-targeting the default branch:
+Branch ruleset **Production Branch Protection** (active, targeting the default branch `main`):
 
 - [x] Restrict deletions and block force pushes.
 - [x] Require linear history.
-- [x] Require a pull request before merging: 0 required approvals and **Require extra
-  approval for unattributed changes** off, because a single maintainer cannot approve their
-  own pull request; squash is the only merge method.
-- [x] Require the status check `ci-ok` from the GitHub Actions app, with the branch up to date
-  before merging. `ci-ok` is the last job of [the CI workflow](../../.github/workflows/ci.yml)
-  and passes only when every other job passed, so CI jobs can change without touching the
-  ruleset.
-- [x] Bypass list empty.
+- [x] Require a pull request before merging: 0 required approvals and **Require extra approval for
+  unattributed changes** off (a single maintainer cannot approve their own pull request); allow
+  squash merging only.
+- [x] Require status checks `ci-ok` (from [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml))
+  and `prcheck` (from [`.github/workflows/prcheck.yml`](../../.github/workflows/prcheck.yml)) from
+  the GitHub Actions app, with branches up to date before merging. Because `ci-ok` aggregates
+  every CI job, individual jobs can change without editing the ruleset.
+- [x] Keep the bypass list empty.
 
-Tag ruleset **releases**, active, targeting `refs/tags/v*`:
+Tag ruleset **releases** (active, targeting `refs/tags/v*`):
 
-- [x] Restrict updates and deletions, and block force pushes, so a release tag cannot be
-  moved. Its bypass list stays empty.
+- [x] Restrict updates and deletions, and block force pushes, so release tags cannot move. Keep
+  the bypass list empty.
 
-Tag ruleset **release tags: create**, active, targeting `refs/tags/v*`:
+Tag ruleset **release tags: create** (active, targeting `refs/tags/v*`):
 
-- [ ] Restrict creations, with the role **Repository admin** in the bypass list (always
-  allow): only the maintainer starts a release; an app or a token with write access cannot.
-  It is a ruleset of its own so that the one above keeps an empty bypass list.
+- [ ] Restrict tag creation, with **Repository admin** in the bypass list (always allow). Only the
+  maintainer can create release tags; apps and tokens with write access cannot. Keep this separate
+  from **releases** so **releases** keeps an empty bypass list.
 
 ### Release secrets
 
-The keys that sign release files are Actions secrets of the environment **release**
-(**Settings → Environments → release**), never repository secrets: a repository secret
-reaches any workflow on any branch, so anyone who may push a branch could read it. The
-environment's **Deployment branches and tags** are *Selected branches and tags*: the tag
-pattern `v*` and the branch `main`. The jobs that sign (`build`, `android` and
-`openwrt-feed` in the release workflow, `homebrew` in the published workflow) name the
-environment; a run by hand to check a key therefore starts from `main`, without a tag (a run
-with one is a rehearsal, which takes no secret: "A rehearsal of a release" below).
-`tools/repocheck` fails on a job of either workflow that reads a secret without naming the
-environment. No required
-reviewers: the release tag is the maintainer's decision already.
+Store all release keys as environment secrets in **Settings → Environments → release**, never as
+repository secrets (a repository secret is accessible to any workflow on any branch).
 
-| Secret | What it is | Section |
-| --- | --- | --- |
-| `CBB_ANDROID_KEYSTORE_BASE64`, `CBB_ANDROID_KEYSTORE_PASSWORD`, `CBB_ANDROID_KEY_ALIAS`, `CBB_ANDROID_KEY_PASSWORD` | the Android release key | [Android signing key](#android-signing-key) |
-| `CBB_FIREBASE_APP_ID`, `CBB_FIREBASE_PROJECT_ID`, `CBB_FIREBASE_API_KEY`, `CBB_FIREBASE_SENDER_ID` | the Firebase app of the Android full build, for push | [Firebase for push](#firebase-for-push) |
-| `CBB_WINDOWS_CERT_BASE64`, `CBB_WINDOWS_CERT_PASSWORD` | the Windows code signing certificate | [Signing for Windows](#signing-for-windows) |
-| `CBB_APPLE_DEVID_APP_P12`, `CBB_APPLE_DEVID_APP_PASSWORD` | the Developer ID Application certificate and key | [Signing for macOS](#signing-for-macos) |
-| `CBB_APPLE_DEVID_INSTALLER_P12`, `CBB_APPLE_DEVID_INSTALLER_PASSWORD` | the Developer ID Installer certificate and key, for the `.pkg` | [Signing for macOS](#signing-for-macos) |
-| `CBB_APPLE_DISTRIBUTION_P12`, `CBB_APPLE_DISTRIBUTION_PASSWORD`, `CBB_APPLE_PROFILES` | the Apple Distribution certificate and the App Store profiles, for TestFlight | [Signing for macOS](#signing-for-macos) |
-| `CBB_ASC_KEY`, `CBB_ASC_KEY_ID`, `CBB_ASC_ISSUER_ID` | the App Store Connect API key (role App Manager): notarization and TestFlight uploads | [Signing for macOS](#signing-for-macos) |
-| `CBB_OPENWRT_FEED_KEY` | the OpenWrt feed's key | [The OpenWrt feed](#the-openwrt-feed) |
-| `CBB_HOMEBREW_TAP_KEY` | the tap's deploy key | [Homebrew](#homebrew) |
+The jobs that read these secrets name the `release` environment: `build`, `macos-app`, `testflight`,
+`android`, and `openwrt-feed` in `.github/workflows/release.yml`, and `homebrew` in
+`.github/workflows/published.yml`. `tools/repocheck` fails if any job in either workflow reads a
+secret outside the `release` environment. To verify secrets without releasing, trigger a manual run
+from `main` with an empty tag input (a manual run with a tag input is a rehearsal that reads no
+secrets; see [A rehearsal of a release](#a-rehearsal-of-a-release)).
 
-GitHub never shows a secret again, so each key is made on the maintainer's Mac and kept
-there with an offline backup (an encrypted drive or a password manager) before it goes into
-the environment; a key that exists only in GitHub is lost with it. To put one in:
-`gh secret set NAME --env release < file`, or **Settings → Environments → release → Add
-environment secret**.
+| Secret | Purpose | Procedure |
+|---|---|---|
+| `CBB_ANDROID_KEYSTORE_BASE64`, `CBB_ANDROID_KEYSTORE_PASSWORD`, `CBB_ANDROID_KEY_ALIAS`, `CBB_ANDROID_KEY_PASSWORD` | Android release signing key | [Android signing key](#android-signing-key) |
+| `CBB_FIREBASE_APP_ID`, `CBB_FIREBASE_PROJECT_ID`, `CBB_FIREBASE_API_KEY`, `CBB_FIREBASE_SENDER_ID` | Firebase app credentials for Android full-build push | [Firebase for push](#firebase-for-push) |
+| `CBB_WINDOWS_CERT_BASE64`, `CBB_WINDOWS_CERT_PASSWORD` | Windows Authenticode certificate | [Signing for Windows](#signing-for-windows) |
+| `CBB_APPLE_DEVID_APP_P12`, `CBB_APPLE_DEVID_APP_PASSWORD` | Apple Developer ID Application certificate | [Signing for macOS](#signing-for-macos) |
+| `CBB_APPLE_DEVID_INSTALLER_P12`, `CBB_APPLE_DEVID_INSTALLER_PASSWORD` | Apple Developer ID Installer certificate (`.pkg`) | [Signing for macOS](#signing-for-macos) |
+| `CBB_APPLE_DISTRIBUTION_P12`, `CBB_APPLE_DISTRIBUTION_PASSWORD`, `CBB_APPLE_PROFILES` | Apple Distribution certificate and App Store profiles (TestFlight) | [Signing for macOS](#signing-for-macos) |
+| `CBB_ASC_KEY`, `CBB_ASC_KEY_ID`, `CBB_ASC_ISSUER_ID` | App Store Connect API key (App Manager role) for notarization and TestFlight | [Signing for macOS](#signing-for-macos) |
+| `CBB_OPENWRT_FEED_KEY` | OpenWrt apk feed ECDSA P-256 signing key | [The OpenWrt feed](#the-openwrt-feed) |
+| `CBB_HOMEBREW_TAP_KEY` | SSH deploy key for `HunterEwok/homebrew-tap` | [Homebrew](#homebrew) |
+
+GitHub does not allow reading secret values back. Generate every key on the maintainer's Mac and
+store an encrypted offline backup (an encrypted disk image or password manager) before uploading
+it:
+
+```sh
+gh secret set NAME --env release < file
+```
+
+You can also add secrets in **Settings → Environments → release → Add environment secret**.
 
 ## CI
 
-[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs on every pull request and on
-`main`:
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs on every pull request. It does
+not rerun on `main` because branch protection requires every pull request to be up to date with
+`main` before squash merging.
 
-- **check**: `gofmt`, `go mod tidy`, `go mod verify`, `go vet`, `staticcheck`,
-  `govulncheck`, `actionlint` and zizmor (their security) for the workflows,
-  [the repository rules](../../tools/repocheck/main.go) (English only, apart from the apps'
-  translations; license headers in Go and Rust files; copied code with its license; the documentation's
-  links, the old name, the command reference with every flag, the environment variables,
-  the ports, the index of the documentation, the register of decisions, the references to
-  protocol.md's sections, no notes of work left in the code), the design tokens
-  (`go run ./tools/tokens -check`), shellcheck on every shell script, the spelling of the
-  English text (typos), the tray app's HTML, CSS and JavaScript (Biome), and every file's
-  copyright and license (`reuse lint`);
-- **test**: `go test -race` on Linux x86-64, Linux ARM64 and Windows, each with its own
-  files' coverage (macOS's runs in `test and build (macOS), homebrew, Mac app`);
-- **go coverage**: Go's tests across packages with `-coverpkg`, the desktop clipboards, the
-  uinput keyboard, mDNS beside avahi and the e2e built with `-cover`;
-- **coverage**: the coverage of every part that ran, in the run's summary, held to
-  `tools/coverage/floor.json` ([testing](../testing.md#coverage));
-- **build**: a cgo-free build (`CGO_ENABLED=0`) for every Linux and Windows target, static
-  on Linux, including ARMv6 for the Raspberry Pi Zero W; the macOS targets on macOS runners
-  with cgo, for the pasteboard agent (see the Build section of [the design](../design.md#build));
-- **mdns with avahi**: the mDNS tests on real sockets, beside avahi-daemon, in a Debian
-  container;
-- **e2e**: the built binary as three members and an avahi browser in Docker containers:
-  pairing, sync, mDNS as avahi sees it, a wrong code
-  ([tools/e2e/e2e.sh](../../tools/e2e/e2e.sh));
-- **desktop clipboards**: the Wayland data-control client under a headless sway and the X11
-  client under Xvfb, against wl-clipboard and xclip;
-- **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
-  entry;
-- **test and build (macOS), homebrew, Mac app**: CBBKit's tests on macOS, `go test -race`
-  on macOS, the macOS release archives and the check that they ignore the test hooks, then
-  the formula written by `packaging/homebrew/formula.sh`, installed with Homebrew, then the
-  Mac app's tests and its `.pkg`, then the iPhone's libraries with the latest Rust (the phone
-  core), one after the other on one machine;
-- **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
-  windows-latest;
-- **phone kit**: CBBKit's tests and its cross tests with the Go code on Linux (pairing over
-  plain TCP); on macOS (pairing and a member connection over TLS) they run in the macOS job
-  above;
-- **iPhone app**: the Xcode project from XcodeGen, built and tested without signing on an
-  iPhone and an iPad simulator, one job for each, at the same time;
-- **Android app**: the Kotlin kit's tests and its cross tests with the Go code and the
-  computers' cbb, then the app and the Wear OS app built, unit-tested and linted;
-- **cbb (Rust), the checks and the Raspberry Pi builds**: `cargo check` on the oldest Rust,
-  `cargo fmt`, `clippy` for each system, and the ARM64 and ARMv6 builds;
-- **cbb (Rust)**: the tests of the Rust workspace under coverage: one job builds them into a
-  cargo-nextest archive, two parts run a share of them each at the same time
-  (`.config/nextest.toml`), and one job puts the parts' coverage together;
-- **cbb (Rust), the optimized builds and the installers**: the stack a verify needs in the
-  optimized builds, the installers without the helper (`get.sh --no-helper`, rootless) and
-  `cbb update` there, and the tests of cbb without its helper among other members;
-- **service tests on the Rust cbb**: the build, three parts of `internal/service` at the
-  same time (the last also the desktop connector and the previous release), and their coverage (docs/testing.md, "Running tests in
-  parallel");
-- **the core on the ESP32**: the protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
-  ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and
-  flash settings tested and its self-test run in Espressif's QEMU (both downloaded by hash);
-- **ZX Spectrum Next**: the tests of the `.cbb` frame parser on the host, and the dot commands `.cbb`
-  and `.pibridge` built with z88dk (from its release source, checked by hash, cached);
-- **ci-ok**: the summary that the ruleset requires.
+The `changes` job detects which areas a pull request touches (`.github/ci-changes.sh`) so untouched
+areas skip their jobs while `ci-ok` still counts them as passed. The jobs are:
 
-Rules for workflows:
+- **check**: `gofmt`, `go mod tidy -diff`, `go mod verify`, `go vet`, `staticcheck`,
+  `govulncheck`, `actionlint`, `zizmor`, [`tools/repocheck`](../../tools/repocheck/main.go) (with
+  `-tests-since` against the pull request base), `tools/strings -lint` (termbase and Vale),
+  `tools/tokens -check`, `tools/icon -check`, `tools/site check -strict`, `.github/shellcheck.sh`,
+  `.github/release-targets.sh`, `typos`, Biome (`biome.json`), and `reuse lint` (`REUSE.toml`).
+- **test**: `go test -race` with coverage on Linux x86-64, Linux ARM64, and Windows (plus 32-bit
+  Go tests on Linux and Rust Windows ACL unit tests on Windows). macOS `go test -race` runs inside
+  `buildmac`.
+- **go coverage** and **coverage**: cross-package Go coverage (`-coverpkg`, including TPM, desktop
+  clipboards, and container e2e) combined with Rust, Swift, Kotlin, Qt, and JS coverage against
+  `tools/coverage/floor.json` ([Testing: coverage](../testing.md#coverage)).
+- **build (Linux, FreeBSD, Windows)**: builds release targets across Linux (including ARMv6 for
+  Raspberry Pi Zero W), FreeBSD, and Windows (`CGO_ENABLED=0` for Go helpers; see
+  [Design: build](../design.md#build)).
+- **test and build (macOS), homebrew, Mac app** (`buildmac`): runs `CBBKit` tests, macOS Go CodeQL
+  analysis, `go test -race`, macOS release builds with ad hoc hardened-runtime signing and hook
+  checks, Homebrew formula install test (`packaging/homebrew/formula.sh`), Mac app tests and
+  unsigned `.pkg` install/uninstall test, and iOS Rust core build.
+- **test (linux/mips under qemu)** and **cbb for MIPS (no tunnel)** (`rustmips`): big-endian and
+  little-endian softfloat MIPS Go tests under QEMU and Rust router builds without the tunnel.
+- **test (freebsd)** and **OpenWrt**: FreeBSD tests inside a VM and OpenWrt rootfs and apk feed
+  install/remove tests (`tools/e2e/openwrt.sh`).
+- **upgrade from the last release**: tests upgrading from the previous release (`tools/e2e/upgrade.sh`).
+- **mdns with avahi**, **e2e**, and **desktop clipboards**: real-socket mDNS tests beside
+  `avahi-daemon`, three-member Docker e2e tests (`tools/e2e/e2e.sh`), and Wayland (headless sway)
+  and X11 (Xvfb) clipboard tests.
+- **packaging** and **windows installer**: `systemd-analyze verify` and `security`, desktop entry
+  validation, OPNsense hook check, `get.sh` and `cbb update` verification against signed test
+  releases, SBOM generation, winget manifest check, and Windows `install.ps1` / `uninstall.ps1`
+  tests on `windows-latest`.
+- **a release build ignores the test hooks** (`hooks`): verifies on Linux and Windows that release
+  builds carry no test-hook marker (`.github/hooks-marker.sh`) and ignore all test hooks
+  (`.github/release-ignores-hooks.sh`), and that test builds fail those checks
+  (`.github/hooks-refused.sh`).
+- **phone kit (Linux)**, **iPhone app** (iPhone and iPad simulators), and **codeql-swift**: `CBBKit`
+  tests and Go cross-tests on Linux, XcodeGen + `xcodebuild test` without signing on simulators,
+  and Swift CodeQL analysis when `apps/ios` changes.
+- **tray app**: builds and tests `apps/desktop` (including browser UI and screenshot checks) on
+  Linux and Windows.
+- **Android app**, **Android app on an emulator**, and **F-Droid build reproduces**: Kotlin `kit`
+  tests and cross-tests, full and `fdroid` APK and Wear OS builds, unit tests, lint, SBOM,
+  instrumented emulator tests, and F-Droid reproducibility (`packaging/fdroid/reproduce.sh`).
+- **Aurora app**, **HarmonyOS app (native module)**, **Aurora and HarmonyOS apps' code on the
+  computer**, and **phone core**: unsigned Aurora 5, Aurora 4, and Sailfish OS RPMs, HarmonyOS
+  Node-API build and ArkTS compiler/linter checks, host-side Qt 5 and Node tests, and `ffi/bind.sh`
+  builds for Android.
+- **cbb (Rust)** jobs (`rustcheck`, `rust-build`, `rust`, `rust-coverage`, `rustinstall`): MSRV
+  `cargo check`, `cargo fmt`, `clippy` per target, ARM64/ARMv6 builds, sharded `cargo-nextest` runs
+  with coverage, optimized stack verification, and `--no-helper` / rootless installer tests.
+- **service tests on the Rust cbb** (`service-build`, `service`, `service-coverage`): sharded
+  `internal/service` tests against the Rust `cbb` binary with coverage
+  ([Testing: running tests in parallel](../testing.md#running-tests-in-parallel)).
+- **the core on the ESP32** and **ZX Spectrum Next**: `cbb-core` `no_std` builds for ESP32-C6
+  (RISC-V) and ESP32-S3 (Xtensa), Nano ESP32 firmware self-test in QEMU, and `.cbb` / `.pibridge`
+  builds with z88dk plus host frame-parser tests.
+- **advisories**, **docker image**, **website**, **differential**, **model**, and **the frozen
+  format**: OSV-Scanner and `cargo-deny`, multi-arch Docker build and container e2e, `nginx -t` +
+  HTML validation + Lighthouse, Go/Rust/Kotlin differential fuzzing (`.github/differential.sh`),
+  Quint record-model tests (`docs/model/records-v3.qnt`), and `tools/formatfreeze` + `gen.py`
+  vector checks.
+- **ci-ok**: final aggregation job required by the branch ruleset.
 
-- Pin every action to a full commit SHA, with the version in a comment; Dependabot updates
-  them.
-- Set `permissions: contents: read` at the workflow level; grant more to a single job only
-  when it needs it.
-- Check out with `persist-credentials: false`.
-- zizmor (CI's check job) looks for holes in the workflows; a finding that has to stay gets a
-  `# zizmor: ignore[<audit>]` comment beside it that says why.
-- Pull request workflows get no secrets.
-- Tools such as `staticcheck`, `govulncheck` and `actionlint` are pinned in `go.mod` and run
-  with `go tool`. Go records them as indirect requirements, so `.github/dependabot.yml` allows
-  them by name; otherwise Dependabot would never update them.
+Companion workflows outside `ci.yml`:
+
+- [`prcheck.yml`](../../.github/workflows/prcheck.yml): verifies commit author/committer/co-author
+  addresses and pull request metadata (`tools/prcheck`); required by the branch ruleset.
+- [`nightly.yml`](../../.github/workflows/nightly.yml): daily extended differential fuzzing,
+  native Go and Cargo fuzz targets, 1,000-seed group simulation, slow core tests, mutation testing
+  (`cargo-mutants`), reproducible-build checks, Miri on `ffi/`, ASan on `cbb` and `ffi/`, Rust core
+  branch coverage, and 10× unstable-test sweeps.
+- [`pins.yml`](../../.github/workflows/pins.yml): weekly check (`tools/pins`) for outdated
+  manually pinned tool versions and nightly toolchains that Dependabot does not manage.
+- [`channel.yml`](../../.github/workflows/channel.yml),
+  [`monitor.yml`](../../.github/workflows/monitor.yml),
+  [`aurora.yml`](../../.github/workflows/aurora.yml),
+  [`release.yml`](../../.github/workflows/release.yml), and
+  [`published.yml`](../../.github/workflows/published.yml): release channel, server monitoring,
+  Aurora signing, and release automation described below.
+
+### Workflow rules
+
+- Pin every third-party action to a full commit SHA with the version in a trailing comment;
+  Dependabot updates them.
+- Set `permissions: contents: read` at the workflow level; grant elevated permissions only on the
+  individual job that needs them.
+- Check out with `persist-credentials: false` unless a job pushes commits (annotate any exception
+  with `# zizmor: ignore[...]`).
+- Resolve every `zizmor` finding or document a required exception with `# zizmor: ignore[<audit>]`
+  stating the reason.
+- Never pass secrets to pull request workflows.
+- Pin Go development tools (`staticcheck`, `govulncheck`, `actionlint`) in `go.mod` and run them
+  with `go tool`. Allow them explicitly in
+  [`.github/dependabot.yml`](../../.github/dependabot.yml) because Go records them as indirect
+  dependencies that Dependabot otherwise skips.
 
 ## Releases
 
-- Before the tag, a pull request moves the changes under `## [Unreleased]` in
-  `CHANGELOG.md` to a new `## [X.Y.Z] - YYYY-MM-DD` section and updates the link
-  references at the end of the file; the release notes are built from that section
-  (`packaging/release-notes.sh`), which fails the release if it is missing.
-  The same pull request sets `apps/android/version.properties` to `X.Y.Z` and its
-  `versionCode` to `X*10000 + Y*100 + Z` (`tools/repocheck` asks for it), and adds the
-  F-Droid changelog `apps/android/app/fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`
-  (500 characters at most); the release fails on a tag that differs from the file.
-- Built by CI from a tag, never on a laptop: push a tag `vX.Y.Z` on main
-  (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`), and
-  `.github/workflows/release.yml` builds the archives, `SHA256SUMS` and the attestations and,
-  once the iPhone app's CodeQL analysis has passed for the tagged commit (on `main` after the
-  merge, or on the tag in about half an hour when `main`'s run did not analyze it),
-  makes a draft release, with notes generated from the merged pull requests. The maintainer
-  signs and publishes it on their Mac with `release-sign publish` ("Signed releases" below).
-  A tag `vX.Y.Z-rc.N` makes a pre-release, which `releases/latest` and so `get.sh` skip;
-  it needs no pull request first: its notes take CHANGELOG's *Unreleased*, and the Android apps
-  take the tag's version.
-- **Test builds** never ship. The bench's time-scaled build (feature `benchtime`, Go's tag
-  `benchtime`), the build that Go's service tests steer through their hooks (feature and Go
-  tag `testhooks`) and the fuzzing build (`fuzzing`) are kept out three ways
-  (`member/src/testbuild.rs`): with `CBB_RELEASE_BUILD=1`, which the release workflow sets,
-  such a build of `cbb` does not compile; its `cbb version` names its features; and its
-  binary carries a marker the release workflow looks for in every Rust program it publishes,
-  as it looks for the tags `benchtime` and `testhooks` in the Go programs' build information
-  (`go version -m`). The tests' hooks, the variables `CBB_TEST_*` (docs/reference/config.md)
-  and the update's `CBB_RELEASE_DIR` and `CBB_RELEASE_ROOTS`, are read only through
-  `testbuild::env` in Rust and `internal/testhook` in Go, which a release build ignores (a Go
-  test binary reads them too); `tools/repocheck` refuses a program that reads one around
-  them, and CI's `packaging` job checks that a release's `cbb update` ignores the two.
-- The archives are `cbb-<os>-<arch>.tar.gz` without the version, so that
-  `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
-  binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code
-  and Go itself, written by `packaging/archive.sh`, after the crates' licenses from
-  `packaging/notices.sh`) and `packaging/`, with `cbb-helper` beside `cbb` on every
-  architecture but MIPS.
-- Published with `SHA256SUMS` and a build provenance attestation
-  (`actions/attest-build-provenance`), which users can check with `gh attestation verify`;
-  the release carries the same signed attestation as `provenance.intoto.jsonl`, which
-  `release-sign` leaves out of `release.json` (it describes the files, and no attestation
-  covers it).
-- What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each
-  part, made by `tools/sbom` and listed in `SHA256SUMS` and the signed `release.json` like the
-  other files:
-  - `sbom-go.cdx.json`: the Go modules of every program in the archives (`cbb` and the tray
-    app), read from the programs' own build information, and Go's standard library;
-  - `sbom-member.cdx.json`: the crates cbb is built with on its targets, without the
-    ones only tests and build scripts use, with their checksums from `Cargo.lock`;
-  - `sbom-phone-core.cdx.json`: the same for the Rust core both phone apps link (`ffi/`);
-  - `sbom-ios-kit.cdx.json`: the Swift packages of the iPhone kit (`Package.resolved`);
-  - `sbom-android.cdx.json`: the Maven modules of the Android app's two builds and the Wear OS
-    app, listed by `packaging/sbom.init.gradle.kts`, an init script that leaves the apps' build
-    files as they are.
+### Prepare and publish a release
 
-  The Docker image carries its own as a GitHub attestation in the registry (`actions/attest`
-  with `sbom-path`), not as buildx's, which would add a platform "unknown" to the index.
-  The same input makes the same file (no time; a serial number derived from the content).
-  CI's `packaging` and `Android app` jobs make them on every change, as the release does.
-- After the draft, the `docker` job builds the image of `packaging/docker` from the
-  release's own Linux archives for amd64, arm64 and armv7, pushes it to
-  `ghcr.io/hunterewok/cbb` as `X.Y.Z-unsigned`, attests it in the registry and adds its
-  digest to the release notes. Only after the release is signed and published does
-  `published.yml` tag the digest that the signed `release.json` names as `X.Y.Z` (and
-  `latest`, but not for a pre-release), so no unsigned image reaches them. The first push makes
-  the package private: once, in the package's settings on GitHub, make it public.
+1. Open a release preparation pull request on a branch from `main` that updates:
+   - [`CHANGELOG.md`](../../CHANGELOG.md): move items from `## [Unreleased]` to
+     `## [X.Y.Z] - YYYY-MM-DD` and update the comparison links at the bottom.
+     `packaging/release-notes.sh` reads this section and fails the release if it is missing.
+   - `apps/android/version.properties`: set `versionName=X.Y.Z` and
+     `versionCode=X*10000 + Y*100 + Z` (`tools/repocheck` verifies agreement with `CHANGELOG.md`,
+     and `release.yml` fails if a non-prerelease tag differs).
+   - `apps/silica/packaging/aurora4/tools.cbb.aurora.spec`,
+     `apps/silica/packaging/aurora5/tools.cbb.aurora.spec`, and
+     `apps/silica/packaging/sailfish/harbour-cbb.spec`: update `Version:` to `X.Y.Z`
+     (`tools/repocheck` checks these against `CHANGELOG.md`).
+   - `apps/android/app/fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`: add the
+     F-Droid release notes (at most 500 characters).
+2. Merge the pull request once `ci-ok` and `prcheck` pass.
+3. Tag `main` and push the tag (never build releases on a workstation):
+
+   ```sh
+   git tag -a vX.Y.Z -m vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+   `.github/workflows/release.yml` verifies pinned root keys, builds all platform archives, APKs,
+   macOS `.pkg`, TestFlight upload, OpenWrt feed, ZX Spectrum Next archive, SBOMs, `SHA256SUMS`,
+   winget manifest, and Sigstore build provenance attestations (`actions/attest-build-provenance`
+   and `provenance.intoto.jsonl`). Once Swift CodeQL passes for the tagged commit (reusing `main`'s
+   passing analysis when present), it creates a draft release and builds and pushes the unsigned
+   Docker image (`ghcr.io/hunterewok/cbb:X.Y.Z-unsigned`), appending its attested digest to the
+   draft notes.
+4. Sign and publish the draft release on your Mac with `release-sign publish`
+   ([Signed releases](#signed-releases)).
+5. After publication, `.github/workflows/published.yml` verifies the published release files under
+   the pinned roots, tags the signed Docker image digest as `X.Y.Z` (and `latest` when moving
+   forward on a stable release), verifies all attestations and image digests (`release-check`), and
+   updates the Homebrew tap (`homebrew`).
+
+A tag of the form `vX.Y.Z-rc.N` creates a pre-release, which `releases/latest`, `get.sh`, Homebrew,
+`winget-manifest.zip`, `stable.json`, and Docker `latest` skip. Pre-releases need no preparation
+pull request: `packaging/release-notes.sh` reads `CHANGELOG.md`'s *Unreleased* section, and the
+Android build derives `versionName` and `versionCode` from the tag.
+
+For the first Docker image push to `ghcr.io/hunterewok/cbb`, change package visibility from private
+to public once in GitHub package settings.
+
+### Release archives
+
+Archive names omit the version (`cbb-<os>-<arch>.tar.gz`, or `cbb-windows-<arch>.zip` on Windows)
+so `releases/latest/download/` URLs stay fixed for `get.sh` and `get.ps1`. Each archive contains a
+`cbb/` directory with:
+
+- `cbb` (`cbb.exe` and windowless `cbbw.exe` on Windows);
+- `cbb-helper`, `cbb-forward`, and `cbb-relay` on every target except MIPS routers (where `cbb`
+  runs alone);
+- `cbb-push` on Linux targets except MIPS;
+- the tray app `cbb-desktop` on Linux `amd64`/`arm64` and `cbb-desktop.exe` on Windows;
+- `LICENSE`, `THIRD_PARTY_NOTICES` (Rust crate licenses from `packaging/notices.sh`, followed by
+  Go module licenses, copied third-party code licenses, and Go runtime notices from
+  `packaging/archive.sh`), and `packaging/`.
+
+### Test builds
+
+Test-only builds—Rust features `benchtime`, `testhooks`, and `fuzzing`, and Go build tags
+`benchtime` and `testhooks`—must never ship in a release. Multiple guards prevent this
+(`member/src/testbuild.rs`, `internal/testhook/testhook.go`):
+
+- `CBB_RELEASE_BUILD=1` (set by `release.yml`) causes Rust compilation to fail if `benchtime`,
+  `testhooks`, or `fuzzing` is enabled.
+- Test builds print the marker `cbb-test-build-not-for-release` in `cbb version` and
+  `cbb-helper version` and embed it in the binary.
+- `release.yml` runs `.github/hooks-marker.sh absent` on every program it archives, and
+  `.github/release-go.sh` checks `go version -m` to reject `-tags=.*(benchtime|testhooks)` on
+  every Go binary.
+- Test hook variables (`CBB_TEST_*`, `CBB_TPM_SIMULATOR`, `CBB_HELPER`, `CBB_RELEASE_DIR`, and
+  `CBB_RELEASE_ROOTS`; see [Settings and environment variables](../reference/config.md)) are read
+  only through `member/src/testbuild.rs` and `internal/testhook`, which release builds ignore.
+  `tools/repocheck` fails if production code reads any hook directly.
+- CI's `hooks`, `buildmac`, and `packaging` jobs verify that release builds ignore all test hooks
+  (`.github/release-ignores-hooks.sh`) and that test builds are caught by both
+  `.github/hooks-marker.sh` and `.github/release-ignores-hooks.sh` (`.github/hooks-refused.sh`).
+
+### What a release is built from
+
+`tools/sbom` generates deterministic CycloneDX 1.6 JSON software bills of materials (no timestamps;
+UUID serial numbers derived from content) listed in `SHA256SUMS` and `release.json`:
+
+- `sbom-go.cdx.json`: Go modules embedded in every Go binary inside the release archives
+  (`cbb-helper`, `cbb-forward`, and `cbb-desktop` / `cbb-desktop.exe`) and the Go standard library.
+- `sbom-member.cdx.json`: crates compiled into `cbb-member` across all release targets (excluding
+  dev and build dependencies), with checksums from `Cargo.lock`.
+- `sbom-phone-core.cdx.json`: crates compiled into `cbb-ffi` across iOS and Android targets.
+- `sbom-ios-kit.cdx.json`: Swift packages from `apps/ios/CBBKit/Package.resolved`.
+- `sbom-android.cdx.json`: Maven dependencies for the full Android build, F-Droid build, and Wear
+  OS app, collected by `packaging/sbom.init.gradle.kts` without modifying Gradle build files.
+
+The Docker image receives its own SBOM as a GitHub registry attestation (`actions/attest` with
+`sbom-path`) rather than a Buildx SBOM attestation, which would add an `unknown` platform entry to
+the image index. CI's `packaging` and `Android app` jobs generate these SBOMs on every pull request.
 
 ### A rehearsal of a release
 
-Run by hand with a tag (Actions, "release", "Run workflow", **tag** `vX.Y.Z` or
-`vX.Y.Z-rc.N`), from any branch, `.github/workflows/release.yml` builds and checks
-everything as a release of that tag would and leaves the release's files (the archives,
-`SHA256SUMS`, the bills of materials, `get.sh` and `get.ps1`, the winget manifest) in the
-artifact `release-files` for a week. It signs nothing and publishes nothing, whatever its
-inputs: the jobs name the environment **release** and read its secrets only when the
-`roots` job's output `sign` is true, which its shell step sets, comparing exactly, only for a
-tag pushed or the keys check from `main` without a tag, so a rehearsal's programs are signed ad hoc or not at all and it has
-no APK, no `.pkg`, no TestFlight build and no OpenWrt feed; the draft, the iPhone app's
-CodeQL analysis and the Docker image run only on a tag pushed. The steps are the release's
-own, with the tag from `TAG` (the pushed tag, or the rehearsal's), whose characters the
-`roots` job checks first (0-9, a-z, `.` and `-`, in the form above). When the pinned roots lack
-a half, a rehearsal does not stop at `TestPinnedRootsComplete`: it writes a warning with what
-failed and the test's output in the run's summary and goes on, so it can run before the
-ceremony's roots are in the tree; a tag pushed and the keys check stop there.
+To test the release pipeline without signing or publishing anything, run
+[`.github/workflows/release.yml`](../../.github/workflows/release.yml) manually (**Actions →
+release → Run workflow**) from any branch with the **tag** input set to `vX.Y.Z` or `vX.Y.Z-rc.N`.
+
+The `roots` job validates the tag characters (`0-9`, `a-z`, `.`, `-`) and sets `sign=false` for
+rehearsals (`sign=true` is set only for a pushed tag or a manual keys check from `main` with an
+empty tag input). Because `sign` is `false`, jobs do not enter the `release` environment and read
+no secrets: binaries stay unsigned or ad hoc signed, and the rehearsal omits APKs, `.pkg`,
+TestFlight, OpenWrt feed, draft release, Swift CodeQL, and Docker image pushes. The `release-files`
+job uploads the built archives, `SHA256SUMS`, SBOMs, `get.sh`, `get.ps1`, and (for non-prerelease
+tags) `winget-manifest.zip` as the `release-files` artifact for 7 days.
+
+If `TestPinnedRootsComplete` fails during a rehearsal, the `roots` job logs a warning and summary
+and continues; pushed tags and manual keys checks stop on failure.
 
 ## Signed releases
 
-The release files of docs/protocol.md, section 16, are made with `tools/release-sign` on
-the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
-(`internal/release/roots`, with their attestations); releases from 0.6 on are signed.
+`tools/release-sign` creates and signs the release metadata files specified in
+[Protocol](../protocol.md), section 16, on the maintainer's Mac. Signing keys never enter CI.
 
-- **The root keys**, once: one on each of two YubiKeys, kept apart, with a PIN and touch
-  for every signature. The YubiKeys may be in daily use for other things: the root goes
-  into a free retired PIV slot (82 when `ykman piv keys info 82` finds no key), and nothing
-  else on the key is reset or changed. `ykman piv keys generate --algorithm ECCP256
-  --pin-policy ALWAYS --touch-policy ALWAYS 82 root-N.pem`, then `ykman piv certificates
-  generate --subject "CN=Connect Beyond Borders release signing root N (2026)" 82 root-N.pem` so
-  the key can be read from the slot, and `ykman piv keys attest 82` with the `f9`
-  certificate as proof that the key was made on the YubiKey.
-  Each root's post-quantum half is made beside it ("Two signatures" below). Both halves'
-  public keys go into `internal/release/roots/roots.pem` under the root's `Name`, which
-  `internal/release.Roots` and the Rust core (`release::ROOTS_PEM`, for `cbb` and the phone
-  kits) read, and into `packaging/get.sh` (`release_roots`, the same text); the P-256 halves
-  into `packaging/windows/get.ps1` (`$releaseRoots`).
-- **The release key**, in the Mac's Secure Enclave, asking for Touch ID at each signature:
-  `swift tools/release-sign/se.swift create ~/.config/cbb-release/release.se`, with its
-  post-quantum half encrypted to the same Secure Enclave. A root certifies both in
-  `keys.json`, which lives 90 days.
-- **The branch `channel`** holds the current `keys.json` and `stable.json`
-  (docs/protocol.md, section 16, "Where the files are"), since a published release takes no
-  new files. `release-sign publish` makes it with the first signed release, and only
-  `release-sign` and the `channel` workflow write to it.
-- **The channel key**, once, on cbb.tools beside the status key, readable only by root:
-  `openssl ecparam -name prime256v1 -genkey -noout -out /etc/cbb-channel/channel-key.pem`,
-  then its post-quantum half as an encrypted credential and both public keys in
-  `channel.pem` ("Two signatures"), copied to the Mac. The first `release-sign publish` certifies it with `-channel cbb.tools=channel.pem`;
-  later ones keep it. A weekly systemd timer on cbb.tools
-  (`site/deploy/cbb-channel.service` and `.timer`, as the user `cbb-channel`, which gets the
-  root-only key and its encrypted half as credentials for the run) runs `release-sign extend
-  -key file:channel-key.pem+slh:channel-pq.pem -out /srv/cbb.tools/channel`, which reads the
-  branch, checks it, signs `stable.json` again for 30 days with the same release and a
-  higher number, and serves it with `keys.json` at `https://cbb.tools/channel/` (build it
-  with `GOOS=linux GOARCH=amd64 go build ./tools/release-sign`). The daily `channel`
-  workflow (`.github/workflows/channel.yml`) takes it into the branch with `release-sign
-  take`, which refuses one that does not check out, names another release or is not newer.
-  GitHub holds no key and cbb.tools no GitHub token.
-- **Each release**: once the release workflow has made the draft (its `docker` job adds the
-  image's digest to the notes), `release-sign publish -version X.Y.Z [-min-from X.Y.Z]` on
-  the Mac, with `gh` signed in. It downloads the draft's files, checks each one's build
-  attestation against the tag (`gh attestation verify --source-ref refs/tags/vX.Y.Z`), and
-  the image's in the registry (the notes are not signed, so the digest they name counts only
-  with that attestation), keeps
-  the branch's `keys.json` when it is valid for 45 more days and certifies the release key
-  and the keys asked for (otherwise a root signs a new one, numbered above it, with the same
-  keys: the YubiKey's PIN and a touch), signs `release.json` and `stable.json` (numbered
-  above the branch's) with the release key (Touch ID for each), checks all of it under the
-  pinned roots as a device would, uploads `release.json` to the draft and, after a yes,
-  publishes it and commits `keys.json` and `stable.json` to the branch. `-no-publish` stops
-  before publishing, `-docker none` signs a release without the image; a pre-release
-  changes no `stable.json`. `published.yml` then checks what GitHub serves, tags the signed
-  image and updates the Homebrew tap; a pre-release, which no channel names, it checks by
-  name with `release-sign verify -pinned`. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
-  `verify` (the comment in `tools/release-sign/main.go`).
-- **The entry points** (docs/protocol.md, section 16, "Entry points"): the ways in to the
-  project's servers that are not built in. On the Mac, in a checkout of the branch `channel`,
-  `release-sign entries -key se:~/.config/cbb-release/release.se -in in.json channel`, where
-  `in.json` is `{"forwarders": [{"name": "cbb.tools:8764", "vless": [{"transport": "xhttp",
-  "server_name": "cbb.tools", "port": 443, "path": "/banMEJvnYJJap8S"}]}]}`, signs
-  `entries.json` numbered above the branch's, valid for 30 days (`-days`, at most 100), and
-  checks it under the pinned roots; commit and push it. From then on `release-sign extend`
-  on cbb.tools signs it again with the channel key, the same forwarders and a higher number,
-  `take` brings that into the branch only when it names the same forwarders, `due` reminds
-  when it runs out, and `mirror` serves the newest copy that checks out. A blocked way in is
-  replaced by signing a new list with another `in.json`, without a release. `in.json` may
-  also name where the project's relay is reached, `"relays": [{"name": "cbb.tools:8765",
-  "endpoints": ["relay.cbb.tools:8765"]}]` (no `endpoints`: its name), for moving it to
-  another server; the devices on it follow at their next failed registration.
-- **The project's push service's key** goes into `keys.json` the same way, since no pin of it is
-  built in and no group reaches the service before one is listed: on cbb.tools `cbb-push`
-  makes `push.pem` in its state directory on its first start (keep that file; it is the
-  service's TLS key), `sudo openssl pkey -in /var/lib/private/cbb-push/push.pem -pubout -out
-  push-pub.pem` takes its public key, and on the Mac `release-sign renew -push
-  cbb.tools:8767=push-pub.pem` (or `-push` with `publish`) lists it in the next signed
-  `keys.json`. A new key for it later goes as below, with `-push`.
-- **A new key for the project's forwarder or relay**, without a release: make the new key
-  file beside the running one, take its public key (`openssl pkey -in relay.pem -pubout -out
-  relay-2.pem`; the WireGuard block of a relay's file is skipped), and on the Mac
-  `release-sign renew -relay cbb.tools:8765=relay-2.pem` (`-forwarder cbb.tools:8764=...` for
-  the forwarder), which keeps the old key listed. Wait until the mirror and the branch serve
-  the new `keys.json` and a few days for the devices to get it (`cbb update` once a day, the
-  group, and a device that fails at the relay fetches it from the mirror itself), then switch
-  the server to the new key file. After a few more days drop the old one: `release-sign renew
-  -drop <the old pin>`. `keys.json` holds at most 64 halves in all, so drop old keys before
-  adding more.
-- **Reminders**: the `channel` workflow opens the issue "Release channel: renewal due" when
-  the branch's `keys.json` expires within 21 days (run `release-sign renew -new-keys` on the
-  Mac with a YubiKey) or its `stable.json` within 10, which means cbb.tools stopped renewing
-  it (check its timer, or run `release-sign renew`, which signs it with the release key).
-- A lost or stolen Mac: a root signs a `keys.json` with a new release key and without the
-  old one. A lost YubiKey: the other root signs, and the next release ships a new second root.
-  A stolen channel key: a new one on cbb.tools, and `release-sign renew -drop cbb.tools
-  -channel cbb.tools-2=channel.pem` (`-drop NAME` drops any key by its name in `keys.json`).
-- **The status key** of the revocation mirror, on cbb.tools in `/etc/cbb-attest/` like the
-  channel key (it signs nothing but `attest-status.json`, so a stolen one can at most keep
-  a revoked phone proven until it is replaced): `openssl ecparam -name prime256v1 -genkey
-  -noout -out status-key.pem`, readable only by root, with its post-quantum half as a
-  credential encrypted with systemd-creds (`release-sign pq-new -key file:status-key.pem
-  -out - -public status.pem | systemd-creds encrypt --name=status-pq.pem -
-  status-pq.cred`). `keys.json` certifies both with `-status mirror=status.pem`. A daily
-  timer (`site/deploy/cbb-attest.service` and `.timer`, as the user `cbb-attest`, which gets
-  both halves as credentials for the run) runs `attest-status` into
-  `/srv/cbb.tools/attest` and copies `keys.json` beside it from `/srv/cbb.tools/channel`. When it stops on a list that drops a serial number, check Google's
-  list and run it once with `-allow-drop`; a stolen status key is dropped from the next
-  `keys.json` like a release key.
-- **The TPM makers' certificates** in `internal/attest/tpmroots/roots.pem`, which decide
-  whose TPMs prove their keys (docs/protocol.md, section 17, "TPM evidence"): before a
-  release, download Microsoft's TrustedTpm.cab (its README says where), check its
-  Authenticode signature, extract the root and intermediate certificates as PEM, review the
-  diff (a maker added or gone) and note the date in the README.
-- `release-sign drill -version X.Y.Z DIR ROOTS.pem` signs DIR with throwaway keys in files,
-  as CI does to test the installers, and for drills of the steps above.
+### Root keys and release keys
+
+- **Root keys** (one-time setup): generate one P-256 key on each of two YubiKeys kept in separate
+  locations, in an unused retired PIV slot (slot `82`, confirmed empty with
+  `ykman piv keys info 82`; nothing else on the YubiKey is reset):
+
+  ```sh
+  ykman piv keys generate --algorithm ECCP256 --pin-policy ALWAYS --touch-policy ALWAYS 82 root-N.pem
+  ykman piv certificates generate --subject "CN=Connect Beyond Borders release signing root N" 82 root-N.pem
+  ykman piv keys attest 82 > root-N-attest.pem
+  ```
+
+  Export the slot `f9` attestation certificate alongside `root-N-attest.pem` into
+  `internal/release/roots/attestation/` (`internal/release/roots/README.md`). Create each root's
+  post-quantum half beside it ([Two signatures](#two-signatures)). Commit both halves of `root-1`
+  and `root-2` to `internal/release/roots/roots.pem` (read by Go's `internal/release.Roots` and
+  Rust's `release::ROOTS_PEM`) and mirror them in `packaging/get.sh` (`release_roots`) and, for
+  the P-256 halves, `packaging/windows/get.ps1` (`$releaseRoots`).
+- **Release key**: create a P-256 key in the Mac's Secure Enclave requiring Touch ID per signature,
+  or in retired PIV slot `83` on a YubiKey:
+
+  ```sh
+  swift tools/release-sign/se.swift create ~/.config/cbb-release/release.se
+  ```
+
+  Generate its post-quantum half sealed to the same hardware ([Two signatures](#two-signatures)). A
+  root key certifies both halves in `keys.json` (valid for 90 days).
+- **The `channel` branch**: stores the active `keys.json`, `stable.json`, and `entries.json`
+  ([Protocol](../protocol.md), section 16, "Where the files are") because published GitHub releases
+  are immutable. `release-sign publish` creates the branch on the first signed release; only
+  `release-sign` and `.github/workflows/channel.yml` write to it.
+
+### Channel key and automatic renewal
+
+Generate the channel key once on `cbb.tools`, readable only by root:
+
+```sh
+openssl ecparam -name prime256v1 -genkey -noout -out /etc/cbb-channel/channel-key.pem
+```
+
+Create its post-quantum half as a systemd encrypted credential and export both public halves to
+`channel.pem` ([Two signatures](#two-signatures)), then copy `channel.pem` to your Mac and certify
+it once with `release-sign publish -channel cbb.tools=channel.pem` (or `release-sign renew`).
+
+Build `release-sign` for `cbb.tools` with `GOOS=linux GOARCH=amd64 go build ./tools/release-sign`
+and install it at `/usr/local/bin/release-sign`. A twice-weekly systemd timer
+(`site/deploy/cbb-channel.service` and `site/deploy/cbb-channel.timer`, Monday and Thursday at
+05:00 UTC, running as user `cbb-channel` with both key halves passed as systemd credentials) runs:
+
+```sh
+/usr/local/bin/release-sign extend \
+  -key "file:$CREDENTIALS_DIRECTORY/channel-key.pem+slh:$CREDENTIALS_DIRECTORY/channel-pq.pem" \
+  -out /srv/cbb.tools/channel
+```
+
+`extend` reads the `channel` branch, verifies it under the pinned roots, re-signs `stable.json`
+for **14 days** with the same release and a higher sequence number, re-signs `entries.json` for
+**30 days** with the same forwarders and relays if present, and writes them beside `keys.json` at
+`https://cbb.tools/channel/`.
+
+The daily `.github/workflows/channel.yml` workflow runs `release-sign take channel`, which commits
+the renewed `stable.json` and `entries.json` to the `channel` branch only if they verify under the
+pinned roots, advance the sequence number within bounds, and keep the same release, forwarders, and
+relays. GitHub holds no signing key and `cbb.tools` holds no GitHub token.
+
+### Publishing with release-sign
+
+Once `release.yml` finishes the draft release and its `docker` job appends the image digest to the
+draft notes, run on your Mac with `gh` authenticated:
+
+```sh
+release-sign publish -version X.Y.Z [-min-from X.Y.Z]
+```
+
+`publish` performs these steps:
+
+1. Verifies that pinned roots are complete (`release.CompleteRoots`).
+2. Downloads all draft files and verifies each file's Sigstore build provenance attestation—and the
+   Docker image's attestation in `ghcr.io`—against `refs/tags/vX.Y.Z` and
+   `.github/workflows/release.yml`.
+3. Keeps the `channel` branch's `keys.json` if it has at least 45 days of validity left and already
+   certifies the release key and any requested extra keys; otherwise signs a new `keys.json` (valid
+   90 days) with a YubiKey root key (PIN and touch).
+4. Signs `release.json`, `zxnext.json` (when `cbb-zxnext.tar.gz` is present), and `stable.json`
+   (for non-prereleases, valid 14 days) with the release key (Touch ID per file).
+5. Verifies all signed files and assets under the pinned roots as a client device would.
+6. Uploads `release.json` (and `zxnext.json`) to the draft, prompts for confirmation, publishes the
+   release, and commits `keys.json` and `stable.json` to the `channel` branch.
+
+Useful flags:
+
+- `-no-publish`: stops after uploading `release.json`, leaving the release as a draft.
+- `-docker none`: signs a release with no Docker image.
+- Manual subcommands for individual steps: `release-sign manifest`, `sign`, `channel`, `keys`, and
+  `verify` (see usage comments in `tools/release-sign/main.go`).
+- Test drill with throwaway keys in files: `release-sign drill -version X.Y.Z DIR ROOTS.pem`.
+
+### Entry points and server key pins
+
+- **Entry points** ([Protocol](../protocol.md), section 16, "Entry points"): to publish or update
+  non-built-in server entry points without a release, check out the `channel` branch on your Mac
+  and run:
+
+  ```sh
+  release-sign entries -key se:~/.config/cbb-release/release.se -in in.json channel
+  ```
+
+  `in.json` lists forwarder VLESS paths and optional relay endpoints:
+
+  ```json
+  {
+    "forwarders": [
+      {
+        "name": "cbb.tools:8764",
+        "vless": [
+          {"transport": "xhttp", "server_name": "cbb.tools", "port": 443, "path": "/banMEJvnYJJap8S"}
+        ]
+      }
+    ],
+    "relays": [
+      {"name": "cbb.tools:8765", "endpoints": ["relay.cbb.tools:8765"]}
+    ]
+  }
+  ```
+
+  Omitting `endpoints` defaults a relay to its `name`. `entries` signs `entries.json` valid for
+  30 days (`-days`, maximum 100), verifies it under the pinned roots, and writes it to `channel`;
+  commit and push the file. `release-sign extend` on `cbb.tools` renews it automatically, `take`
+  accepts renewals only when both forwarders and relays match, `due` warns when expiry approaches,
+  and `mirror` serves the newest verified copy.
+- **Push service key**: `cbb-push` has no built-in pin, so groups reach it only after `keys.json`
+  lists its public key. On `cbb.tools`, `cbb-push` creates `/var/lib/private/cbb-push/push.pem` on
+  first start (preserve this file). Extract its public key and certify it on your Mac:
+
+  ```sh
+  # On cbb.tools:
+  sudo openssl pkey -in /var/lib/private/cbb-push/push.pem -pubout -out push-pub.pem
+
+  # On the Mac:
+  release-sign renew -push cbb.tools:8767=push-pub.pem
+  ```
+
+- **Rotating a forwarder, relay, or push service key** without a release:
+  1. Generate the new server key beside the active key on `cbb.tools` and export its public key
+     (`openssl pkey -in relay.pem -pubout -out relay-2.pem`; OpenSSL skips the WireGuard block of
+     a relay key file).
+  2. Add the new pin alongside the old pin on your Mac:
+     `release-sign renew -relay cbb.tools:8765=relay-2.pem` (or `-forwarder cbb.tools:8764=...` or
+     `-push cbb.tools:8767=...`).
+  3. Wait for `dl.cbb.tools` and the `channel` branch to serve the new `keys.json` and allow a few
+     days for devices to fetch it.
+  4. Switch the server to the new key file and restart the service.
+  5. After a few more days, remove the old pin with `release-sign renew -drop <old-pin>`.
+     `keys.json` holds at most 64 key entries (`maxKeys` in `internal/release/release.go`), so drop
+     retired keys before adding more.
+
+### Renewal reminders and key compromise
+
+- **Renewal reminders**: `.github/workflows/channel.yml` runs `release-sign due channel` daily and
+  opens the issue **Release channel: renewal due** when:
+  - `keys.json` expires within **21 days** (run `release-sign renew -new-keys` on your Mac with a
+    YubiKey);
+  - `stable.json` expires within **5 days** (check `cbb-channel.timer` on `cbb.tools`, or run
+    `release-sign renew` on your Mac);
+  - `entries.json` expires within **10 days** (check `cbb-channel.timer` on `cbb.tools`, or run
+    `release-sign entries` on your Mac).
+- **Lost or stolen Mac**: sign a new `keys.json` with a YubiKey root key certifying a new release
+  key and dropping the old one (`-drop NAME`).
+- **Lost YubiKey**: sign with the second YubiKey root key and pin a replacement second root in the
+  next release.
+- **Compromised channel key**: generate a new key on `cbb.tools`, copy its public PEM to your Mac,
+  and run `release-sign renew -drop cbb.tools -channel cbb.tools-2=channel.pem`.
+
+### The status key
+
+`cbb-attest.service` on `cbb.tools` mirrors Google's Android key-attestation revocation list as
+`attest-status.json` ([Protocol](../protocol.md), section 17, "Revoked attestations"). The status
+key signs only `attest-status.json`, limiting compromise impact to serving a stale revocation list
+until the key is dropped from `keys.json`.
+
+Generate the key in `/etc/cbb-attest/`, readable only by root, with its post-quantum half stored as
+a systemd encrypted credential:
+
+```sh
+openssl ecparam -name prime256v1 -genkey -noout -out /etc/cbb-attest/status-key.pem
+release-sign pq-new -key file:/etc/cbb-attest/status-key.pem -out - -public /etc/cbb-attest/status.pem | \
+  systemd-creds encrypt --name=status-pq.pem - /etc/cbb-attest/status-pq.cred
+```
+
+Certify both halves in `keys.json` with `-status mirror=status.pem`. A daily systemd timer
+(`site/deploy/cbb-attest.service` and `site/deploy/cbb-attest.timer`, 04:00 UTC, running as user
+`cbb-attest`) runs `/usr/local/bin/attest-status` (valid for 8 days) into `/srv/cbb.tools/attest`
+and copies `keys.json` beside it from `/srv/cbb.tools/channel`. If Google's list removes a
+previously revoked serial number, `attest-status` stops safely; verify Google's list and run
+`attest-status` once with `-allow-drop`.
+
+### TPM makers' certificates
+
+`internal/attest/tpmroots/roots.pem` lists the root and intermediate CA certificates trusted for
+TPM endorsement key (EK) attestation ([Protocol](../protocol.md), section 17, "TPM evidence").
+Before each release:
+
+1. Download Microsoft's `TrustedTpm.cab` (URL in `internal/attest/tpmroots/README.md`).
+2. Verify its Authenticode signature.
+3. Extract the root and intermediate certificates as PEM into `internal/attest/tpmroots/roots.pem`.
+4. Review the diff for added or removed manufacturers and record the source date in
+   `internal/attest/tpmroots/README.md`.
 
 ### Two signatures
 
-Every key that signs release files has a P-256 half and an SLH-DSA-SHA2-128s half, and every
-file carries a signature of each (docs/protocol.md, section 16, "Two signatures"); devices
-from 0.6 take a file only with both. No YubiKey or Secure Enclave holds an SLH-DSA key, so
-the post-quantum half of a key in hardware is a file sealed twice: first with the
-maintainer's passphrase (scrypt and XChaCha20-Poly1305, `tools/release-sign/seal.go`), then
-with `age` to a key in the same hardware. The hardware's wrap is P-256, which the adversary
-the second signature is for breaks; the passphrase's is symmetric, so to that adversary a
-copied file is still no key without the passphrase, and to anyone else it is no key without
-the hardware. Treat the files as secrets all the same: on the Mac's encrypted disk and in
-the encrypted image only, never in a repository, a message or a plain cloud folder.
-`release-sign` asks for the passphrase once a run (never from an argument or an
-environment variable, never logged), opens a half for each signature and clears it after:
-the hardware asks for each file signed, once for the P-256 signature and once to open the
-other half.
+Every release signing key has an ECDSA P-256 half and an SLH-DSA-SHA2-128s half, and every signed
+release file carries signatures from both ([Protocol](../protocol.md), section 16, "Two
+signatures"). Devices accept a file only when both signatures verify under the two halves of the
+same named key.
 
-Only the roots are pinned: both halves of `root-1` and `root-2` in
-`internal/release/roots/roots.pem` (and `get.sh`'s copy; `get.ps1` takes the P-256 halves).
-The release, channel and status keys are certified by a root in `keys.json`. Until each
-root's post-quantum half is made and committed there, a build pins P-256 halves only and
-takes no `keys.json`, so that commit must be merged before the first release candidate.
-Three checks stop a release with incomplete roots: `release-sign publish` refuses at once
-(`release.CompleteRoots`), the release workflow's first job runs `TestPinnedRootsComplete`
-before anything is built (on a tag and in the keys check run by hand; a rehearsal only
-warns there, "A rehearsal of a release"), and `publish` checks everything
-it signed under the pinned roots as a device would.
+Because YubiKeys and the Mac Secure Enclave do not support SLH-DSA, each hardware key's
+post-quantum half is sealed in two layers (`tools/release-sign/seal.go`):
 
-A key is its halves under one name and use, one of each algorithm: every reader refuses a
-`keys.json` with two halves of one algorithm under one name and use (a forwarder's or
-relay's pins excepted), `release-sign` refuses a new key under a name another key holds,
-and `-drop` with the pin of either half of a signing key drops both halves.
+1. Symmetric encryption under the maintainer's passphrase (`scrypt` + `XChaCha20-Poly1305`), which
+   protects a copied file even against an adversary who breaks P-256.
+2. `age` encryption to a P-256 key stored in the same hardware (a second retired PIV slot on the
+   YubiKey, or the Mac Secure Enclave), which requires the hardware for every decryption.
 
-- **Tools**, on the Mac: `brew install age age-plugin-yubikey age-plugin-se`.
-- **The passphrase**, one for every hardware half: five random words or more (`pq-new` takes
-  no fewer than five words, 24 characters and ten different characters; whether the words are
-  random is yours to see to), asked twice at the first `pq-new`, which seals a check of it into
-  `pq/passphrase.check`; every later run checks the passphrase typed against that file before
-  it asks the hardware for anything, and says plainly when it is wrong. Without that file
-  beside the halves neither `pq-new` nor a signing run goes on (a new half would be sealed
-  under another passphrase, and a wrong passphrase would cost the PIN and a touch first):
-  put `passphrase.check` back from the backup first. That file is not
-  encrypted to the hardware, so whoever copies `pq` (or its backup) can try passphrases
-  against it offline, about a second of scrypt each: only the passphrase's length holds them
-  off, so it must be random words, not a phrase someone could guess. Keep it in the password manager and on paper with the backup. Losing it
-  loses every hardware key's post-quantum half: the P-256 halves then sign nothing devices
-  take, and each key is replaced like a lost one (the roots in the next release, which
-  needs a root that still signs: so keep the passphrase as safe as the YubiKeys).
-- **A YubiKey's age key**, once per YubiKey, in another free retired PIV slot (one that
-  `ykman piv keys info` finds empty; the root and the release key hold 82 and 83, and
-  nothing on the YubiKey is reset or changed): `age-plugin-yubikey --generate --slot N
-  --pin-policy always --touch-policy always >yubikey-K.identity`, where N counts the
-  retired slots from 1 for 82 (3 is 84), writes the identity and its recipient
-  (`age1yubikey1...`). The identity file only points at the YubiKey.
-- **The Secure Enclave's age key**, once: `age-plugin-se keygen --access-control
-  any-biometry -o release-se.identity` prints its recipient (`age1se1...`).
-- **The post-quantum half of a key in hardware**: `release-sign pq-new -key piv:82 -to
-  age1yubikey1... -identity yubikey-K.identity -name root-K` (a root; `piv:83` a release
-  key on the YubiKey, `se:~/.config/cbb-release/release.se` with the Secure Enclave's
-  recipient and identity for the release key on the Mac) makes the half, seals it with the
-  passphrase and to the hardware into `~/.config/cbb-release/pq` (`CBB_RELEASE_PQ_DIR`) as
-  `HASH.age`, with `HASH.identity` and its public key `HASH.pub` beside it, opens it once
-  with the hardware to check it, and prints both public keys with the `Name` that
-  `roots.pem` takes. From then on `piv:82`, `piv:83` and `se:...` sign with both halves.
-  Right after it, with the same hardware still in, `release-sign pq-check -key piv:82
-  -public root-K-public.pem` signs a test body with both halves and checks the signatures
-  under the public file as a device would; it prints `both halves sign, and the signatures
-  check out under root-K-public.pem`.
-- **A key on a server** (the channel key, the status key) has no passphrase: its half is an
-  encrypted credential, symmetric already. `release-sign pq-new -key file:KEY.pem -out -
-  -public KEY-public.pem` writes the half to the standard output only into a pipe, for
-  `systemd-creds encrypt --name=channel-pq.pem - /etc/cbb-channel/channel-pq.cred`;
-  `-out FILE` writes it to a new file only its owner reads. `release-sign` signs with
-  `file:KEY.pem+slh:PQ.pem`, and `pq-check -key file:KEY.pem+slh:PQ.pem -public
-  KEY-public.pem` proves the pair. It opens the half twice, so the half must be a file,
-  not a pipe: for a credential, `systemd-run --pipe --wait -p
-  LoadCredential=channel-key.pem:/etc/cbb-channel/channel-key.pem -p
-  LoadCredentialEncrypted=channel-pq.pem:/etc/cbb-channel/channel-pq.cred /bin/sh -c 'exec
-  release-sign pq-check -key "file:$CREDENTIALS_DIRECTORY/channel-key.pem+slh:$CREDENTIALS_DIRECTORY/channel-pq.pem"
-  -public /etc/cbb-channel/channel.pem'` reads it as the unit does, and the decrypted half
-  lives only as long as the run. The units, `site/deploy/cbb-channel.service` and
-  `site/deploy/cbb-attest.service` with their timers, are copied to `/etc/systemd/system/`
-  and loaded with `systemctl daemon-reload`; each is a oneshot its timer starts, and
-  `systemctl cat cbb-attest.service | grep LoadCredentialEncrypted` shows the credential.
-  `jq -c '[.sigs[].alg]'` on the served `attest-status.json` prints `[1,4]`.
-- **Back up** `~/.config/cbb-release/pq`, the identities and the public files like the
-  other release files: an encrypted disk image (`pq-keys.dmg`, AES-256) beside them with a
-  copy in iCloud. Without `pq` the hardware's P-256 half signs nothing devices take. A lost
-  YubiKey takes its post-quantum halves with it, since they are sealed to its own slot and
-  no backup opens them: the other YubiKey's root signs a new `keys.json`, and the next
-  release pins a new second root, both halves. A lost half is replaced like a
-  lost key (a new key, certified by a root, or for a root a new root in the next release).
+Keep the encrypted files only on the Mac's encrypted disk and encrypted backup image—never in a
+repository, message, or unencrypted cloud folder. `release-sign` prompts for the passphrase once
+per run on `/dev/tty` (never via flag or environment variable, never logged), decrypts the
+post-quantum half for each signature, and clears it from memory immediately afterward. The hardware
+prompts twice per signed file: once for the P-256 signature and once to unwrap the post-quantum
+half.
+
+Every pinned root in `internal/release/roots/roots.pem` carries both halves (`root-1` and `root-2`).
+Three checks enforce completeness: `release-sign publish` checks `release.CompleteRoots`,
+`release.yml`'s `roots` job runs `TestPinnedRootsComplete` before building, and `publish` verifies
+every signed output under the pinned roots.
+
+Every signing key in `keys.json` pairs one P-256 half and one SLH-DSA half under one `(name, use)`.
+Readers reject duplicate algorithms under the same `(name, use)` (except server TLS pins for
+forwarders, relays, and push services). `release-sign` refuses reusing an existing key name, and
+`-drop` with either half's pin drops both halves of a signing key.
+
+#### Hardware post-quantum halves (Mac)
+
+1. Install tools on the Mac:
+
+   ```sh
+   brew install age age-plugin-yubikey age-plugin-se
+   ```
+
+2. Choose one strong passphrase shared across all hardware halves (at least 5 random words, 24
+   characters, and 10 distinct characters; `pq-new` enforces length, word count, and character
+   diversity). The first `pq-new` run prompts twice and writes `passphrase.check` in
+   `~/.config/cbb-release/pq` (`CBB_RELEASE_PQ_DIR`) so later runs catch typos before touching the
+   hardware. Store the passphrase in a password manager and on paper with your offline backup:
+   `passphrase.check` is not hardware-wrapped (allowing offline scrypt guesses at ~1 s each), and
+   losing the passphrase makes every hardware post-quantum half unrecoverable. If `passphrase.check`
+   is missing beside existing `.age` files, restore it from backup before running `release-sign`.
+3. Create an `age` key in an empty retired PIV slot on each YubiKey (for example slot 3 = PIV `84`,
+   leaving `82` and `83` untouched):
+
+   ```sh
+   age-plugin-yubikey --generate --slot 3 --pin-policy always --touch-policy always > yubikey-K.identity
+   ```
+
+   Note the printed recipient (`age1yubikey1...`). The identity file points to the YubiKey and holds
+   no secret key material.
+4. Create the Mac Secure Enclave `age` key once:
+
+   ```sh
+   age-plugin-se keygen --access-control any-biometry -o release-se.identity
+   ```
+
+   Note the printed recipient (`age1se1...`).
+5. Generate and verify each hardware key's post-quantum half (`piv:82` for a root, `piv:83` for a
+   YubiKey release key, or `se:~/.config/cbb-release/release.se` for the Mac release key):
+
+   ```sh
+   release-sign pq-new -key piv:82 -to age1yubikey1... -identity yubikey-K.identity -name root-K -public root-K-public.pem
+   release-sign pq-check -key piv:82 -public root-K-public.pem
+   ```
+
+   `pq-new` stores `HASH.age`, `HASH.identity`, and `HASH.pub` in `~/.config/cbb-release/pq` and
+   test-decrypts the half once. `pq-check` signs a test body with both halves and prints
+   `both halves sign, and the signatures check out under root-K-public.pem`.
+6. Back up `~/.config/cbb-release/pq`, the `.identity` files, and the `.pub`/public PEM files in an
+   AES-256 encrypted disk image (`pq-keys.dmg`) with an off-site copy. A lost YubiKey permanently
+   loses its sealed halves; replace it by signing a new `keys.json` with the remaining root and
+   pinning a new second root in the next release.
+
+#### Server post-quantum halves (`cbb.tools`)
+
+Server keys (the channel key and status key) have no interactive passphrase; systemd encrypts their
+post-quantum halves to the server host key with `systemd-creds`:
+
+```sh
+release-sign pq-new -key file:/etc/cbb-channel/channel-key.pem -out - -public /etc/cbb-channel/channel.pem | \
+  systemd-creds encrypt --name=channel-pq.pem - /etc/cbb-channel/channel-pq.cred
+```
+
+(`-out -` writes only into a pipe; `-out FILE` creates a mode-`0600` file.) Verify the pair as the
+systemd unit reads it (never via a pipe, because `pq-check` opens the half twice):
+
+```sh
+systemd-run --pipe --wait \
+  -p LoadCredential=channel-key.pem:/etc/cbb-channel/channel-key.pem \
+  -p LoadCredentialEncrypted=channel-pq.pem:/etc/cbb-channel/channel-pq.cred \
+  /bin/sh -c 'exec release-sign pq-check -key "file:$CREDENTIALS_DIRECTORY/channel-key.pem+slh:$CREDENTIALS_DIRECTORY/channel-pq.pem" -public /etc/cbb-channel/channel.pem'
+```
+
+Install `site/deploy/cbb-channel.service`, `site/deploy/cbb-attest.service`, and their `.timer`
+units in `/etc/systemd/system/` and run `systemctl daemon-reload`. Verify encrypted credential
+loading with `systemctl cat cbb-attest.service | grep LoadCredentialEncrypted`, and confirm hybrid
+signatures on served JSON with `jq -c '[.sigs[].alg]'` (expected output: `[1,4]`).
 
 ## Watching cbb.tools
 
-Updates, the revocation mirror, the forwarder and the relay all depend on `cbb.tools`, and a
-stopped timer there stops everyone's updates without a sound. The `monitor` workflow runs
-`go run ./tools/monitor` every six hours from GitHub and fails, which mails the maintainer,
-when:
+Updates, the attestation revocation mirror, the forwarder, and the open blind relay depend on
+`cbb.tools`. [`.github/workflows/monitor.yml`](../../.github/workflows/monitor.yml) runs
+`go run ./tools/monitor` every six hours from GitHub Actions and fails—notifying the maintainer by
+email—when any check fails:
 
-- `https://cbb.tools/` or `https://dl.cbb.tools/` does not answer over HTTPS, or a
-  certificate expires within 14 days (renew it with certbot on the server);
-- the forwarder's port (TCP 8764) or the project's relay's (TCP 8765) refuses a
-  connection; UDP cannot be checked from outside without a group's keys;
-- a signed file the devices fetch is close to its expiry: the channel's `keys.json` (21
-  days: `release-sign renew -new-keys`) and `stable.json` (5 days: the `cbb-channel` timer
-  stopped), the same two at `dl.cbb.tools`, and `attest/attest-status.json` (5 days: the
-  `cbb-attest` timer stopped);
-- the server moved more than 1 TB in the last 24 hours, half of what its plan allows before
-  it is slowed, or `status/traffic.json` is more than two hours old (`cbb-traffic.timer`
-  stopped): [the servers' budget](../relay-budget.md#money-and-traffic) says what to do.
+- `https://cbb.tools/` or `https://dl.cbb.tools/` fails over HTTPS, or its TLS certificate expires
+  within 14 days (nginx's built-in ACME module in `site/deploy/nginx.conf` renews certificates
+  automatically; check `/var/log/nginx/error.log` and reload nginx if renewal stalled).
+- The forwarder (`cbb.tools:8764`) or open blind relay (`cbb.tools:8765`) refuses a TCP connection
+  (UDP cannot be probed externally without group keys).
+- A served signed file approaches expiry: `cbb.tools/channel/keys.json` or `dl.cbb.tools/keys.json`
+  within **21 days** (run `release-sign renew -new-keys` or check `cbb-mirror.timer`),
+  `cbb.tools/channel/stable.json` or `dl.cbb.tools/stable.json` within **5 days** (check
+  `cbb-channel.timer` or `cbb-mirror.timer`), or `cbb.tools/attest/attest-status.json` within
+  **5 days** (check `cbb-attest.timer`).
+- Rolling 24-hour traffic in `https://cbb.tools/status/traffic.json` exceeds 1 TB (half the
+  hosting plan's 2 TB throttle threshold) or the file is older than 2 hours (`cbb-traffic.timer`
+  stopped). See [The servers' budget: money and traffic](../relay-budget.md#money-and-traffic) for
+  the response order.
 
-Before the first signed release these files are not served, which the check reports and
-passes; from v0.6.0 on the workflow runs it with `-require-files`. The steps to rebuild the
-server, where the backup of its configuration is and what to tell users are in the
-maintainer's private runbook, outside the repository.
+Pass `-require-files` to `tools/monitor` in `monitor.yml` once signed release files and
+`traffic.json` are served, so HTTP 404 responses fail the check instead of passing. Server rebuild
+procedures, configuration backups, and user communication templates live in the maintainer's
+private runbook outside the repository.
 
 ### An abuse report
 
-A report to `abuse@cbb.tools` about the forwarder or the relay gets the answer decided in
-advance ([the servers' budget](../relay-budget.md#abuse-reports)): when it carries the tag of a
-group, add the tag with the date to `refused-groups` next to the forwarder's key and next to
-the relay's key on cbb.tools, readable by each service, and both drop the group within ten
-seconds:
+Handle abuse reports sent to `abuse@cbb.tools` as defined in
+[The servers' budget: abuse reports](../relay-budget.md#abuse-reports):
 
-```sh
-echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-forward/refused-groups
-echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-relay/refused-groups
-```
+1. If the report is a security vulnerability rather than server abuse, follow
+   [SECURITY.md](../../SECURITY.md) instead.
+2. If the report does not include a group tag or period tag, reply that the servers keep no logs,
+   IP addresses, or clipboard content and request the group tag (16 hex characters from `cbb status`)
+   or period tag (`period TAG`, 32 hex characters).
+3. When the report includes a valid tag, append it with the date to `refused-groups` beside the
+   forwarder and relay keys on `cbb.tools`:
 
-A line that is not a tag keeps the list as it was and is logged
-(`journalctl -u cbb-forward`, `journalctl -u cbb-relay`); taking the line out lets the group back in. Answer the reporter that the group is refused; the servers have nothing else to
-give, no logs, addresses or content. A report without a tag gets that answer too, with a
-request for the tag. A report about a source that loads the servers on purpose is the
-firewall's, at the level of its network or provider, as the terms say. A vulnerability is
-not an abuse report: SECURITY.md.
+   ```sh
+   echo "TAG  # YYYY-MM-DD, report of DATE" | sudo tee -a /var/lib/cbb-forward/refused-groups
+   echo "TAG  # YYYY-MM-DD, report of DATE" | sudo tee -a /var/lib/cbb-relay/refused-groups
+   ```
+
+   Both services reload the file within 10 seconds and drop active registrations for the tag. An
+   invalid line keeps the previous list active and logs a warning (`journalctl -u cbb-forward`,
+   `journalctl -u cbb-relay`). Removing the line admits the group again immediately.
+4. Reply to the reporter confirming the group is refused and noting that the servers hold no logs,
+   addresses, or content.
+5. For deliberate traffic floods against the servers, block the offending source at the firewall,
+   network, or hosting-provider level per the service terms.
 
 ## Ways out carry only cbb
 
-The forwarder, VLESS, the relay and the mirror on cbb.tools must never take a user anywhere
-but cbb (docs/roadmap.md, item 61). The code holds this without any rule on the server;
-the server must not add a way around it: the forwarder only passes WireGuard packets
-between a group's hub and its clients, VLESS's one outbound goes to the forwarder, its
-registrations or the mirror whatever the client asked for, and the hub's in-process stack
-opens only the member port and forwards nothing. Tests hold it, in which a client that is
-not ours asks for other addresses (TCP and UDP, IPv4, IPv6 and names, the server's own
-loopback services among them) and reaches nothing: VLESS over XHTTP
-(`internal/vless/onlycbb_test.go`), the hub's tunnel (`internal/tunnel/onlycbb_test.go`), the
-Rust hub and the phones' (`member/src/hub.rs`, `a_client_reaches_only_the_member_listener`),
-the relay (`member/src/nettest/relayd.rs`, `a_dial_reaches_no_address`) and `cbb`'s tunnel
-(`member/src/tunnel.rs`, `link_reaches_nothing_from_the_tunnel`); the forwarder's
-`FuzzForwardWire` sends a packet only to an endpoint it knows. After each change on the
-server, run this check, reading only, and keep its result in the private runbook:
+The forwarder, VLESS over XHTTP, the blind relay, and the release mirror on `cbb.tools` must never
+act as a general-purpose proxy to arbitrary destinations:
 
-- `sysctl net.ipv4.ip_forward net.ipv6.conf.all.forwarding` both 0; `iptables -S` and
-  `ip6tables -S` with `FORWARD DROP`, `iptables -t nat -S` and `ip6tables -t nat -S` with no
-  rules; `ip -br link` shows no `wg` or `tun` interface.
-- Every `proxy_pass` in `/etc/nginx` goes to the loopback address, and there is no `stream`
-  block.
-- `cbb forward` runs without `-vless-mirror`, or with the mirror at the loopback
-  `dl.cbb.tools` server, which serves only `/*.json` and `/vX.Y.Z/` files and 404 for the
-  rest.
-- No other proxy on the server listens on a public address beyond those `ufw status`
-  allows, and x-ui's subscription server is off.
+- The forwarder relays only WireGuard packets between a registered hub and its clients.
+- VLESS routes every outbound connection only to the forwarder, its registration listener, or the
+  local release mirror, ignoring the client's requested destination.
+- A hub's in-process network stack opens only the member port and forwards nothing else.
+
+Automated tests verify these invariants by dialing arbitrary TCP/UDP IPv4, IPv6, hostname, and
+loopback targets and asserting failure:
+
+- VLESS over XHTTP: `internal/vless/onlycbb_test.go`.
+- Hub tunnel: `internal/tunnel/onlycbb_test.go` and `member/src/hub.rs`
+  (`a_client_reaches_only_the_member_listener`).
+- Blind relay: `member/src/nettest/relayd.rs` (`a_dial_reaches_no_address`).
+- `cbb` tunnel: `member/src/tunnel.rs` (`link_reaches_nothing_from_the_tunnel`).
+- Forwarder packet routing: `internal/forward` (`FuzzForwardWire`).
+
+After any server configuration change on `cbb.tools`, run this read-only audit and record the
+output in the private runbook:
+
+1. Verify kernel forwarding and NAT are off and no tunnel interfaces exist:
+   - `sysctl net.ipv4.ip_forward net.ipv6.conf.all.forwarding` both return `0`.
+   - `iptables -S` and `ip6tables -S` show `FORWARD DROP`.
+   - `iptables -t nat -S` and `ip6tables -t nat -S` have no rules.
+   - `ip -br link` shows no `wg` or `tun` interface.
+2. Verify every `proxy_pass` in `/etc/nginx` targets loopback only, and no `stream` block exists.
+3. Verify `cbb-forward` runs without `-vless-mirror`, or points `-vless-mirror` only at the loopback
+   `dl.cbb.tools` server serving `/*.json` and `/vX.Y.Z/*` (404 for all other paths).
+4. Verify no unexpected proxy or subscription service listens on any public address beyond the
+   ports permitted in `ufw status`.
 
 ## Homebrew
 
-The tap is the repository
-[HunterEwok/homebrew-tap](https://github.com/HunterEwok/homebrew-tap),
-the one tap for all of the owner's formulae; CBB's is `Formula/cbb.rb`, and users install with
-`brew install hunterewok/tap/cbb`. After each release (not a
-pre-release) is published, `.github/workflows/published.yml` checks its signed files and writes the formula with
-`packaging/homebrew/formula.sh` from the release's `SHA256SUMS` and pushes it to the tap's
-`main`. The formula installs the release archives as they are, so it needs no Apple signing,
-and CI's `test and build (macOS), homebrew, Mac app` job installs one with it on macOS on every pull request.
+The Homebrew tap lives at [HunterEwok/homebrew-tap](https://github.com/HunterEwok/homebrew-tap)
+with formula `Formula/cbb.rb` (`brew install hunterewok/tap/cbb`). After each stable release
+publication (not pre-releases), `.github/workflows/published.yml` verifies the published release
+files under the pinned roots, generates `Formula/cbb.rb` with `packaging/homebrew/formula.sh` from
+`SHA256SUMS`, and pushes it to the tap's `main` branch. CI's `buildmac` job verifies formula
+installation on every pull request.
 
-Setting it up, once:
+One-time setup:
 
-- [x] Create the public repository `HunterEwok/homebrew-tap`, empty (no README,
-  license or `.gitignore`).
-- [x] Make a key for it, on any computer:
-  `ssh-keygen -t ed25519 -N '' -C homebrew-tap -f homebrew-tap`.
-- [x] In the tap, **Settings → Deploy keys → Add deploy key**: the contents of
-  `homebrew-tap.pub`, with **Allow write access**. It can write to the tap and nothing else.
-- [ ] In the environment **release** ("Release secrets" above), the secret
-  `CBB_HOMEBREW_TAP_KEY`: the contents of `homebrew-tap`, the private key. Then delete both
-  files: a lost tap key is replaced by making a new one the same way.
+- [x] Create public repository `HunterEwok/homebrew-tap` (empty).
+- [x] Generate an SSH key pair: `ssh-keygen -t ed25519 -N '' -C homebrew-tap -f homebrew-tap`.
+- [x] Add `homebrew-tap.pub` to `HunterEwok/homebrew-tap` under **Settings → Deploy keys → Add
+  deploy key** with **Allow write access**.
+- [ ] Store the private key (`homebrew-tap`) in the `release` environment as
+  `CBB_HOMEBREW_TAP_KEY`, then delete both local key files (a lost key is replaced by generating a
+  new pair).
 
-To check the key without a release, run the published workflow from `main` (**Actions →
-published → Run workflow**): its `homebrew` job pushes to the tap with `--dry-run`, which
-fails unless the key may write there.
-
-Without the secret the release still succeeds and warns that the tap kept its formula. To
-fill the tap for a release made before, run `formula.sh` with that tag and its
-`SHA256SUMS` and commit the output to the tap by hand.
+To verify the deploy key without a release, trigger **Actions → published → Run workflow** from
+`main`; the `homebrew` job runs `git push --dry-run` against the tap. Without
+`CBB_HOMEBREW_TAP_KEY`, the release still succeeds with a warning; you can update the tap manually
+by running `sh packaging/homebrew/formula.sh vX.Y.Z SHA256SUMS` and committing `Formula/cbb.rb`.
 
 ## winget
 
-The package `HunterEwok.cbb` installs the release's zip for Windows as winget's
-portable command `cbb`; `cbb install` then runs the installer from the same zip. For each
-release (not a pre-release) the `release` job of `.github/workflows/release.yml` writes its
-three manifest files with `packaging/winget/manifest.sh` from the release's `SHA256SUMS` and
-publishes them with the release as `winget-manifest.zip` (nothing can be attached to a
-release once published, as releases are immutable); CI's `packaging` job checks the script on every pull
-request. winget takes a package only by a pull request to
-[microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), which its reviewers merge:
+The package `HunterEwok.cbb` installs the Windows release zip as winget's portable `cbb` command
+(users then run `cbb install` in an administrator terminal). For each non-prerelease tag, the
+`release-files` job in `.github/workflows/release.yml` runs `packaging/winget/manifest.sh` against
+`SHA256SUMS` and packages the three YAML manifests into `winget-manifest.zip`, which the `release`
+job attaches to the draft release. CI's `packaging` job checks `manifest.sh` on every pull request.
 
-- [ ] For each release, on a Windows PC: unpack `winget-manifest.zip`, check it with
-  `winget validate --manifest <folder>` and `winget install --manifest <folder>`, then submit
-  it with `wingetcreate submit <folder>` (it asks for a GitHub token and opens the pull
-  request under `manifests/h/HunterEwok/cbb/<version>`).
+After each stable release, submit the manifest to
+[microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) from a Windows PC:
+
+1. Unpack `winget-manifest.zip` into a local folder.
+2. Validate and test-install the manifest:
+
+   ```powershell
+   winget validate --manifest <folder>
+   winget install --manifest <folder>
+   ```
+
+3. Submit the pull request (`manifests/h/HunterEwok/cbb/<version>`):
+
+   ```powershell
+   wingetcreate submit <folder>
+   ```
 
 ## The OpenWrt feed
 
-The release workflow's `openwrt-feed` job wraps each Linux archive in an apk package for
-OpenWrt 25.12 and later (`packaging/openwrt/feed.sh`, run in the pinned `alpine:3.23`
-image, whose apk has mkpkg and mkndx, which OpenWrt's leaves out), one feed per Go architecture, and signs each index
-with the feed's ECDSA P-256 key. It publishes them with the release as
-`openwrt-feed.tar.gz`: `<arch>/packages.adb`, `<arch>/cbb-<version>.apk` and
-the public key `cbb.pem`. CI's `openwrt` job builds a feed with a test key on
-every pull request and installs and removes the package from it. Setting it up, once:
+The `openwrt-feed` job in `.github/workflows/release.yml` wraps each Linux release archive into a
+`noarch` apk package for OpenWrt 25.12 and later (`packaging/openwrt/feed.sh`, run inside the
+pinned `alpine:3.23` image because OpenWrt's own `apk` omits `mkpkg` and `mkndx`), creates one feed
+per Go architecture, signs each `packages.adb` index with an ECDSA P-256 key, and attaches
+`openwrt-feed.tar.gz` (`<arch>/packages.adb`, `<arch>/cbb-<version>.apk`, and public key `cbb.pem`)
+to the release. CI's `OpenWrt` job builds, installs, and removes a feed signed with a test key on
+every pull request.
 
-- [ ] Make the key on any computer: `openssl ecparam -name prime256v1 -genkey -noout -out
-  feed.pem`.
-- [ ] In the environment **release**: `CBB_OPENWRT_FEED_KEY`, the contents of
-  `feed.pem`. Keep a copy offline; a new key means every router fetches the new public key.
+One-time setup:
 
-For each release, once it is signed and published, unpack `openwrt-feed.tar.gz` into the
-site's `openwrt/` directory on cbb.tools (routers read
-`https://cbb.tools/openwrt/<arch>/packages.adb`). The feed's key is in CI, so a feed counts
-only as a file of a release the offline release key signed: take it from the published
-release, check that release with `release-sign verify` (under the pinned roots, with the
-branch `channel`'s `keys.json` and `stable.json`, or for a pre-release `keys.json` and
-`-pinned`, as `published.yml` does), and unpack only
-the `openwrt-feed.tar.gz` it checked; never one from a draft. Without the secret the release
-still succeeds and warns that there is no feed.
+- [ ] Generate the feed key: `openssl ecparam -name prime256v1 -genkey -noout -out feed.pem`.
+- [ ] Store `feed.pem` in the `release` environment as `CBB_OPENWRT_FEED_KEY` and keep an encrypted
+  offline backup (rotating the key requires routers to fetch the new public key).
+
+Publishing a feed after a release:
+
+Because `CBB_OPENWRT_FEED_KEY` lives in CI, deploy `openwrt-feed.tar.gz` only from a published,
+offline-signed release—never from a draft:
+
+1. Download the published release files and verify them with `release-sign verify` under the pinned
+   roots (using `keys.json` and `stable.json` from the `channel` branch, or `keys.json` with
+   `-pinned` for a pre-release).
+2. Unpack the verified `openwrt-feed.tar.gz` into the site's `openwrt/` directory on `cbb.tools`
+   (served at `https://cbb.tools/openwrt/<arch>/packages.adb`).
+
+Without `CBB_OPENWRT_FEED_KEY`, the release still succeeds with a warning and omits the feed.
 
 ## The ZX Spectrum Next's files
 
-The release workflow's `zxnext` job takes `cbb` for the Pi Zero from the `build`
-job's armv6 archive, builds `.cbb`, its overlay `CBB.OVL` and `CBB.DRV` with the SHA-256 of that member, of
-the overlay and of the driver inside `.cbb` (`make PI_CBB=...`, `apps/zxnext/pins.sh` and
-`ovl.sh`), and lays them out for cbb.tools (`packaging/zxnext/site.sh`) as
-`cbb-zxnext.tar.gz`: `zxnext/` with the four files and `LIST`, a line of name, size, CRC-32
-and SHA-256 for each. `.cbb install` installs only the overlay, the driver and the member its
-own `.cbb` carries. The four files must come from one build: a `.cbb` refuses another
-build's. `release-sign publish` signs the same list with the release key as `zxnext.json`
-(docs/protocol.md, section 16; one more touch of the key) and puts it among the release's
-files; `release-sign mirror` writes `zxnext/SIGNED`, that release's `zxnext.json` after the
-current `keys.json`, a line each, on every run, so it follows a new `keys.json`. `.cbb
-update` takes a newer `.cbb` only from `SIGNED`, checked by the Pi's `cbb`.
+The `zxnext` job in `.github/workflows/release.yml` extracts the ARMv6 `cbb` binary for the
+Raspberry Pi Zero from `cbb-linux-armv6.tar.gz`, builds `.cbb` (`CBB`), its overlay (`CBB.OVL`),
+its driver (`CBB.DRV`), and `CBBPI.GZ` with the SHA-256 hashes of the overlay, driver, and Pi `cbb`
+embedded inside `CBB` (`make PI_CBB=...`, `apps/zxnext/pins.sh`, `ovl.sh`), and lays them out with
+`packaging/zxnext/site.sh` into `cbb-zxnext.tar.gz`. The archive holds `zxnext/` with five files
+(`CBB`, `CBB.OVL`, `CBB.DRV`, `cbb`, and `cbb.gz`) plus `LIST` (name, size, CRC-32, and SHA-256 per
+file). All files must come from one build; `.cbb install` refuses files whose hashes do not match
+those embedded in `CBB`.
 
-NextZXOS's `.http` and the ESP8266 have no TLS, so these two paths are served over plain HTTP
-on port 80, where the rest of the site redirects to HTTPS (`site/deploy/nginx.conf`, the
-port-80 server of cbb.tools):
+`release-sign publish` signs the same list as `zxnext.json` ([Protocol](../protocol.md), section
+16) and uploads it with the release. On every run, `release-sign mirror` writes `zxnext/SIGNED`
+(the current `keys.json` followed by `zxnext.json`, one JSON object per line), which `.cbb update`
+verifies on the attached Pi before accepting a newer `CBB`.
+
+Because NextZXOS's `.http` and the ESP8266 do not support TLS, `site/deploy/nginx.conf` serves
+`/zxnext` and `/zxnext/` over plain HTTP on port 80 while keeping the HTTPS redirect inside
+`location /` (a server-level `return 301` would preempt the `/zxnext` locations):
 
 ```nginx
 location = /zxnext { alias /srv/cbb.tools/zxnext/CBB; default_type application/octet-stream; }
 location /zxnext/ { root /srv/cbb.tools; default_type application/octet-stream; }
 ```
 
-The first serves the dot command at `/zxnext`, which `.http -h cbb.tools -u /zxnext -f CBB`
-fetches. A `return 301` at the server's level runs before any location, so the redirect to
-HTTPS has to stay inside `location / { ... }`. The files are in `/srv/cbb.tools/zxnext`, outside
-`www`, so a deploy of the site leaves them alone, and nobody puts them there by hand:
-`cbb-mirror.timer` ("The mirror" below) unpacks them from the newest release that has them,
-once that release checks out under the pinned roots. The checks of `.cbb install` guard
-against a damaged download, and `.cbb update`'s also against a changed one; the `CBB` that
-the first `.http` fetches is as trustworthy as the network (docs/threat-model.md).
+`/srv/cbb.tools/zxnext` lives outside `www` so website deploys leave it untouched. Do not copy
+files there manually: `cbb-mirror.timer` ([The mirror](#the-mirror)) unpacks verified releases
+automatically. The initial `.http -h cbb.tools -u /zxnext -f CBB` download trusts the network;
+`.cbb install` guards against download corruption, and `.cbb update` verifies signatures against
+pinned roots ([Threat model](../threat-model.md)).
 
 ## The mirror
 
-`https://dl.cbb.tools/` mirrors the releases with the layout of docs/protocol.md, section 16,
-"Where the files are": `keys.json` and `stable.json` at its top, each release's files and its
-`release.json` under `vX.Y.Z/`. `cbb update`, the installers, the Android app and the lite
-member fall back to it when GitHub does not answer; they check every signature, so the
-mirror is not trusted. It runs on cbb.tools beside the site, on a name of its own.
+`https://dl.cbb.tools/` mirrors releases on `cbb.tools` using the layout in
+[Protocol](../protocol.md), section 16, "Where the files are": `keys.json`, `stable.json`, and
+`entries.json` at the root, and each release's files plus `release.json` under `vX.Y.Z/`.
+`cbb update`, installers, the Android app, and small devices fall back to the mirror when GitHub is
+unreachable; every client verifies signatures locally, so the mirror is untrusted.
 
-`release-sign mirror` keeps it, from an hourly systemd timer (`site/deploy/cbb-mirror.service`
-and `.timer`, as the user `cbb-mirror`, which holds no key). Each run takes the newest
-`keys.json` and `stable.json` that check out from the branch `channel`, from
-`/srv/cbb.tools/channel` (renewed there twice a week) and from the mirror itself, so it never
-goes back. Then it downloads the release `stable.json` names, and the `min_from` of each
-release in turn, checks each file against its `release.json` as a device does and only then
-moves the release into place, and writes the top files last. Releases once mirrored stay,
-since a device below a release's `min_from` needs the older one. A run with nothing new
-downloads only the two small files. With `-zxnext DIR` it unpacks the ZX Spectrum Next's
-files of the newest mirrored release that has `cbb-zxnext.tar.gz` into `DIR`, `LIST` last.
+An hourly systemd timer (`site/deploy/cbb-mirror.service` and `site/deploy/cbb-mirror.timer`, user
+`cbb-mirror`, holding no keys) runs `release-sign mirror`. Each run:
 
-A pre-release has no `stable.json`, so the timer does not take it; once, by hand, after
-`release-sign publish`: `sudo -u cbb-mirror release-sign mirror -out /srv/dl.cbb.tools
--zxnext /srv/cbb.tools/zxnext -version 0.6.0-rc.1`.
+1. Fetches `keys.json`, `stable.json`, and `entries.json` from the `channel` branch,
+   `/srv/cbb.tools/channel`, and the mirror itself, keeping the newest verified files so the mirror
+   never rolls back.
+2. Downloads the release named in `stable.json` and recursively any older release referenced by
+   `min_from`, verifies every file against `release.json`, moves verified directories into place,
+   and updates the top-level JSON files last. Previously mirrored releases remain on disk for
+   devices upgrading across `min_from` steps.
+3. With `-zxnext /srv/cbb.tools/zxnext`, unpacks the newest verified `cbb-zxnext.tar.gz` (writing
+   `LIST` last) and refreshes `zxnext/SIGNED`.
 
-Setting it up, once, on cbb.tools:
+Because pre-releases are not listed in `stable.json`, mirror a pre-release manually after
+`release-sign publish`:
 
-- [x] The DNS record `dl.cbb.tools`, A to the server's address, DNS only.
-- [x] `release-sign` built from this version (`GOOS=linux GOARCH=amd64 go build
-  ./tools/release-sign`) at `/usr/local/bin/release-sign`, the user and its directories:
-  `useradd --system --no-create-home --shell /usr/sbin/nologin cbb-mirror`, then `install -d
-  -o cbb-mirror -g cbb-mirror -m 755 /srv/dl.cbb.tools /srv/cbb.tools/zxnext`.
-- [x] The two servers of `dl.cbb.tools` and the two `/zxnext` locations from
-  `site/deploy/nginx.conf`, merged into the live configuration by hand; `nginx -t`, then
-  `systemctl reload nginx`, and nginx's ACME module gets the certificate.
-- [x] `cbb-mirror.service` and `.timer` in `/etc/systemd/system`, `systemctl daemon-reload`,
-  `systemctl enable --now cbb-mirror.timer`. `systemctl start cbb-mirror` runs it at once,
-  and `journalctl -u cbb-mirror` says what it took. Until the first signed release it fails,
-  for want of a `keys.json`.
+```sh
+sudo -u cbb-mirror release-sign mirror -out /srv/dl.cbb.tools -zxnext /srv/cbb.tools/zxnext -version X.Y.Z-rc.N
+```
+
+One-time setup on `cbb.tools`:
+
+- [x] Create a DNS `A` record for `dl.cbb.tools` pointing to the server (DNS only).
+- [x] Install `release-sign` (`GOOS=linux GOARCH=amd64 go build ./tools/release-sign`) at
+  `/usr/local/bin/release-sign`, create the system user, and prepare directories:
+
+  ```sh
+  useradd --system --no-create-home --shell /usr/sbin/nologin cbb-mirror
+  install -d -o cbb-mirror -g cbb-mirror -m 755 /srv/dl.cbb.tools /srv/cbb.tools/zxnext
+  ```
+
+- [x] Merge the `dl.cbb.tools` server blocks and `/zxnext` locations from `site/deploy/nginx.conf`
+  into the live nginx configuration, verify with `nginx -t`, and run `systemctl reload nginx` (the
+  ACME module obtains the certificate automatically).
+- [x] Install `cbb-mirror.service` and `cbb-mirror.timer` in `/etc/systemd/system/`, run
+  `systemctl daemon-reload`, and run `systemctl enable --now cbb-mirror.timer`. Verify with
+  `systemctl start cbb-mirror` and `journalctl -u cbb-mirror`.
 
 ## Signing for Windows
 
-The release workflow signs `cbb.exe`, `cbbw.exe`, `cbb-helper.exe` and the tray app `cbb-desktop.exe` with Authenticode (`osslsigncode`, SHA-256,
-a timestamp from DigiCert) when the secrets hold a code signing certificate; without it they
-stay unsigned and SmartScreen warns on the first start. Setting it up, once:
+When `CBB_WINDOWS_CERT_BASE64` and `CBB_WINDOWS_CERT_PASSWORD` are set in the `release`
+environment, `.github/workflows/release.yml` signs all six Windows executables (`cbb.exe`,
+`cbbw.exe`, `cbb-desktop.exe`, `cbb-helper.exe`, `cbb-forward.exe`, and `cbb-relay.exe`) with
+Authenticode (`osslsigncode`, SHA-256, timestamped via `http://timestamp.digicert.com`). Without
+these secrets, the binaries stay unsigned and SmartScreen warns on first launch. Once installed
+binaries are signed, `cbb update` on Windows accepts only updates from the same signer.
 
-- [ ] Buy a code signing certificate whose key can be exported as a PKCS#12 file (an OV
-  certificate; an EV one lives on a hardware token and needs a signing service instead).
-- [ ] In the environment **release**: `CBB_WINDOWS_CERT_BASE64`, the `.pfx` file in
-  base64 (`base64 -w0 cert.pfx`), and `CBB_WINDOWS_CERT_PASSWORD`, its password.
+One-time setup:
 
-To check it without a release, run the release workflow from `main`: its Windows builds
-sign the programs.
+- [ ] Obtain an OV code-signing certificate exportable as PKCS#12 (`.pfx`).
+- [ ] Add `CBB_WINDOWS_CERT_BASE64` (`base64 -w0 cert.pfx`) and `CBB_WINDOWS_CERT_PASSWORD` to the
+  `release` environment.
 
-### SignPath Foundation
-
-Microsoft's Artifact Signing does not take individuals outside the USA and Canada, so the
-plan for a certificate without buying one is the [SignPath Foundation](https://signpath.org),
-which signs open-source projects for free with its own certificate:
-
-- [ ] Apply on signpath.org with this repository (AGPL-3.0, releases built by GitHub Actions
-  from tags, the code-signing policy page they ask for).
-- [ ] Once accepted, they give an organization id, a project slug and a signing policy; put
-  `SIGNPATH_API_TOKEN` in the Actions secrets and the ids in Actions variables.
-- [ ] The release workflow then uploads the unsigned `cbb.exe`, `cbbw.exe`, `cbb-helper.exe` and `cbb-desktop.exe` as an
-  artifact, submits it with SignPath's GitHub action, and archives the signed programs it
-  gets back, in place of the `osslsigncode` step (which stays for a bought certificate).
-
-`cbb update` on Windows needs nothing more: once the installed programs carry a signature,
-it installs only programs with the same signer.
+To test signing without a release, trigger `release.yml` manually from `main` with an empty tag
+input.
 
 ## Signing for macOS
 
-The release workflow signs `cbb` and `cbb-helper` (identifier `tools.cbb.helper`) for macOS with the project's **Developer ID Application**
-certificate and the hardened runtime (`packaging/macos/sign.sh`) and has Apple's notary
-service check each (`packaging/macos/notarize.sh`, `notarytool` signed in with the App Store
-Connect API key), so that Gatekeeper opens it without a warning. Without the secrets the
-program is signed ad hoc. The certificates live in a keychain of the run's own
-(`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
-request's build ad hoc with the same flags and runs `cbb version`
-under the hardened runtime. No program carries an entitlement, since none compiles code at
-run time, and sign.sh refuses a signature with one.
+### Command-line binaries
 
-The same secrets make the Mac's installer package, `cbb-X.Y.Z.pkg` (the job "the Mac app
-and the .pkg"): `cbb` for Apple silicon and Intel in one program (`lipo` of the two signed
-builds) and CBB.app, built for both, signed with the hardened runtime and notarized, in a
-package signed with the **Developer ID Installer** certificate (`packaging/macos/pkg.sh`) and
-notarized in turn, its ticket stapled. The package puts the app in `/Applications` and runs
-`install.sh` for the user signed in at the screen; without a terminal it keeps the answers
-given before about the firewall and automatic updates and asks nothing. Without the secrets
-the release has no `.pkg`. CI's `test and build (macOS), homebrew, Mac app` job builds one unsigned, installs it with
-`installer`, and removes it with `uninstall.sh`.
+When `CBB_APPLE_DEVID_APP_P12`, `CBB_APPLE_DEVID_APP_PASSWORD`, and `CBB_ASC_*` are set in the
+`release` environment, `.github/workflows/release.yml` signs `cbb` (`tools.cbb.cli`), `cbb-helper`
+(`tools.cbb.helper`), `cbb-forward` (`tools.cbb.forward`), and `cbb-relay` (`tools.cbb.relay`) with
+the **Developer ID Application** certificate and hardened runtime (`packaging/macos/sign.sh`), then
+notarizes each binary with `notarytool` (`packaging/macos/notarize.sh`). Certificates live only in
+a temporary per-step keychain (`packaging/macos/keychain.sh`). Without the secrets, binaries are
+signed ad hoc. No binary carries entitlements (`sign.sh` rejects any signature with one). CI's
+`buildmac` job signs pull request builds ad hoc with the same hardened-runtime flags and runs each
+binary to verify startup.
 
-The iPhone app goes to TestFlight from the same environment (the job "the iPhone app, to
-TestFlight", `apps/ios/testflight.sh`): an archive of the app with its share extension,
-widgets, watch app and notification extension, each target signed by hand with the **Apple Distribution**
-certificate and its own App Store profile from `CBB_APPLE_PROFILES` (a base64 `tar.gz` of
-the five `.mobileprovision` files, found by their App IDs), exported for App Store Connect
-and uploaded with the API key. Its version is the tag's numbers (`0.6.0` for `v0.6.0-rc.1`),
-its build number the run's. A run by hand from `main` builds and signs it as `0.0.0` and
-uploads nothing. Apple asks about the app's encryption (export compliance) in App Store
-Connect for each build until the answer is in the app's `Info.plist`. The profiles expire
-after a year: make new ones in the account, then set `CBB_APPLE_PROFILES` again.
+### Mac app and `.pkg` installer
 
-The Apple Developer account (team `U2ZJ8F2JCJ`) holds, all made once on the maintainer's
-Mac with a key of its own (`openssl genrsa 2048` and a CSR, never Xcode's automatic signing),
-with the files and a backup beside the other release keys:
+The `macos-app` job in `release.yml` combines the signed ARM64 and Intel slices of `cbb` and
+`cbb-helper` with `lipo`, builds universal `CBB.app`, signs and notarizes `CBB.app`, packages both
+with `packaging/macos/pkg.sh` signed by **Developer ID Installer** (`CBB_APPLE_DEVID_INSTALLER_P12`
+and `CBB_APPLE_DEVID_INSTALLER_PASSWORD`), notarizes and staples `cbb-X.Y.Z.pkg`, and validates it
+with `spctl --assess --type install`. Installing the `.pkg` copies `CBB.app` to `/Applications` and
+runs `install.sh` non-interactively for the console user (preserving prior firewall and auto-update
+answers). Without the secrets, the release omits `.pkg`. CI's `buildmac` job builds, installs, and
+uninstalls an unsigned `.pkg` on every pull request.
 
-- Certificates: Developer ID Application (programs and the Mac app outside the App Store),
-  Developer ID Installer (the `.pkg`), Apple Distribution (TestFlight and the App Store),
-  Apple Development (builds on the maintainer's own devices). Each `.p12` has a password of
-  its own.
-- Identifiers: the App Groups `group.tools.cbb` and `group.tools.cbb.push`; the App IDs
-  `tools.cbb` (App Groups: both, NFC Tag Reading, Push Notifications), `tools.cbb.share`
-  (App Groups), `tools.cbb.widgets`, `tools.cbb.watchkitapp`, `tools.cbb.push` (the
-  notification extension; App Groups: `group.tools.cbb.push`) and `tools.cbb.mac`.
-- App Store profiles for the five iPhone IDs, which renew every year. A profile goes
-  invalid when its App ID's capabilities change: edit and save it again, then download it.
-- Keys: the App Store Connect API key (App Manager) for CI, and two APNs keys, one for
-  Sandbox (builds signed for development) and one for Production, for a push server.
+The Mac app updates through the signed `.pkg`; planned Sparkle self-updates are tracked in
+[Roadmap](../roadmap.md).
 
-A Developer ID certificate is never revoked to replace it: a revoked one stops every release
-signed with it from opening. When it expires, a new one signs the next release; the releases
-signed before keep opening, since their signatures carry a secure timestamp.
+### iPhone app to TestFlight
 
-To check it without a release, run the release workflow from `main`: its macOS builds sign
-and notarize `cbb`.
+The `testflight` job in `release.yml` (`apps/ios/testflight.sh`) archives the iPhone app with its
+share extension, widgets, Apple Watch app, and notification service extension, signs all five
+targets manually with **Apple Distribution** (`CBB_APPLE_DISTRIBUTION_P12`,
+`CBB_APPLE_DISTRIBUTION_PASSWORD`) and their App Store provisioning profiles (`CBB_APPLE_PROFILES`,
+a base64-encoded `.tar.gz` of the five `.mobileprovision` files matched by App ID), exports the
+`.ipa`, and uploads it to App Store Connect using `CBB_ASC_*`. Its version is the numeric prefix of
+the tag (for example `0.6.0` for `v0.6.0-rc.1`), and its build number is `GITHUB_RUN_NUMBER`. A
+manual keys-check run from `main` builds and signs version `0.0.0` without uploading.
 
-## Updates of the Mac app (Sparkle)
+App Store Connect prompts for encryption export compliance on each uploaded build until
+`ITSAppUsesNonExemptEncryption` is set in `Info.plist`. App Store provisioning profiles expire
+annually: regenerate them in the Apple Developer portal and update `CBB_APPLE_PROFILES`.
 
-The Mac app comes in the release's `.pkg`, signed with a Developer ID and notarized, but it does
-not update itself yet. It is to update with [Sparkle](https://sparkle-project.org):
+### Apple Developer account inventory
 
-- [ ] Sparkle's own Ed25519 key, made with Sparkle's `generate_keys` on the maintainer's Mac
-  and kept in its keychain; the public key goes into the app's `Info.plist`
-  (`SUPublicEDKey`) in `apps/macos/project.yml`.
-- [ ] The release workflow builds, signs and notarizes `CBB-X.Y.Z.zip`;
-  `release-sign manifest` lists it like the other files.
-- [ ] `appcast.xml` beside `stable.json`, with each version's EdDSA signature
-  (`sign_update`), made when `stable.json` is signed, so both name the same release.
-- [ ] The app checks the appcast once a day (`SUFeedURL` on GitHub's latest release, the
-  mirror second), and Settings gets "Check for updates" and "Update automatically".
+Team `U2ZJ8F2JCJ` holds the following assets (all certificates generated on the maintainer's Mac
+with dedicated keys via `openssl genrsa 2048` and CSRs—never Xcode automatic signing—and backed up
+offline beside the other release keys):
+
+- **Certificates**: Developer ID Application (binaries and `CBB.app`), Developer ID Installer
+  (`.pkg`), Apple Distribution (TestFlight and App Store), and Apple Development (local testing on
+  maintainer devices). Each `.p12` has its own password.
+- **Identifiers**: App Groups `group.tools.cbb` and `group.tools.cbb.push`; App IDs `tools.cbb`
+  (both App Groups, NFC Tag Reading, Push Notifications), `tools.cbb.share` (`group.tools.cbb`),
+  `tools.cbb.widgets`, `tools.cbb.watchkitapp`, `tools.cbb.push` (`group.tools.cbb.push`), and
+  `tools.cbb.mac`.
+- **Provisioning profiles**: App Store profiles for the five iPhone App IDs (renewed yearly; edit,
+  re-save, and re-download any profile after changing its App ID capabilities).
+- **Keys**: App Store Connect API key (App Manager role) for CI, plus two APNs keys (Sandbox for
+  development builds and Production for `cbb-push`).
+
+Never revoke a Developer ID certificate when rotating it: revoking invalidates all previously
+signed releases. Let the old certificate expire and sign future releases with the new one; existing
+timestamped signatures remain valid.
+
+To verify macOS signing and notarization without a release, trigger `release.yml` manually from
+`main` with an empty tag input.
 
 ## Android signing key
 
-The release workflow builds `cbb-X.Y.Z.apk` and `cbb-fdroid-X.Y.Z.apk`
-from the tag (version code `X*10000 + Y*100 + Z`, from `apps/android/version.properties`)
-and signs them with the project's release key, which lives in the environment **release**
-("Release secrets" above) and, with a backup, on the maintainer's Mac. Android installs an update only when it is signed with the same
-key, so the key is made once and kept, with a backup, for good:
+The `android` job in `.github/workflows/release.yml` builds three signed APKs from the tag—the full
+phone build (`cbb-X.Y.Z.apk`), the F-Droid build (`cbb-fdroid-X.Y.Z.apk`), and the Wear OS app
+(`cbb-wear-X.Y.Z.apk`)—verifies all three with `apksigner verify --print-certs`, and generates
+`sbom-android.cdx.json`. Android accepts app updates only when signed with the same key, so create
+the keystore once and keep an encrypted offline backup permanently:
 
 ```sh
 keytool -genkeypair -v -keystore cbb-release.jks -alias cbb \
@@ -826,73 +1024,84 @@ keytool -genkeypair -v -keystore cbb-release.jks -alias cbb \
 base64 -i cbb-release.jks | pbcopy   # macOS; Linux: base64 -w0 cbb-release.jks
 ```
 
-The secrets: `CBB_ANDROID_KEYSTORE_BASE64` (the keystore, in base64),
-`CBB_ANDROID_KEYSTORE_PASSWORD`, `CBB_ANDROID_KEY_ALIAS` (`cbb`) and
-`CBB_ANDROID_KEY_PASSWORD` (the same as the keystore's for a PKCS12 keystore). Without them
-the release has no APK. F-Droid publishes our signed `cbb-fdroid-X.Y.Z.apk` once
-its own build of the tag matches it (below).
+Upload four secrets to the `release` environment:
 
-To check the key without a release, run the release workflow by hand from `main` (Actions,
-"release", "Run workflow"): it builds everything, checks the APK's signature and keeps the
-files as the run's artifacts, and publishes nothing.
+- `CBB_ANDROID_KEYSTORE_BASE64`: base64-encoded keystore;
+- `CBB_ANDROID_KEYSTORE_PASSWORD`: keystore password;
+- `CBB_ANDROID_KEY_ALIAS`: `cbb`;
+- `CBB_ANDROID_KEY_PASSWORD`: key password (same as keystore password for PKCS#12).
+
+Without these secrets, the release omits all APKs. To test the key without a release, run
+`release.yml` manually from `main` with an empty tag input; the job builds, signs, and verifies the
+APKs as workflow artifacts without publishing.
 
 ## Firebase for push
 
-The Android full build receives push through Firebase Cloud Messaging; the F-Droid build uses
-UnifiedPush and needs nothing here. The project's Firebase project has one Android app,
-`tools.cbb`, with no Analytics. The build reads its four identifiers (the app ID, the project
-ID, the web API key restricted to the Firebase Installations and Cloud Messaging APIs and to
-the app's package and signing certificate, the sender ID) from the release environment's
-secrets `CBB_FIREBASE_*`, or locally from `-Pcbb.firebase.appId=…` and the like; the project
-never commits a `google-services.json`. Without them the full build works and offers no push.
+The Android full build receives closed-app push notifications through Firebase Cloud Messaging
+(FCM); the F-Droid build uses UnifiedPush and requires no Firebase configuration.
 
-`cbb-push` on cbb.tools sends through the FCM HTTP v1 API with a service account of that
-project whose only role is *Firebase Cloud Messaging API Admin*: its JSON key lives in
-`/etc/cbb/push/fcm.json` (root, mode 0600), which the unit hands to the service as a
-credential (`packaging/linux/cbb-push.service`). To change the key, make a new one in the
-console, replace the file, restart `cbb-push`, then delete the old key in the console.
+The Firebase project contains one Android app (`tools.cbb`) with Analytics disabled.
+`apps/android/app/build.gradle.kts` reads four values from `release` environment secrets
+(`CBB_FIREBASE_APP_ID`, `CBB_FIREBASE_PROJECT_ID`, `CBB_FIREBASE_API_KEY`, and
+`CBB_FIREBASE_SENDER_ID`) or local Gradle properties (`-Pcbb.firebase.appId=...`, `projectId`,
+`apiKey`, `senderId`), restricting the web API key to the Firebase Installations and Cloud Messaging
+APIs and to `tools.cbb`'s signing certificate. Never commit `google-services.json`. Without these
+values, the full build compiles normally without push support.
+
+On `cbb.tools`, `cbb-push` sends FCM HTTP v1 requests using a service account restricted to the
+*Firebase Cloud Messaging API Admin* role. Its JSON key resides at `/etc/cbb/push/fcm.json` (owned
+by `root:root`, mode `0600`) and is injected via systemd credentials
+(`packaging/linux/cbb-push.service`). To rotate the key:
+
+1. Create a new JSON key for the service account in the Firebase console.
+2. Replace `/etc/cbb/push/fcm.json` (mode `0600`) and run `sudo systemctl restart cbb-push`.
+3. Delete the old key in the Firebase console.
 
 ## Signing for Aurora OS
 
-Aurora OS installs an RPM only when it is signed with a certificate from Open Mobile
-Platform; the maintainer's has the profile `regular` (`CN=hunterewok`, a GOST R 34.10-2012
-key, valid until 2049). A phone updates the app only from a package with the same
-certificate, and removing the app removes its key in OP-TEE, so every build that reaches a
-phone is signed with this one certificate. CI's `Aurora app` jobs build the RPMs unsigned;
-the workflow **aurora**, run by hand on any branch (Actions, "aurora", "Run workflow"),
-builds them and signs them, after the maintainer approves the run in the environment
-**aurora**, which alone holds the key: an environment with a required reviewer, so that a
-pushed branch cannot use the key unseen.
+Aurora OS installs an RPM only when signed with an Open Mobile Platform developer certificate
+(profile `regular`, `CN=hunterewok`, GOST R 34.10-2012 key). Updates require the same certificate,
+and uninstalling removes the app's OP-TEE key, so every build installed on a phone uses this
+certificate.
 
-The secrets of the environment **aurora**, from the files kept in `ci-keys.dmg` on the
-maintainer's Mac:
+CI's `Aurora app` jobs build unsigned RPMs. To build signed RPMs from any branch, run
+[`.github/workflows/aurora.yml`](../../.github/workflows/aurora.yml) manually (**Actions → aurora →
+Run workflow**) and approve the deployment in the **aurora** environment (which requires maintainer
+review so arbitrary branches cannot access the key).
+
+Upload the three secrets from `ci-keys.dmg` on the maintainer's Mac:
 
 ```sh
 base64 -i hunterewok_key.pem | gh secret set CBB_AURORA_KEY_BASE64 -R HunterEwok/cbb --env aurora
 base64 -i hunterewok_cert.pem | gh secret set CBB_AURORA_CERT_BASE64 -R HunterEwok/cbb --env aurora
-gh secret set CBB_AURORA_KEY_PASSWORD -R HunterEwok/cbb --env aurora   # asks for the key's password
+gh secret set CBB_AURORA_KEY_PASSWORD -R HunterEwok/cbb --env aurora
 ```
 
-`rpmsign-external` of the Platform SDK signs; it reads the key's password from
-`KEY_PASSPHRASE`. The run's artifacts are the signed `tools.cbb.aurora-X.Y.Z-1.armv7hl.rpm` and
-`.aarch64.rpm`.
+`apps/silica/ci.sh` signs the RPMs inside the Platform SDK using `rpmsign-external` (passing the
+passphrase via `KEY_PASSPHRASE`) and uploads `tools.cbb.aurora-X.Y.Z-1.armv7hl.rpm` and
+`tools.cbb.aurora-X.Y.Z-1.aarch64.rpm` as workflow artifacts.
 
 ## F-Droid
 
-The app's F-Droid build ([apps.md](../apps.md#f-droid)) is published by F-Droid, from its
-recipe in [fdroiddata](https://gitlab.com/fdroid/fdroiddata); `packaging/fdroid` holds the
-recipe we submit. Once, for the first release with the fdroid flavor:
+F-Droid publishes the `fdroid` flavor ([App specification: F-Droid](../apps.md#f-droid)) using the
+build recipe in `packaging/fdroid/tools.cbb.yml`, submitted to
+[fdroiddata](https://gitlab.com/fdroid/fdroiddata) as `metadata/tools.cbb.yml`.
 
-- [ ] Fill in the recipe: `AllowedAPKSigningKeys`, the SHA-256 of the release key's
-  certificate (`apksigner verify --print-certs cbb-fdroid-X.Y.Z.apk`), and
-  `ndk`, the `cbb.ndk` of the tag.
-- [ ] Check that F-Droid's build reproduces ours: `fdroid build -v -l
-  tools.cbb` in a clone of fdroiddata with the recipe, on
-  F-Droid's buildserver image (`fdroid build` compares with `Binaries`).
-- [ ] Open the merge request to fdroiddata (GitLab account), with the recipe as
-  `metadata/tools.cbb.yml`, and answer the reviewers.
+One-time submission steps:
 
-After that, each release's tag is picked up by F-Droid's update check
-(`UpdateCheckData` reads `apps/android/version.properties`), usually within days. When a
-release's F-Droid build does not reproduce, F-Droid does not publish it; CI's `fdroid` job
-catches most causes before the tag.
+1. Fill in `AllowedAPKSigningKeys` with the release certificate SHA-256 from
+   `apksigner verify --print-certs cbb-fdroid-X.Y.Z.apk`, and confirm `ndk` matches `cbb.ndk` in
+   `apps/android/gradle.properties`.
+2. Verify reproducibility on F-Droid's buildserver image in a clone of `fdroiddata`:
+
+   ```sh
+   fdroid build -v -l tools.cbb
+   ```
+
+3. Open a merge request to `fdroiddata` adding `metadata/tools.cbb.yml`.
+
+After acceptance, F-Droid's update check (`UpdateCheckData` reading
+`apps/android/version.properties`) detects each new tag automatically and publishes the project's
+signed `cbb-fdroid-X.Y.Z.apk` whenever F-Droid's build reproduces it bit for bit. CI's `fdroid`
+job runs `packaging/fdroid/reproduce.sh` on pull requests to catch reproducibility regressions before
+tagging.

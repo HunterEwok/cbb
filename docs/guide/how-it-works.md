@@ -65,7 +65,7 @@ Each device has a role in the group:
 
 | Role | Which devices | What it does |
 |---|---|---|
-| **Main device** (called *root* in command-line tools and diagrams) | The phone that creates the group, or a computer when you run [without the app](without-app.md) | Holds the group's main key, adds and removes devices, chooses admins, and sets group rules |
+| **Main device** (called *root* in command-line tools) | The phone that creates the group, or a computer when you run [without the app](without-app.md) | Holds the group's main key, adds and removes devices, chooses admins, and sets group rules |
 | **Admin** | Another phone or a computer chosen by the main device | Adds and removes ordinary devices, freezes a stolen admin computer, and sends admin actions such as [remote paste](remote-paste.md); an admin phone can also remove another admin |
 | **Member** | Every computer, phone, and small device (such as a router or Raspberry Pi; see [small devices](../../member/README.md)) | Syncs the clipboard |
 | **Rootless member** | A Linux computer installed without administrator rights (`sudo`) | Syncs like any member, but cannot be the main device, an admin, or a hub ([rootless members](#rootless-members)) |
@@ -82,8 +82,9 @@ Where a device keeps its keys determines what a thief can take if the device is 
   passcode, or (on Aurora OS) the app's own PIN; everyday syncing works without asking.
 - **Computers** keep their member and admin keys in hardware when available: the Secure Enclave
   on Macs with Apple silicon or a T2 chip, and the hardware security chip (TPM) on Linux and
-  Windows PCs. Computers without that hardware, small devices, and a computer acting as the
-  main device keep keys in files that only Connect Beyond Borders can read.
+  Windows PCs; a computer that is the main device keeps its main key there too. Computers
+  without that hardware and small devices keep keys in files that only Connect Beyond Borders
+  can read.
 
 For full details on key storage and verification, see [Keys and attestation](keys.md).
 

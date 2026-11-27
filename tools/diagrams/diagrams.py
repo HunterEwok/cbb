@@ -203,17 +203,17 @@ def bottom(c): x, y, w, h = c; return (x + w/2, y + h)
 
 def draw():
     # 1. The group: the phone adds each computer.
-    d = D(720, 300, "The phone adds each computer by its QR code; then the computers share one clipboard")
-    p = d.card(120, 140, 'phone', 'Phone', 'holds the group\'s key', w=190, cls='key', badge='ROOT')
+    d = D(720, 300, "The phone adds each computer by a six-digit code; then the computers share one clipboard")
+    p = d.card(120, 140, 'phone', 'Phone', 'holds the group\'s key', w=190, cls='key', badge='MAIN DEVICE')
     cs = []
     for i, (k, t) in enumerate([('laptop', 'Linux'), ('laptop', 'Mac'), ('desktop', 'Windows')]):
         cs.append(d.card(560, 50 + i*90, k, t, w=150))
-    bx = right(p)[0] + 45  # the branch stands close to the root
+    bx = right(p)[0] + 45  # the branch stands close to the main device
     lx = (bx + left(cs[0])[0]) / 2
     for i, c in enumerate(cs):
         x0, y0 = right(p); x1, y1 = left(c)
         d.edge([(x0, y0), (bx, y0), (bx, y1), (x1, y1)] if y1 != y0 else [(x0, y0), (x1, y1)], 'pair')
-        d.labels.append(((lx, y1), 'adds by QR code', 'pair'))
+        d.labels.append(((lx, y1), 'six-digit code', 'pair'))
     for a, b in [(cs[0], cs[1]), (cs[1], cs[2])]:
         d.edge([bottom(a), top(b)], 'home', start=True)
     d.edge([(right(cs[0])[0], 50), (680, 50), (680, 230), (right(cs[2])[0], 230)], 'home', start=True, label='clipboard', at=(680, 140))
@@ -234,7 +234,7 @@ def draw():
         xs.append(x + w / 2)
         x += w + 24
     for x, w, (k, t, s_, cls) in zip(xs, ws, items):
-        c = d.card(x, 82, k, t, s_, w=w, cls=cls, badge='ROOT' if cls else None)
+        c = d.card(x, 82, k, t, s_, w=w, cls=cls, badge='MAIN DEVICE' if cls else None)
         d.edge([bottom(c), (x, bus)], 'home', end=False)
     d.edge([(xs[0], bus), (xs[-1], bus)], 'home', end=False)
     d.labels.append(((W / 2, bus + 22), 'direct, encrypted connections, found by mDNS', 'home'))
@@ -301,10 +301,10 @@ def draw():
 
     # 6. Without the app.
     d = D(720, 230, "Without the app, a computer holds the group")
-    rt = d.card(130, 95, 'desktop', 'Linux computer', 'holds the group\'s key', w=210, cls='key', badge='ROOT')
+    rt = d.card(130, 95, 'desktop', 'Linux computer', 'holds the group\'s key', w=210, cls='key', badge='MAIN DEVICE')
     mc = d.card(570, 50, 'laptop', 'Mac', w=170)
     wn = d.card(570, 140, 'desktop', 'Windows', w=170)
-    bx = right(rt)[0] + 45  # the branch stands close to the root
+    bx = right(rt)[0] + 45  # the branch stands close to the main device
     lx = (bx + left(wn)[0]) / 2
     d.edge([right(rt), (bx, 95)], 'pair', end=False)
     d.edge([(bx, 95), (bx, 50), left(mc)], 'pair')
@@ -317,43 +317,43 @@ def draw():
 def draw_design():
     """The two diagrams of docs/design.md (English only: the document is)."""
     # The system context (C4 level 1).
-    d = D(1000, 420, "The system context: a group of devices, the user, the systems' clipboards, an optional forwarder or relay, and the release mirror")
-    us = d.card(330, 50, 'user', 'The user', 'copies, pastes, pairs, admits, removes', w=310)
-    d.zone(10, 110, 640, 140, 'A CBB group: no central server')
-    d.card(120, 175, 'desktop', 'Computers', 'Linux, Mac, Windows', w=200, cls='key')
-    d.card(330, 175, 'phone', 'Phones', 'iPhone, iPad, Android', w=200)
-    d.card(540, 175, 'board', 'Routers, watches, TVs', 'small members', w=200)
-    d.note(330, 236, "Members trust each other by the group's certificates.")
-    cb = d.card(865, 175, 'board', "The systems' clipboards", 'keyboards and screens', w=250)
-    d.edge([(650, 175), left(cb)], 'home', label='copy, paste', at=(695, 150))
-    d.edge([bottom(us), (330, 110)], 'home', start=True)
+    d = D(1060, 420, "The system context: a group of devices, the user, the systems' clipboards, an optional forwarder or relay, and the release mirror")
+    us = d.card(385, 50, 'user', 'The user', 'copies, pastes, pairs, admits, removes', w=310)
+    d.zone(10, 110, 750, 140, 'A CBB group: no central server')
+    d.card(135, 175, 'desktop', 'Computers', 'Linux, Mac, Windows, FreeBSD', w=240, cls='key')
+    d.card(385, 175, 'phone', 'Phones', 'iOS, Android, Aurora, HarmonyOS', w=240)
+    d.card(635, 175, 'board', 'Routers, watches, TVs', 'small members', w=240)
+    d.note(385, 236, "Members trust each other by the group's certificates.")
+    cb = d.card(925, 175, 'board', "The systems' clipboards", 'keyboards and screens', w=250)
+    d.edge([(760, 175), left(cb)], 'home', label='copy, paste', at=(780, 150))
+    d.edge([bottom(us), (385, 110)], 'home', start=True)
     fw = d.card(210, 355, 'cloud', 'Forwarder or blind relay', "the project's or yours; sees ciphertext only", w=350, cls='srv')
     d.edge([(210, 250), top(fw)], 'tunnel', start=True, label="away from home,\nif you choose one", at=(210, 292))
-    gh = d.card(700, 355, 'server', 'GitHub or the dl.cbb.tools mirror', 'signed releases', w=340)
-    d.edge([top(gh), (700, 250)], 'home', label='cbb update', at=(700, 302))
+    gh = d.card(760, 355, 'server', 'GitHub or the dl.cbb.tools mirror', 'signed releases', w=340)
+    d.edge([top(gh), (760, 250)], 'home', label='cbb update', at=(760, 302))
     d.save('context')
 
     # The containers (C4 level 2).
     d = D(900, 470, "The containers: the programs of a computer, a phone, a small device and the hub, and how they talk")
-    d.zone(10, 10, 500, 290, 'Computer: Linux, macOS, Windows, FreeBSD, routers')
-    sv = d.card(260, 90, 'desktop', 'cbb service (Go)', 'member protocol, sync, keys, tunnel', w=340, cls='key')
+    d.zone(10, 10, 500, 290, 'Computer: Linux, macOS, Windows, FreeBSD')
+    sv = d.card(260, 90, 'desktop', 'cbb service (Rust)', 'member protocol, sync, records, keys, tunnel', w=340, cls='key')
     bus = 160
     bx = [96, 260, 424]
-    kids = [d.box(bx[0], 235, 'Clipboard connector', ['desktop connector,', 'pasteboard or', 'clipboard agent'], w=156),
+    kids = [d.box(bx[0], 235, 'cbb-helper (Go)', ['TPM keys, attestation', 'checks, TVs, the', 'Bluetooth keyboard'], w=156),
             d.box(bx[1], 235, 'Control clients', ['cbb CLI,', 'tray app,', 'Mac app'], w=156),
-            d.box(bx[2], 235, 'Paste helpers', ['cbb paste-helper:', 'tmux, console,', 'uinput'], w=156)]
+            d.box(bx[2], 235, 'Session agent', ['in cbb-helper: the', "desktop's clipboard,", 'remote paste'], w=156)]
     d.edge([bottom(sv), (260, bus)], 'home', end=False)
     d.edge([(bx[0], bus), (bx[2], bus)], 'home', end=False)
     for x, k in zip(bx, kids):
         d.edge([(x, bus), top(k)], 'home')
-    d.labels.append(((400, 136), 'control socket (JSON lines)', 'home'))
-    d.zone(580, 10, 310, 170, 'Phone: iPhone, iPad, Android')
-    app = d.box(735, 100, 'The app', ['SwiftUI or Compose', 'the kit: member protocol,', 'pairing, records, tunnel'], w=270)
+    d.labels.append(((400, 136), 'control socket; pipes to the helper', 'home'))
+    d.zone(580, 10, 310, 170, 'Phone: iPhone, Android, Aurora, HarmonyOS')
+    app = d.box(735, 100, 'The app', ['SwiftUI, Compose, Qt or ArkTS', 'on the Rust core: member', 'protocol, records, tunnel'], w=270)
     d.edge([right(sv), (595, 90)], 'pair', start=True)
     d.labels.append(((512, 58), 'member protocol,\nTLS 1.3, TCP 8764', 'pair'))
-    wa = d.box(735, 280, 'The watch app', ['Apple Watch, Wear OS'], w=230)
-    d.edge([top(wa), bottom(app)], 'home', start=True, label='WatchConnectivity,\nWearable Data Layer', at=(735, 205))
-    lm = d.card(150, 410, 'board', 'Small device (Rust)', 'Linux, OpenWrt, ESP32', w=250)
+    wa = d.box(735, 280, 'The watch app', ['Apple Watch, Wear OS,', 'HarmonyOS watch'], w=230)
+    d.edge([top(wa), bottom(app)], 'home', start=True, label='the watch link\nof each phone system', at=(735, 205))
+    lm = d.card(150, 410, 'board', 'Small device', 'cbb alone: OpenWrt, a Pi', w=250)
     d.edge([(150, 300), top(lm)], 'pair', start=True, label='member protocol', at=(150, 336))
     hb = d.box(640, 412, 'The hub (a member) and, on the way,', ['a forwarder (cbb forward) or a relay', '(cbb relay): blind, they pass', 'packets only'], w=300, cls='srv')
     d.edge([(400, 300), (400, 340), (640, 340), top(hb)], 'tunnel', start=True, label='WireGuard (UDP 8764),\nmaybe over VLESS (TCP 443)', at=(520, 340))

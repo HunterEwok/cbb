@@ -10,14 +10,8 @@
 
 mod common;
 
-use std::net::UdpSocket;
-
 use common::*;
 use serde_json::{Value, json};
-
-fn free_udp() -> u16 {
-    UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
-}
 
 fn away(st: &Value) -> &Value {
     &st["away"]

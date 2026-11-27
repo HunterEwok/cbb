@@ -1258,8 +1258,8 @@
         <translation>创建群组</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以把群组移到自己这里。</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>请尽快保存群组的恢复密钥：如果这台手机丢失，另一台手机可以用它把群组移到自己这里。</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1829,8 +1829,8 @@
         <translation>CBB %1 已可用。</translation>
     </message>
     <message>
-        <source>Check that the base is on and online.</source>
-        <translation>请确认主站已开机并联网。</translation>
+        <source>Check that the hub is on and online.</source>
+        <translation>请确认中心节点已开机并联网。</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
@@ -1857,8 +1857,8 @@
         <translation>一切都在同步。</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no base.</source>
-        <translation>“随处”已打开，但群组没有主站。</translation>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>“随处”已打开，但群组没有中心节点。</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1877,8 +1877,8 @@
         <translation>在这台电脑的防火墙中允许 CBB。</translation>
     </message>
     <message>
-        <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>在家中某台电脑的高级设置中，将它设为主站。</translation>
+        <source>Make a computer at home the hub, on its page in the app.</source>
+        <translation>在应用中打开家中某台电脑的页面，将它设为中心节点。</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1921,16 +1921,8 @@
         <translation>以下设备已关闭同步：%1。</translation>
     </message>
     <message>
-        <source>The backup server does not answer.</source>
-        <translation>备用服务器没有响应。</translation>
-    </message>
-    <message>
-        <source>The base %1 does not answer.</source>
-        <translation>主站 %1 没有响应。</translation>
-    </message>
-    <message>
-        <source>The connection server does not take this base.</source>
-        <translation>连接服务器未接受此主站。</translation>
+        <source>The forwarder does not take this hub.</source>
+        <translation>转发器未接受此中心节点。</translation>
     </message>
     <message>
         <source>The group has records of a newer version.</source>
@@ -1961,8 +1953,12 @@
         <translation>群组的恢复密钥被使用了两次，因此群组已永久停止。</translation>
     </message>
     <message>
-        <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>连接服务器的入口列表已过期。</translation>
+        <source>The hub %1 does not answer.</source>
+        <translation>中心节点 %1 没有响应。</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>转发器的入口列表已过期。</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1973,8 +1969,12 @@
         <translation>主设备的记录在等待尚无设备转发的记录。</translation>
     </message>
     <message>
-        <source>The tunnel to the base %1 does not get through.</source>
-        <translation>通往主站 %1 的隧道无法连通。</translation>
+        <source>The relay does not answer.</source>
+        <translation>中继没有响应。</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>通往中心节点 %1 的隧道无法连通。</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -1997,8 +1997,8 @@
         <translation>此设备已静音：它的副本不会到达群组。</translation>
     </message>
     <message>
-        <source>This device is the base, and no device has connected yet.</source>
-        <translation>此设备是主站，但尚无设备连接。</translation>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>此设备是中心节点，但尚无设备连接。</translation>
     </message>
     <message>
         <source>This device was removed from the group.</source>
@@ -2013,8 +2013,8 @@
         <translation>这是群组中唯一的设备。</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>此网络可能会阻止隧道：请在主站上打开“严格网络”。</translation>
+        <source>This network may block tunnels: turn on Strict networks on the hub.</source>
+        <translation>此网络可能会阻止隧道：请在中心节点上打开“严格网络”。</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>

@@ -167,7 +167,7 @@ Commands:
                           Make this Linux computer a Bluetooth keyboard for a TV, a tablet
                           or a computer near it: pair shows it to a new one for two minutes,
                           type types TEXT or standard input there.
-  remote [add [-appletv | -roku -consent] [-name NAME] ADDRESS | code CODE | cancel
+  remote [add [-appletv | -roku -consent] [-name NAME] ADDRESS | code < CODE | cancel
          | remove TV | pastes TV on|off | type [-tv TV] [TEXT]]
                           Be the remote of a TV on the home network: an Android TV, a
                           Google TV or an Apple TV pairs with the code it shows, a Roku over

@@ -1,281 +1,391 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Installing
 
-Connect Beyond Borders runs as a small background service on each computer. Its command is `cbb`.
-Every way below installs the same program; pick the one you like.
+For anyone installing, updating, verifying, or removing Connect Beyond Borders on a computer,
+router, or home server. For phone, tablet, watch, and TV apps, see [The apps](apps.md).
+
+Connect Beyond Borders runs as a small background service on each computer. Its command-line tool
+is `cbb`. Every method below installs the same service; pick the one that fits your system.
 
 ## Linux
 
-Any Linux with systemd (x86-64, ARM64, ARMv7, ARMv6): a laptop, a desktop, a Raspberry Pi,
-a server, a Steam Deck.
+Supported on Linux systems with `systemd` on x86-64, ARM64, ARMv7, and ARMv6 (laptops, desktops,
+Raspberry Pi boards, servers, and Steam Deck).
+
+1. Run the installer in a terminal:
+
+   ```sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+   ```
+
+2. Answer the prompts for firewall rules (when an active firewall is found) and daily automatic
+   updates.
+3. Log out and log back in once so your account (added to the `cbb` group) can run `cbb` without
+   `sudo`.
+
+On x86-64 and ARM64 desktops that have GTK 4 and WebKitGTK 6.0 installed (`libgtk-4-1
+libwebkitgtk-6.0-4` on Debian and Ubuntu; `gtk4 webkitgtk6.0` on Fedora), the installer also
+installs the tray app (`cbb-desktop`), which starts with your desktop session and appears in your
+applications menu. If those libraries are missing, the installer names the packages to install;
+re-run the installer after adding them to install the tray app.
+
+You can pass extra options to `get.sh` after `sh -s --`:
+
+- **Text console (`--console`):** For a machine without a desktop, adds copy and paste inside
+  `tmux` and installs `cbb-console.service` for remote paste on the text console:
+
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --console
+  ```
+
+- **Skip desktop paste dialogs (`--uinput`):** On GNOME and KDE, remote paste asks once in a
+  system dialog before pressing keys. Adding `--uinput` installs `cbb-uinput.service` and loads
+  the `uinput` kernel module so Connect Beyond Borders presses paste keys directly (never on a
+  login or lock screen). This option requires `cbb-helper`.
+- **Small devices without the helper (`--no-helper`):** Leaves out `cbb-helper` (the helper
+  program that handles TPM keys, desktop clipboards, remote paste key injection, Bluetooth
+  keyboards, and TV remotes) on small devices that only sync:
+
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --no-helper
+  ```
+
+  See [Small devices](../../member/README.md). MIPS router archives leave out `cbb-helper` by
+  default. Once a device is installed without `cbb-helper`, later updates keep it that way.
+
+Homebrew on Linux (x86-64 and ARM64) is also supported:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+brew install hunterewok/tap/cbb
+sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/linux/install.sh" "$(brew --prefix)/opt/cbb/bin/cbb"
 ```
 
-Then log out and in again once, so your user may use `cbb` without `sudo`. A machine
-without a desktop gets copy and paste inside tmux with `--console`
-(`... | sudo sh -s -- --console`).
-
-On a desktop with GTK 4 and WebKitGTK 6.0 (x86-64 and ARM64) it also installs the tray app,
-which starts with your session and is in the applications menu. Without them it names the
-packages to add; run it again afterwards for the tray app.
-
-Remote paste on GNOME and KDE asks once, in a dialog on the computer, before an admin's
-first paste may press the keys. To skip the dialog, add `--uinput` (`... | sudo sh -s -- --uinput`): a small helper then
-presses the paste keys (Shift+Insert and Enter) for whoever uses the screen, never on a
-login or lock screen.
-
-Small devices that should only sync, such as a router or a Raspberry Pi Zero, take the same
-installer and can leave out `cbb-helper`, which holds keys in a TPM and runs the desktop's
-clipboard and keys and Bluetooth: `... | sudo sh -s -- --no-helper`
-([cbb on small devices](../../member/README.md)). A router's archive (MIPS) has no helper anyway.
+Re-run the second command after each `brew upgrade`.
 
 ### Without sudo (rootless)
 
-On a Linux computer where you cannot or do not want to use `sudo`, install it for your own
-user, without `sudo`:
+On a Linux computer where you do not have administrator rights (`sudo`), install Connect Beyond
+Borders for your own user account without `sudo`:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-It runs as your own background service while you are logged in, and syncs as any member.
-Use it only when the normal install is not possible: every program you run could copy its
-keys, so it can never be the group's root, an admin or the hub
-([how it works](how-it-works.md#rootless-members)), and it has no firewall rules, no TPM and
-no `--console` or `--uinput`. To keep it running after you log out, an administrator runs
-`sudo loginctl enable-linger YOUR-USER` once. To remove it:
-`sh ~/.local/share/cbb/uninstall.sh`. `--no-helper --rootless` leaves the helper out there too
-([without sudo](../../member/README.md#without-sudo-rootless)).
+This installs `cbb` into `~/.local/bin` and runs it as a `systemd` user service while you are
+logged in. It cannot be installed alongside a system-wide installation.
+
+Use a rootless install only when a normal install is not possible. Because any program running
+under your user account can read its key files, a rootless device can never be the **main
+device**, an **admin**, or a **hub** ([rootless members](how-it-works.md#rootless-members)). A
+rootless install also has no firewall rules, no TPM support, and no `--console` or `--uinput`
+helpers.
+
+- **Keep running after logout:** If the installer cannot enable lingering automatically, ask an
+  administrator to run `sudo loginctl enable-linger YOUR-USER` once.
+- **Without the helper:** Pass `--no-helper --rootless` to omit `cbb-helper` as well (see
+  [without sudo on small devices](../../member/README.md#without-sudo-rootless)).
+- **Remove:** Run `sh ~/.local/share/cbb/uninstall.sh`.
 
 ### SteamOS (Steam Deck)
 
-Switch to Desktop Mode, open Konsole, give the `deck` user a password once if it has none
-(`passwd`), and run the same command. SteamOS replaces its system files with each update, so
-the installer puts Connect Beyond Borders in `/opt/cbb` instead of `/usr/local`, and
-tells SteamOS which of its files in `/etc` to keep (`/etc/atomic-update.conf.d/cbb.conf`).
-It stays installed and in its group across SteamOS updates.
+1. Switch to **Desktop Mode** and open **Konsole**.
+2. If you have not set a password for the `deck` user, run `passwd` to set one.
+3. Run the Linux installer command:
 
-- `cbb` is in the path of a new Konsole after you log out and in again. `sudo` does not
-  look there, so commands that need it take the whole path:
-  `sudo /opt/cbb/bin/cbb pair`.
-- In Desktop Mode the clipboard syncs as on any KDE Plasma desktop.
-- In Game Mode there is no desktop clipboard, so nothing syncs there; the service keeps
-  running and catches up in Desktop Mode.
-- To remove it: `sudo sh /opt/cbb/share/uninstall.sh`.
+   ```sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+   ```
+
+SteamOS replaces its root filesystem on every OS update, so the installer places Connect Beyond
+Borders in `/opt/cbb` instead of `/usr/local` and registers its `/etc` configuration files in
+`/etc/atomic-update.conf.d/cbb.conf`. Your installation and group membership persist across
+SteamOS updates.
+
+- After you log out and back in, `cbb` is on your `PATH` in Konsole. Because `sudo` does not
+  search `/opt/cbb/bin`, commands that require `sudo` must use the full path, such as
+  `sudo /opt/cbb/bin/cbb pair -code`.
+- In Desktop Mode, the clipboard syncs as on any KDE Plasma desktop.
+- In Game Mode, there is no desktop clipboard, so nothing syncs there; the service stays running
+  and catches up when you return to Desktop Mode.
+- To remove it, run `sudo sh /opt/cbb/share/uninstall.sh`.
 
 ## Mac
 
-Apple silicon or Intel, macOS 14 or later: download `cbb-X.Y.Z.pkg` from the
-[latest release](https://github.com/HunterEwok/cbb/releases/latest) and open it. It
-installs the CBB app in the menu bar and the service, both signed by the project and checked
-by Apple.
+Supported on Apple silicon and Intel Macs running macOS 14 or later.
 
-Or in Terminal, without the app, the same command as on Linux:
+- **Installer package (recommended, includes the menu bar app):** Download `cbb-X.Y.Z.pkg` from
+  the [latest GitHub release](https://github.com/HunterEwok/cbb/releases/latest) and open it. The
+  package installs the **CBB** menu bar app (`/Applications/CBB.app`) and the background service,
+  both signed and notarized.
+- **Terminal (service and `cbb` only, without the menu bar app):**
 
-```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
-```
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+  ```
 
-Or with Homebrew, which also updates it. Run the second line again after each
-`brew upgrade`:
+- **Homebrew (service and `cbb` only, without the menu bar app):**
 
-```sh
-brew install hunterewok/tap/cbb
-sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
-```
+  ```sh
+  brew install hunterewok/tap/cbb
+  sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
+  ```
+
+  Re-run the second command after each `brew upgrade` to restart the service and pasteboard agent
+  on the updated version.
 
 ## Windows
 
-Windows 10 (1809 or later) or 11, x86-64 or ARM64, in a PowerShell opened with "Run as
-administrator":
+Supported on Windows 10 (version 1809 or later) and Windows 11, on x86-64 and ARM64.
 
-```powershell
-irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
-```
+1. Open PowerShell with **Run as administrator**.
+2. Run the installer:
 
-It lets the user signed in at the screen use `cbb` (in a new terminal) and starts the
-clipboard agent for them. Commands that change the group run in a terminal opened as
-administrator, where Linux and macOS use `sudo`.
+   ```powershell
+   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
+   ```
 
-It also installs the tray app, which starts at sign-in and is in the Start menu as
-CBB.
+3. Answer the prompts for Windows Firewall rules and daily automatic updates.
+4. Open a new terminal window to use `cbb`.
 
-With winget, once the package is in winget's repository:
+The installer adds the signed-in user to the `cbb` group, starts the background service and
+clipboard agent, and installs the tray app (started at sign-in and listed in the Start menu as
+**CBB**). Commands that change group membership or settings run in an administrator terminal,
+where Linux and macOS use `sudo`.
+
+To install with **winget** (using the `HunterEwok.cbb` package):
 
 ```powershell
 winget install HunterEwok.cbb
-cbb install           # in the administrator terminal; again after each winget upgrade
+cbb install
 ```
+
+Run `cbb install` in an administrator terminal to install the service, clipboard agent, tray app,
+and firewall rules from the unpacked package, and run it again after each `winget upgrade`.
 
 ## OpenWrt
 
-A router with OpenWrt 25.12 or later and room for a 25 MB program (128 MB of flash or
-more, or eMMC; 256 MB of RAM), as root over SSH:
+Supported on routers running OpenWrt 25.12 or later (using `apk`) with room for a 25 MB program
+(at least 128 MB of flash or eMMC, and 256 MB of RAM).
+
+Connect over SSH as `root` and run:
 
 ```sh
 uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-It installs `cbb` as a service that works only on the `lan` zone and never answers on
-`wan`. The keys live in `/etc/cbb`, which sysupgrade keeps; after an attended
-sysupgrade (ASU, owut), run the command again. Another zone, such as an IoT network, the
-firewall and the checks are in [routers and FreeBSD](../admin/routers.md#openwrt).
+The installer sets up `cbb` (without `cbb-helper`) as a `procd` service that listens on the `lan`
+zone only and never answers on `wan`. Keys live in `/etc/cbb/state`, which `sysupgrade` keeps;
+after an attended sysupgrade (ASU or `owut`), run the install command again. When run in an
+interactive terminal, the installer starts pairing right away (`--no-pair` skips this). For
+additional zones (such as an IoT network), firewall details, and checks, see
+[Routers and FreeBSD](../admin/routers.md#openwrt).
 
-Or from our package feed, which `apk upgrade` then keeps current. The feed's architecture
-follows the router's CPU (`grep DISTRIB_ARCH /etc/openwrt_release`): `arm64` for
-`aarch64_*`, `armv7` for `arm_cortex-a*` with `neon` or `vfp` in the name, `mipsle` for
-`mipsel_*`, `mips` for `mips_*`, `amd64` for `x86_64`. Put yours in place of `arm64` in
-the second line:
+You can also install from the project's `apk` package feed so `apk upgrade` keeps it updated:
 
-```sh
-uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
-echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
-apk update && apk add cbb
-```
+1. Check your router's architecture with `grep DISTRIB_ARCH /etc/openwrt_release` and map it to
+   the feed directory:
+   - `aarch64_*` → `arm64`
+   - `arm_cortex-a*` (with `neon` or `vfp` in the name) → `armv7`
+   - `mipsel_*` → `mipsle`
+   - `mips_*` → `mips`
+   - `x86_64` → `amd64`
+2. Add the feed key and repository (replace `arm64` with your architecture) and install:
 
-`apk del cbb` removes it and keeps the keys in `/etc/cbb`.
+   ```sh
+   uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
+   echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
+   apk update && apk add cbb
+   ```
+
+`apk del cbb` removes the package and keeps the keys in `/etc/cbb`. Note that `mips` and `mipsle`
+router builds sync on the home network only (no sync away from home).
 
 ## FreeBSD
 
-FreeBSD 15, amd64 or arm64, as root (with `sudo` or `doas`):
+Supported on FreeBSD 15 (`amd64` and `arm64`). Run as `root` (with `sudo` or `doas`):
 
 ```sh
 fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-It installs `cbb`, an rc.d script that runs the service through daemon(8), and adds the
-line `cbb_enable="YES"` to rc.conf. The keys live in `/var/db/cbb`.
+The installer installs `cbb`, adds an `rc.d` script that runs the service through `daemon(8)`,
+and adds `cbb_enable="YES"` to `rc.conf`. Keys live in `/var/db/cbb` and settings in
+`/usr/local/etc/cbb`.
 
-On OPNsense the same installer also adds a plugin hook: the service shows under System >
-Diagnostics > Services, and its firewall rules (in pf's anchor `cbb`) follow
-every filter reload. Turn off the mDNS repeater (Services > mDNS Repeater) while it runs:
-both need UDP port 5353, and the service answers mDNS on each home interface itself.
-pfSense is not supported: the installer runs there too, but it prints the firewall rules
-for Firewall > Rules instead of adding them, and an update of pfSense may remove Connect
-Beyond Borders.
-
-On a FreeBSD desktop (X11, or Wayland with the data control protocol, as in KDE, sway and
-Hyprland), the session starts `cbb agent` from XDG autostart and the clipboard joins the
-group; log in again after the install. Remote paste types through XTEST on X11 and the
-virtual keyboard on wlroots desktops; GNOME takes no remote paste on FreeBSD, since without
-logind nothing tells whether its screen is locked.
+- **OPNsense:** The same installer adds a plugin hook so the service appears under
+  **System > Diagnostics > Services** and its firewall rules (in `pf` anchor `cbb`) persist
+  across filter reloads. Turn off **Services > mDNS Repeater** while Connect Beyond Borders runs,
+  because both need UDP port 5353 and the service answers mDNS on each home interface itself.
+- **pfSense (unsupported):** The installer runs on pfSense, prints the rules to add manually
+  under **Firewall > Rules**, and may be removed by a pfSense system update.
+- **FreeBSD desktops:** On X11, or on Wayland compositors with the data-control protocol (such as
+  KDE, sway, and Hyprland), XDG autostart launches `cbb agent` when you log in again. Remote
+  paste uses XTEST on X11 and virtual keyboard on wlroots desktops; GNOME on FreeBSD does not
+  accept remote paste because lock-screen status is unavailable without `logind`.
 
 ## Docker
 
-For a NAS or a home server that is always on
-([image's README](../../packaging/docker/README.md); published with each release from 0.5).
-It joins as an ordinary member: make the group on the phone or a computer you hold.
+For a NAS or an always-on home server without a desktop (see the
+[Docker image README](../../packaging/docker/README.md)). A container joins as an ordinary
+member; create the group on your phone or on a computer you hold.
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/HunterEwok/cbb/main/packaging/docker/compose.home.yaml
 docker compose -f compose.home.yaml up -d
-docker compose -f compose.home.yaml exec cbb cbb pair
+docker compose -f compose.home.yaml exec cbb cbb pair -code
 ```
+
+Open a pairing window on your phone or an admin computer first, then type the six digits when
+`cbb pair -code` prompts for them.
 
 ## The firewall
 
-Connect Beyond Borders needs one TCP port, 8764, and mDNS (UDP 5353), both from the home network
-only. The installer finds the firewall (ufw, firewalld, nftables or iptables on Linux, pf
-or ipfw on FreeBSD, the Mac's application firewall, Windows Firewall), lists each rule, and
-asks
-`Add these rules now? [y/N]`:
+Connect Beyond Borders needs incoming **TCP port 8764** (or your custom member port) and **UDP
+port 5353** (mDNS), from your home network only.
 
-- **Yes**: it adds them, keeps them current on every update and removes them when you
-  uninstall. It never touches other rules.
-- **No** (the default, and when there is no terminal to ask in): it adds nothing and prints
-  the exact commands, for you to run yourself.
-- `--express` (`-Express` on Windows) adds them without asking; `--no-firewall` answers No.
+The installer detects your firewall (`ufw`, `firewalld`, `nftables`, or `iptables` on Linux;
+`pf`, `ipfw`, or OPNsense on FreeBSD; the macOS application firewall; Windows Firewall), lists
+every rule it needs, and prompts `Add these rules now? [y/N]` (`Add this rule now? [y/N]` on
+macOS):
 
-nftables and iptables always get the commands only, since rules added at run time do not
-survive a restart there. On FreeBSD, pf gets the rules in an anchor of their own, which
-pf reads through three marked lines the installer adds at the end of `/etc/pf.conf` and
-removes again; ipfw gets them in rule set 17, added again at each start. If you turn a
-firewall on later, run the installer again.
+- **Yes:** The installer adds the rules, keeps them updated on upgrades, and removes them on
+  uninstall without changing any other rules.
+- **No** (the default, and when no interactive terminal is attached): The installer adds no rules
+  and prints the exact commands for you to run yourself.
+- **Unattended options:**
+  - On Linux, macOS, and FreeBSD: pass `--express` to add rules without asking, or
+    `--no-firewall` to decline and print the commands.
+  - On Windows: set `$env:CBB_FIREWALL = "express"` or `$env:CBB_FIREWALL = "no"` before running
+    `get.ps1` (or pass `-Express` or `-NoFirewall` to `install.ps1`).
 
-**Another port**, if 8764 is taken: `... | sudo sh -s -- --port 9000` (on Windows,
-`$env:CBB_PORT = "9000"` before the installer). The phone app learns the port from the QR
-code.
+Firewall-specific behavior:
 
-All installer options are in the [command reference](../reference/cli.md#installers).
+- `nftables` and `iptables` always print manual commands only, because runtime rules do not
+  survive a reboot.
+- FreeBSD `pf` places the rules in its own `cbb` anchor, loaded through three marked lines added
+  to the end of `/etc/pf.conf` (removed on uninstall). FreeBSD `ipfw` adds them in rule set 17
+  and reloads them on each start.
+- If you enable a firewall after installing Connect Beyond Borders, run the installer again.
+
+To use a different member port when TCP 8764 is already in use:
+
+- On Linux, macOS, FreeBSD, and OpenWrt: pass `--port 9000` (for example,
+  `... | sudo sh -s -- --port 9000`).
+- On Windows: set `$env:CBB_PORT = "9000"` before running `get.ps1` (or pass `-Port 9000` to
+  `install.ps1`).
+
+All installer options are listed in the [command reference](../reference/cli.md#installers).
 
 ## Updating
 
-Releases are signed from 0.6 on. To move to 0.6 from an earlier version, run the install
-command again; from then on `cbb update` does it.
+Keep every device in a group on the same release. See
+[Versions and compatibility](../reference/compatibility.md) for compatibility details.
 
-Keep every device of a group on the same release: 0.6 promises no more than 0.5 did, so
-update them all. A group made with 0.5 is set up again once on 0.6. What works together is in
-[versions and compatibility](../reference/compatibility.md).
+### Manual updates
 
-`sudo cbb update` (on Windows `cbb update` in a terminal opened as administrator) installs
-the newest release on a computer or a small device installed with `get.sh`, `get.ps1` or a
-release archive; `cbb update -check` only says whether there is one. Your settings stay.
-It installs only a release the project signed, and never an older one. If the new version
-does not start within a minute, the previous one comes back by itself. How it checks the
-signatures is in the [protocol](../protocol.md), section 16.
+- **Installed with `get.sh`, `get.ps1`, or a release archive:**
+  - Check for a newer release: `cbb update -check`
+  - Install the newest signed release: `sudo cbb update` (on Windows, run `cbb update` in an
+    administrator terminal; on rootless Linux, run `cbb update` without `sudo`; on SteamOS, run
+    `sudo /opt/cbb/bin/cbb update`).
 
-The installers ask once whether to update automatically (`--auto-update on|off`, or
-`-AutoUpdate on|off` and `$env:CBB_AUTO_UPDATE` on Windows, answer it beforehand);
-`sudo cbb update -auto on|off` changes it later. On, a timer checks once a day at a time of
-its own: a systemd timer on Linux, a launchd job on a Mac, a scheduled task as SYSTEM on
-Windows, cron on OpenWrt and FreeBSD. Each check downloads the same small files from GitHub
-(or from `dl.cbb.tools` when GitHub does not answer), so GitHub learns this device's address
-and that it uses Connect Beyond Borders, as with any download; it sends nothing about the group.
-`sudo cbb update -mirror https://...` takes updates from another mirror instead, which
-needs no trust, since the signatures are checked. The timer's log is `update.log` in
-`/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt),
-`/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update`
-(Mac) or `C:\Program Files\cbb-update` (Windows).
+  `cbb update` keeps your settings and keys, installs only releases signed by the project, refuses
+  older versions, and automatically restores the previous version if the updated service fails to
+  start within one minute. Re-running the original `get.sh` or `get.ps1` command also updates.
+- **Homebrew:** Run `brew upgrade cbb`, then re-run the `install.sh` command from the
+  [Mac](#mac) or [Linux](#linux) section.
+- **winget:** Run `winget upgrade HunterEwok.cbb`, then run `cbb install` in an administrator
+  terminal.
+- **Docker:** Run `docker compose -f compose.home.yaml pull` and recreate the container.
+- **OpenWrt package feed:** Run `apk update && apk upgrade`.
 
-The devices of a group tell each other of the newest signed release any of them has seen, so
-one device's check is enough for `cbb status` and the tray app on the others to say that a
-newer release is out ("Update to X" in the tray app runs `cbb update` as the administrator).
-Each device still checks the signatures itself and downloads its own archive.
+### Automatic updates
 
-Running the same install command again also updates. With Homebrew or winget, upgrade
-there and run the second line again; `cbb update` says so. Docker and the OpenWrt package
-update through `docker compose pull` and `apk upgrade`.
+For `get.sh` and `get.ps1` installations, the installer asks once whether to turn on daily
+automatic updates. You can preset the answer or change it later:
+
+- **During install:** Pass `--auto-update on` or `--auto-update off` to `get.sh`; on Windows, set
+  `$env:CBB_AUTO_UPDATE = "on"` or `"off"` before running `get.ps1` (or pass `-AutoUpdate on|off`
+  to `install.ps1`).
+- **After install:** Run `sudo cbb update -auto on` or `sudo cbb update -auto off` (without
+  `sudo` on rootless Linux; in an administrator terminal on Windows).
+
+When automatic updates are on, a daily schedule checks for signed releases: a `systemd` timer on
+Linux (user timer on rootless), a `launchd` job on macOS, a scheduled task as `SYSTEM` on
+Windows, or `cron` on OpenWrt and FreeBSD.
+
+Each check downloads small signed metadata files from GitHub (falling back to `dl.cbb.tools` if
+GitHub does not answer). GitHub sees the device's IP address and that it requests Connect Beyond
+Borders metadata, but nothing about your group. To use a custom mirror instead, run
+`sudo cbb update -mirror https://...`; the mirror does not need to be trusted because signatures
+are still verified.
+
+Automatic update logs are written to `update.log` in:
+
+| System | Update log directory |
+|---|---|
+| Linux | `/var/lib/cbb-update` |
+| Linux (rootless) | `~/.local/state/cbb-update` |
+| SteamOS | `/opt/cbb-update` |
+| OpenWrt | `/etc/cbb-update` |
+| FreeBSD | `/var/db/cbb-update` |
+| macOS | `/Library/Application Support/cbb-update` |
+| Windows | `C:\Program Files\cbb-update` |
+
+Devices in a group share notices of the newest signed release any of them has seen, so
+`cbb status` and the desktop apps notify you when an update is available. Each device still
+verifies signatures itself and downloads its own archive.
 
 ## Checking a download
 
-The one-line installers check the download against the release's `SHA256SUMS`. Every
-release file also has a build provenance attestation that ties it to this repository and
-the build that made it; with the [GitHub CLI](https://cli.github.com/):
+Every release archive is checked in three ways:
 
-```sh
-gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
-```
+1. **Checksums (`SHA256SUMS`):** Both `get.sh` and `get.ps1` verify the downloaded archive
+   against the release's `SHA256SUMS` file.
+2. **Project release signatures:** Releases are signed with the project's offline root keys and
+   release key (which never touch CI): `keys.json` certifies the release keys under the project's
+   root keys, `release.json` lists each file's size and SHA-256 hash, and `stable.json` names the
+   current stable release ([Protocol](../protocol.md), section 16). Both `get.sh` (using
+   `openssl`) and `get.ps1` carry the project's built-in root keys and refuse to install any
+   release whose signatures do not verify. `get.sh` checks both ES256 and SLH-DSA-SHA2-128s when
+   OpenSSL 3.5 or later is installed (ES256 on older OpenSSL); `get.ps1` checks ES256. To install
+   without checking project signatures, set `CBB_VERIFY=skip`.
+3. **Build provenance attestation:** Every release file has a GitHub build provenance attestation
+   tying it to this repository's release workflow. With the [GitHub CLI](https://cli.github.com/)
+   (`gh`), you can verify any file manually:
 
-`get.sh` checks it by itself when `gh` is installed and signed in for root
-(`sudo gh auth login`); `CBB_ATTESTATION=require` refuses to install without it.
+   ```sh
+   gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
+   ```
 
-Releases are also signed with the project's own keys, which never touch CI (the root keys
-sit on offline hardware keys, the release key in the maintainer's Secure Enclave):
-`keys.json` names the release keys under the project's root keys, `release.json` lists every
-file of the release with its hash, and `stable.json` says which release is current. Once the
-root keys are built into the installers, `get.sh` (with `openssl`) and `get.ps1` check these
-before they install, and refuse a release that is not signed; until then they check
-`SHA256SUMS` and the attestation only. `CBB_VERIFY=skip` installs without the check.
+   Both `get.sh` and `get.ps1` run this check automatically when `gh` is installed and signed in
+   (`gh auth login`; for `get.sh` under `sudo`, run `sudo gh auth login`). Set
+   `CBB_ATTESTATION=require` to refuse installation without a verified attestation, or
+   `CBB_ATTESTATION=skip` to skip the attestation check.
 
 ## Removing it
 
-On Linux and a Mac:
+Run the uninstall command for your system:
 
-```sh
-sudo sh /usr/local/share/cbb/uninstall.sh
-```
+| System | Command or steps |
+|---|---|
+| Linux and macOS | `sudo sh /usr/local/share/cbb/uninstall.sh` |
+| Linux (rootless) | `sh ~/.local/share/cbb/uninstall.sh` |
+| SteamOS | `sudo sh /opt/cbb/share/uninstall.sh` |
+| FreeBSD | `sudo sh /usr/local/share/cbb/uninstall.sh` (or with `doas`) |
+| OpenWrt | `sh /usr/share/cbb/uninstall.sh` (or `apk del cbb` if installed from the feed) |
+| Windows | Open **Settings > Apps > CBB > Uninstall**, or run `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1"` as administrator |
 
-On SteamOS it is `sudo sh /opt/cbb/share/uninstall.sh`. With Homebrew, run
-`brew uninstall cbb` after it.
+If you installed with Homebrew, run the uninstall script first and then run `brew uninstall cbb`.
 
-On Windows: Settings, Apps, "CBB", Uninstall.
+Uninstalling removes the program, background service, clipboard agent, update timer, firewall
+rules added by the installer, and (on macOS) `/Applications/CBB.app` if installed from the
+`.pkg`. Your device's keys and group state stay on disk so reinstalling rejoins the same group.
 
-This removes the program, the service, the firewall rules the installer added and, on a Mac,
-the app the `.pkg` installed. The device's keys stay, so installing again brings it back into its group. To delete them too,
-add `--purge` (`-Purge` on Windows, with
-`powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`),
-then remove the device from the group on another one (`sudo cbb remove NAME`, or on the
-phone). To leave the group and keep CBB, run `sudo cbb leave` instead: it deletes the keys
-and the group's files, and the device can join a group again.
+- **Delete keys and group state too:** Add `--purge` on Unix systems, or run `uninstall.ps1
+  -Purge` in an administrator PowerShell on Windows. Afterward, remove the device from the group
+  on an admin device (`sudo cbb remove NAME` or in the phone app).
+- **Leave the group without uninstalling:** Run `sudo cbb leave` (without `sudo` on rootless
+  Linux, or `cbb leave` in an administrator terminal on Windows). This deletes the device's keys
+  and group files while keeping Connect Beyond Borders installed so the device can join a group
+  again.

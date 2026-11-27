@@ -52,7 +52,7 @@ final class PadUITests: XCTestCase {
         XCTAssertTrue(mac.waitForExistence(timeout: 10))
         mac.tap()
         XCTAssertTrue(app.buttons["Close"].waitForExistence(timeout: 10), "the card opens beside the tiles")
-        XCTAssertTrue(mac.becomesSelected(), "the chosen tile is marked")
+        XCTAssertTrue(mac.becomesSelected(timeout: 20), "the chosen tile is marked")
         picture("pad-home-card")
 
         // The next tile is found by its own label before the key: found for
@@ -68,7 +68,11 @@ final class PadUITests: XCTestCase {
         // screen to stand still, as a person sees it before pressing.
         app.settle("the card")
         app.typeKey(.rightArrow, modifierFlags: [])
-        XCTAssertTrue(thinkpad.becomesSelected(), "the right arrow chooses the next device")
+        // One snapshot of the accessibility tree takes 4 to 12 seconds on
+        // CI's small machine, so the wait ends at the change, not at 5
+        // seconds (CI's video, 2026-11-24: the tile stood chosen 2 seconds
+        // after the key, and the first snapshot came back after the limit).
+        XCTAssertTrue(thinkpad.becomesSelected(timeout: 20), "the right arrow chooses the next device")
 
         app.settle("the next device's card")
         app.typeKey(.simulatorEscape, modifierFlags: [])

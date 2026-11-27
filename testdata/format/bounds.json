@@ -191,7 +191,7 @@
       ],
       "refusal": "",
       "value": 65552,
-      "widest": "a segment and its AES-256-GCM tag, the unit a fetch gets"
+      "widest": "a segment and its ChaCha20-Poly1305 tag, the unit a fetch gets"
     },
     {
       "class": "frozen",
@@ -613,7 +613,7 @@
       ],
       "refusal": "records/revoke/keys",
       "value": 256,
-      "widest": "keys of a settings record"
+      "widest": "keys of a revoke or freeze record, or records a thaw or resolve names"
     },
     {
       "class": "stated",

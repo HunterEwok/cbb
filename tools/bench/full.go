@@ -324,9 +324,9 @@ func containerCases(ctx context.Context, r *Report, g *benchGroup, d *Device, ti
 				}
 				if err == nil {
 					var mode string
-					mode, err = Run(ctx, d, cbbCmd(d)+" mode", "")
-					if err == nil && !strings.HasPrefix(mode, "Sync mode shared") {
-						err = fmt.Errorf("%s came back with %q, not in mode shared", d.Name, firstLine(mode))
+					mode, err = Run(ctx, d, cbbCmd(d)+" sync", "")
+					if err == nil && !strings.HasPrefix(mode, "Sync is on") {
+						err = fmt.Errorf("%s came back with %q, not with sync on", d.Name, firstLine(mode))
 					}
 				}
 				return err

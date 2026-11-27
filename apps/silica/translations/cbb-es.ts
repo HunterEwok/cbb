@@ -1258,8 +1258,8 @@
         <translation>Crear un grupo</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
-        <translation>Haz administrador a otro teléfono pronto: si pierdes este, un teléfono administrador mueve el grupo a sí mismo.</translation>
+        <source>Save the group's recovery key soon: if this phone is lost, another phone moves the group to itself with it.</source>
+        <translation>Guarda pronto la clave de recuperación del grupo: si pierdes este teléfono, otro teléfono mueve el grupo a sí mismo con ella.</translation>
     </message>
     <message>
         <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
@@ -1829,8 +1829,8 @@
         <translation>CBB %1 está disponible.</translation>
     </message>
     <message>
-        <source>Check that the base is on and online.</source>
-        <translation>Comprueba que la base está encendida y conectada.</translation>
+        <source>Check that the hub is on and online.</source>
+        <translation>Comprueba que el hub está encendido y conectado.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
@@ -1857,8 +1857,8 @@
         <translation>Todo se sincroniza.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no base.</source>
-        <translation>En todas partes está activado, pero el grupo no tiene base.</translation>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>En todas partes está activado, pero el grupo no tiene hub.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1877,8 +1877,8 @@
         <translation>Permite CBB en el cortafuegos de este ordenador.</translation>
     </message>
     <message>
-        <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>Haz que un ordenador de casa sea la base, en su configuración avanzada.</translation>
+        <source>Make a computer at home the hub, on its page in the app.</source>
+        <translation>Haz que un ordenador de casa sea el hub, en su página de la app.</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1921,16 +1921,8 @@
         <translation>La sincronización está desactivada en: %1.</translation>
     </message>
     <message>
-        <source>The backup server does not answer.</source>
-        <translation>El servidor de respaldo no responde.</translation>
-    </message>
-    <message>
-        <source>The base %1 does not answer.</source>
-        <translation>La base %1 no responde.</translation>
-    </message>
-    <message>
-        <source>The connection server does not take this base.</source>
-        <translation>El servidor de conexión no acepta esta base.</translation>
+        <source>The forwarder does not take this hub.</source>
+        <translation>El reenviador no acepta este hub.</translation>
     </message>
     <message>
         <source>The group has records of a newer version.</source>
@@ -1961,8 +1953,12 @@
         <translation>La clave de recuperación del grupo se usó dos veces, así que el grupo se detuvo para siempre.</translation>
     </message>
     <message>
-        <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>La lista de puntos de entrada de los servidores de conexión está desactualizada.</translation>
+        <source>The hub %1 does not answer.</source>
+        <translation>El hub %1 no responde.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>La lista de puntos de entrada de los reenviadores está desactualizada.</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1973,8 +1969,12 @@
         <translation>Los registros del dispositivo principal esperan registros que ningún dispositivo ha transmitido.</translation>
     </message>
     <message>
-        <source>The tunnel to the base %1 does not get through.</source>
-        <translation>El túnel a la base %1 no consigue pasar.</translation>
+        <source>The relay does not answer.</source>
+        <translation>El relé no responde.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>El túnel al hub %1 no consigue pasar.</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -1997,8 +1997,8 @@
         <translation>Este dispositivo está silenciado: sus copias no llegan al grupo.</translation>
     </message>
     <message>
-        <source>This device is the base, and no device has connected yet.</source>
-        <translation>Este dispositivo es la base y aún no se ha conectado ningún dispositivo.</translation>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>Este dispositivo es el hub y aún no se ha conectado ningún dispositivo.</translation>
     </message>
     <message>
         <source>This device was removed from the group.</source>
@@ -2013,8 +2013,8 @@
         <translation>Este es el único dispositivo del grupo.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>Esta red puede bloquear túneles: activa Redes estrictas en la base.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the hub.</source>
+        <translation>Esta red puede bloquear túneles: activa Redes estrictas en el hub.</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>

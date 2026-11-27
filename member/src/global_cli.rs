@@ -26,12 +26,15 @@ const PROJECT_FORWARDER: &str = "cbb.tools:8764";
 const PROJECT_RELAY: &str = "cbb.tools:8765";
 const PROJECT: &str = "default";
 
-/// What a user agrees to before a device whose keys sit in files syncs away
-/// from home (docs/design.md, "Turning it on, step by step").
-pub(crate) const KEYS_WARNING: &str = "Sync away from home lets this device reach the group's hub from the internet,
+/// What a user agrees to before a device syncs away from home
+/// (docs/design.md, "Turning it on, step by step").
+const AWAY_NOTICE: &str = "Sync away from home lets this device reach the group's hub from the internet,
 through the group's own WireGuard tunnel, with the clipboard encrypted end to end.
 
-This device keeps its keys in files, not in a security chip. Whoever copies those
+";
+
+/// What the user agrees to as well where the device's keys sit in files.
+const KEYS_WARNING: &str = "This device keeps its keys in files, not in a security chip. Whoever copies those
 files (with root on this device, from its disk or memory card, or from an
 unencrypted backup) can act as this device from anywhere until you remove it from
 the group. To keep that from happening:
@@ -42,6 +45,21 @@ the group. To keep that from happening:
     or someone else may have had root on it.
 
 ";
+
+/// The consent's text for this device: the notice, and the warning when its
+/// keys sit in files or the service does not say where they are.
+fn away_consent(g: &Global) -> String {
+    let in_files = request(g, &Message::new(Header { op: "devices".into(), ..Default::default() }, Vec::new()))
+        .ok()
+        .and_then(|m| m.header.devices.into_iter().find(|d| d.this))
+        .is_none_or(|d| keys_in_files(&d.store));
+    if in_files { format!("{AWAY_NOTICE}{KEYS_WARNING}") } else { AWAY_NOTICE.to_string() }
+}
+
+/// Whether a device's key store, as the service's list of devices names it, is a file.
+fn keys_in_files(store: &str) -> bool {
+    !matches!(store, "hardware" | "proven")
+}
 
 /// What a blind relay learns, said before the user agrees to meet there
 /// (docs/design.md, "Blind relay").
@@ -96,8 +114,8 @@ fn usage_text() -> String {
        cbb global relay default|address:port -key KEY [address:port -key KEY...] [-yes]
                                       meet the group's other devices at a blind relay, for a group
                                       without a hub: the project's ({PROJECT_RELAY}) or these, up to
-                                      16; in a group of 0.6 on the root, which signs them for the group
-       cbb global relay off           in a group of 0.6, on the root: the group meets at no relay
+                                      16; on the root, which signs them for the group
+       cbb global relay off           on the root: the group meets at no relay
        cbb global hubs DEVICE...      on the root, or an admin that may be a hub: the group's main
                                       hubs, in the order they serve, before the others
        cbb global allow               let this computer's service reach the group's servers as they
@@ -282,7 +300,7 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
                 return Err(usage(usage_text()));
             }
             net.check()?;
-            confirm(&format!("{KEYS_WARNING}Type yes to turn sync away from home on: "))?;
+            confirm(&format!("{}Type yes to turn sync away from home on: ", away_consent(g)))?;
             h.consent = true;
         }
         "off" => {
@@ -372,7 +390,8 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
                     }
                     print!("A hub needs sync away from home, so this turns it on here first, where it is off.\n\n");
                     confirm(&format!(
-                        "{KEYS_WARNING}Type yes to turn sync away from home on and make this device a hub: "
+                        "{}Type yes to turn sync away from home on and make this device a hub: ",
+                        away_consent(g)
                     ))?;
                     h.consent = true;
                 }
@@ -434,7 +453,7 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
                 // The relay turns sync away from home on where it is off,
                 // and the same yes agrees to that.
                 if status_now(g).is_ok_and(|s| s.away.is_none()) {
-                    print!("This turns sync away from home on here as well.\n\n{KEYS_WARNING}");
+                    print!("This turns sync away from home on here as well.\n\n{}", away_consent(g));
                 }
                 confirm("Type yes to meet at this relay: ")?;
             }
@@ -724,6 +743,14 @@ mod tests {
 
     fn strings(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Only keys in a security chip spare the user the warning about keys
+    /// in files; a store the service does not name gets it.
+    #[test]
+    fn the_warning_follows_the_key_store() {
+        assert!(!keys_in_files("hardware") && !keys_in_files("proven"));
+        assert!(keys_in_files("file") && keys_in_files("rootless") && keys_in_files(""));
     }
 
     #[test]

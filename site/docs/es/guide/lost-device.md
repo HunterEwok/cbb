@@ -1,65 +1,97 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e056f57a7649 -->
+<!-- source: 3475f09f1379 -->
 # Si se pierde o roban un dispositivo
 
-Para quien ha perdido un teléfono, un ordenador u otro dispositivo del grupo. Quítalo del grupo en cuanto puedas; los demás dispositivos siguen en el grupo y continúan sincronizando.
+Para cualquiera cuyo teléfono, ordenador u otro dispositivo del grupo se haya perdido o haya sido robado. En esta página quitas el dispositivo perdido, congelas un ordenador administrador robado, mueves el grupo a un nuevo dispositivo principal si has perdido el dispositivo principal y desactivas funciones remotas en tus demás dispositivos.
 
-## 1. Quítalo
+Quita un dispositivo desaparecido en cuanto notes que falta. Tus demás dispositivos permanecen en el grupo y siguen sincronizando sin necesidad de volver a emparejarlos.
 
-En un teléfono que sea administrador, pulsa el dispositivo perdido en **Inicio** y luego **Remove**. En un ordenador administrador:
+## 1. Quita el dispositivo perdido
 
-```sh
-sudo cbb remove NAME     # NAME, or the device ID, as cbb status shows it
-```
+Quitar un dispositivo difunde un registro de eliminación firmado para que todos los demás dispositivos rechacen sus conexiones y dejen de sellar copias para él. Solo el **dispositivo principal** (llamado *root* en las herramientas de línea de comandos) o un **teléfono administrador** pueden quitar a otro administrador; un ordenador administrador solo quita miembros ordinarios.
 
-Todos los dispositivos del grupo se enteran y dejan de hablar con el perdido. Solo la raíz, o un teléfono administrador, quita a un administrador.
+- **En el dispositivo principal o en un teléfono administrador:**
+  1. Abre **CBB** y toca el dispositivo perdido en **Inicio**.
+  2. Toca **Quitar** y confirma con tu cara, huella, código o (en Aurora OS) tu PIN de administrador.
+- **En el dispositivo principal o en un ordenador administrador (terminal):**
+
+  ```sh
+  sudo cbb remove NAME
+  ```
+
+  Sustituye `NAME` por el nombre del dispositivo o el ID del dispositivo que muestra `cbb status` (omite `sudo` en una terminal de administrador en Windows).
+- **En la app para Mac o la app de la bandeja (dispositivo principal o administrador):** Abre el panel de detalles del dispositivo perdido, haz clic en **Quitar** y confirma.
+
+**Resultado:** Todos los dispositivos conectados rechazan el dispositivo quitado de inmediato, y los dispositivos desconectados lo rechazan en cuanto vuelven a conectarse. Un dispositivo quitado solo puede volver a unirse emparejándose de nuevo como un dispositivo nuevo.
 
 ## 2. Si era un ordenador administrador: congélalo primero
 
-Las claves de un ordenador administrador pueden firmar. Si puede estar en manos de otra persona, congélalo desde cualquier administrador, para que nada de lo que firme a partir de ahora cuente, y luego quítalo:
+Un ordenador administrador puede firmar cambios del grupo y enviar órdenes. Si un ordenador administrador puede estar en manos de otra persona y no tienes a mano el dispositivo principal ni un teléfono administrador para quitarlo, congélalo primero desde cualquier dispositivo administrador.
 
-```sh
-sudo cbb freeze NAME
-```
+1. Ejecuta en cualquier dispositivo administrador:
+   - **Terminal:** `sudo cbb freeze NAME`
+   - **App del teléfono o de escritorio:** Abre el ordenador administrador en **Inicio**, selecciona **Congelar** y confirma.
 
-Un administrador congelado no puede congelar a la raíz ni a un teléfono administrador. Si lo congela a su vez, ambos siguen congelados hasta que la raíz decida (`cbb unfreeze` o `cbb remove` en la raíz, o **Unfreeze** y **Remove** en el teléfono raíz).
+   **Resultado:** Nada de lo que firme el administrador congelado cuenta a partir de ese momento, y todos los demás dispositivos rechazan sus conexiones. Un administrador congelado no puede congelar al dispositivo principal ni a un teléfono administrador.
 
-## 3. Si era la raíz: asume el grupo
+2. En cuanto tengas el dispositivo principal o un teléfono administrador, quita el ordenador congelado (paso 1).
 
-La raíz guarda la clave raíz del grupo. Cuando falta, otro dispositivo del grupo pasa a ser la
-raíz con la **clave de recuperación** del grupo, la hoja o la YubiKey que guardaste al crear el
-grupo, y todos los demás dispositivos siguen en el grupo:
+Si dos ordenadores administradores se congelan entre sí antes de enterarse de la congelación del otro, ambos permanecen congelados hasta que el dispositivo principal decida: ejecuta `sudo cbb unfreeze NAME` o `sudo cbb remove NAME` en el ordenador principal, o elige **Descongelar** o **Quitar** en el teléfono principal.
 
-- con teléfonos: en tu otro teléfono, abre la recuperación en la app y dale la clave de
-  recuperación;
-- con ordenadores: en otro ordenador del grupo, `sudo cbb recovery` con la hoja de
-  recuperación (`sudo cbb recovery -yubikey` con la YubiKey), nombrando el dispositivo
-  perdido con `-leave NAME`.
+## 3. Si era el dispositivo principal: mueve el grupo
 
-Muestra quién se queda y quién sale y pregunta una vez; el cambio vale al instante, y desde
-entonces el grupo rechaza el dispositivo perdido. Nadie asume el grupo sin la clave de
-recuperación, ni siquiera un administrador.
+El **dispositivo principal** guarda la clave principal del grupo. Si el dispositivo principal se pierde o se estropea, mueve el grupo a otro dispositivo que ya esté en el grupo usando la **clave de recuperación** de tu grupo: la hoja de recuperación impresa o la YubiKey que guardaste cuando creaste el grupo.
 
-Sin la clave de recuperación el grupo no se puede asumir: crea un grupo nuevo y añade los
-dispositivos otra vez. Por eso la app pregunta cómo guardarla en cuanto se crea el grupo.
+Nadie puede mover el grupo sin la clave de recuperación, ni siquiera un administrador. Si no tienes la clave de recuperación, no puedes mover el grupo: abandona el grupo antiguo en cada dispositivo que te quede (`sudo cbb leave` o **Abandonar el grupo** en la app), crea un grupo nuevo y vuelve a emparejar tus dispositivos.
 
-## 4. Desactiva lo que podía alcanzar
+### Mover el grupo a un teléfono del grupo
 
-Quitar el dispositivo basta para el grupo. Si todavía no puedes quitarlo, o quieres estar seguro de los demás dispositivos, un administrador también puede desactivar a distancia:
+1. En otro teléfono que ya esté en tu grupo, abre **CBB** y ve a **Ajustes > Mover el grupo a este teléfono**.
+2. Proporciona la clave de recuperación:
+   - **Hoja de recuperación:** Escanea el código QR de la hoja o escribe su texto.
+   - **YubiKey:** Acerca la YubiKey al teléfono (NFC) o conéctala al puerto USB-C (en Aurora OS, solo por USB-C), introduce su PIN y toca la YubiKey cuando te lo pida.
+3. Revisa la lista de dispositivos del grupo y desmarca el dispositivo principal perdido (y cualquier otro dispositivo que quieras excluir).
+4. Toca **Hacer de este teléfono el dispositivo principal** y confirma con tu cara, huella, código o (en Aurora OS) tu PIN de administrador.
 
-| Qué | Comando en un ordenador administrador |
-|---|---|
-| [Pegado remoto](remote-paste.md) en un dispositivo, o en todos | `cbb paste-receive off -on DEVICE`, `-all` |
-| [Acciones rápidas](quick-actions.md) en un dispositivo, o en todos | `cbb action off -on DEVICE`, `-all` |
-| Sincronización fuera de casa en un dispositivo | `cbb global off -on DEVICE` |
+**Resultado:** Este teléfono pasa a ser de inmediato el dispositivo principal del grupo con una clave principal nueva. Cada dispositivo marcado sigue en el grupo y sigue al nuevo dispositivo principal en cuanto se conecta; cada dispositivo sin marcar queda excluido y el grupo lo rechaza.
 
-Un teléfono administrador ofrece lo mismo en la página del dispositivo, y un reloj administrador también puede enviar estas órdenes. Solo el propio usuario de cada dispositivo vuelve a activarlas.
+### Mover el grupo a un ordenador del grupo
 
-## Qué obtiene un ladrón
+1. En otro ordenador de tu grupo, abre una terminal (como administrador en Windows) y ejecuta:
+   - **Con la hoja de recuperación:**
 
-Depende de dónde guardaba el dispositivo sus claves ([claves y atestación](keys.md)):
+     ```sh
+     sudo cbb recovery -leave LOST-DEVICE
+     ```
 
-- **Claves en hardware** (teléfonos, Mac con Secure Enclave, ordenadores con TPM): nada que copiar. Las claves firman solo en ese dispositivo, y las claves de raíz y de administrador de un teléfono firman solo tras tu cara, tu huella o tu código.
-- **Claves en un archivo** (Mac con Intel sin el chip T2, PC con Windows y ordenadores Linux sin TPM, dispositivos pequeños): quien copie el archivo puede actuar como ese dispositivo hasta que lo quites. Cifra el disco (FileVault, BitLocker, LUKS) para que un dispositivo robado no revele nada.
+   - **Con una YubiKey** (requiere `pcscd` en Linux y FreeBSD):
 
-El historial del portapapeles no se guarda en los dispositivos, y un secreto desaparece 60 segundos después de copiarlo.
+     ```sh
+     sudo cbb recovery -yubikey -leave LOST-DEVICE
+     ```
+
+   Repite `-leave NAME` por cada dispositivo que quieras excluir. También puedes iniciar este proceso en la app para Mac o en la app de la bandeja con **Mover el grupo a este Mac** / **Mover el grupo a este ordenador**.
+2. Revisa quién se queda y quién sale, confirma y luego escribe la clave de recuperación de la hoja por la entrada estándar (o introduce el PIN de la YubiKey y tócala cuando parpadee).
+
+**Resultado:** El servicio del ordenador se reinicia como el nuevo dispositivo principal del grupo, conserva todos los dispositivos incluidos y rechaza todos los dispositivos excluidos. El ordenador descarta la clave de recuperación después del cambio.
+
+## 4. Desactiva funciones remotas si hace falta
+
+Quitar el dispositivo perdido le impide actuar en tu grupo. Si no puedes quitarlo enseguida, o quieres proteger de inmediato tus demás dispositivos, cualquier administrador puede desactivar estas funciones desde otro dispositivo:
+
+| Función | Comando en un ordenador administrador | En la app de un teléfono administrador |
+|---|---|---|
+| [Pegado remoto](remote-paste.md) | `sudo cbb paste-receive off -on DEVICE` (o `-all`) | Abre la página del dispositivo y desactiva el pegado remoto |
+| [Acciones rápidas](quick-actions.md) | `sudo cbb action off -on DEVICE` (o `-all`) | Abre la página del dispositivo y toca **Desactivar todo** |
+| [Sincronizar fuera de casa](away-from-home.md) | `sudo cbb global off -on DEVICE` | Abre la página del dispositivo y desactiva la sincronización fuera de casa |
+
+**Resultado:** Los dispositivos afectados desactivan esas funciones de inmediato. Solo el propio usuario de cada dispositivo puede volver a activarlas localmente.
+
+## A qué puede acceder un ladrón
+
+Lo que puede obtener alguien que robe tu dispositivo depende de dónde guarde ese dispositivo sus claves (consulta [Claves y atestación](keys.md)):
+
+- **Claves en hardware** (teléfonos con chip de seguridad, Mac con Apple silicon o chip T2, y PC Linux o Windows con TPM 2.0): Las claves no se pueden copiar fuera del dispositivo. En los teléfonos, las claves principal y de administrador solo firman tras tu cara, huella, código o (en Aurora OS) tu PIN de administrador.
+- **Claves en archivos** (Mac con Intel sin chip T2, PC Linux y Windows sin TPM, FreeBSD, dispositivos pequeños, teléfonos con Aurora OS 4 y Sailfish OS, e instalaciones sin root en Linux): Cualquiera que pueda leer el disco puede copiar los archivos de clave y hacerse pasar por ese dispositivo hasta que lo quites. Mantén activado el cifrado completo del disco (FileVault, BitLocker o LUKS).
+
+Connect Beyond Borders no guarda historial del portapapeles. Las copias ordinarias caducan tras la duración de copia del grupo (5 minutos por defecto), y los secretos permanecen solo en memoria y caducan tras 60 segundos por defecto.

@@ -70,7 +70,9 @@ pub(crate) fn rename(g: &Global, args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// cbb takeover, on an admin, or -delay on the root.
+/// cbb takeover and cbb takeover -delay. On the records of 0.6 the root
+/// changes only with the recovery key (D-117): the service answers both
+/// with an error that points to cbb recovery, which is what they print.
 pub(crate) fn takeover(g: &Global, args: &[String]) -> Result<()> {
     if args.first().is_some_and(|a| a == "-delay") {
         let [d] = &args[1..] else {
@@ -80,22 +82,10 @@ pub(crate) fn takeover(g: &Global, args: &[String]) -> Result<()> {
             return Err(usage("cbb takeover -delay <duration>, from 0s to 168h, as 72h"));
         }
         ask(g, Header { value: d.clone(), ..header("takeover_delay") })?;
-        println!(
-            "{}",
-            tr!("A claim to take the group over now waits {} on each member, from when it first holds the claim.", d)
-        );
         return Ok(());
     }
     let name = one_device(args, "cbb takeover <name or device ID of the lost root>; cbb status shows it")?;
-    let m = ask(g, Header { device: name.into(), ..header("take_over") })?;
-    println!(
-        "{}",
-        tr!(
-            "Claimed the group from {}. This device becomes its root when the waiting time ends (72 hours unless the root set another), unless the root cancels the claim; cbb status shows the time left.",
-            m.header.name
-        )
-    );
-    println!("{}", tr!("Then it removes the old root."));
+    ask(g, Header { device: name.into(), ..header("take_over") })?;
     Ok(())
 }
 
@@ -284,20 +274,11 @@ pub(crate) fn resolve(g: &Global, args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// cbb handover, on the group's root.
+/// cbb handover: like cbb takeover, the service answers it with an error
+/// that points to cbb recovery (D-117).
 pub(crate) fn handover(g: &Global, args: &[String]) -> Result<()> {
-    let name = one_device(
-        args,
-        "cbb handover <name or device ID of an admin>; on the group's root, it lets that admin take the group over at once",
-    )?;
-    let m = ask(g, Header { device: name.into(), ..header("hand_over") })?;
-    println!(
-        "{}",
-        tr!(
-            "Handed the group over to {}: when it claims the group, its claim takes effect at once and it becomes the root.",
-            m.header.name
-        )
-    );
+    let name = one_device(args, "cbb handover <name or device ID of an admin>; cbb status shows it")?;
+    ask(g, Header { device: name.into(), ..header("hand_over") })?;
     Ok(())
 }
 
@@ -528,17 +509,9 @@ pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
         );
         return Ok(());
     }
-    println!(
-        "{}",
-        tr!(
-            "Claimed the group with its recovery key. This device becomes the group's root when the waiting time ends (72 hours unless the root set another), unless the root phone cancels the claim; cbb status shows the time left."
-        )
-    );
-    println!(
-        "{}",
-        tr!("Then a new phone joins it (cbb pair -admin), and cbb handover gives that phone the group at once.")
-    );
-    Ok(())
+    // A recovery that the service did not finish says so, rather than
+    // ending without a word.
+    Err(Error::msg("the service did not make this device the group's root; cbb status shows the group"))
 }
 
 #[cfg(test)]

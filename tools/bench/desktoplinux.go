@@ -268,7 +268,7 @@ func tpmKeys(ctx context.Context, r *Report, g *benchGroup, l *Device) {
 			return Skipped(l.Name + " has no TPM")
 		}
 		return eventually(ctx, 60*time.Second, func() error {
-			list, err := Run(ctx, g.hub, cbbCmd(g.hub)+" devices", "")
+			list, err := Run(ctx, g.hub, cbbCmd(g.hub)+" status", "")
 			if err != nil {
 				return err
 			}

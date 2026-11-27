@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The devices of the group as `cbb devices`, `cbb status` and the apps
+//! The devices of the group as `cbb status` and the apps
 //! show them (`control::Device`), from the records of 0.6 (`State`) and
 //! the hellos of the devices connected now. What a device may do comes
 //! from its record; what it says of itself (its form, versions, mode and

@@ -1,65 +1,69 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fc79c2973911 -->
+<!-- source: 09c16892691e -->
 # Claves y atestación
 
-Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es, y las claves de la raíz y de los administradores añaden y quitan dispositivos. El lugar donde un dispositivo guarda sus claves decide lo que se lleva un ladrón con él. Esta página dice dónde guarda las suyas cada tipo de dispositivo, cómo puede comprobarlo el grupo y qué nivel de rigor elegir. Las reglas exactas están en el [protocolo](../protocol.md), sección 17.
+Para cualquiera que quiera entender dónde guarda cada dispositivo sus claves criptográficas, cómo demuestran los dispositivos que sus claves viven en hardware de seguridad y qué **nivel de claves** elegir para su grupo. Para la especificación completa del protocolo, consulta [Protocolo](../protocol.md), sección 17, y [Criptografía](../cryptography.md).
 
-> Hecho y probado en CI con un TPM por software; en dispositivos reales, por ahora solo el Secure Enclave del iPhone y Windows en una máquina virtual. La [tabla de estado](../../README.md#status) del README dice qué se ha probado y dónde.
+Cada dispositivo de un grupo guarda una **clave de miembro** que demuestra su identidad ante tus demás dispositivos. El **dispositivo principal** (llamado *root* en las herramientas de línea de comandos) guarda la clave principal del grupo, y cada **administrador** guarda una clave de administrador que firma cambios y órdenes del grupo. El lugar donde un dispositivo guarda esas claves determina qué puede extraer un atacante si el dispositivo es robado.
 
-## Dónde viven las claves
+## Dónde guarda cada dispositivo sus claves
 
-| Dónde | Dispositivos | Qué se lleva un ladrón |
-|---|---|---|
-| **En un archivo** | Mac con Intel sin el chip T2, PC con Windows y ordenadores Linux sin TPM, dispositivos pequeños | una copia del archivo, que funciona en cualquier sitio hasta que un administrador quita el dispositivo |
-| **En hardware** | iPhone (Secure Enclave), teléfonos Android (Keystore: StrongBox o el TEE), Mac con Apple silicon o el chip T2 (Secure Enclave), ordenadores Linux y PC con Windows con TPM | nada que copiar: la clave firma solo en ese dispositivo, y en un teléfono las claves de la raíz y de los administradores solo tras tu cara, tu huella o tu código |
-| **Hardware demostrado** | un teléfono Android cuya clave comprobó la raíz del grupo | lo mismo que el hardware, y el grupo sabe que es verdad, no solo que el dispositivo lo dice |
+La lista de dispositivos en las apps y la columna `KEYS` de `cbb status` muestran el nivel de almacenamiento de claves de cada dispositivo: **verificado** (`proven hardware`), **hardware** (`hardware`), **archivo** (`in a file`) o **sin root** (`in a file, rootless`).
 
-La lista de dispositivos de las apps y `cbb status` (la columna KEYS) muestran cuál tiene cada dispositivo.
+| Dispositivo | Dónde viven las claves de miembro, administrador y principal | Confirmación antes de firmar como principal/administrador | Nivel de almacenamiento mostrado | Qué se puede llevar un ladrón |
+|---|---|---|---|---|
+| **iPhone y iPad** | Secure Enclave (hardware) | Face ID, Touch ID o código | `hardware` | Nada que copiar; las claves solo firman en ese dispositivo tras desbloquearlo |
+| **Teléfono o tableta Android** (gestor de arranque bloqueado, sistema verificado) | Android Keystore (StrongBox o TEE, hardware) | Huella, rostro o bloqueo de pantalla (exigido por Keystore) | `proven hardware` | Nada que copiar; además, el grupo verifica la prueba de hardware sin conexión |
+| **Teléfono o tableta Android** (gestor de arranque desbloqueado o sistema con firma propia como GrapheneOS) | Android Keystore (StrongBox o TEE, hardware) | Huella, rostro o bloqueo de pantalla | `hardware` | Nada que copiar; las raíces de Google no pueden avalar la verificación del sistema operativo |
+| **Teléfono con Aurora OS 5** | Elemento seguro OP-TEE (hardware) | PIN de administrador propio de la app (al menos 6 dígitos al crearlo; 7 intentos fallidos bloquean la clave de administrador para siempre) | `hardware` | Nada que copiar; la clave de miembro sincroniza sin PIN y la clave de administrador/principal requiere PIN |
+| **Teléfono con Aurora OS 4 y Sailfish OS** | Archivo de la app en el teléfono | Ninguna por hardware | `in a file` | Una copia del archivo de clave, utilizable en cualquier sitio hasta que se quite el dispositivo |
+| **Teléfono o tableta con HarmonyOS 5+** | HUKS (TEE, hardware) | Rostro, huella o PIN (User Authentication Kit) | `hardware` | Nada que copiar; las claves solo firman en ese dispositivo tras autenticarse |
+| **Mac con Apple silicon o chip T2** | Secure Enclave (hardware); secretos locales y del túnel sellados por el Secure Enclave | Touch ID de macOS o contraseña de administrador mediante el aviso del sistema | `hardware` | Nada que copiar; las claves solo firman en ese Mac |
+| **Mac con Intel sin chip T2** | Archivos de estado del servicio (`/Library/Application Support/cbb/state`) | Contraseña de administrador de macOS | `in a file` | Una copia de los archivos de clave si se puede leer el disco; cífralo con FileVault |
+| **PC Linux o Windows con TPM 2.0 y `cbb-helper`** | TPM 2.0 (hardware); secretos locales y del túnel sellados por el TPM | polkit en Linux o Windows Hello / aviso de administrador | `proven hardware` (con certificado EK en el chip) o `hardware` | Nada que copiar; las claves solo firman en ese PC |
+| **PC Linux o Windows sin TPM, FreeBSD, OpenWrt, OPNsense, dispositivos pequeños sin `cbb-helper`, Docker** | Archivos de estado del servicio (legibles solo por la cuenta del servicio) | Privilegios de administrador (`sudo` o terminal de administrador) | `in a file` | Una copia de los archivos de clave si se puede leer el disco o volumen; cifra el disco (LUKS, BitLocker) |
+| **Instalación sin root en Linux (`--rootless`)** | Archivos de usuario en `~/.local/state/cbb` | Ninguna (cualquier programa de tu usuario puede leerlos) | `in a file, rootless` | Cualquier programa que se ejecute bajo tu cuenta puede copiar los archivos de clave; nunca dispositivo principal, administrador ni hub |
 
-## Cómo se demuestra una clave
+Configurar `CBB_TPM=off` en un ordenador guarda las claves recién generadas en archivos en lugar de en hardware. Un contenedor Docker rechaza guardar claves principales o de administrador salvo que definas `CBB_KEYS_IN_FILE=yes` en su entorno.
 
-Un dispositivo puede decir que su clave está en hardware, pero un programa modificado también podría decirlo. Algunos tipos de hardware pueden demostrarlo:
+### La clave de recuperación
 
-- **Android.** Cuando la app crea su clave, el Keystore del teléfono firma un certificado que describe la clave: en StrongBox o en el TEE, en un teléfono con el gestor de arranque bloqueado y un sistema verificado. El certificado llega hasta la raíz de atestación de Google. La app lo envía a la raíz del grupo, que lo comprueba y registra el teléfono como **demostrado**. Para esto no se envía nada a Google.
-- **Un teléfono con el gestor de arranque desbloqueado, o con un sistema firmado con su propia clave** (GrapheneOS y similares) guarda su clave en hardware, pero la comprobación no puede dar fe del sistema que la rodea. Cuenta como hardware, no como demostrado.
-- **Teléfonos revocados.** Google publica una lista de teléfonos cuyas claves de atestación se filtraron. Un servidor del proyecto, `cbb.tools`, la copia una vez al día y firma la copia. La raíz del grupo obtiene esa copia, así que tus dispositivos nunca preguntan a Google. Un teléfono de la lista baja de demostrado a hardware.
-- **Los ordenadores Linux con TPM** guardan en él sus claves de miembro y de administrador, así que las claves cuentan como hardware. Un TPM cuyo fabricante escribió su certificado en el chip (los chips de Infineon, ST y Nuvoton, como las placas TPM de la Raspberry Pi) lo demuestra a la raíz del grupo, que entonces registra el ordenador como **demostrado**; no se pregunta nada al fabricante. Los TPM de firmware de Intel y AMD suelen guardar su certificado en el servidor del fabricante, así que siguen siendo hardware. Los **dispositivos Apple** (App Attest) todavía no demuestran sus claves.
+Cuando creas un grupo, Connect Beyond Borders deriva la **clave de recuperación** del grupo (una clave ECDSA P-256 emparejada con una clave poscuántica SLH-DSA-SHA2-128s) a partir de un único secreto aleatorio de 32 bytes. El secreto se muestra una sola vez y nunca se guarda en ningún dispositivo del grupo. Lo guardas en papel (la hoja de recuperación), sellado en una ranura PIV retirada sin usar (ranuras 95 a 82) de una YubiKey (firmware 5.3 o posterior), o en ambos.
+
+## Cómo se verifica una clave
+
+Cualquier dispositivo puede afirmar que su clave vive en hardware, y un programa modificado podría afirmarlo falsamente. La **atestación de hardware** permite que un chip de seguridad firme una prueba criptográfica de que la clave se generó dentro del chip y no puede salir de él.
+
+- **Android Key Attestation:** Cuando la app de Android crea su clave, Android Keystore firma una cadena de certificados que describe la clave (StrongBox o TEE, gestor de arranque bloqueado, estado de arranque verificado) con raíz en los certificados raíz de atestación de Google. El dispositivo principal verifica esta cadena sin conexión y registra el teléfono como **verificado**. No se envía nada a Google.
+- **Gestores de arranque desbloqueados y sistemas personalizados:** Los teléfonos con el gestor de arranque desbloqueado o con un sistema operativo autofirmado (como GrapheneOS) siguen guardando las claves dentro de StrongBox o TEE, así que la clave no se puede extraer. Como la cadena no avala un sistema operativo verificado de fábrica, el grupo registra el teléfono como **hardware** en lugar de **verificado**.
+- **Claves de atestación de Android revocadas:** Google publica una lista de dispositivos cuyas claves de atestación de hardware fueron comprometidas. El servidor del proyecto en `cbb.tools` descarga esa lista una vez al día y sirve una copia firmada (`https://cbb.tools/attest/`). El dispositivo principal descarga la copia firmada de `cbb.tools`, así que tus dispositivos nunca contactan con Google. Cualquier teléfono cuyo número de serie de certificado aparezca en la lista baja de **verificado** a **hardware**.
+- **Atestación TPM 2.0 en ordenadores:** Un ordenador Linux o Windows con un TPM 2.0 y `cbb-helper` guarda sus claves en el TPM. Cuando el TPM tiene en el propio chip un certificado de Endorsement Key (EK) de su fabricante (habitual en chips TPM discretos de Infineon, ST y Nuvoton, como las placas TPM para Raspberry Pi), el dispositivo principal verifica sin conexión la activación de credenciales del TPM sin contactar con ningún servidor externo y registra el ordenador como **verificado**. Los TPM de firmware (habituales en CPU Intel y AMD) suelen omitir el certificado EK en el chip y por tanto permanecen en **hardware**.
 
 ## Los tres niveles
 
-Tu grupo tiene un nivel, que decide cuán seguro debe estar el grupo antes de que un dispositivo
-pueda actuar como raíz o como administrador. Un hub que lee las copias es un administrador, así
-que el nivel se le aplica también. Un hub que solo pasa las copias no necesita nivel: las copias
-se sellan de extremo a extremo para los demás dispositivos y nunca para él, así que quien copie
-sus claves puede retrasar copias y ver lo que ve cualquier dispositivo intermedio
-([privacidad](privacy.md#what-the-devices-in-between-see)), y no leer ninguna.
+El **nivel de claves** de tu grupo establece el nivel mínimo de almacenamiento de claves necesario para que un dispositivo actúe como **dispositivo principal**, **administrador** o **hub que lee las copias**.
 
-1. **Estricto.** Solo el hardware demostrado puede ser la raíz o un administrador. Para demostrar
-   más dispositivos, este nivel también consulta servicios fuera de tu casa: a Apple para App
-   Attest, y a Intel o AMD para algunos certificados TPM. Esos servicios saben que un dispositivo
-   de ese tipo preguntó, desde tu dirección. Las cadenas de Android cuentan solo cuando llegaron
-   a través de Remote Key Provisioning de Google.
-2. **Hardware (el predeterminado, recomendado).** Las claves en hardware pueden ser la raíz o un
-   administrador, demostradas o no. Las pruebas que no necesitan un servicio externo (Android,
-   los TPM con su certificado en el chip) se siguen comprobando y mostrando. Nada sobre tus
-   dispositivos sale de tu casa, aparte de descargar la copia de revocación de `cbb.tools`, que
-   es el mismo archivo para todos.
-3. **Archivos permitidos (el menos seguro).** Un dispositivo con las claves en un archivo también puede ser administrador, tras una advertencia: quien copie el archivo actúa como administrador hasta que otro administrador quite el dispositivo. Un ordenador cuyas claves no están en un TPM ni en el Secure Enclave solo llega a administrador de esta manera (`cbb admin -allow-file-key`, o la advertencia del cuadro «Make it an admin» del teléfono).
+Un **hub que solo reenvía las copias** no necesita ningún nivel de claves porque cada copia va sellada de extremo a extremo sin incluirlo: un atacante que copie sus claves puede retrasar el tráfico y observar metadatos (consulta [Privacidad: qué ven los dispositivos intermedios](privacy.md#what-the-devices-in-between-see)), pero no puede leer ni falsificar copias. Un **miembro sin root** nunca puede ser dispositivo principal, administrador ni hub en ningún nivel de claves.
 
-El nivel 2 es el predeterminado porque mantiene las claves fuera de los archivos siempre que el hardware lo permite, sin decir a ningún servicio externo qué dispositivos tienes.
+1. **Solo hardware verificado (`proven`):** Solo los dispositivos cuyas claves están demostradas mediante atestación de hardware (`proven`) pueden ser el dispositivo principal, un administrador o un hub que lee las copias. En Android, la verificación estricta exige cadenas emitidas a través de Google Remote Key Provisioning (RKP). Un dispositivo principal cuya propia clave no sea `proven` no puede poner el grupo en este nivel.
+2. **Claves en hardware (`hardware`, predeterminado y recomendado):** Cualquier dispositivo cuyas claves vivan en hardware de seguridad (`hardware` o `proven`) puede ser el dispositivo principal, un administrador o un hub que lee las copias. Las pruebas sin conexión (Android Key Attestation y los TPM con certificado EK en el chip) se siguen verificando y mostrando, y ninguna información del dispositivo sale de tu red doméstica más allá de descargar la lista compartida de revocaciones de `cbb.tools`.
+3. **Claves también en archivos (`files`):** También permite que los dispositivos cuyas claves vivan en archivos (`file`) sean el dispositivo principal, un administrador o un hub que lee las copias, tras una advertencia explícita cada vez (`cbb admin -allow-file-key` en una terminal, o el cuadro de advertencia en las apps). Un grupo creado en un ordenador sin TPM ni Secure Enclave empieza en `files`.
 
-Un ordenador instalado sin `sudo` ([sin root](install.md#without-sudo-rootless)) nunca es la
-raíz, un administrador ni un hub de ningún tipo, en ningún nivel: cualquier programa de su
-usuario puede leer sus claves.
+### Ver o cambiar el nivel de claves
+
+Solo el **dispositivo principal** del grupo puede cambiar el nivel de claves:
+
+- **En la app del teléfono o de escritorio:** Abre **Ajustes**, activa **Ajustes avanzados** y ve a **Grupo > Claves de administrador**.
+- **En una terminal de un ordenador principal:** Ejecuta `cbb keys` para ver el nivel actual, o cámbialo con:
+
+  ```sh
+  sudo cbb keys proven
+  sudo cbb keys hardware
+  sudo cbb keys files
+  ```
+
+Los administradores y hubs que ya están en el grupo con claves más débiles permanecen activos hasta que los quites, y Connect Beyond Borders te avisa de qué dispositivos quedan por debajo del nuevo nivel.
 
 ## Si se pierde un dispositivo
 
-Quítalo del grupo en cuanto puedas: consulta [si se pierde o roban un dispositivo](lost-device.md). Una clave en hardware no puede usarse sin el dispositivo; una clave en un archivo sí, hasta que se quita el dispositivo.
-
-## Lo que aún no está construido
-
-Los niveles anteriores son el diseño; esta versión construye una parte:
-
-- Los teléfonos Android demuestran sus claves, y la raíz comprueba la prueba y la lista de Google. La copia de `cbb.tools` empezará cuando existan las claves de firma del proyecto.
-- El nivel es un ajuste: Ajustes, Claves de administrador, en el teléfono raíz, o `cbb keys` en un ordenador raíz. Un grupo creado en un teléfono empieza en el nivel 2; hacer administrador allí a un ordenador con las claves en un archivo, tras la advertencia, pasa el grupo al nivel 3. Un grupo creado en un ordenador cuya clave raíz está en un archivo empieza en el nivel 3, ya que su raíz no cumple ella misma el nivel 2. El nivel 1 todavía no consulta los servicios ajenos a tu casa, y un teléfono cuya propia clave no está demostrada no puede elegirlo.
-- Los ordenadores Linux y los PC con Windows con TPM 2.0 guardan en él sus claves de miembro y de administrador desde el momento en que se unen a un grupo; un ordenador que se unió antes conserva su archivo hasta que vuelva a unirse. En Windows aún no se ha probado en un PC real. Los Mac con Apple silicon o el chip T2 las guardan del mismo modo en el Secure Enclave. La clave raíz del grupo en un ordenador y App Attest todavía no están construidos: hasta entonces sus claves están en un archivo.
+Quita el dispositivo perdido de tu grupo lo antes posible; consulta [Si se pierde o roban un dispositivo](lost-device.md). Una clave guardada en hardware no se puede extraer ni usar fuera de ese dispositivo; una clave guardada en un archivo se puede copiar y usar hasta que quites el dispositivo.

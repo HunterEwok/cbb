@@ -387,7 +387,9 @@ jobs:
   testflight:
     name: build (the iPhone app, to TestFlight)
     needs: [roots]
-    runs-on: macos-latest
+    # App Store Connect takes only apps built with the newest iOS SDK
+    # (ITMS-90725); the image macos-latest lags behind it.
+    runs-on: xcode-27
     timeout-minutes: 60
     # The Apple Distribution certificate, the App Store profiles and the App
     # Store Connect key live in the environment release (docs/maintainers/maintaining.md,
@@ -398,6 +400,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Xcode 27.2
+        run: sudo xcode-select -s /Applications/Xcode_27.2.app
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod

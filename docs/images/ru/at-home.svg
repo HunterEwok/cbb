@@ -44,7 +44,7 @@
 </style>
 <rect class="zone" x="10" y="10" width="762" height="200" rx="14"/>
 <text class="zone-t" x="26" y="34">Домашняя сеть</text>
-<g class="key"><rect class="card key" x="29.76249999999999" y="50.0" width="152.3" height="64" rx="10"/><g transform="translate(41.76249999999999,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="79.76249999999999" y="78">Телефон</text><text class="s" x="79.76249999999999" y="96">с приложением</text><rect class="badge" x="127.6625" y="41.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="150.8625" y="54.0" text-anchor="middle">КОРЕНЬ</text></g>
+<g class="key"><rect class="card key" x="29.76249999999999" y="50.0" width="152.3" height="64" rx="10"/><g transform="translate(41.76249999999999,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="79.76249999999999" y="78">Телефон</text><text class="s" x="79.76249999999999" y="96">с приложением</text><rect class="badge" x="50.8625" y="41.0" width="123.2" height="18" rx="9"/><text class="badge-t" x="112.4625" y="54.0" text-anchor="middle">ГЛАВНОЕ УСТРОЙСТВО</text></g>
 <path class="e-home" d="M105.9125,114.0 L105.9125,150"/>
 <g class=""><rect class="card " x="206.0625" y="56.0" width="150" height="52" rx="10"/><g transform="translate(218.0625,68)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="256.0625" y="87">Ноутбук</text></g>
 <path class="e-home" d="M281.0625,108.0 L281.0625,150"/>
