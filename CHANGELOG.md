@@ -2265,6 +2265,7 @@ with 0.5 is set up again once. The details follow.
   the limits page gives `stable.json` its 14 days and `attest-status.json` its 8.
   The test bench's pages name the commands and suites `tools/bench` has, the root changed only
   with the recovery key, and the timeouts and thresholds the code uses.
+  The guide's Russian, Spanish and Chinese translations follow the current English pages.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
 - "How it works" explains first what happens to a copy, then the group, its keys and the

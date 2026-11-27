@@ -1,178 +1,282 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: c58263ffc4ea -->
+<!-- source: d11a83f383ef -->
 # Instalación
 
-Connect Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
+Para cualquiera que instale, actualice, verifique o desinstale Connect Beyond Borders en un ordenador, un router o un servidor doméstico. Para las apps de teléfono, tableta, reloj y televisor, consulta [Las apps](apps.md).
+
+Connect Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su herramienta de línea de comandos es `cbb`. Todos los métodos siguientes instalan el mismo servicio; elige el que corresponda a tu sistema.
 
 ## Linux
 
-Cualquier Linux con systemd (x86-64, ARM64, ARMv7, ARMv6): un portátil, un sobremesa, una Raspberry Pi, un servidor, una Steam Deck.
+Compatible con sistemas Linux con `systemd` en x86-64, ARM64, ARMv7 y ARMv6 (portátiles, sobremesas, placas Raspberry Pi, servidores y Steam Deck).
+
+1. Ejecuta el instalador en una terminal:
+
+   ```sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+   ```
+
+2. Responde a las preguntas sobre las reglas de cortafuegos (cuando se detecta un cortafuegos activo) y las actualizaciones automáticas diarias.
+3. Cierra sesión y vuelve a iniciarla una vez para que tu cuenta (añadida al grupo `cbb`) pueda ejecutar `cbb` sin `sudo`.
+
+En escritorios x86-64 y ARM64 que tengan instalados GTK 4 y WebKitGTK 6.0 (`libgtk-4-1 libwebkitgtk-6.0-4` en Debian y Ubuntu; `gtk4 webkitgtk6.0` en Fedora), el instalador también instala la app de la bandeja (`cbb-desktop`), que se inicia con tu sesión de escritorio y aparece en tu menú de aplicaciones. Si faltan esas bibliotecas, el instalador indica los paquetes que debes instalar; vuelve a ejecutar el instalador después de añadirlos para instalar la app de la bandeja.
+
+Puedes pasar opciones adicionales a `get.sh` después de `sh -s --`:
+
+- **Consola de texto (`--console`):** Para una máquina sin escritorio, añade copiar y pegar dentro de `tmux` e instala `cbb-console.service` para el pegado remoto en la consola de texto:
+
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --console
+  ```
+
+- **Omitir los cuadros de diálogo de pegado en el escritorio (`--uinput`):** En GNOME y KDE, el pegado remoto pregunta una vez en un cuadro de diálogo del sistema antes de pulsar teclas. Añadir `--uinput` instala `cbb-uinput.service` y carga el módulo del núcleo `uinput` para que Connect Beyond Borders pulse directamente las teclas de pegado (nunca en una pantalla de inicio de sesión o de bloqueo). Esta opción requiere `cbb-helper`.
+- **Dispositivos pequeños sin el ayudante (`--no-helper`):** Deja fuera `cbb-helper` (el programa ayudante que gestiona claves en TPM, portapapeles de escritorio, inyección de teclas del pegado remoto, teclados Bluetooth y mandos de televisor) en dispositivos pequeños que solo sincronizan:
+
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --no-helper
+  ```
+
+  Consulta [Dispositivos pequeños](../../member/README.md). Los archivos de los routers MIPS dejan fuera `cbb-helper` por defecto. Una vez instalado un dispositivo sin `cbb-helper`, las actualizaciones posteriores lo mantienen así.
+
+También se admite Homebrew en Linux (x86-64 y ARM64):
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+brew install hunterewok/tap/cbb
+sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/linux/install.sh" "$(brew --prefix)/opt/cbb/bin/cbb"
 ```
 
-Después, cierra sesión y vuelve a entrar una vez, para que tu usuario pueda usar `cbb` sin `sudo`. Una máquina sin escritorio obtiene copiar y pegar dentro de tmux con `--console` (`... | sudo sh -s -- --console`).
-
-En un escritorio con GTK 4 y WebKitGTK 6.0 (x86-64 y ARM64) también instala la app de la bandeja, que se abre con tu sesión y está en el menú de aplicaciones. Sin ellos, indica qué paquetes añadir; después ejecútalo de nuevo para tener la app de la bandeja.
-
-El pegado remoto en GNOME y KDE pregunta una vez, en un cuadro de diálogo en el ordenador, antes de que el primer pegado de un administrador pueda pulsar las teclas. Para saltarte el cuadro de diálogo, añade `--uinput` (`... | sudo sh -s -- --uinput`): un pequeño ayudante pulsa entonces las teclas de pegado (Mayús+Insert e Intro) por quien esté usando la pantalla, nunca en una pantalla de inicio de sesión o de bloqueo.
-
-Los dispositivos pequeños que solo deben sincronizar, como un router o una Raspberry Pi Zero, usan el mismo instalador y pueden prescindir de `cbb-helper`, que guarda claves en un TPM y maneja el portapapeles, las teclas del escritorio y Bluetooth: `... | sudo sh -s -- --no-helper` ([cbb en dispositivos pequeños](../../member/README.md)). El archivo de los routers (MIPS) no trae ayudante de todos modos.
+Vuelve a ejecutar el segundo comando después de cada `brew upgrade`.
 
 ### Sin sudo (sin root)
 
-En un ordenador Linux donde no puedes o no quieres usar `sudo`, instálalo para tu propio usuario, sin `sudo`:
+En un ordenador Linux donde no tienes permisos de administrador (`sudo`), instala Connect Beyond Borders para tu propia cuenta de usuario sin `sudo`:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-Se ejecuta como tu propio servicio en segundo plano mientras tienes la sesión abierta y sincroniza como cualquier miembro. Úsalo solo cuando la instalación normal no sea posible: cualquier programa que ejecutes podría copiar sus claves, así que nunca puede ser la raíz del grupo, un administrador ni el hub ([cómo funciona](how-it-works.md#rootless-members)), y no tiene reglas de cortafuegos, ni TPM, ni `--console` ni `--uinput`. Para mantenerlo en marcha después de cerrar sesión, un administrador ejecuta una vez `sudo loginctl enable-linger YOUR-USER`. Para quitarlo: `sh ~/.local/share/cbb/uninstall.sh`. `--no-helper --rootless` deja fuera el ayudante también aquí ([sin sudo](../../member/README.md#without-sudo-rootless)).
+Esto instala `cbb` en `~/.local/bin` y lo ejecuta como un servicio de usuario de `systemd` mientras tengas la sesión abierta. No puede instalarse a la vez que una instalación para todo el sistema.
+
+Usa una instalación sin root solo cuando no sea posible una instalación normal. Como cualquier programa que se ejecute con tu cuenta de usuario puede leer sus archivos de claves, un dispositivo sin root nunca puede ser el **dispositivo principal**, un **administrador** ni un **hub** ([miembros sin root](how-it-works.md#rootless-members)). Una instalación sin root tampoco tiene reglas de cortafuegos, compatibilidad con TPM ni los ayudantes `--console` o `--uinput`.
+
+- **Seguir funcionando tras cerrar sesión:** Si el instalador no puede activar la persistencia automáticamente, pide a un administrador que ejecute una vez `sudo loginctl enable-linger YOUR-USER`.
+- **Sin el ayudante:** Pasa `--no-helper --rootless` para omitir también `cbb-helper` (consulta [sin sudo en dispositivos pequeños](../../member/README.md#without-sudo-rootless)).
+- **Desinstalar:** Ejecuta `sh ~/.local/share/cbb/uninstall.sh`.
 
 ### SteamOS (Steam Deck)
 
-Cambia al Modo escritorio, abre Konsole, ponle una contraseña una vez al usuario `deck` si no tiene (`passwd`) y ejecuta el mismo comando. SteamOS sustituye sus archivos de sistema con cada actualización, así que el instalador coloca Connect Beyond Borders en `/opt/cbb` en lugar de `/usr/local`, y le indica a SteamOS cuáles de sus archivos de `/etc` debe conservar (`/etc/atomic-update.conf.d/cbb.conf`). Sigue instalado y en su grupo tras las actualizaciones de SteamOS.
+1. Cambia al **Modo escritorio** y abre **Konsole**.
+2. Si no has puesto contraseña al usuario `deck`, ejecuta `passwd` para crear una.
+3. Ejecuta el comando del instalador de Linux:
 
-- `cbb` está en la ruta de un Konsole nuevo después de cerrar sesión y volver a entrar. `sudo` no busca ahí, así que los comandos que lo necesitan llevan la ruta completa: `sudo /opt/cbb/bin/cbb pair`.
+   ```sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+   ```
+
+SteamOS reemplaza su sistema de archivos raíz en cada actualización del sistema operativo, así que el instalador coloca Connect Beyond Borders en `/opt/cbb` en lugar de `/usr/local` y registra sus archivos de configuración de `/etc` en `/etc/atomic-update.conf.d/cbb.conf`. Tu instalación y tu pertenencia al grupo se conservan tras las actualizaciones de SteamOS.
+
+- Después de cerrar sesión y volver a iniciarla, `cbb` está en tu `PATH` en Konsole. Como `sudo` no busca en `/opt/cbb/bin`, los comandos que requieren `sudo` deben usar la ruta completa, como `sudo /opt/cbb/bin/cbb pair -code`.
 - En el Modo escritorio, el portapapeles se sincroniza como en cualquier escritorio KDE Plasma.
-- En el Modo juego no hay portapapeles de escritorio, así que allí no se sincroniza nada; el servicio sigue funcionando y se pone al día en el Modo escritorio.
-- Para quitarlo: `sudo sh /opt/cbb/share/uninstall.sh`.
+- En el Modo juego no hay portapapeles de escritorio, así que allí no se sincroniza nada; el servicio sigue ejecutándose y se pone al día cuando vuelves al Modo escritorio.
+- Para quitarlo, ejecuta `sudo sh /opt/cbb/share/uninstall.sh`.
 
 ## Mac
 
-Apple silicon o Intel, macOS 14 o posterior: descargue `cbb-X.Y.Z.pkg` de la
-[última versión](https://github.com/HunterEwok/cbb/releases/latest) y ábralo. Instala la app CBB en
-la barra de menús y el servicio, ambos firmados por el proyecto y comprobados por Apple.
+Compatible con Mac con chip de Apple o Intel con macOS 14 o posterior.
 
-O en Terminal, sin la app, el mismo comando que en Linux:
+- **Paquete instalador (recomendado, incluye la app de la barra de menús):** Descarga `cbb-X.Y.Z.pkg` desde la [última versión en GitHub](https://github.com/HunterEwok/cbb/releases/latest) y ábrelo. El paquete instala la app **CBB** de la barra de menús (`/Applications/CBB.app`) y el servicio en segundo plano, ambos firmados y notarizados.
+- **Terminal (solo servicio y `cbb`, sin la app de la barra de menús):**
 
-```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
-```
+  ```sh
+  curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
+  ```
 
-O con Homebrew, que también lo actualiza. Ejecuta de nuevo la segunda línea después de cada `brew upgrade`:
+- **Homebrew (solo servicio y `cbb`, sin la app de la barra de menús):**
 
-```sh
-brew install hunterewok/tap/cbb
-sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
-```
+  ```sh
+  brew install hunterewok/tap/cbb
+  sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
+  ```
+
+  Vuelve a ejecutar el segundo comando después de cada `brew upgrade` para reiniciar el servicio y el agente del portapapeles en la versión actualizada.
 
 ## Windows
 
-Windows 10 (1809 o posterior) u 11, x86-64 o ARM64, en un PowerShell abierto con «Ejecutar como administrador»:
+Compatible con Windows 10 (versión 1809 o posterior) y Windows 11, en x86-64 y ARM64.
 
-```powershell
-irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
-```
+1. Abre PowerShell con **Ejecutar como administrador**.
+2. Ejecuta el instalador:
 
-Permite que el usuario con sesión iniciada en la pantalla use `cbb` (en una terminal nueva) e inicia para él el agente del portapapeles. Los comandos que cambian el grupo se ejecutan en una terminal abierta como administrador, donde Linux y macOS usan `sudo`.
+   ```powershell
+   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
+   ```
 
-También instala la app de la bandeja, que se abre al iniciar sesión y está en el menú Inicio como CBB.
+3. Responde a las preguntas sobre las reglas del Firewall de Windows y las actualizaciones automáticas diarias.
+4. Abre una ventana de terminal nueva para usar `cbb`.
 
-Con winget, cuando el paquete esté en el repositorio de winget:
+El instalador añade al usuario con sesión iniciada al grupo `cbb`, inicia el servicio en segundo plano y el agente del portapapeles, e instala la app de la bandeja (que se inicia al abrir sesión y aparece en el menú Inicio como **CBB**). Los comandos que cambian la pertenencia al grupo o los ajustes se ejecutan en una terminal de administrador, donde Linux y macOS usan `sudo`.
+
+Para instalar con **winget** (usando el paquete `HunterEwok.cbb`):
 
 ```powershell
 winget install HunterEwok.cbb
-cbb install           # in the administrator terminal; again after each winget upgrade
+cbb install
 ```
+
+Ejecuta `cbb install` en una terminal de administrador para instalar el servicio, el agente del portapapeles, la app de la bandeja y las reglas de cortafuegos desde el paquete descomprimido, y vuelve a ejecutarlo después de cada `winget upgrade`.
 
 ## OpenWrt
 
-Un router con OpenWrt 25.12 o posterior y espacio para un programa de 25 MB (128 MB de flash o más, o eMMC; 256 MB de RAM), como root por SSH:
+Compatible con routers con OpenWrt 25.12 o posterior (con `apk`) y espacio para un programa de 25 MB (al menos 128 MB de flash o eMMC, y 256 MB de RAM).
+
+Conéctate por SSH como `root` y ejecuta:
 
 ```sh
 uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-Instala `cbb` como un servicio que funciona solo en la zona `lan` y nunca responde en `wan`. Las claves están en `/etc/cbb`, que sysupgrade conserva; después de un sysupgrade atendido (ASU, owut), ejecuta de nuevo el comando. Otra zona, como una red IoT, el cortafuegos y las comprobaciones están en [routers y FreeBSD](../admin/routers.md#openwrt).
+El instalador configura `cbb` (sin `cbb-helper`) como un servicio `procd` que escucha solo en la zona `lan` y nunca responde en `wan`. Las claves viven en `/etc/cbb/state`, que `sysupgrade` conserva; después de un sysupgrade atendido (ASU u `owut`), vuelve a ejecutar el comando de instalación. Cuando se ejecuta en una terminal interactiva, el instalador inicia el emparejamiento de inmediato (`--no-pair` omite esto). Para zonas adicionales (como una red IoT), detalles del cortafuegos y comprobaciones, consulta [Routers y FreeBSD](../admin/routers.md#openwrt).
 
-O desde nuestro repositorio de paquetes, que `apk upgrade` mantiene al día. La arquitectura del repositorio depende de la CPU del router (`grep DISTRIB_ARCH /etc/openwrt_release`): `arm64` para `aarch64_*`, `armv7` para `arm_cortex-a*` con `neon` o `vfp` en el nombre, `mipsle` para `mipsel_*`, `mips` para `mips_*`, `amd64` para `x86_64`. Pon la tuya en lugar de `arm64` en la segunda línea:
+También puedes instalar desde el repositorio de paquetes `apk` del proyecto para que `apk upgrade` lo mantenga actualizado:
 
-```sh
-uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
-echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
-apk update && apk add cbb
-```
+1. Comprueba la arquitectura de tu router con `grep DISTRIB_ARCH /etc/openwrt_release` y hazla corresponder con el directorio del repositorio:
+   - `aarch64_*` → `arm64`
+   - `arm_cortex-a*` (con `neon` o `vfp` en el nombre) → `armv7`
+   - `mipsel_*` → `mipsle`
+   - `mips_*` → `mips`
+   - `x86_64` → `amd64`
+2. Añade la clave y el repositorio (reemplaza `arm64` por tu arquitectura) e instala:
 
-`apk del cbb` lo quita y conserva las claves en `/etc/cbb`.
+   ```sh
+   uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
+   echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
+   apk update && apk add cbb
+   ```
+
+`apk del cbb` quita el paquete y conserva las claves en `/etc/cbb`. Ten en cuenta que las compilaciones para routers `mips` y `mipsle` solo sincronizan en la red doméstica (sin sincronización fuera de casa).
 
 ## FreeBSD
 
-FreeBSD 15, amd64 o arm64, como root (con `sudo` o `doas`):
+Compatible con FreeBSD 15 (`amd64` y `arm64`). Ejecuta como `root` (con `sudo` o `doas`):
 
 ```sh
 fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-Instala `cbb`, un script rc.d que ejecuta el servicio mediante daemon(8), y añade la línea `cbb_enable="YES"` a rc.conf. Las claves están en `/var/db/cbb`.
+El instalador instala `cbb`, añade un script `rc.d` que ejecuta el servicio mediante `daemon(8)` y añade `cbb_enable="YES"` a `rc.conf`. Las claves viven en `/var/db/cbb` y los ajustes en `/usr/local/etc/cbb`.
 
-En OPNsense, el mismo instalador añade además un gancho de plugin: el servicio aparece en System > Diagnostics > Services, y sus reglas de cortafuegos (en el ancla `cbb` de pf) siguen cada recarga del filtro. Desactiva el repetidor de mDNS (Services > mDNS Repeater) mientras se ejecute: ambos necesitan el puerto UDP 5353, y el servicio responde él mismo a mDNS en cada interfaz doméstica. pfSense no está soportado: el instalador también se ejecuta allí, pero imprime las reglas de cortafuegos para Firewall > Rules en lugar de añadirlas, y una actualización de pfSense puede quitar Connect Beyond Borders.
-
-En un escritorio FreeBSD (X11, o Wayland con el protocolo data control, como en KDE, sway e Hyprland), la sesión inicia `cbb agent` desde el inicio automático de XDG y el portapapeles se une al grupo; vuelve a iniciar sesión después de la instalación. El pegado remoto escribe mediante XTEST en X11 y mediante el teclado virtual en los escritorios wlroots; GNOME no admite pegado remoto en FreeBSD, ya que sin logind nada indica si su pantalla está bloqueada.
+- **OPNsense:** El mismo instalador añade un gancho de plugin para que el servicio aparezca en **System > Diagnostics > Services** y sus reglas de cortafuegos (en el ancla `cbb` de `pf`) se conserven tras recargar el filtro. Desactiva **Services > mDNS Repeater** mientras se ejecute Connect Beyond Borders, porque ambos necesitan el puerto UDP 5353 y el servicio responde él mismo a mDNS en cada interfaz doméstica.
+- **pfSense (no compatible):** El instalador se ejecuta en pfSense, imprime las reglas que debes añadir a mano en **Firewall > Rules**, y puede eliminarse con una actualización del sistema de pfSense.
+- **Escritorios FreeBSD:** En X11, o en compositores Wayland con el protocolo data-control (como KDE, sway e Hyprland), el inicio automático de XDG lanza `cbb agent` cuando vuelves a iniciar sesión. El pegado remoto usa XTEST en X11 y teclado virtual en escritorios wlroots; GNOME en FreeBSD no acepta pegado remoto porque el estado de la pantalla de bloqueo no está disponible sin `logind`.
 
 ## Docker
 
-Para un NAS o un servidor doméstico que está siempre encendido ([README de la imagen](../../packaging/docker/README.md); publicada con cada versión desde la 0.5). Se une como un miembro normal: crea el grupo en el teléfono o en un ordenador que lleves tú.
+Para un NAS o un servidor doméstico siempre encendido sin escritorio (consulta el [README de la imagen de Docker](../../packaging/docker/README.md)). Un contenedor se une como un miembro normal; crea el grupo en tu teléfono o en un ordenador que lleves tú.
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/HunterEwok/cbb/main/packaging/docker/compose.home.yaml
 docker compose -f compose.home.yaml up -d
-docker compose -f compose.home.yaml exec cbb cbb pair
+docker compose -f compose.home.yaml exec cbb cbb pair -code
 ```
+
+Abre primero una ventana de emparejamiento en tu teléfono o en un ordenador administrador y escribe los seis dígitos cuando `cbb pair -code` los pida.
 
 ## El cortafuegos
 
-Connect Beyond Borders necesita un puerto TCP, el 8764, y mDNS (UDP 5353), ambos solo desde la red doméstica. El instalador localiza el cortafuegos (ufw, firewalld, nftables o iptables en Linux, pf o ipfw en FreeBSD, el cortafuegos de aplicaciones del Mac, el Firewall de Windows), enumera cada regla y pregunta `Add these rules now? [y/N]`:
+Connect Beyond Borders necesita tráfico entrante en el **puerto TCP 8764** (o tu puerto de miembro personalizado) y en el **puerto UDP 5353** (mDNS), solo desde tu red doméstica.
 
-- **Sí**: las añade, las mantiene al día en cada actualización y las quita cuando desinstalas. Nunca toca otras reglas.
-- **No** (la opción por defecto, y la que se aplica cuando no hay terminal donde preguntar): no añade nada e imprime los comandos exactos para que los ejecutes tú.
-- `--express` (`-Express` en Windows) las añade sin preguntar; `--no-firewall` responde No.
+El instalador detecta tu cortafuegos (`ufw`, `firewalld`, `nftables` o `iptables` en Linux; `pf`, `ipfw` u OPNsense en FreeBSD; el cortafuegos de aplicaciones de macOS; el Firewall de Windows), enumera cada regla que necesita y pregunta `Add these rules now? [y/N]` (`Add this rule now? [y/N]` en macOS):
 
-nftables e iptables reciben siempre solo los comandos, porque las reglas añadidas en tiempo de ejecución no sobreviven a un reinicio. En FreeBSD, pf recibe las reglas en un ancla propia, que pf lee mediante tres líneas marcadas que el instalador añade al final de `/etc/pf.conf` y vuelve a quitar; ipfw las recibe en el conjunto de reglas 17, añadidas de nuevo en cada arranque. Si activas un cortafuegos más tarde, ejecuta de nuevo el instalador.
+- **Sí:** El instalador añade las reglas, las mantiene actualizadas en las actualizaciones y las quita al desinstalar sin tocar ninguna otra regla.
+- **No** (la opción por defecto, y cuando no hay una terminal interactiva conectada): El instalador no añade reglas e imprime los comandos exactos para que los ejecutes tú mismo.
+- **Opciones desatendidas:**
+  - En Linux, macOS y FreeBSD: pasa `--express` para añadir las reglas sin preguntar, o `--no-firewall` para rechazarlas e imprimir los comandos.
+  - En Windows: establece `$env:CBB_FIREWALL = "express"` o `$env:CBB_FIREWALL = "no"` antes de ejecutar `get.ps1` (o pasa `-Express` o `-NoFirewall` a `install.ps1`).
 
-**Otro puerto**, si el 8764 está ocupado: `... | sudo sh -s -- --port 9000` (en Windows, `$env:CBB_PORT = "9000"` antes del instalador). La app del teléfono conoce el puerto por el código QR.
+Comportamiento según el cortafuegos:
 
-Todas las opciones del instalador están en la [referencia de comandos](../reference/cli.md#installers).
+- `nftables` e `iptables` siempre imprimen solo los comandos manuales, porque las reglas en tiempo de ejecución no sobreviven a un reinicio.
+- En FreeBSD, `pf` coloca las reglas en su propia ancla `cbb`, cargada mediante tres líneas marcadas añadidas al final de `/etc/pf.conf` (se quitan al desinstalar). `ipfw` en FreeBSD las añade en el conjunto de reglas 17 y las recarga en cada arranque.
+- Si activas un cortafuegos después de instalar Connect Beyond Borders, vuelve a ejecutar el instalador.
+
+Para usar un puerto de miembro distinto cuando el TCP 8764 ya está ocupado:
+
+- En Linux, macOS, FreeBSD y OpenWrt: pasa `--port 9000` (por ejemplo, `... | sudo sh -s -- --port 9000`).
+- En Windows: establece `$env:CBB_PORT = "9000"` antes de ejecutar `get.ps1` (o pasa `-Port 9000` a `install.ps1`).
+
+Todas las opciones del instalador se enumeran en la [referencia de comandos](../reference/cli.md#installers).
 
 ## Actualización
 
-Las versiones están firmadas desde la 0.6. Para pasar a la 0.6 desde una versión anterior, ejecuta de nuevo el comando de instalación; a partir de entonces lo hace `cbb update`.
+Mantén todos los dispositivos de un grupo en la misma versión. Consulta [Versiones y compatibilidad](../reference/compatibility.md) para los detalles de compatibilidad.
 
-Mantén todos los dispositivos de un grupo en la misma versión: la 0.6 no promete más que la 0.5, así que actualízalos todos. Un grupo creado con la 0.5 se vuelve a crear una vez en la 0.6.
+### Actualizaciones manuales
 
-`sudo cbb update` (en Windows, `cbb update` en una terminal abierta como administrador) instala la versión más reciente en un ordenador o un dispositivo pequeño instalados con `get.sh`, `get.ps1` o un archivo de versión; `cbb update -check` solo dice si hay una. Tus ajustes se conservan. Solo instala una versión firmada por el proyecto, y nunca una anterior. Si la versión nueva no arranca en un minuto, la anterior vuelve por sí sola. Cómo comprueba las firmas está en el [protocolo](../protocol.md), sección 16.
+- **Instalado con `get.sh`, `get.ps1` o un archivo de versión:**
+  - Comprobar si hay una versión más nueva: `cbb update -check`
+  - Instalar la versión firmada más reciente: `sudo cbb update` (en Windows, ejecuta `cbb update` en una terminal de administrador; en Linux sin root, ejecuta `cbb update` sin `sudo`; en SteamOS, ejecuta `sudo /opt/cbb/bin/cbb update`).
 
-Qué versiones funcionan juntas y qué hace un dispositivo antiguo con algo más nuevo: [versiones y compatibilidad](../reference/compatibility.md).
+  `cbb update` conserva tus ajustes y claves, instala solo versiones firmadas por el proyecto, rechaza versiones anteriores y restaura automáticamente la versión previa si el servicio actualizado no arranca en un minuto. Volver a ejecutar el comando original de `get.sh` o `get.ps1` también actualiza.
+- **Homebrew:** Ejecuta `brew upgrade cbb` y luego vuelve a ejecutar el comando `install.sh` de la sección [Mac](#mac) o [Linux](#linux).
+- **winget:** Ejecuta `winget upgrade HunterEwok.cbb` y luego ejecuta `cbb install` en una terminal de administrador.
+- **Docker:** Ejecuta `docker compose -f compose.home.yaml pull` y vuelve a crear el contenedor.
+- **Repositorio de paquetes de OpenWrt:** Ejecuta `apk update && apk upgrade`.
 
-Los instaladores preguntan una vez si actualizar automáticamente (`--auto-update on|off`, o `-AutoUpdate on|off` y `$env:CBB_AUTO_UPDATE` en Windows, para responder de antemano); `sudo cbb update -auto on|off` lo cambia después. Activado, un temporizador comprueba una vez al día a una hora propia: un temporizador de systemd en Linux, una tarea de launchd en un Mac, una tarea programada como SYSTEM en Windows, cron en OpenWrt y FreeBSD. Cada comprobación descarga los mismos archivos pequeños de GitHub (o de `dl.cbb.tools` cuando GitHub no responde), así que GitHub conoce la dirección de este dispositivo y que usa Connect Beyond Borders, como con cualquier descarga; no envía nada sobre el grupo. `sudo cbb update -mirror https://...` toma las actualizaciones de otro espejo, lo que no requiere confianza, ya que las firmas se comprueban. El registro del temporizador es `update.log` en `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt), `/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update` (Mac) o `C:\Program Files\cbb-update` (Windows).
+### Actualizaciones automáticas
 
-Los dispositivos de un grupo se comunican entre sí la versión firmada más reciente que alguno de ellos haya visto, así que la comprobación de un solo dispositivo basta para que `cbb status` y la app de bandeja de los demás indiquen que hay una versión más nueva («Update to X» en la app de bandeja ejecuta `cbb update` como administrador). Cada dispositivo sigue comprobando las firmas por sí mismo y descargando su propio archivo.
+Para las instalaciones con `get.sh` y `get.ps1`, el instalador pregunta una vez si quieres activar las actualizaciones automáticas diarias. Puedes predefinir la respuesta o cambiarla más tarde:
 
-Ejecutar de nuevo el mismo comando de instalación también actualiza. Con Homebrew o winget, actualiza allí y ejecuta de nuevo la segunda línea; `cbb update` lo indica. Docker y el paquete de OpenWrt se actualizan con `docker compose pull` y `apk upgrade`.
+- **Durante la instalación:** Pasa `--auto-update on` o `--auto-update off` a `get.sh`; en Windows, establece `$env:CBB_AUTO_UPDATE = "on"` o `"off"` antes de ejecutar `get.ps1` (o pasa `-AutoUpdate on|off` a `install.ps1`).
+- **Después de la instalación:** Ejecuta `sudo cbb update -auto on` o `sudo cbb update -auto off` (sin `sudo` en Linux sin root; en una terminal de administrador en Windows).
+
+Cuando las actualizaciones automáticas están activadas, una tarea diaria busca versiones firmadas: un temporizador de `systemd` en Linux (temporizador de usuario en instalaciones sin root), una tarea de `launchd` en macOS, una tarea programada como `SYSTEM` en Windows o `cron` en OpenWrt y FreeBSD.
+
+Cada comprobación descarga pequeños archivos de metadatos firmados desde GitHub (con respaldo en `dl.cbb.tools` si GitHub no responde). GitHub ve la dirección IP del dispositivo y que solicita metadatos de Connect Beyond Borders, pero nada sobre tu grupo. Para usar un espejo propio en su lugar, ejecuta `sudo cbb update -mirror https://...`; no hace falta confiar en el espejo porque las firmas se siguen verificando.
+
+Los registros de actualizaciones automáticas se guardan en `update.log` en:
+
+| Sistema | Directorio del registro de actualizaciones |
+|---|---|
+| Linux | `/var/lib/cbb-update` |
+| Linux (sin root) | `~/.local/state/cbb-update` |
+| SteamOS | `/opt/cbb-update` |
+| OpenWrt | `/etc/cbb-update` |
+| FreeBSD | `/var/db/cbb-update` |
+| macOS | `/Library/Application Support/cbb-update` |
+| Windows | `C:\Program Files\cbb-update` |
+
+Los dispositivos de un grupo comparten avisos de la versión firmada más reciente que haya visto cualquiera de ellos, de modo que `cbb status` y las apps de escritorio te avisan cuando hay una actualización disponible. Cada dispositivo sigue verificando las firmas por sí mismo y descargando su propio archivo.
 
 ## Comprobar una descarga
 
-Los instaladores de una línea comprueban la descarga con el `SHA256SUMS` de la versión. Cada archivo de la versión lleva además una atestación de procedencia de la compilación que lo vincula a este repositorio y a la compilación que lo generó; con la [CLI de GitHub](https://cli.github.com/):
+Cada archivo de versión se comprueba de tres maneras:
 
-```sh
-gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
-```
+1. **Sumas de verificación (`SHA256SUMS`):** Tanto `get.sh` como `get.ps1` verifican el archivo descargado con el archivo `SHA256SUMS` de la versión.
+2. **Firmas de versión del proyecto:** Las versiones se firman con las claves raíz sin conexión y la clave de versión del proyecto (que nunca tocan CI): `keys.json` certifica las claves de versión bajo las claves raíz del proyecto, `release.json` enumera el tamaño y el hash SHA-256 de cada archivo, y `stable.json` indica la versión estable actual ([Protocolo](../protocol.md), sección 16). Tanto `get.sh` (mediante `openssl`) como `get.ps1` llevan integradas las claves raíz del proyecto y se niegan a instalar cualquier versión cuyas firmas no se verifiquen. `get.sh` comprueba tanto ES256 como SLH-DSA-SHA2-128s cuando está instalado OpenSSL 3.5 o posterior (ES256 en OpenSSL anteriores); `get.ps1` comprueba ES256. Para instalar sin comprobar las firmas del proyecto, establece `CBB_VERIFY=skip`.
+3. **Atestación de procedencia de la compilación:** Cada archivo de versión tiene una atestación de procedencia de compilación de GitHub que lo vincula con el flujo de publicación de este repositorio. Con la [CLI de GitHub](https://cli.github.com/) (`gh`), puedes verificar cualquier archivo manualmente:
 
-`get.sh` la comprueba por sí mismo cuando `gh` está instalado y con sesión iniciada para root (`sudo gh auth login`); `CBB_ATTESTATION=require` se niega a instalar sin ella.
+   ```sh
+   gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
+   ```
 
-Las versiones también se firman con las claves propias del proyecto, que nunca tocan CI (las claves raíz están en llaves de hardware sin conexión, la clave de versión en el Secure Enclave del mantenedor): `keys.json` nombra las claves de versión bajo las claves raíz del proyecto, `release.json` enumera cada archivo de la versión con su hash y `stable.json` indica cuál es la versión actual. Cuando las claves raíz estén integradas en los instaladores, `get.sh` (con `openssl`) y `get.ps1` comprobarán esto antes de instalar y rechazarán una versión sin firmar; hasta entonces solo comprueban `SHA256SUMS` y la atestación. `CBB_VERIFY=skip` instala sin la comprobación.
+   Tanto `get.sh` como `get.ps1` ejecutan esta comprobación automáticamente cuando `gh` está instalado y con sesión iniciada (`gh auth login`; para `get.sh` con `sudo`, ejecuta `sudo gh auth login`). Establece `CBB_ATTESTATION=require` para rechazar la instalación sin una atestación verificada, o `CBB_ATTESTATION=skip` para omitir la comprobación de atestación.
 
 ## Desinstalación
 
-En Linux y en un Mac:
+Ejecuta el comando de desinstalación de tu sistema:
 
-```sh
-sudo sh /usr/local/share/cbb/uninstall.sh
-```
+| Sistema | Comando o pasos |
+|---|---|
+| Linux y macOS | `sudo sh /usr/local/share/cbb/uninstall.sh` |
+| Linux (sin root) | `sh ~/.local/share/cbb/uninstall.sh` |
+| SteamOS | `sudo sh /opt/cbb/share/uninstall.sh` |
+| FreeBSD | `sudo sh /usr/local/share/cbb/uninstall.sh` (o con `doas`) |
+| OpenWrt | `sh /usr/share/cbb/uninstall.sh` (o `apk del cbb` si se instaló desde el repositorio) |
+| Windows | Abre **Configuración > Aplicaciones > CBB > Desinstalar**, o ejecuta `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1"` como administrador |
 
-En SteamOS es `sudo sh /opt/cbb/share/uninstall.sh`. Con Homebrew, ejecuta después `brew uninstall cbb`.
+Si instalaste con Homebrew, ejecuta primero el script de desinstalación y luego ejecuta `brew uninstall cbb`.
 
-En Windows: Configuración, Aplicaciones, «CBB», Desinstalar.
+Al desinstalar se eliminan el programa, el servicio en segundo plano, el agente del portapapeles, el temporizador de actualizaciones, las reglas de cortafuegos añadidas por el instalador y (en macOS) `/Applications/CBB.app` si se instaló desde el `.pkg`. Las claves de tu dispositivo y el estado del grupo permanecen en disco para que, al volver a instalar, el dispositivo regrese al mismo grupo.
 
-Esto quita el programa, el servicio, las reglas de cortafuegos que añadió el instalador y, en un Mac, la app que instaló el `.pkg`. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono). Para salir del grupo y conservar CBB, ejecuta en su lugar `sudo cbb leave`: borra las claves y los archivos del grupo, y el dispositivo puede volver a unirse a un grupo.
+- **Borrar también las claves y el estado del grupo:** Añade `--purge` en sistemas Unix, o ejecuta `uninstall.ps1 -Purge` en un PowerShell de administrador en Windows. Después, quita el dispositivo del grupo desde un dispositivo administrador (`sudo cbb remove NAME` o en la app del teléfono).
+- **Abandonar el grupo sin desinstalar:** Ejecuta `sudo cbb leave` (sin `sudo` en Linux sin root, o `cbb leave` en una terminal de administrador en Windows). Esto borra las claves del dispositivo y los archivos del grupo mientras mantiene instalado Connect Beyond Borders para que el dispositivo pueda volver a unirse a un grupo.

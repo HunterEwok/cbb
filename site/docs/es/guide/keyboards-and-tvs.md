@@ -1,103 +1,162 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0d34c8a9ae24 -->
+<!-- source: 30d3986ec6a3 -->
 # Teclados y televisores
 
-Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Connect Beyond Borders. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
+Para cualquiera que quiera escribir una contraseña larga, una URL o una búsqueda en un televisor, una tableta, una consola de juegos o un ordenador que no ejecute Connect Beyond Borders. Un dispositivo de tu grupo actúa como un teclado Bluetooth, un teclado USB o un mando a distancia de televisor por red.
 
-## Elige una forma
+Los teclados y los mandos de televisor son funciones experimentales en [El laboratorio](lab.md). Para ver el estado actual de las pruebas en hardware real, consulta [Paridad entre plataformas](../parity.md#on-real-devices).
 
-| Forma | Escribe en | Necesita |
+## Elige un método
+
+| Método | Escribe en | Requisitos |
 |---|---|---|
-| [Un teléfono Android como teclado Bluetooth](#an-android-phone-as-a-bluetooth-keyboard) | cualquier cosa que acepte un teclado Bluetooth: televisores, tabletas, teléfonos, ordenadores, la Steam Deck, la PlayStation 5 | Android 10 o posterior con el perfil de teclado Bluetooth |
-| [Un ordenador Linux como teclado Bluetooth](#a-linux-computer-as-a-bluetooth-keyboard) | cualquier cosa que acepte un teclado Bluetooth LE | BlueZ 5.50 o posterior y un adaptador con Bluetooth 4.0 o posterior |
-| [La Nano ESP32 como teclado USB o Bluetooth](#the-nano-esp32-as-a-usb-or-bluetooth-keyboard) | por USB también una BIOS, una petición de cifrado de disco, la Xbox y la Nintendo Switch | una Arduino Nano ESP32 en tu grupo |
-| [Un ordenador como mando del televisor](#a-computer-as-the-tvs-remote) | un Android TV, un Google TV o un Roku de tu red doméstica | un ordenador Linux, macOS, Windows o FreeBSD en casa |
+| [Teléfono como teclado Bluetooth](#a-phone-as-a-bluetooth-keyboard) | Cualquier dispositivo que acepte un teclado Bluetooth: televisores, tabletas, teléfonos, ordenadores, Steam Deck, PlayStation 5 | Teléfono con Android 10 o posterior (con perfil HID de Bluetooth), Aurora OS o HarmonyOS |
+| [Ordenador Linux como teclado Bluetooth](#a-linux-computer-as-a-bluetooth-keyboard) | Cualquier dispositivo que acepte un teclado Bluetooth LE | Linux con BlueZ 5.50 o posterior, adaptador Bluetooth 4.0+ y `cbb-helper` |
+| [Arduino Nano ESP32 como teclado USB o Bluetooth](#the-nano-esp32-as-a-usb-or-bluetooth-keyboard) | Cualquier dispositivo con entrada de teclado USB o BLE, incluidos BIOS/UEFI, peticiones de cifrado de disco, Xbox y Nintendo Switch por USB | Una Arduino Nano ESP32 con el firmware de `esp32/` cargado |
+| [Ordenador como mando del televisor](#a-computer-as-the-tvs-remote) | Android TV, Google TV, Apple TV o Roku en tu red doméstica | Ordenador Linux, macOS, Windows o FreeBSD en casa con `cbb-helper` |
 
-La Xbox y la Nintendo Switch solo aceptan teclados USB, así que para ellas usa la Nano ESP32. macOS, Windows y los iPhone no dejan que ninguna app actúe como teclado Bluetooth.
+Xbox y Nintendo Switch solo aceptan teclados USB, así que usa la Arduino Nano ESP32 para esas consolas. iPhone, macOS y Windows no permiten que las apps actúen como teclado Bluetooth.
 
-## La distribución debe coincidir
+## Haz coincidir la distribución del teclado y la velocidad
 
-Un teclado envía teclas, no caracteres: el dispositivo en el que se escribe convierte cada tecla en un carácter con su propia distribución. Por eso hay que indicar al teclado qué distribución está activa allí, inglés (EE. UU.) o ruso. Un texto con un carácter para el que esa distribución no tiene tecla no se escribe en absoluto, y se te dice cuáles son esos caracteres; no se escribe nada más en su lugar. Un salto de línea pulsa Intro y un tabulador pulsa Tab.
+Un teclado Bluetooth o USB envía códigos de tecla físicos, no caracteres: el dispositivo de destino convierte cada código de tecla en un carácter según su distribución de teclado activa.
 
-Escribir es lento a propósito, 20 caracteres por segundo por defecto: algunos televisores pierden teclas que llegan más rápido. Bájalo si faltan letras.
+- **Distribución:** Configura la distribución del teclado en Connect Beyond Borders para que coincida con la distribución activa en el dispositivo de destino: **Inglés (EE. UU.)** (`us`) o **Ruso** (`ru`). Si tu texto contiene un carácter que la distribución elegida no puede escribir, Connect Beyond Borders rechaza todo el texto e indica los caracteres no compatibles en lugar de escribir caracteres incorrectos. Los saltos de línea envían Intro y los tabuladores envían Tab.
+- **Velocidad:** La velocidad por defecto es de **20 caracteres por segundo**, porque algunos televisores pierden teclas que llegan más rápido. Baja la velocidad (por ejemplo, a 10 caracteres por segundo) si faltan caracteres.
+- **Límite de longitud:** Un teclado Bluetooth o USB escribe como máximo **4096 caracteres** cada vez.
 
-## Un teléfono Android como teclado Bluetooth
+## Un teléfono como teclado Bluetooth
 
-1. En la app, abre Ajustes, Teclado Bluetooth, y activa **Act as a Bluetooth keyboard**. Permite el Bluetooth («Dispositivos cercanos») si lo pide. Si la app dice que el teléfono no puede actuar como teclado, su fabricante dejó fuera el perfil (por ejemplo el Fairphone 6 y algunos teléfonos Huawei, Honor y Xiaomi antiguos); usa otra forma. Si dice que otra app puede ser el teclado del teléfono, desactiva el teclado de esa app: solo una app a la vez puede serlo.
-2. Pulsa **Make this phone visible**. En dos minutos, añade el teléfono en el dispositivo, en sus propios ajustes de Bluetooth, como añadirías un teclado.
-3. En **Type into**, elige el dispositivo. La app dice «Connected to …».
-4. Ajusta **The device's keyboard layout** y, si hace falta, la **Speed** (10, 20 o 40 caracteres por segundo).
-5. Pulsa **Type the clipboard**. El texto aparece donde el dispositivo tiene el foco, así que abre antes un campo de texto allí.
+Compatible con teléfonos **Android**, **Aurora OS** y **HarmonyOS**.
 
-Para que los pegados remotos de un administrador se escriban allí en lugar de en el teléfono, activa el pegado remoto en la app y después **Type remote pastes there**. Un texto con un salto de línea necesita que se permita Intro en el pegado remoto.
+1. Abre **CBB**, ve a **Ajustes**, activa **Ajustes avanzados** y abre **Laboratorio > Teclado Bluetooth**.
+2. Activa **Actuar como teclado Bluetooth** y concede el permiso de Bluetooth si te lo pide.
+   - En Android, si la app informa de que el teléfono no puede actuar como teclado, el fabricante del dispositivo omitió el perfil Bluetooth HID Device; usa otro método. Si otra app ocupa el perfil de teclado, desactívala allí primero porque Android solo permite una app de teclado a la vez.
+3. Empareja el dispositivo de destino con tu teléfono:
+   - **Android:** Toca **Hacer visible este teléfono** (visible durante 2 minutos), empareja tu teléfono en los ajustes de Bluetooth del dispositivo de destino y luego selecciona el destino en **Escribir en**.
+   - **Aurora OS:** Toca **Hacer visible este teléfono** (visible durante 2 minutos) y conéctate a `CBB keyboard` desde los ajustes de Bluetooth del dispositivo de destino.
+   - **HarmonyOS:** Mientras el interruptor del teclado está activado, conéctate a tu teléfono por el nombre del dispositivo desde los ajustes de Bluetooth del dispositivo de destino.
+
+   **Resultado:** La pantalla muestra `Conectado a …` (o `Hay un dispositivo conectado.`).
+
+4. Ajusta **Distribución del teclado del dispositivo** (`Inglés (EE. UU.)` o `Ruso`) y, si hace falta, **Velocidad** (`10`, `20` o `40` caracteres por segundo).
+5. Coloca el foco en un campo de texto del dispositivo de destino y luego toca **Escribir el portapapeles** (en HarmonyOS, toca el botón **Pegar** del sistema junto a **Escribir el portapapeles**).
+
+**Resultado:** Tu teléfono escribe el texto del portapapeles en el campo enfocado del dispositivo de destino.
 
 ## Un ordenador Linux como teclado Bluetooth
 
-```sh
-sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
-sudo cbb keyboard pair             # discoverable for two minutes
-# add "CBB <this computer's name>" on the device, in its Bluetooth settings
-cbb keyboard                       # shows whether it is connected
-echo 'the text' | sudo cbb keyboard type
-```
+Ejecuta estos comandos en un ordenador Linux con `cbb-helper` instalado:
 
-`on` también admite `-rate N`, la velocidad, de 5 a 60 caracteres por segundo, y `-pastes`, que envía los pegados remotos del grupo al dispositivo en lugar de a la pantalla de este ordenador: `sudo cbb keyboard on -layout us -rate 10 -pastes`. `sudo cbb keyboard off` lo detiene. Los teclados y ratones Bluetooth del propio ordenador siguen funcionando.
+1. Registra el teclado Bluetooth LE con BlueZ:
+
+   ```sh
+   sudo cbb keyboard on -layout us
+   ```
+
+   Opciones adicionales: `-rate N` (de 5 a 60 caracteres por segundo; 20 por defecto) y `-pastes` (redirige los [pegados remotos](remote-paste.md) entrantes al dispositivo Bluetooth emparejado en lugar de a la pantalla de este ordenador; los saltos de línea requieren `sudo cbb paste-receive on -enter`).
+
+2. Haz visible el ordenador durante 2 minutos:
+
+   ```sh
+   sudo cbb keyboard pair
+   ```
+
+3. En el dispositivo de destino, abre sus ajustes de Bluetooth y emparéjalo con `CBB <nombre de tu ordenador>`.
+4. Comprueba la conexión y escribe texto:
+
+   ```sh
+   cbb keyboard
+   echo 'the text' | sudo cbb keyboard type
+   ```
+
+**Resultado:** `cbb keyboard` confirma que hay un dispositivo conectado, y `cbb keyboard type` imprime `Typed.` tras enviar el texto. Los teclados y ratones Bluetooth propios de tu ordenador Linux siguen funcionando con normalidad.
+
+Para desactivar el teclado Bluetooth, ejecuta `sudo cbb keyboard off`.
 
 ## La Nano ESP32 como teclado USB o Bluetooth
 
-La placa es un miembro de tu grupo. En su consola:
+El [firmware para Arduino Nano ESP32](../../esp32/README.md) ejecuta un teclado USB de arranque y un teclado Bluetooth LE controlados desde su consola serie (unirse a un grupo y sincronizar el portapapeles están en la [hoja de ruta](../roadmap.md)).
 
-- `usb keyboard` convierte su puerto USB en un teclado, con la consola como segundo puerto serie a su lado; conéctala al dispositivo. Funciona antes de que arranque ningún sistema: en una BIOS, una configuración UEFI o una petición de cifrado de disco.
-- `ble on`, y después `ble pair`, la convierte en un teclado Bluetooth LE; añade «CBB Nano ESP32» en el dispositivo en dos minutos. Recuerda hasta cuatro dispositivos; `ble forget` los olvida.
-- `layout ru` o `layout us` y `rate N` fijan la distribución y la velocidad.
-- `type TEXT` escribe en el dispositivo Bluetooth conectado, o si no en el USB.
+1. Conéctate a la consola serie de la placa y elige un modo:
+   - **Teclado USB:** Ejecuta `usb keyboard`. La placa se reinicia con su puerto USB-C actuando a la vez como teclado de arranque (que funciona en BIOS/UEFI, peticiones de cifrado de disco y consolas) y como consola serie. Conecta la placa al dispositivo de destino.
+   - **Teclado Bluetooth LE:** Ejecuta `ble on`, luego `ble pair`, y empareja `CBB Nano ESP32` en los ajustes de Bluetooth del dispositivo de destino en un plazo de 2 minutos. La placa recuerda hasta 4 dispositivos emparejados (`ble forget` los borra).
+2. Ajusta la distribución del destino y la velocidad de escritura:
 
-Los pegados remotos del grupo hacia la placa se escriben del mismo modo. La guía de la propia placa está en [esp32/](../../esp32/README.md).
+   ```text
+   layout us
+   rate 20
+   ```
+
+   Usa `layout ru` para ruso.
+3. En un firmware compilado con `--features console-type`, escribe texto con:
+
+   ```text
+   type hello world
+   ```
+
+**Resultado:** La placa escribe en el dispositivo Bluetooth conectado si hay uno activo, o en el teclado USB en caso contrario.
 
 ## Un ordenador como mando del televisor
 
-Un ordenador de casa puede escribir en un televisor por la red, como hace su mando. No se instala nada en el televisor, y el televisor nunca se une al grupo.
+Cualquier ordenador Linux, macOS, Windows o FreeBSD con `cbb-helper` en tu red doméstica puede escribir en un Android TV, Google TV, Apple TV o Roku por la red local. No se instala nada en el televisor, y el televisor nunca se une a tu grupo. Usa `sudo` en sistemas Unix (omite `sudo` en una terminal de administrador en Windows).
 
-Un Android TV o un Google TV se empareja una vez:
+### 1. Emparejar o añadir el televisor
 
-```sh
-sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code                     # type 123456 within two minutes
-```
+Elige los comandos correspondientes a tu televisor:
 
-Un Apple TV se empareja igual, con el PIN de cuatro cifras que muestra. Antes, en el Apple TV, pon Ajustes, AirPlay y HomeKit, Permitir acceso en "Todos en la misma red": con "Solo quienes comparten esta casa" rechaza cualquier emparejamiento.
+- **Android TV o Google TV:**
 
-```sh
-sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code                     # type 1234 within two minutes
-```
+  ```sh
+  sudo cbb remote add -name living-room-tv living-room-tv.lan
+  sudo cbb remote code
+  ```
 
-Un Roku no tiene emparejamiento ni cifrado: el texto cruza tu red doméstica como HTTP sin cifrar, así que solo se añade cuando lo dices con `-consent`. En el Roku, pon antes Ajustes, Sistema, Ajustes avanzados del sistema, Control por aplicaciones móviles en Habilitado o Permisivo.
+  Escribe el código de 6 dígitos que muestra la pantalla del televisor en un plazo de 2 minutos.
 
-```sh
-sudo cbb remote add -roku -consent 192.168.1.40
-```
+- **Apple TV:** Primero configura **Ajustes > AirPlay y HomeKit > Permitir acceso** en el Apple TV como **Todos en la misma red** (**Solo quienes comparten esta casa** rechaza el emparejamiento). Luego ejecuta:
 
-Después abre un campo de búsqueda o de texto en el televisor con su propio mando, y escribe:
+  ```sh
+  sudo cbb remote add -appletv -name lounge 192.168.1.30
+  sudo cbb remote code
+  ```
 
-```sh
-echo 'the film' | sudo cbb remote type
-sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
-```
+  Escribe el PIN de 4 dígitos que muestra el Apple TV en un plazo de 2 minutos.
 
-`cbb remote` enumera los televisores, `-tv NAME` elige uno cuando hay varios, y `sudo cbb remote remove NAME` olvida uno. Un Android TV o un Apple TV que se restableció, o que olvidó este ordenador, debe volver a emparejarse.
+- **Roku:** El protocolo External Control Protocol de Roku usa HTTP sin cifrar y sin emparejamiento. Primero configura **Ajustes > Sistema > Ajustes avanzados del sistema > Control por aplicaciones móviles** en el Roku como **Habilitado** o **Permisivo**. Luego añádelo con `-consent`:
+
+  ```sh
+  sudo cbb remote add -roku -consent 192.168.1.40
+  ```
+
+**Resultado:** Ejecuta `cbb remote` sin argumentos para comprobar que el televisor aparece en tu lista.
+
+### 2. Escribir en el televisor o reenviar pegados remotos
+
+1. Abre un cuadro de búsqueda o un campo de texto en el televisor con su propio mando.
+2. Escribe texto desde el ordenador:
+
+   ```sh
+   echo 'the film' | sudo cbb remote type
+   ```
+
+   Añade `-tv NAME` cuando tengas más de un televisor configurado. En Android TV y Roku, los saltos de línea pulsan Intro; en Apple TV, los saltos de línea permanecen dentro del texto.
+
+   **Resultado:** El texto aparece en el campo de texto enfocado del televisor y `cbb remote type` imprime `Typed.`
+
+3. Opcionalmente, redirige los [pegados remotos](remote-paste.md) entrantes de los administradores de tu grupo al televisor (un televisor a la vez; los saltos de línea requieren `sudo cbb paste-receive on -enter`):
+
+   ```sh
+   sudo cbb remote pastes living-room-tv on
+   ```
+
+Para olvidar un televisor, ejecuta `sudo cbb remote remove NAME`. Si un Android TV o Apple TV se restablece u olvida tu ordenador, vuelve a emparejarlo.
 
 ## Seguridad
 
-- Un teclado Bluetooth escribe donde el dispositivo tiene el foco, como si estuvieras ante su teclado. Empareja solo con los dispositivos en los que quieras escribir, y olvídalo en ambos extremos cuando dejes de usarlo.
-- Con los pegados remotos enviados a un teclado o a un televisor, cualquier administrador de tu grupo puede escribir allí. Actívalo solo donde lo necesites; se desactiva con el pegado remoto.
-- A un televisor solo se llega en la red doméstica: una dirección fuera de ella se rechaza, resuelva el nombre luego a lo que resuelva.
-- El texto de un Roku no está cifrado en la red doméstica. No envíes contraseñas a un Roku.
+- **Teclados Bluetooth:** Un teclado Bluetooth escribe donde el dispositivo emparejado tiene el foco del teclado. Empareja solo con los dispositivos que quieras controlar y olvida el emparejamiento en ambos lados cuando dejes de usarlo.
+- **Pegados remotos a teclados y televisores:** Mientras el reenvío de pegados remotos está activado (`-pastes` o `cbb remote pastes TV on`), cualquier administrador de tu grupo puede escribir en ese dispositivo. Desactivar el pegado remoto también detiene el reenvío.
+- **Solo en la red doméstica para televisores:** `cbb remote` solo se conecta a direcciones de tu red doméstica y rechaza cualquier dirección fuera de ella.
+- **Nada de contraseñas a un Roku:** El texto enviado a un Roku cruza tu red doméstica como HTTP sin cifrar. Nunca envíes contraseñas ni otros secretos a un Roku.
 
-## Límites
-
-- En un televisor real solo se ha probado con un Apple TV 4K, escribiendo con `cbb remote`; lo demás se prueba contra un BlueZ, un Android TV, un Apple TV y un Roku simulados.
-- Las apps de los teléfonos todavía no pueden ser el mando de un televisor; los televisores Samsung y LG vendrán después ([hoja de ruta](../roadmap.md), punto 25).
-- Un teclado escribe como máximo 4096 caracteres cada vez.
-
-Todos los parámetros están en [los comandos](../reference/cli.md); los puertos de los televisores, en [dispositivos, puertos y archivos](../reference/devices.md#ports); cómo funciona por dentro, en la [especificación de las apps](../apps.md#android-the-bluetooth-keyboard).
+Para consultar todas las opciones de la línea de comandos, consulta [Comandos](../reference/cli.md). Para los puertos de red de los televisores, consulta [Dispositivos, puertos y archivos](../reference/devices.md#ports).

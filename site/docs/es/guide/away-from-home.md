@@ -1,116 +1,200 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 68da0e7aeffa -->
+<!-- source: 8a4822a1fdc4 -->
 # Fuera de casa
 
-En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
+Para cualquiera que quiera que sus dispositivos sigan sincronizando fuera de su red doméstica. En esta página configuras un ordenador de casa como **hub**, activas la sincronización fuera de casa en tus demás dispositivos, configuras opcionalmente un **reenviador** o un **relé ciego** e invitas dispositivos que no están en casa.
 
-> Entre ordenadores está hecho y probado en CI, todavía no en dispositivos reales; el iPhone se ha sincronizado con datos móviles a través de un hub en un Mac y el reenviador del proyecto. La [tabla de estado](../../README.md#status) del README dice qué se ha probado y dónde.
+En casa, tus dispositivos se conectan directamente en tu red local. Fuera de casa, llegan a un hub en casa mediante el túnel cifrado WireGuard propio de tu grupo. Para saber cómo funcionan los hubs, los reenviadores y los relés ciegos, consulta [Cómo funciona](how-it-works.md#away-from-home-the-hub). Para ver qué puede ver cada servidor, consulta [Privacidad: quién ve qué](privacy.md).
 
-La sincronización fuera de casa está desactivada hasta que la actives, en el hub y en cada dispositivo que deba usarla. Configúrala **mientras todos los dispositivos están en casa**: es entonces cuando se entregan unos a otros las claves del túnel.
+La sincronización fuera de casa permanece desactivada hasta que la actives en el hub y en cada dispositivo que la necesite. Configúrala **mientras todos los dispositivos están en tu red doméstica**, porque los dispositivos intercambian las claves del túnel localmente con el hub.
 
 ## 1. Elige el hub
 
-El hub es un ordenador: Linux, Windows, un Mac, FreeBSD o un router con OpenWrt u OPNsense. El
-mejor está siempre encendido: un servidor doméstico, un NAS, una Raspberry Pi. Un ordenador que
-enciendes solo cuando lo necesitas también sirve; mientras el hub está apagado, nada se
-sincroniza fuera de casa, y en casa todo sigue sincronizándose.
+Un **hub** es un ordenador, un router o una placa pequeña en casa (Linux, macOS, Windows, FreeBSD, OpenWrt u OPNsense). Un teléfono, un reloj o una [instalación sin root en Linux](install.md#without-sudo-rootless) nunca es un hub. Elige un dispositivo que permanezca encendido la mayor parte del tiempo, como un servidor doméstico, un NAS, un router o una Raspberry Pi. Mientras el hub está apagado, la sincronización fuera de casa se detiene, mientras que los dispositivos en casa siguen sincronizando directamente.
 
-Un hub es de uno de dos tipos, y eliges cuál al nombrarlo:
+Elige qué tipo de hub quieres:
 
-- **Un hub que lee las copias** es un administrador del grupo, así que las copias se sellan para
-  él como para tus otros dispositivos, y el [nivel de claves](keys.md#the-three-levels) del
-  grupo se aplica a sus claves. En un grupo creado en un teléfono, el teléfono hace primero
-  administrador al ordenador.
-- **Un hub que solo pasa las copias** es cualquier otro ordenador del grupo. Las copias se sellan
-  de extremo a extremo para tus otros dispositivos y nunca para él, así que no lee ninguna, y sus
-  claves no necesitan un chip de seguridad: una Raspberry Pi o un NAS en Docker con sus claves en
-  un archivo es una buena opción. No hace, lee ni pega copias propias.
+- **Un hub que lee las copias:** El **dispositivo principal** de tu grupo (si es un ordenador) o un ordenador **administrador**. Los dispositivos sellan las copias para él igual que para cualquier otro dispositivo lector, y el [nivel de claves](keys.md#the-three-levels) de tu grupo se aplica a sus claves.
+- **Un hub que solo reenvía las copias:** Cualquier ordenador normal o placa pequeña de tu grupo. Los dispositivos sellan las copias de extremo a extremo sin incluirlo, así que no lee ninguna copia, no hace copias propias, no acepta pegados remotos ni acciones rápidas y no necesita chip de seguridad por hardware. Solo el dispositivo principal del grupo puede designar un hub que solo reenvía las copias.
 
-En un teléfono administrador, toca un ordenador administrador y luego **Make it a hub**: se
-convierte en un hub que lee las copias. La app del Mac y la app de la bandeja preguntan el tipo. Desde un ordenador administrador,
-`sudo cbb global hub -on DEVICE -forward-only` convierte otro ordenador en un hub que solo pasa
-las copias. Antes debe estar activada allí la sincronización fuera de casa (paso 2 más abajo,
-con `sudo cbb global on`).
+Un grupo puede tener varios hubs en orden de prioridad; solo el hub en línea con mayor prioridad presta servicio cada vez. Para fijar el orden desde el dispositivo principal (o desde un ordenador administrador que pueda ser hub), ejecuta `sudo cbb global hubs NAME...`.
 
 ## 2. Actívalo en el hub
 
-En Linux, en una terminal del hub (en Windows, sin `sudo`, en una terminal de administrador):
+Puedes configurar el hub desde una app de escritorio, desde un teléfono administrador o desde una terminal.
+
+### Usando la app para Mac o la app de la bandeja
+
+1. Abre **CBB** en el ordenador que quieras usar como hub.
+2. Abre la página de ese mismo ordenador y haz clic en **Convertirlo en hub**.
+3. Si te lo pregunta, elige **Un hub que lee las copias** o **Un hub que solo las reenvía**, y confirma activar la sincronización fuera de casa.
+
+**Resultado:** La app activa la sincronización fuera de casa en este ordenador y lo configura como hub mediante el reenviador del proyecto en `cbb.tools`, así que no necesitas abrir ningún puerto en tu router.
+
+### Usando un teléfono administrador
+
+1. En el ordenador que quieras convertir en hub, activa primero la sincronización fuera de casa (`sudo cbb global on`, o activa **En todas partes** en la app de escritorio).
+2. En tu teléfono, abre **CBB** y toca el ordenador en **Inicio**.
+3. Si el ordenador aún no es administrador (y quieres un hub que lea las copias), toca **Hacerlo administrador** y confirma.
+4. Toca **Convertirlo en hub** y confirma con tu cara, huella, código o (en Aurora OS) tu PIN de administrador.
+
+**Resultado:** El ordenador pasa a ser un hub a través del reenviador del proyecto en `cbb.tools`.
+
+### Usando una terminal
+
+En Linux, macOS o FreeBSD, ejecuta estos comandos en el ordenador hub (en Windows, omite `sudo` y usa una terminal de administrador):
+
+1. Activa la sincronización fuera de casa:
+
+   ```sh
+   sudo cbb global on
+   ```
+
+   Si el ordenador guarda sus claves en archivos, lee el aviso y escribe `yes`.
+
+   **Resultado:** El servicio permite conexiones salientes del túnel a los servidores de tu grupo y mantiene bloqueados todos los demás destinos de internet.
+
+2. Convierte el ordenador en un hub. Elige una de las siguientes opciones:
+   - **Conexión directa con una dirección pública doméstica** (IPv4, IPv6 o un nombre de dominio que apunte a tu casa):
+
+     ```sh
+     sudo cbb global hub 203.0.113.7:8764
+     ```
+
+   - **A través de un reenviador** (cuando tu casa no tiene dirección pública o no quieres abrir un puerto en el router):
+
+     ```sh
+     sudo cbb global hub
+     ```
+
+   **Resultado:** Si diste una dirección doméstica, `cbb global hub` enumera la regla de cortafuegos UDP que necesita y pregunta antes de añadirla. Sin direcciones, el hub se registra en el reenviador del proyecto en `cbb.tools`.
+
+3. Si diste una dirección pública doméstica y tu hub está detrás de un router, abre los ajustes del router y redirige el **puerto UDP 8764** (o el puerto que hayas puesto con `-port`) a la dirección IP local del hub. Busca **Reenvío de puertos** (Port Forwarding) o **Servidor virtual** (Virtual Server) en los ajustes de tu router.
+
+   En un **router OpenWrt** que actúe como hub, ejecuta los comandos anteriores como `root` sin `sudo`. No hace falta redirección de puertos salvo que el router esté detrás de otro router (doble NAT): cuando confirmas la pregunta del cortafuegos, Connect Beyond Borders añade la regla UDP de WAN a las propias reglas de cortafuegos del servicio sin editar `/etc/config/firewall`.
+
+Para convertir otro ordenador en un hub que solo reenvía las copias desde el dispositivo principal (llamado *root* en las herramientas de línea de comandos), activa primero la sincronización fuera de casa en ese ordenador y luego ejecuta en el dispositivo principal:
 
 ```sh
-sudo cbb global on                        # read what it says about the keys, type yes
-sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches your home at
+sudo cbb global hub -on DEVICE -forward-only
 ```
-
-En la app de Mac o en la app de la bandeja, abre la página del propio ordenador y elige **Make it a hub**: pregunta una vez y activa con él la sincronización fuera de casa, a través del reenviador del proyecto.
-
-- **La dirección** es la dirección IP pública de tu casa (IPv4 o IPv6), o un nombre que apunte a ella. La página de estado del router la muestra, o un sitio como `ifconfig.me`.
-- **El router** debe redirigir el puerto UDP 8764 al hub. Busca «reenvío de puertos» o «servidor virtual» en sus ajustes.
-- **El cortafuegos del hub**: `cbb global hub` enumera la regla que necesita y pregunta antes de añadirla.
-
-**Un router OpenWrt como hub** no necesita redirección de puertos: ejecuta los mismos comandos en el router, como root y sin `sudo`. Con Yes, la regla para el puerto UDP del hub desde `wan` pasa a formar parte de las reglas de cortafuegos del propio servicio, que van y vienen con el servicio; `/etc/config/firewall` queda como estaba. Un router tras otro router (doble NAT) sigue necesitando la redirección en el router de delante, o un reenviador.
-
-¿No tienes dirección pública porque tu proveedor te pone tras un NAT de operador? Entonces el router no puede ayudar; usa en su lugar un reenviador (paso 5).
 
 ## 3. Actívalo en los demás dispositivos
 
-En casa, con el hub encendido:
+Mientras todos los dispositivos están en tu red doméstica y el hub está en marcha:
 
-- **Ordenadores**: `sudo cbb global on` (en Windows, en una terminal de administrador).
-- **Teléfonos**: en la app, Ajustes, **Sync away from home**. Después deja la app abierta un momento en casa, para que se encuentre con el hub. Un iPhone sincroniza fuera de casa mientras la app está abierta; Android también en segundo plano.
-- **Un dispositivo pequeño** (un router, una Raspberry Pi): `sudo cbb global on` en el dispositivo ([dispositivos pequeños](../../member/README.md#sync-away-from-home)).
+- **Ordenadores y dispositivos pequeños:** Ejecuta `sudo cbb global on` (en una terminal de administrador sin `sudo` en Windows), o activa **En todas partes** en la app para Mac o en la app de la bandeja. Ten en cuenta que las compilaciones para routers MIPS solo sincronizan en la red doméstica; consulta [Dispositivos, puertos y archivos](../reference/devices.md).
+- **Teléfonos:** Abre **CBB** y activa **En todas partes** (el interruptor del globo) desde **Inicio**; después mantén la app abierta brevemente en casa para que intercambie las claves del túnel con el hub. Los teléfonos Android siguen sincronizando fuera de casa en segundo plano; los teléfonos iPhone, Aurora OS y HarmonyOS sincronizan mientras la app está abierta.
+
+**Resultado:** Cada dispositivo recibe la oferta de túnel del hub e intercambia con él las claves del túnel.
 
 ## 4. Compruébalo
 
-```sh
-cbb global
-```
+1. En cada ordenador, ejecuta:
 
-En cada ordenador muestra si la sincronización fuera de casa está activada, qué dispositivo es el hub, si el túnel está levantado y qué falló si no lo está. Después saca un portátil o un teléfono del Wi-Fi de casa (basta con los datos móviles del teléfono) y copia algo.
+   ```sh
+   cbb global
+   ```
 
-Cuando no conecta, los motivos habituales son que el router no redirige el puerto o que la dirección no es la que ve internet. [Solución de problemas](troubleshooting.md#sync-away-from-home) tiene más.
+   **Resultado:** La salida muestra si la sincronización fuera de casa está activada, qué dispositivo es el hub, si el túnel está conectado y cualquier error.
 
-Cuando cambia la dirección de tu casa, el hub se lo dice a los dispositivos la próxima vez que se encuentren; en un ordenador, `cbb global` indica entonces que ejecutes `sudo cbb global allow`.
+2. Saca un teléfono o un portátil del Wi-Fi de casa (por ejemplo, cambia un teléfono a datos móviles) y copia una línea de texto.
+
+   **Resultado:** El texto copiado llega a tus dispositivos de casa.
+
+Si el túnel no conecta, comprueba la redirección del puerto UDP y la dirección pública de tu router, o consulta [Solución de problemas: sincronización fuera de casa](troubleshooting.md#sync-away-from-home).
+
+Si la dirección pública de tu casa cambia más adelante, el hub comparte la dirección nueva la próxima vez que tus dispositivos se encuentren. Cuando `cbb global` o `cbb status` informa de que la regla saliente de red del sistema va retrasada, ejecuta `sudo cbb global allow` en ese ordenador para actualizar la regla.
 
 ## 5. Cuando internet no puede llegar a tu casa: un reenviador
 
-Tras un NAT de operador, el hub se registra en cambio en un **reenviador** de internet, mediante una conexión saliente, así que no hace falta abrir nada en casa. El reenviador solo pasa paquetes cifrados y no guarda claves.
+Muchos proveedores de internet colocan los hogares tras un NAT de operador (una dirección IP pública compartida), que bloquea las conexiones entrantes incluso con redirección de puertos. Un **reenviador** resuelve esto: tu hub abre una conexión saliente hacia el reenviador, y los dispositivos fuera de casa envían paquetes cifrados del túnel al hub a través de él. No hace falta abrir ningún puerto en el router, y el reenviador no guarda ninguna clave del grupo.
 
-```sh
-sudo cbb global hub
-```
+Elige una de estas dos opciones en tu hub:
 
-Sin direcciones propias, el hub pasa por el reenviador del proyecto en `cbb.tools`: cbb conoce su dirección y su clave. `-forwarder default` lo añade a un hub que además tiene sus propias direcciones. Para [tu propio reenviador](../admin/self-hosting.md#a-forwarder), en cualquier servidor pequeño, da en su lugar su dirección y su clave: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`.
+- **Usar el reenviador del proyecto en `cbb.tools`:** Ejecuta `sudo cbb global hub` sin dirección, o añade `-forwarder default` junto con las direcciones públicas propias de tu hub:
 
-El hub puede tener a la vez su propia dirección y un reenviador: los dispositivos prueban primero el hub y el reenviador en último lugar.
+  ```sh
+  sudo cbb global hub -forwarder default 203.0.113.7:8764
+  ```
+
+- **Usar tu propio reenviador:** Ejecuta un reenviador en cualquier servidor con dirección pública ([Tus propios servidores](../admin/self-hosting.md#a-forwarder)) y pasa después su dirección y su clave al hub:
+
+  ```sh
+  sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key KEY
+  ```
+
+**Resultado:** Cuando un hub tiene tanto direcciones directas como un reenviador, los dispositivos fuera de casa prueban primero las direcciones directas y recurren al reenviador si las conexiones directas fallan.
 
 ## 6. Redes que bloquean las VPN
 
-Los hoteles, las oficinas y algunos países bloquean WireGuard. El hub puede disfrazar el túnel con AmneziaWG o esconderlo dentro de VLESS: consulta [Redes que bloquean las VPN](blocked-networks.md).
+Los hoteles, las oficinas, los operadores móviles y algunos países bloquean WireGuard. Por defecto, un hub disfraza su túnel con **AmneziaWG** y (cuando usa un reenviador compatible) con **VLESS** sobre HTTPS. Para configurar o ajustar el disfraz del túnel, consulta [Redes que bloquean las VPN](blocked-networks.md).
 
 ## Un ordenador que no está en casa: una invitación
 
-Un ordenador lejano puede unirse al grupo con una invitación del hub, una vez que la sincronización fuera de casa funciona:
+Cuando la sincronización fuera de casa ya funciona a través de un hub, puedes invitar a un ordenador o a un teléfono que no esté en tu red doméstica. Una invitación sirve una sola vez y dura 1 hora por defecto (hasta 24 horas con `-for`).
 
-```sh
-sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
-```
+### Invitar y admitir un dispositivo
 
-Envía el archivo al nuevo ordenador por un canal de confianza, como una aplicación de mensajería que uses contigo mismo; es un secreto hasta que se usa. Allí, ejecuta `sudo cbb pair -invite cbb.cbbinvite`. Ambos ordenadores muestran la huella de la clave del nuevo; en el hub, escribe `yes` solo si coinciden. Los teléfonos todavía no pueden unirse por invitación: añádelos en casa.
+1. En el dispositivo principal o en un administrador, crea una invitación:
+   - **En una terminal en un ordenador administrador:** Ejecuta `sudo cbb invite` para un ordenador (crea `cbb.cbbinvite`), o `sudo cbb invite -phone` para un teléfono (muestra un código QR). Mantén el comando en marcha hasta que el nuevo dispositivo se una.
+   - **En una app de teléfono o escritorio:** Toca **+** en **Inicio** (o elige **Añadir un dispositivo > ¿El dispositivo está lejos? Envía una invitación** en una app de escritorio) y sigue las indicaciones.
+2. Envía el archivo de invitación, el texto (`cbb://join#...`) o el código QR al nuevo dispositivo por un canal de confianza. Cualquiera que tenga una invitación sin usar puede pedir unirse, aunque tú sigues aprobando la admisión comprobando las huellas de clave.
+3. En el nuevo dispositivo, usa la invitación:
+   - **En un ordenador (terminal):** Ejecuta `sudo cbb pair -invite cbb.cbbinvite` (o `sudo cbb pair -invite -` y pega el texto `cbb://join#...` en la entrada estándar).
+   - **En un ordenador (app de escritorio):** Elige **Unirse con una invitación** y pega el texto de la invitación.
+   - **En un teléfono:** Abre **CBB**, toca **Unirse con una invitación** y escanea el código QR, pega el texto de la invitación o abre el archivo de invitación.
 
-Otras formas de unirse desde lejos, por SSH o con tu propia VPN, están en [Sin la app](without-app.md#joining-from-another-network).
+   **Resultado:** Ambos dispositivos muestran la huella de la clave del dispositivo nuevo.
+
+4. Compara la huella de la clave que muestra el dispositivo que invita con la que muestra el nuevo dispositivo. Escribe `yes` (o toca **Admitir**) solo si coinciden exactamente.
+
+**Resultado:** El nuevo dispositivo se une a tu grupo y empieza a sincronizar a través del hub. `cbb invite` borra el archivo temporal de invitación al terminar.
+
+Para añadir en su lugar un ordenador desde otra red por SSH o mediante tu propia VPN, consulta [Sin la app: unirse desde otra red](without-app.md#joining-from-another-network).
 
 ## Sin ordenador para el hub
 
-Un teléfono nunca es el hub: un hub es un ordenador, un router o una placa pequeña como una Raspberry Pi. Sin uno, los dispositivos se encuentran en un **relé ciego** en lugar de un hub, el del proyecto o uno en tu propio servidor: los ordenadores con `cbb global relay`, los teléfonos en **Blind relay** de Ajustes. El relé no puede leer el portapapeles, pero ve qué dispositivos se comunican, cuándo y cuánto. Consulta [cómo ejecutar tus propios servidores](../admin/self-hosting.md#a-blind-relay).
+Un teléfono nunca es un hub. Si tu grupo no tiene ningún ordenador, router o placa pequeña que actúe como hub (por ejemplo, un grupo solo de teléfonos), tus dispositivos pueden encontrarse en un **relé ciego**. Ambos dispositivos deben estar en línea al mismo tiempo para intercambiar una copia.
 
-El proyecto mantiene un relé ciego en `cbb.tools` que cualquier grupo puede usar: `sudo cbb global relay default` conoce su dirección y su clave, y se mantiene al día solo cuando el proyecto las cambia.
+Un relé ciego no puede leer tu portapapeles, pero ve qué seudónimos temporales de dispositivos están en línea a la vez, sus direcciones IP, los horarios y el volumen de tráfico. Solo el **dispositivo principal** del grupo activa o desactiva un relé ciego para el grupo, y solo después de que aceptes lo que ve el relé.
+
+### Activar un relé ciego
+
+- **En un teléfono (dispositivo principal):** Abre **Ajustes**, activa **Ajustes avanzados**, toca **Relé ciego** y elige el relé del proyecto o introduce la dirección y la clave de tu propio relé. Confirma el aviso.
+- **En un ordenador (dispositivo principal):**
+  - Usar el relé abierto del proyecto en `cbb.tools:8765`:
+
+    ```sh
+    sudo cbb global relay default
+    ```
+
+  - Usar tu propio relé ([Tus propios servidores](../admin/self-hosting.md#a-blind-relay)):
+
+    ```sh
+    sudo cbb global relay 198.51.100.9:8764 -key KEY
+    ```
+
+  Lee lo que puede ver el relé y escribe `yes`.
+
+**Resultado:** Los ajustes de tu grupo nombran el relé, y los dispositivos con **En todas partes** activado se encuentran allí.
+
+Para dejar de usar un relé ciego, ejecuta `sudo cbb global relay off` en el ordenador principal, o abre **Ajustes > Ajustes avanzados > Relé ciego** en el teléfono principal y toca **Dejar el relé**.
 
 ## Desactivarlo
 
-Para que un ordenador deje de ser el hub pero siga sincronizando fuera de casa, ejecuta allí `sudo cbb global hub off`, o elige **Stop being the hub** en su página de la app de Mac o de la app de la bandeja; un administrador también puede hacerlo para otro ordenador (`sudo cbb global hub off -on NOMBRE`). Los dispositivos conectados a él pasan al siguiente hub del grupo. Si no hay otro hub, pregunta antes, porque los dispositivos fuera de casa dejan de sincronizar hasta que un dispositivo vuelva a ser hub.
+### Hacer que un ordenador deje de ser un hub
 
-```sh
-sudo cbb global off
-```
+Para que un ordenador deje de actuar como hub manteniendo activada en él la sincronización fuera de casa:
 
-Olvida las claves del túnel en ese dispositivo. Las claves nuevas de un `cbb global on` posterior solo llegan al hub en la red doméstica, así que un dispositivo que esté fuera ahora volverá a sincronizar solo cuando llegue a casa. En un teléfono, desactiva el interruptor en Ajustes.
+- **En la app para Mac o la app de la bandeja:** Abre la página del hub y haz clic en **Dejar de ser el hub**.
+- **En una terminal:** Ejecuta `sudo cbb global hub off` en el hub, o `sudo cbb global hub off -on NAME` desde un ordenador administrador.
+
+**Resultado:** Los dispositivos fuera de casa conectados cambian automáticamente al siguiente hub del grupo. Si el grupo no tiene otro hub, Connect Beyond Borders pide confirmación antes de detenerlo (pasa `-yes` en scripts para confirmar), porque los dispositivos fuera de casa dejan de sincronizar hasta que se configure otro hub.
+
+### Desactivar la sincronización fuera de casa en un dispositivo
+
+- **En un ordenador:** Ejecuta `sudo cbb global off` (en Windows, `cbb global off` en una terminal de administrador), o desactiva **En todas partes** en la app de escritorio.
+- **En un teléfono:** Desactiva **En todas partes** en **Inicio**.
+
+**Resultado:** El dispositivo olvida sus claves del túnel y deja de sincronizar fuera de casa. En Linux y Windows, `cbb global off` también quita los servidores del grupo de la regla de red saliente del sistema. Como las claves nuevas del túnel se intercambian con el hub en tu red doméstica, un dispositivo que desactive la sincronización fuera de casa estando fuera solo reanuda la sincronización fuera de casa cuando vuelva a conectarse en casa.
