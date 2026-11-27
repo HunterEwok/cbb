@@ -552,7 +552,7 @@ func controlSocket(ctx context.Context, r *Report, f *Fleet) {
 	}
 	for _, c := range []struct{ name, want string }{
 		{"junk", "closed"}, {"long", "closed"}, {"big", "closed"}, {"negative", "closed"},
-		{"unknown", "answered: "}, {"admin", "answered: \"revoke\" changes the group"}, {"short", "closed"},
+		{"unknown", "answered: "}, {"admin", "answered: \"remove\" changes the group"}, {"short", "closed"},
 		{"idle-100", "100 open, 36 closed, status refused while open, answered after"}, {"status", "answered"},
 	} {
 		r.Do(p+c.name, func() error {

@@ -3377,7 +3377,8 @@ with 0.5 is set up again once. The details follow.
   `cbb status` for the devices, `cbb remove` instead of revoke, and the recovery key for a
   change of root. G26 takes the root with `cbb recovery` and the sheet that `cbb new` showed,
   G27 checks that `cbb takeover`, `cbb takeover -delay` and `cbb handover` are refused with a
-  pointer to `cbb recovery`, and the random walk (G40) changes the root the same way.
+  pointer to `cbb recovery`, the random walk (G40) changes the root the same way, and the
+  control-socket case expects the refusal of `remove`, the operation it sends.
 - `cbb takeover`, `cbb takeover -delay` and `cbb handover` print only the service's answer,
   which points to the recovery key, and no longer a claim that waits; a recovery the service
   did not finish says so. `cbb`'s help shows that `cbb remote code` reads the TV's code from
