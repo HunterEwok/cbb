@@ -75,6 +75,8 @@ with 0.5 is set up again once. The details follow.
 - The Mac App Store build and offering the iPhone app in France are planned for 0.7 (roadmap 43).
 - CodeQL's Kotlin analysis keeps Gradle and its dependencies in the Actions cache, as the Android
   jobs do, so Maven Central's limit (status 429) no longer stops it.
+- The away-from-home tests give their hubs UDP ports from below the systems' ephemeral ranges,
+  so a tunnel's socket cannot take a stopped hub's port before the hub starts again.
 - docs/format.md: the wire format of 0.6 byte by byte, written from the core's tables: the CBOR
   profile, keys, envelopes, every record, statement, command, grant, credential, message and copy,
   pairing, the key container, the ceilings and the registries. The code's "format section N"

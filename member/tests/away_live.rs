@@ -23,10 +23,6 @@ fn has(e: &str, part: &str) {
     assert!(e.contains(part), "{e:?} does not say {part:?}");
 }
 
-fn free_udp() -> u16 {
-    UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
-}
-
 /// A local UDP port that passes each datagram to the hub's port and back,
 /// as `cbb next link -udp` does for a ZX Spectrum Next; it counts what it
 /// passed.
