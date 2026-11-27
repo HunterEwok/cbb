@@ -73,6 +73,8 @@ with 0.5 is set up again once. The details follow.
   on every language, and one English text has one translation (D-133;
   [apps](docs/apps.md), "Words in the apps").
 - The Mac App Store build and offering the iPhone app in France are planned for 0.7 (roadmap 43).
+- CodeQL's Kotlin analysis keeps Gradle and its dependencies in the Actions cache, as the Android
+  jobs do, so Maven Central's limit (status 429) no longer stops it.
 - docs/format.md: the wire format of 0.6 byte by byte, written from the core's tables: the CBOR
   profile, keys, envelopes, every record, statement, command, grant, credential, message and copy,
   pairing, the key container, the ceilings and the registries. The code's "format section N"
