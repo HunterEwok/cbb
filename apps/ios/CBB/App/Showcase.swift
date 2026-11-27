@@ -8,19 +8,27 @@ import Foundation
 /// builds only: the app starts with it when launched with -showcase
 /// (docs/testing.md, "The apps' languages, accessibility and screenshots").
 /// With -showcaseAlerts too, Home also shows the cards about the group
-/// itself: a group from before 0.6 and the member's notices. Nothing leaves
-/// the app; every change only changes these devices.
+/// itself: a group from before 0.6 and the member's notices. With
+/// -showcaseNoDevices the group lists no devices, so that Home shows those
+/// cards with no tiles under them. Nothing leaves the app; every change
+/// only changes these devices.
 @MainActor
 final class ShowcaseGroup: GroupController {
     /// The group for the launch arguments, if they ask for it.
     static func requested(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> ShowcaseGroup? {
-        arguments.contains("-showcase") ? ShowcaseGroup(alerts: arguments.contains("-showcaseAlerts")) : nil
+        arguments.contains("-showcase")
+            ? ShowcaseGroup(alerts: arguments.contains("-showcaseAlerts"), noDevices: arguments.contains("-showcaseNoDevices")) : nil
     }
 
-    init(alerts: Bool = false) {
+    init(alerts: Bool = false, noDevices: Bool = false) {
         before06 = alerts
         notices = alerts ? Self.someNotices : []
+        self.noDevices = noDevices
+        if noDevices { computers = [] }
     }
+
+    /// The group lists no devices, this one included.
+    private let noDevices: Bool
 
     /// A notice that may be hidden and one that may not, as the member
     /// tells them.
@@ -50,7 +58,7 @@ final class ShowcaseGroup: GroupController {
     ]
     private var syncOff: AppModel.Hold?
     var devices: [AppModel.Computer] {
-        [.init(id: "me", name: "ewok-ipad", online: true, role: "phone", os: "ios", isSelf: true, admin: true, isRoot: true,
+        noDevices ? [] : [.init(id: "me", name: "ewok-ipad", online: true, role: "phone", os: "ios", isSelf: true, admin: true, isRoot: true,
                device: .init(form: "tablet", osVersion: "27.0"), syncOff: syncOff)] + computers
     }
 

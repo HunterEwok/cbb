@@ -368,7 +368,8 @@ Every app is verified across all eight project languages (`zh`, `en`, `es`, `ru`
   Xcode's accessibility audit (clipped text, labels, touch targets, and Dynamic Type at the largest
   accessibility size in English, Swahili, and Hindi on iPhone). On iPhone and iPad, `ReadersUITests`
   also tests Home's legacy-group and member notice cards in English and Arabic using `-showcase
-  -showcaseAlerts`, confirming that **Hide** hides only dismissible notices. Text and iPhone button
+  -showcaseAlerts -showcaseNoDevices` (a group with no device tiles, since the audit counts text
+  running past the screen edge as clipped), confirming that **Hide** hides only dismissible notices. Text and iPhone button
   contrast is verified directly on captured screenshots (at least 4.5:1 between darkest and lightest
   pixels) because Xcode's built-in audit reports false contrast failures on high-contrast elements.
   CI exports all `.xcresult` screenshots (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`),
