@@ -252,10 +252,14 @@ fn run_cases(group: &str, cases: Vec<Case>) {
         if !r.stderr.contains(c.stderr) {
             why.push(format!("stderr lacks {:?}", c.stderr));
         }
-        // Reading the status to learn whether the device is in a group
-        // is no request of the command's own.
-        let own: Vec<&Sent> =
-            r.sent.iter().filter(|s| c.sent.is_some_and(|(op, _)| s.op() == op) || s.op() != "status").collect();
+        // Reading the status to learn whether the device is in a group,
+        // or the devices to learn where its keys are before asking for
+        // consent, is no request of the command's own.
+        let own: Vec<&Sent> = r
+            .sent
+            .iter()
+            .filter(|s| c.sent.is_some_and(|(op, _)| s.op() == op) || !matches!(s.op(), "status" | "devices"))
+            .collect();
         match c.sent {
             None if !own.is_empty() => why.push(format!("sent {:?}, want no request", own[0].h)),
             None => {}
