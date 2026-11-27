@@ -238,7 +238,7 @@
     <string name="keyboard_sdp_description">输入 CBB 发送的内容</string>
     <string name="keyboard_sdp_name">CBB 键盘</string>
     <string name="keyboard_starting">正在准备…</string>
-    <string name="keyboard_switch">用作蓝牙键盘</string>
+    <string name="keyboard_switch">充当蓝牙键盘</string>
     <string name="keyboard_turn_on_bluetooth">开启蓝牙</string>
     <string name="keyboard_type_clipboard">输入剪贴板</string>
     <string name="keyboard_type_failed">文本未输入。</string>
@@ -307,7 +307,7 @@
     <string name="notice_ack_owed">这部手机有一项移除待确认；它会在你下一次管理操作时确认。</string>
     <string name="notice_admins_silent">管理员 %1$s 已很久没有消息：除非它连接，否则其管理员权限将在 %2$d 天后结束。</string>
     <string name="notice_admins_silent_now">管理员 %1$s 已很久没有消息：其管理员权限现在结束。</string>
-    <string name="notice_change_arriving">群组主设备的更换正在传来。</string>
+    <string name="notice_change_arriving">群组主设备的更换即将生效。</string>
     <string name="notice_checkpoint_stuck">主设备的记录在等待尚无设备转发的记录。</string>
     <string name="notice_frozen_holding">被冻结的管理员 %1$s 阻碍了移除操作：请解冻或移除它。</string>
     <string name="notice_hide">隐藏</string>
@@ -552,7 +552,7 @@
     <string name="why_away_off_d">打开“随处”，以便在家以外同步。</string>
     <string name="why_away_off_t">此网络中没有群组的设备。</string>
     <string name="why_change_arriving_d">在更换到达前，让此设备保持开启并靠近群组的其他设备。</string>
-    <string name="why_change_arriving_t">群组主设备的更换正在传来。</string>
+    <string name="why_change_arriving_t">群组主设备的更换即将生效。</string>
     <string name="why_checkpoint_stuck_d">打开群组的其他设备。</string>
     <string name="why_checkpoint_stuck_t">主设备的记录在等待尚无设备转发的记录。</string>
     <string name="why_copy_waits_t">有一份副本在等待，直到此设备得知是哪台设备发送的。</string>

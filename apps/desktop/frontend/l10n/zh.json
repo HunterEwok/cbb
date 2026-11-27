@@ -5,7 +5,7 @@
   "%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:": "%s（%s）使用了邀请。仅当该设备显示相同的指纹时才接纳：",
   "%s signed two histories with one key, as a stolen key or a restore from a backup would.": "%s 用同一个密钥签署了两份历史，就像被盗密钥或从备份恢复时那样。",
   "%s was removed before the main device changed, and counts again now: remove it again if it should not be in the group.": "%s 在主设备更换前已被移除，现在又被计入：如果它不该在群组里，请再次移除。",
-  "A change of the group's main device is on its way.": "群组主设备的更换正在传来。",
+  "A change of the group's main device is on its way.": "群组主设备的更换即将生效。",
   "A copy waits until this device learns which device sent it.": "有一份副本在等待，直到此设备得知是哪台设备发送的。",
   "A device did not pair: %s": "有设备未能配对：%s",
   "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "中心节点需要离家同步，而这台电脑上它是关闭的，所以会先把它打开。之后你的设备离家时会经由这台电脑、通过项目在 cbb.tools 的转发器连到群组。",

@@ -137,7 +137,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "CBB 在用群组密钥签名前会请求 面容 ID，用于添加或移除设备。"
+            "value": "CBB 在用群组密钥签名前会请求面容 ID，用于添加或移除设备。"
           }
         }
       }

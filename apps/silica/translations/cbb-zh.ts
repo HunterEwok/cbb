@@ -720,7 +720,7 @@
     </message>
     <message>
         <source>A change of the group's main device is on its way.</source>
-        <translation>群组主设备的更换正在传来。</translation>
+        <translation>群组主设备的更换即将生效。</translation>
     </message>
     <message>
         <source>Leave the group</source>
@@ -1042,7 +1042,7 @@
     </message>
     <message>
         <source>Connected to the hub through the tunnel.</source>
-        <translation>已通过隧道连上中心节点。</translation>
+        <translation>已通过隧道连接到中心节点。</translation>
     </message>
     <message>
         <source>Connecting to the hub through the tunnel…</source>
@@ -1286,7 +1286,7 @@
     </message>
     <message>
         <source>%1 from the group is in the gallery</source>
-        <translation>来自群组的%1已存入图库</translation>
+        <translation>来自群组的 %1 已存入图库</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1802,7 +1802,7 @@
     <name>WhySection</name>
     <message>
         <source>A change of the group's main device is on its way.</source>
-        <translation>群组主设备的更换正在传来。</translation>
+        <translation>群组主设备的更换即将生效。</translation>
     </message>
     <message>
         <source>A copy waits until this device learns which device sent it.</source>
