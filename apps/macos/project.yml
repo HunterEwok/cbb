@@ -31,6 +31,10 @@ targets:
     info:
       path: CBBMac/Info.plist
       properties:
+        # The build's numbers, which release.yml sets; without them xcodegen
+        # writes 1 and 1.0.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleName: CBB
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en

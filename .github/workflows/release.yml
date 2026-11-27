@@ -345,6 +345,14 @@ jobs:
           ditto "$RUNNER_TEMP/derived/Build/Products/Release/CBB.app" "$RUNNER_TEMP/CBB.app"
           lipo -archs "$RUNNER_TEMP/CBB.app/Contents/MacOS/CBB" | grep -q arm64
           lipo -archs "$RUNNER_TEMP/CBB.app/Contents/MacOS/CBB" | grep -q x86_64
+          # The app carries this release's numbers, not xcodegen's 1 and 1.0.
+          plist="$RUNNER_TEMP/CBB.app/Contents/Info.plist"
+          short=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")
+          build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")
+          if [ "$short" != "${version%%-*}" ] || [ "$build" != "$GITHUB_RUN_NUMBER" ]; then
+            echo "::error::CBB.app is $short ($build), not ${version%%-*} ($GITHUB_RUN_NUMBER)"
+            exit 1
+          fi
       - name: sign and notarize CBB.app, and the .pkg with the Developer ID Installer
         # Without the certificates and the key in the secrets, the app is
         # signed ad hoc and the package is unsigned, and neither is in the release.
