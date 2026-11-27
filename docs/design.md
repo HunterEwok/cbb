@@ -53,8 +53,8 @@ In order of priority, when two of them conflict:
 What the design cannot choose:
 
 - **iOS** lets an app read and write the clipboard only in the foreground, and keeps no
-  network connection of an app in the background, so the iPhone syncs while its app runs, at
-  one gesture, and is a hub only while it is open.
+  network connection of an app in the background, so the iPhone syncs while its app runs or
+  at one gesture. A phone is never a hub (D-134).
 - **Android** gives the clipboard in the background only to the input method or an
   accessibility service, so the app uses its accessibility service to send by itself.
 - **macOS** lets only an app with the Accessibility permission press keys, and asks the user
@@ -93,14 +93,14 @@ The system context (C4 level 1): the group is the system; everything around it i
 | iPhone, iPad            | the app                           | one tap or the Action button                                   |
 | Android phone           | the app                           | receives by itself; sends by itself (accessibility service) or with one tap |
 | Small Linux device      | `cbb` without its helper | `cbb copy`/`paste`/`watch`; no desktop clipboard               |
-| Apple Watch, Wear OS watch | the watch app, through its phone | shows the group, sends commands as an admin                 |
+| Apple Watch, Wear OS watch | the watch app, through its phone | shows the group and its events, switches sync on its phone  |
 | Android TV, set-top box | the Android app                   | as an Android phone                                            |
-| Arduino Nano ESP32      | the firmware (`esp32/`)  | a USB keyboard on its console only (`console-type` build); takes no remote paste yet |
+| Arduino Nano ESP32      | the firmware (`esp32/`)  | a USB keyboard on its console only (`console-type` build); takes no remote paste |
 | ZX Spectrum Next        | `.cbb`, through `cbb` on its Pi | sends and receives on demand                               |
 
 Linux machines, Windows PCs, Macs, boards and routers are equal **members** of a **group**, and
 so is a phone with the app. There is no central server, and any member may be switched off
-at any time. In a group made by a phone app, the phones are its admins (see "The phone
+at any time. In a group made by a phone app, that phone is the group's root (see "The phone
 apps" below).
 
 ### Identifiers and ports
@@ -114,8 +114,7 @@ apps" below).
   - members and the phone app, with the member ALPN protocol and mutual TLS;
   - pairing, with its own ALPN protocol.
 
-  A computer that joins by QR code listens there too, since it is in no group yet. One port
-  is one rule in a firewall, and changing it is one setting.
+  One port is one rule in a firewall, and changing it is one setting.
 
 ## 4. Solution strategy
 
@@ -158,9 +157,10 @@ The containers (C4 level 2): the programs of a group and how they talk.
 The Rust program `cbb` (`member/`) is the one member on every device, a computer as
 much as a router: the group, sync, records, seals, admitting devices, commands and the
 control socket. What needs Go stays in Go, in `cbb-helper` (`cmd/cbb-helper`,
-`internal/helper`): keys in the TPM, the Secure Enclave and on a YubiKey, the hub's and the
-forwarder's tunnel with VLESS, the relay, remote paste into desktop sessions and
-Windows, quick actions, TVs and the Bluetooth keyboard.
+`internal/helper`): keys in the TPM, the checks of an Android phone's key attestation and of
+a TPM's (`attest-android`, `attest-tpm` and the like), the session agent (the desktops'
+clipboards, remote paste into desktop sessions and Windows, quick actions), TVs and the
+Bluetooth keyboard.
 
 - **Started by `cbb` only.** `cbb` starts `cbb-helper` as its child, from beside its own
   program (a build with the test hooks takes `CBB_HELPER` instead, empty for none), and talks to it only over the child's
@@ -188,10 +188,10 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
 - **Lifetime.** The end of its input tells the helper to exit, so it ends with `cbb`, also
   when `cbb` is killed. If the helper stops, `cbb` starts it again at the next request, at
   most once in two seconds.
-- **Keys in hardware.** `key-new` makes a device key in the TPM or a Mac's Secure Enclave
-  where the machine has one (not with `CBB_TPM=off`); its answer has no blob, and says why,
-  where the key would go into a file, which `cbb` then makes itself. `keys.json` keeps the
-  blob (`tpm`, `se`); `key-public` loads it by the
+- **Keys in hardware.** `key-new` makes a device key in the TPM where the machine has one
+  (not with `CBB_TPM=off`); its answer has no blob, and says why, where the key would go into
+  a file, which `cbb` then makes itself. `keys.json` keeps the blob (`tpm`, or `se` for the
+  Secure Enclave keys that `cbb` makes itself on a Mac); `key-public` loads it by the
   blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
   records are signed in the hardware and the key never leaves it. `seal` and `unseal`
   seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
@@ -217,30 +217,29 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   with the service: it starts its own `cbb-helper`, with the session's whole environment (its
   display and D-Bus), and asks it `agent` with the service's socket. The helper runs the Go
   agent (`internal/agent`: Wayland and X11, the Mac's and Windows' pasteboard, Windows' remote
-  paste target, the session's quick actions), a client of the control socket as the Go `cbb
-  agent` is, and answers when it ends; the end of its input ends it, so it ends with the
-  agent (`TestAloneAgent`). On Windows and a Mac the agent logs to its own file, as the Go
-  agent does.
-- **The clients' operations.** The Rust service already takes what the command line and the
-  desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
+  paste target, the session's quick actions), a client of the control socket, and answers
+  when it ends; the end of its input ends it, so it ends with the agent (`TestAloneAgent`).
+  On Windows and a Mac the agent logs to its own file.
+- **The clients' operations.** The service takes what the command line and the desktops'
+  agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,
   `copied` and `write`, and images and files: `copy_media`, `copied_media` and `paste_media`
   with their `part` and `data` messages. It keeps and serves the blobs of media copies
   (`features: ["media"]`), fetches a copy whole before it writes it to a watcher that takes
-  it, and gives the other watchers its text. The Go `cbb` and agent work against it unchanged
-  (`TestAloneClients`).
-- **The group's root and its admins.** `cbb new` makes a group with the Rust service as its
-  root: the root key stays in a file readable only by the service, and the member key goes
-  into the hardware through the helper where it can. Its hello
+  it, and gives the other watchers its text. `TestAloneClients` drives these operations
+  through Go's control client (`internal/control`).
+- **The group's root and its admins.** `cbb new` makes a group with this computer as its
+  root: the root key and the member key go into the TPM or the Secure Enclave where the
+  computer has one, and otherwise into files readable only by the service
+  (`member/src/founding.rs`). Its hello
   carries the capabilities its own device record names (or, before it has one, its `-caps`
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
   dials the members with a higher device ID; without it, it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
   `key_level`, `ttl`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair`, a pairing window that a new device dials (`cbb pair`, the core's admission),
-  each a record signed with the root's key or an admin key the records name. The Go command
-  line runs against it, and another computer joins, syncs and takes each record
-  (`TestAloneRoot`). `cbb pair` opens the home window: a six-digit code, `p=1` and the
+  each a record signed with the root's key or an admin key the records name. Another computer
+  joins, syncs and takes each record (`TestAloneRoot`). `cbb pair` opens the home window: a six-digit code, `p=1` and the
   window's ID in its mDNS record, one attempt at a time, closed by three failed ones, after
   five minutes or once a device joined. Its member port then offers both ALPN protocols,
   `cbb/4` and `cbb-pair/3`, and takes the joiner's key container; the negotiated protocol
@@ -257,8 +256,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   recovery key, then restarts to sign with the new key; a device the records name the root
   already is refused, and the other members follow the new root (`TestAloneRecovery`). With
   `-yubikey` it opens the secret sealed on the card instead (`cbb_core::sheet::yubikey`).
-- **The hub.** On the records of 0.6 (`member/src/live/away.rs`; docs/protocol.md, section
-  11) a device the records allow a hub (named in the root's hubs record, or an admin) becomes
+- **The hub.** A device (`member/src/live/away.rs`; docs/protocol.md, section 11) the records allow a hub (named in the root's hubs record, or an admin) becomes
   one with `cbb global hub` or a `hub` command: the state in `tunnel.json` becomes a hub's,
   with its port, addresses, obfuscation and forwarder. A device with sync away from home on
   sends each possible hub `tunnel` (t 15) with its key toward that hub and the tag of the
@@ -282,7 +280,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   offer with them; VLESS brings AmneziaWG (`TestAloneHubVLESS`). The root signs the `hubs`
   record and sends `away-off` (`Order::AwayOff`) to another device. `hub -on DEVICE
   -forward-only` on the root signs the device's record with `forward_only` first; an
-  admin's is refused as not done yet (D-122). Such a member takes the hub command, seals no
+  admin's is refused (D-122). Such a member takes the hub command, seals no
   copies and refuses paste and action commands (`TestAloneForwardOnly`).
 - **The server credentials.** `faces.rs` keeps the format's credentials
   (`blind::credential`, signed by `Credential::sign`): `server-credentials.cbor` keeps the
@@ -298,7 +296,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   commands and its own hub; D-121), and every message `credentials` names the server it is
   for. A hub of 0.6 serves with a key of its own for each period of its forwarder's face
   (protocol section 11, "The hub's key"; `Away::rotate_live`).
-- **Push.** On the records of 0.6 the mesh drives the push sender (`pusher.rs`) through its
+- **Push.** The mesh drives the push sender (`pusher.rs`) through its
   seam (`mesh/push.rs`): message `push` (t 28) from a phone or a computer over its own
   connection is its registration, kept in `push.cbor` (each device's message as it came) and
   taken again after a restart; a connection that opens gets its `push-renew` messages (t 29)
@@ -315,10 +313,10 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   end to end: three members, a push service with a fake platform that `keys.json` names, a
   device that registers and goes away, one body for a copy (from the origin or the hub) and
   one for a removal, none while it is connected, each opened under its registration, and a
-  send under a replaced registration answered `stale`; the same with the phones' app follows
-  when the phones run on the records of 0.6 (D-122).
-- **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
-  user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
+  send under a replaced registration answered `stale`.
+- **The relay.** The root sets the group's blind relays (`cbb global relay`, the operation
+  `relay`) and signs them for the whole group (`member/src/live/relays.rs`). With the user's
+  consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in
   ones). The run loop keeps the phones' link (`relay.rs`) running in place of the hubs
   (`away/meet.rs`): it registers once the members' credential lists the device's server key,
@@ -326,21 +324,20 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   to dial is dialed through its loopback port; a call comes to a loopback port of its own,
   where the node serves it only when the key container holds the key of the device the relay
   said calls.
-  Status shows the link as Go's `relay` (`TestAloneRelay`, `TestAloneRelayRoot`). When the
+  Status shows the link (`TestAloneRelay`, `TestAloneRelayRoot`). When the
   project's relay fails, the device fetches the newest `keys.json` and `entries.json` through
   the mirror at the relay's address (at most every ten minutes) and, unless the relay showed
   a key it does not know, moves to the next address `entries.json` or DNS gives, keeping it in
-  `tunnel.json` (`TestAloneRelayProject`). A Rust hub registers with its forwarder with the
+  `tunnel.json` (`TestAloneRelayProject`). A hub registers with its forwarder with the
   period's hubs' credential once it lists the hub's server key, showing the server key's
   certificate and that credential alone, and registers again at once when a newer one comes; it serves its clients with a key of
-  its own for each period, which its offers carry ahead of time (Go's `rotateHubKey`,
-  `TestAloneHubCredential`). A Rust hub makes remote invitations as Go's does
-  (`member/src/away/invite.rs`): a guest key and preshared key in the invitation, a guest
+  its own for each period, which its offers carry ahead of time (`Away::rotate_live`,
+  `TestAloneHubCredential`). A hub makes remote invitations (`member/src/away/invite.rs`): a guest key and preshared key in the invitation, a guest
   peer in the hub, and a pairing window on the invitation's secret whose admin confirms the
   device (`Joining`, `answer`); the hub's connections from a guest go to a loopback port of
   their own, where only the window's pairing and then the admitted device's member
   connection are served, and the guest goes once the hub answered that device's key, two
-  minutes after it was admitted at most (`TestAloneInvite`). The Rust member joins with an
+  minutes after it was admitted at most (`TestAloneInvite`). A member joins with an
   invitation (`cbb pair -invite`) through the guest tunnel, turns sync away from home on with
   the join, and keeps the invitation in `invite-guest` until its service has offered its own
   key to the hub through the guest tunnel and the hub's offer came, ten minutes at most
@@ -386,15 +383,16 @@ and lifetimes. The installer enables what the device needs.
   one that connects, if it is still the member's own text.
 - Command line: `cbb copy` (standard input to the group), `cbb paste` (the
   member's own clipboard text to standard output), `cbb new`, `cbb pair`,
-  `remove`, `status` (which lists the group's devices too). `cbb new` creates a group; `cbb pair` joins one on a device in no group and admits a device on the root or an admin.
-  `cbb pair` finds the member with an open pairing window by its TXT record, or uses
-  the address that `pair` prints, for networks where multicast does not pass. It talks to
+  `remove`, `status` (which lists the group's devices too). `cbb new` creates a group; `cbb
+  pair` opens a pairing window on the root or an admin, and `cbb pair -code` joins one from a
+  device in no group.
+  `cbb pair -code` finds the member with an open pairing window by its TXT record, or uses
+  the address that `cbb pair` prints, for networks where multicast does not pass. It talks to
   one member only, tries that member's addresses (IPv4 first, link-local last) until one
   answers, and stops after the first attempt in which the other side could check the code,
   so a device that only pretends to pair gets one guess at most. When more than one device
   announces a window, it asks for the address. Hanging up cancels it, and it gives up after
-  two minutes, or, while it shows its QR code for the phone, after the five minutes it waits
-  for the window.
+  two minutes.
 - tmux: copying in tmux copy mode goes to the group (`copy-command`), and a key binding
   pastes the member's own clipboard text into any program inside tmux. The binding runs
   `cbb paste -terminal`, so that a text from another device cannot drive the terminal or the
@@ -422,27 +420,19 @@ and lifetimes. The installer enables what the device needs.
 - Only the regular clipboard is watched; mouse selections are not sent to the group. A
   received text goes into both the clipboard and the primary selection, so Ctrl+V works in
   applications, and Shift+Insert and the middle mouse button work in terminals.
-- **Auto-paste** (planned, roadmap item 10): after the connector writes an event sent from
-  a phone, it would press Shift+Insert through the uinput helper. Never for Universal
-  Clipboard items or other events, and not on the lock screen. Today the uinput helper
-  serves remote paste only ("Remote paste").
 
 #### 3. Console helper
 
-The helper is built as a remote paste target (`cbb paste-helper console`, the
-`cbb-console` unit; "Remote paste"). Its own trigger, the double press below,
-is not built yet (roadmap item 10); the design:
+The console helper puts remote pastes into the active text console ("Remote paste"). It is
+`cbb paste-helper console`, run by the `cbb-console` unit, which `install.sh --console`
+installs:
 
-- Optional, root with only `CAP_SYS_ADMIN`, because only that may inject input into a
-  console. It runs with `cbb` as a supplementary group and connects to the control
-  socket as a client; it listens on nothing.
-- On a double press of Right Ctrl (configurable; a modifier alone types nothing, so
-  programs do not notice) it injects the member's own clipboard text into the active virtual
-  console with TIOCSTI on `/dev/tty0`. This works at the login prompt, in `sudo` and in any
-  console program, with any characters, independent of the console keyboard layout.
-- Only a single line is injected by default; multi-line text needs a second double press.
-  Control characters, escape sequences and invalid UTF-8 are removed. This stops a local
-  user from planting commands that would run in a root console.
+- It runs as root with `CAP_SYS_ADMIN` as its only capability, because only that may type
+  into a console, and talks to the service over the control socket; it listens on nothing.
+- It types with TIOCSTI into the active virtual console, as if typed there, and only into a
+  text console a user is logged in on: never into a login prompt, a graphical session's
+  console or a locked one (`member/src/pastehelper.rs`).
+- The device's user allows consoles first (`cbb paste-receive on -console`).
 
 ### macOS
 
@@ -462,8 +452,6 @@ is not built yet (roadmap item 10); the design:
   `universal-clipboard`; they do not count as a computer's copy for the iPhone button.
   Received secrets are written with `org.nspasteboard.ConcealedType` and for the current host
   only, so clipboard histories skip them and they do not travel over Universal Clipboard.
-- Finds the members with CBB's own mDNS code, publishing itself as a computer,
-  and trusts only the group CA, in its own configuration; the system keychain is not changed.
 - Installing needs administrator rights once. The Mac app (`apps/macos`) adds a window and
   a menu bar item over the control socket, and is the Mac's remote paste target.
 - Logs: `/Library/Logs/cbb/service.log` and
@@ -496,10 +484,8 @@ is not built yet (roadmap item 10); the design:
   `Clipboard Viewer Ignore`, or with `CanIncludeInClipboardHistory` set to 0, is a secret.
   Received secrets are written with all of these and `CanUploadToCloudClipboard` set to 0, so
   the clipboard history, the cloud clipboard and other monitors skip them.
-- **mDNS**: the service shares UDP 5353 with the DNS Client service through `SO_REUSEADDR`.
-  Windows gives no packet information through `golang.org/x/net`, so a packet's interface is
-  the one whose network holds its source address, or the zone of a link-local source, and a
-  multicast goes out on the interface set on the socket.
+- **mDNS**: the service shares UDP 5353 with the DNS Client service through `SO_REUSEADDR`
+  (`member/src/discovery.rs`).
 - **Installer**: `install.ps1` (or `get.ps1`, which checks a release against
   `SHA256SUMS`) needs an administrator once. It allows TCP 8764 and UDP 5353 for `cbb.exe`
   from the local subnet in Windows Firewall, in rules of the group `cbb` that
@@ -544,11 +530,14 @@ creates the phone is the root of the group (D-34 to D-36, D-105; the wire side i
 
 ### Watches
 
-A watch is never the group's root, but it carries notifications, a
-switch for sync away from home and the emergency actions, with an admin key of its own. In
-0.6 the root phone adds a watch with its key (`add_watch`, D-124) and the watch shows the
-group, but nothing signs on the wrist: the emergency actions below come with 0.7, and the
-watch apps say so instead of offering them.
+A watch is not a member of the group and holds none of its keys. The watch app shows what its
+phone pushes to it (the group, its devices and events, the sync switches) and sends the phone
+the switches for sync and for sync away from home, which the phone applies as its own switches
+do ([apps.md](apps.md), Apple Watch and Wear OS). Nothing signs on the wrist: the member
+refuses an action that comes from a watch, and the watch apps offer none (D-124). The rules
+know a watch's device record (role `watch`; `AdminKind::Watch`: remove and freeze, and the
+commands that turn remote paste, quick actions and sync away from home off on a member), but
+no app writes one, so no watch holds those powers.
 
 #### Why not the root
 
@@ -560,72 +549,26 @@ works through its iPhone and cannot be a member. A root key on the watch with th
 the carrier would keep the root safe from a compromised phone, but the root signs rarely and
 the iPhone's key already sits in the Secure Enclave behind Face ID, so the group stays as it is.
 
-#### What the watch does
+#### Notifications
 
-1. **Notifications.** The phone app notifies of the group's events, and iOS and Wear OS show
-   them on the watch: a device added or removed, an admin made, frozen or unfrozen, the group
-   root changed, the hub unreachable while
-   away from home, a remote paste received or refused. Each is a setting.
-2. **Sync away from home.** A switch on the watch turns the phone's own away mode on and off,
-   as the app's switch does (the Live member's `away`).
-3. **Emergency actions** with the watch's own admin key: freeze an admin computer, remove an
-   ordinary device, turn remote paste off on a member, turn sync away from home **off** on a
-   member. The watch shows what it signs and asks for a tap; the phone only carries the
-   record into the group.
-
-#### The watch's admin key
-
-A key in the watch's Secure Enclave (on Wear OS, the watch's Keystore, where a key in the
-TEE is enough and StrongBox is not required), which the root names as the admin key of the
-watch's device record once (D-124), whose member key nobody keeps, so that nothing is ever
-signed as the watch's member. A watch without a passcode, or with wrist detection off, is not
-added; the key is usable only while the watch is unlocked, and the watch checks wrist
-detection before each signature. The watch's device record has its
-own role, `watch`. A watch on the wrist stays unlocked without asking for Face ID or a
-fingerprint at each signature, so it signs the emergency actions above and nothing else: it
-freezes admin computers (D-60) and removes ordinary devices, but never removes an admin,
-makes one, admits devices or changes the root. Any admin can freeze
-a watch like an admin computer; removing one takes the root or an admin phone.
-Every receiver checks these limits in the core's rules (`AdminKind::Watch`).
-
-Turning sync away from home on stays a decision on each device (D-45); a signed command only
-turns it off, as any admin turns remote paste off (D-59).
+The phone app notifies of the group's events, and iOS and Wear OS show them on the watch: a
+device added or removed, an admin made, frozen or unfrozen, the group's root changed, the hub
+unreachable while away from home, a remote paste received or refused. Each is a setting.
 
 #### Delivery
 
 On Android the foreground service receives the events by itself, so the watch hears of them
 at once. On the iPhone the app has no background sync and learns of events only when it
-syncs. To make it prompt, the hub wakes the phone with an Apple push whose content is sealed
-to the phone's key and opened only on the phone (a Notification Service Extension); Apple
-sees that a push was sent, and when, but nothing in it (D-74). The push goes through a
-stateless sender at `cbb.tools`,
-since only the app's developer holds the key for Apple's push service, and the user agrees
-to it first, after being told what Apple and `cbb.tools` learn (that a push was sent and
-when; the push token, the hub's address and the time). It uses the Apple developer
-account; for users who do not agree, iPhone notifications come with the
-next sync or a background refresh. The lock screen shows the full text, and the app points
-to the system setting that hides previews until the phone is unlocked.
-
-#### Steps
-
-One pull request each, smaller ones together:
-
-1. Notifications for the group's events in both phone apps, with a setting each. Done on
-   both phones (docs/apps.md, Notifications).
-2. The watch apps (watchOS, then Wear OS): the events and the away switch. Done on both
-   (docs/apps.md, Apple Watch and Wear OS).
-3. The `watch` role and its admin key: the records' rules and limits in Go, Rust, Swift and
-   Kotlin, the interop vectors, certifying a watch from the root phone; the signed command
-   that turns sync away from home off on a member. Done; not yet tried on a real watch.
-4. Emergency actions on the watch, and the quick actions. Done.
-5. Prompt notifications through a sealed push (D-74): the push sender (`pusher.rs`, "Push"
-   above), the push service (`member/src/pushd`: Apple, Firebase and UnifiedPush) and the
-   phones' setting "Notify me when the app is closed". Done; members send to the project's
-   service once a `keys.json` they hold lists it (protocol.md, section 13).
-
-Not yet verified on a real watch: the Secure Enclave key on the watch, WatchConnectivity
-waking the phone app in the background long enough to send a record, the Data Layer
-starting the Android app's listener for the Wear OS switch, and the delay of notifications.
+syncs. To make it prompt, a member (the hub, else the root or an admin) wakes the phone with a
+push whose content is sealed to the phone's key and opened only on the phone (a Notification
+Service Extension on the iPhone); Apple sees that a push was sent, and when, but nothing in it
+(D-74). The push goes through the project's push service at `cbb.tools` (`member/src/pushd`:
+Apple, Firebase and UnifiedPush), since only the app's developer holds the key for Apple's
+push service. The user agrees to it first, after being told what the platform and `cbb.tools`
+learn (the push token, the sending member's address and the time of each push), with the
+setting "Notify me when the app is closed"; without it, iPhone notifications come with the
+next sync or a background refresh. The lock screen shows the full text, and the app points to
+the system setting that hides previews until the phone is unlocked.
 
 ### The one button
 
@@ -665,32 +608,31 @@ iPhone the button is the system's Paste button, which iOS lets read the clipboar
 asking, and the "CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard"; reading
 the clipboard when the app opens and while it is on screen asks the person to allow pasting
 unless they allowed CBB to paste from other apps in Settings, so the app explains that
-setting. How convenient the swap is in daily use is tried on real phones before the rule is
-final.
+setting.
 
 ### Build
 
-- Go, with `CGO_ENABLED=0` everywhere except for the Mac's pasteboard agent (the Windows
-  clipboard needs no cgo), which uses cgo
-  with a small Objective-C file. From then on CI builds the macOS targets on macOS runners
-  with cgo.
-- Targets: `linux/amd64`, `linux/arm64`, `linux/arm` with ARMv7 and ARMv6, `darwin/arm64`,
-  `darwin/amd64`, `windows/amd64` and `windows/arm64` (`cbb.exe`, and `cbbw.exe` linked with
-  `-H windowsgui` for the agent). Every archive but the routers' (`mips`, `mipsle`) carries
-  `cbb-helper`, the Go helper cbb starts as its child, built with the same version, since a
-  release cbb takes only a helper of its own release. The tray app (`apps/desktop`) goes in the Windows archives
-  and, built with cgo on a runner of each architecture for GTK 4 and WebKitGTK, in the
-  `linux/amd64` and `linux/arm64` archives.
-- The Raspberry Pi Zero W (ARMv6) cannot run Ubuntu; it runs Raspberry Pi OS. Connect Beyond Borders
-  does not depend on distribution specifics. The systemd units use directives from systemd
-  248 and later and are checked with `systemd-analyze verify`.
-- Third-party code: `golang.org/x/net`, `golang.org/x/sys`, `golang.org/x/crypto` and
-  `golang.org/x/time` (BSD-3-Clause), `jezek/xgb` (BSD-3-Clause), `rsc.io/qr`
-  (BSD-3-Clause), `amnezia-vpn/amneziawg-go` (MIT, a fork of wireguard-go) with gVisor's netstack (Apache-2.0)
-  and `google/btree` (Apache-2.0) for the tunnel, and the CPace implementation translated to Rust from
-  `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) in `core/src/third_party/cpace`. `cbb`
-  uses RustCrypto and rustls (MIT or Apache-2.0). The tray app reads QR codes from
-  pictures with `makiuchi-d/gozxing` (Apache-2.0).
+- `cbb` is Rust (`member/` on `core/`). `packaging/build.sh` builds it for each target of a
+  release: `linux/amd64`, `linux/arm64` and `linux/arm` (ARMv7 and ARMv6) as static musl
+  programs; `freebsd/amd64`, `freebsd/arm64`, `windows/amd64` and `windows/arm64` linked with
+  zig (`cargo-zigbuild`), Windows' as `cbb.exe` and `cbbw.exe`, the same program without a
+  console window; `darwin/amd64` and `darwin/arm64` on a Mac. The routers' `linux/mips` and
+  `linux/mipsle` come from `packaging/mips.sh`, without sync away from home.
+- Go builds `cbb-helper` and the forwarder `cbb-forward` with `CGO_ENABLED=0`, except on a Mac,
+  where the pasteboard code (`internal/pasteboard`) uses cgo with a small Objective-C file, so
+  CI builds the macOS targets on macOS runners. Every archive but the routers' carries
+  `cbb-helper`, built with the same version, since a release `cbb` takes only a helper of its
+  own release.
+- The tray app (`apps/desktop`) goes in the Windows archives and, built with cgo on a runner
+  of each architecture for GTK 4 and WebKitGTK, in the `linux/amd64` and `linux/arm64`
+  archives.
+- The Raspberry Pi Zero W (ARMv6) runs Raspberry Pi OS. Connect Beyond Borders does not depend
+  on distribution specifics. The systemd units use directives from systemd 248 and later and
+  are checked with `systemd-analyze verify`.
+- Third-party code: each archive carries the licences of the crates it is built from
+  (`packaging/notices.sh`). Code copied into the repository lives under a `third_party/`
+  directory beside the code that uses it, with its licence, such as the CPace implementation
+  in `core/src/third_party/cpace`.
 
 ## 6. Runtime view
 
