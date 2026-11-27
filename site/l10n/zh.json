@@ -414,7 +414,7 @@
   "Where is the HarmonyOS app?": "HarmonyOS 应用在哪里？",
   "Why we recommend a computer: it is on far more often than a phone app is open, so sync just works, at home with no server at all, and the iPhone gives an app little time in the background. You can add a computer to a group of phones at any time and make it the hub from its page in the app.": "为什么我们推荐用电脑：它开机的时间远多于手机应用打开的时间，所以同步自然就能用，在家时完全不需要服务器，而且 iPhone 给应用的后台时间很少。你可以随时把电脑加入只有手机的群组，并在应用中打开它的页面将它设为中心节点。",
   "Why will the iPhone need a gesture?": "为什么 iPhone 会需要一个手势？",
-  "Yes. Turn on Everywhere, and your devices reach each other through your hub, a computer or router of yours at home, or at a relay that cannot read your copies. It works on hotel, office and campus Wi-Fi too.": "可以。打开“随处”，你的设备就会通过你的中心节点（你家里的电脑或路由器）相连，或在无法读取你复制内容的中继处相遇。在酒店、办公室和校园的 Wi-Fi 上也能用。",
+  "Yes. Turn on Everywhere, and your devices reach each other through your hub, a computer or router of yours at home, or at a relay that cannot read your copies. It works on hotel, office and campus Wi-Fi too.": "可以。开启“随处”，你的设备就会通过你的中心节点（你家里的电脑或路由器）相连，或在无法读取你复制内容的中继处相遇。在酒店、办公室和校园的 Wi-Fi 上也能用。",
   "Your own build and your own keys": "自行构建与自有密钥",
   "iOS does not let apps read the clipboard in the background, so the iPhone will need one gesture.": "iOS 不允许应用在后台读取剪贴板，所以 iPhone 会需要一个手势。",
   "iOS does not let apps read the clipboard in the background. You will send a copy with the Action button or a double tap on the back of the phone.": "iOS 不允许应用在后台读取剪贴板。届时可以用操作按钮或轻点两下手机背面来发送复制内容。",

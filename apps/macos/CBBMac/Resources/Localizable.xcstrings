@@ -3032,7 +3032,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "请确认其他设备已打开“随处”。"
+            "value": "请确认其他设备已开启“随处”。"
           }
         }
       }
@@ -16326,7 +16326,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开“随处”，以便离家时也能同步。"
+            "value": "开启“随处”，以便离家时也能同步。"
           }
         }
       }
@@ -16878,7 +16878,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "只有在它处于安全的人手中时才解冻；否则请移除它。"
+            "value": "只有确定它由可信的人持有时才解冻；否则请移除它。"
           }
         }
       }

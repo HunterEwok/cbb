@@ -55,7 +55,7 @@
     </message>
     <message>
         <source>Ungroup</source>
-        <translation>解散合集</translation>
+        <translation>取消分组</translation>
     </message>
 </context>
 <context>
@@ -304,7 +304,7 @@
     </message>
     <message>
         <source>Ungroup</source>
-        <translation>解散合集</translation>
+        <translation>取消分组</translation>
     </message>
 </context>
 <context>
@@ -1154,7 +1154,7 @@
     </message>
     <message>
         <source>This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.</source>
-        <translation>此手机所在的群组创建于 0.6 之前，此版本已不再运行它。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。</translation>
+        <translation>此手机所在的群组创建于 0.6 之前，此版本已无法运行该群组。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。</translation>
     </message>
     <message>
         <source>Turn Everywhere off</source>
@@ -1419,7 +1419,7 @@
     </message>
     <message>
         <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
-        <translation>将 YubiKey 插入 USB-C 接口，然后输入其 PIN 码。</translation>
+        <translation>将 YubiKey 插入 USB-C 接口，然后输入其 PIN。</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
@@ -1834,7 +1834,7 @@
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
-        <translation>请确认其他设备已打开“随处”。</translation>
+        <translation>请确认其他设备已开启“随处”。</translation>
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
@@ -2018,7 +2018,7 @@
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>
-        <translation>打开“随处”，以便离家时也能同步。</translation>
+        <translation>开启“随处”，以便离家时也能同步。</translation>
     </message>
     <message>
         <source>Turn on another device of the group.</source>
