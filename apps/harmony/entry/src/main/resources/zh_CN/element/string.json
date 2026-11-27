@@ -330,7 +330,7 @@
     {"name": "settings_system", "value": "系统"},
     {"name": "settings_title", "value": "设置"},
     {"name": "settings_ttl_copies", "value": "副本保留时长"},
-    {"name": "settings_ttl_secrets", "value": "机密的有效期"},
+    {"name": "settings_ttl_secrets", "value": "机密保留时长"},
     {"name": "settings_version", "value": "版本"},
     {"name": "share_failed", "value": "发送失败。"},
     {"name": "share_no_computers", "value": "你群组中的电脑都没有响应。它们是否已开机，这部手机是否在家庭网络中？"},

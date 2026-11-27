@@ -1755,7 +1755,7 @@
     </message>
     <message>
         <source>Secret lifetime</source>
-        <translation>机密的有效期</translation>
+        <translation>机密保留时长</translation>
     </message>
     <message>
         <source>Settings</source>

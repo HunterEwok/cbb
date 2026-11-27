@@ -3587,7 +3587,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "更改副本和机密的有效期"
+            "value": "更改副本和机密的保留时长"
           }
         }
       }
@@ -16421,7 +16421,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "机密的有效期"
+            "value": "机密保留时长"
           }
         }
       }

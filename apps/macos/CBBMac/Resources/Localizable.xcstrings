@@ -10944,7 +10944,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "机密的有效期"
+            "value": "机密保留时长"
           }
         }
       }

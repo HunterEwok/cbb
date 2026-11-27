@@ -386,7 +386,7 @@
     <string name="reason_remove">从群组中移除设备</string>
     <string name="reason_rename">重命名设备</string>
     <string name="reason_set_mode">更改电脑的同步模式</string>
-    <string name="reason_ttl">更改副本和机密的有效期</string>
+    <string name="reason_ttl">更改副本和机密的保留时长</string>
     <string name="reason_unfreeze">解冻管理员电脑</string>
     <string name="reason_unmute">取消设备静音</string>
     <string name="recovery_06">随群组一起生成，它的那张纸只显示过一次。没有这张纸就无法更换群组的主设备：如果纸丢了，请新建一个群组。</string>
@@ -513,7 +513,7 @@
     <string name="ttl_minutes">%d 分钟</string>
     <string name="ttl_saved">已保存。群组的每台设备都会遵循它。</string>
     <string name="ttl_seconds">%d 秒</string>
-    <string name="ttl_secrets">机密的有效期</string>
+    <string name="ttl_secrets">机密保留时长</string>
     <string name="turn_on">开启</string>
     <string name="type">类型</string>
     <string name="unfreeze">解冻</string>
