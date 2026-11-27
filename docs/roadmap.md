@@ -200,12 +200,6 @@ documentation describes them.
   [The lab](guide/lab.md)); freezing and removing an admin remain separate actions. Remaining:
   making away-from-home a single switch with fully automatic hub, forwarder, relay, and
   blocked-network selection (depends on device consent, item 58).
-- **70.** **The 0.6 core and binary format (D-131)**: Waves 1–5 are built in `core/` and `member/`.
-  Remaining: Wave 6 (moving the sans-I/O member session into `cbb_core`, replacing
-  `core/src/sim/exchange.rs`, and running a real ESP32 board in a group) and Wave 7 (freezing the
-  format in `testdata/format/FROZEN`, cross-version N / N-1 compatibility per D-131, and two
-  consecutive clean security audit passes, planned for 0.7). See
-  [The core and the format in 0.6](#the-core-and-the-format-in-06).
 
 ### Next
 
@@ -362,6 +356,12 @@ documentation describes them.
     verbs, `--json`, uniform errors, meaningful exit codes).
   - CI visual gallery across platforms, states, and languages alongside CLI output,
     pseudo-localization, review checklist, heuristic review, and tap-count task walkthroughs.
+- **70.** **Planned for 0.7.** The rest of the core and the binary format (D-131); Waves 1–5 are
+  built in `core/` and `member/` for 0.6. Wave 6 moves the sans-I/O member session into
+  `cbb_core`, replacing `core/src/sim/exchange.rs`, and runs a real ESP32 board in a group. Wave 7
+  freezes the format in `testdata/format/FROZEN`, brings cross-version N / N-1 compatibility per
+  D-131, and needs two consecutive clean security audit passes. See
+  [The core and the format in 0.6](#the-core-and-the-format-in-06).
 - **71.** **Planned for 0.7.** Release-gating soak runs: a seven-day `tools/soak` run on the
   release candidate build on the bench's Raspberry Pi 4 (calm and load stands side by side,
   restarting the day counter on any code change; [Testing: soak](testing.md#soak)) plus the
@@ -639,8 +639,8 @@ guides, translations, and moving this specification to [Design](design.md).
 
 ## The core and the format in 0.6
 
-Partly built (item 70, D-131). The binary wire format and records core stay preliminary in 0.6 and
-freeze in 0.7 (D-131).
+Waves 1–5 built for 0.6; Waves 6 and 7 planned for 0.7 (item 70). The binary wire format and
+records core stay preliminary in 0.6 and freeze in 0.7 (D-131).
 
 1. **Wave 1 — Core hardening without format changes (built)**: CI firmware size tracking
    (`tools/size`), saved copy clock mark, memory zeroization of secrets, external X-Wing vector,

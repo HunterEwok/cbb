@@ -2259,7 +2259,8 @@ with 0.5 is set up again once. The details follow.
   with its fields as the code has them; an admin action's `public` is the key's uncompressed
   point.
   The testing page and the roadmap say what is built today; the roadmap's items keep their
-  numbers and move to Done or Partly done where the code has them.
+  numbers and move to Done or Partly done where the code has them; the rest of the 0.6 core
+  (Waves 6 and 7, item 70) is planned for 0.7.
   The maintainers' guide and the audit plan follow the current workflows, keys and servers;
   the limits page gives `stable.json` its 14 days and `attest-status.json` its 8.
   The test bench's pages name the commands and suites `tools/bench` has, the root changed only
