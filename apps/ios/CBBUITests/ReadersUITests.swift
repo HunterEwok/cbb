@@ -79,6 +79,9 @@ final class ReadersUITests: XCTestCase {
                 // row scrolled half out of its list) is not looked at, as
                 // in `contrast`; it is audited where it is in view.
                 if !e.isHittable { return true }
+                // Half under a bar (a row scrolled up under the navigation
+                // bar or down under the tab bar) is half out of view too.
+                if !Self.inView(app).contains(e.frame) { return true }
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
                 self.fail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame): \(issue.detailedDescription)",
@@ -113,11 +116,12 @@ final class ReadersUITests: XCTestCase {
         app.settle(screen)
         let shot = XCUIScreen.main.screenshot()
         let bounds = app.frame
+        let view = Self.inView(app)
         let status = app.statusBars.firstMatch.exists ? app.statusBars.firstMatch.frame : .null
         let elements = app.staticTexts.allElementsBoundByIndex + app.buttons.allElementsBoundByIndex
         // Only what the user sees: a sheet hides the screen under it from
         // touch, not from the element tree.
-        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && bounds.contains(e.frame) && !status.intersects(e.frame) && e.isHittable {
+        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && view.contains(e.frame) && !status.intersects(e.frame) && e.isHittable {
             guard let ratio = Self.contrast(e.frame, in: shot, screen: bounds) else {
                 XCTFail("\(screen): no picture of '\(e.label)' at \(e.frame)")
                 continue
@@ -163,6 +167,21 @@ final class ReadersUITests: XCTestCase {
         return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
+    /// The part of the window a person sees whole: below the navigation
+    /// bar and above the tab bar, which blur what scrolls under them.
+    static func inView(_ app: XCUIApplication) -> CGRect {
+        var view = app.windows.firstMatch.frame
+        let nav = app.navigationBars.firstMatch
+        if nav.exists, nav.frame.maxY > view.minY, nav.frame.maxY < view.maxY {
+            view = CGRect(x: view.minX, y: nav.frame.maxY, width: view.width, height: view.maxY - nav.frame.maxY)
+        }
+        let tabs = app.tabBars.firstMatch
+        if tabs.exists, tabs.frame.minY > view.minY, tabs.frame.minY < view.maxY {
+            view = CGRect(x: view.minX, y: view.minY, width: view.width, height: tabs.frame.minY - view.minY)
+        }
+        return view
+    }
+
     /// The labels of the texts and buttons the window holds whole, from
     /// one snapshot of the app, once it has settled.
     private func inSight(_ app: XCUIApplication, _ screen: String) -> Set<String> {
@@ -171,7 +190,7 @@ final class ReadersUITests: XCTestCase {
             XCTFail("\(screen): no snapshot of the app")
             return []
         }
-        let window = app.windows.firstMatch.frame
+        let window = Self.inView(app)
         var labels: Set<String> = []
         var stack = [root]
         while let e = stack.popLast() {

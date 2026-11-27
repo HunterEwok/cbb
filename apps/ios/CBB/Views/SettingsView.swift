@@ -148,7 +148,7 @@ struct SettingsView: View {
             LabeledContent {
                 Text(verbatim: version).font(.system(.body, design: .monospaced))
             } label: {
-                Text("Version")
+                Text("Version").fixedSize(horizontal: false, vertical: true)
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -168,10 +168,10 @@ struct SettingsView: View {
                 .onChange(of: errorDetails, initial: true) { _, on in Shared.defaults.set(on, forKey: "ShowErrorDetails") }
             }
             Link(destination: URL(string: "https://github.com/HunterEwok/cbb")!) {
-                Text("Source code and license (AGPL-3.0)")
+                Text("Source code and license (AGPL-3.0)").fixedSize(horizontal: false, vertical: true)
             }
         } header: {
-            Text("About")
+            Text("About").fixedSize(horizontal: false, vertical: true)
         }
         .listRowBackground(palette.surface)
     }
