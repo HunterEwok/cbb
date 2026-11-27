@@ -242,6 +242,10 @@ documentation describes them.
     - Add `PrivacyInfo.xcprivacy` declaring required-reason APIs (`UserDefaults`, file timestamps,
       and similar) and set `ITSAppUsesNonExemptEncryption` in each `Info.plist`, documenting the
       standard-encryption export answer in [Maintaining](maintainers/maintaining.md).
+    - Upload France's encryption declaration to App Store Connect, put the code Apple gives into
+      the iPhone app's `Info.plist`, and only then offer the app in France.
+    - A Mac App Store build: sandboxed, with the core inside the app instead of the root service,
+      sold together with the iPhone app as one purchase (bundle `tools.cbb`).
     - Provide review notes (demo video, test group QR code, and clarification that the tunnel runs
       inside the app rather than as a system VPN under Guideline 5.4), link a privacy policy in
       metadata and inside the app, ensure store text does not promise automatic background sending
