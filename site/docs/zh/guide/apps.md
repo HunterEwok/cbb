@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 07bd60070629 -->
+<!-- source: b8e7e372d74f -->
 # 应用
 
 写给在手机、平板电脑、手表、电视或电脑上使用 Connect Beyond Borders 应用的人。在电脑、路由器和服务器上安装后台服务见[安装](install.md)。工程细节见[应用规格说明](../apps.md)。
@@ -13,11 +13,11 @@ Connect Beyond Borders 为手机、平板电脑、手表、Android TV 和桌面�
 | **Android**（Android 10 或更高版本） | 每个 [GitHub 发布版本](https://github.com/HunterEwok/cbb/releases)中的 `cbb-X.Y.Z.apk` | 包含 Wear OS 手表支持、自动更新和推送通知 |
 | **不含 Google 服务的 Android**（F-Droid 版本） | 每个 [GitHub 发布版本](https://github.com/HunterEwok/cbb/releases)中的 `cbb-fdroid-X.Y.Z.apk` | 不含 Google Play 服务的可复现构建；应用关闭时的通知使用 UnifiedPush，不包含 Wear OS |
 | **Android TV、Google TV 和 Fire OS** | 同一个 Android APK（`cbb-X.Y.Z.apk` 或 `cbb-fdroid-X.Y.Z.apk`） | 方向键界面；以仅接收成员身份加入 |
-| **iPhone 和 iPad**（iOS 17 或更高版本） | TestFlight（受邀后）或用 Xcode 从 `apps/ios` 构建 | 控制中心开关需要 iOS 18 或更高版本 |
+| **iPhone 和 iPad**（iOS 17 或更高版本） | 将在 0.7 版推出；在此之前用 Xcode 从 `apps/ios` 构建 | 控制中心开关需要 iOS 18 或更高版本 |
 | **Apple Watch**（watchOS 10 或更高版本） | 随 iPhone 应用一起提供 | 通过配对的 iPhone 工作 |
 | **Wear OS**（Wear OS 3 或更高版本） | 每个 [GitHub 发布版本](https://github.com/HunterEwok/cbb/releases)中的 `cbb-wear-X.Y.Z.apk`（使用 `adb install` 安装） | 通过配对的 Android 手机（完整版）工作 |
 | **Aurora OS 和 Sailfish OS** | 从 `apps/silica` 构建（面向 Aurora OS 5.1.5 提供已签名 RPM 包） | 在 Aurora 5 上将管理员密钥保存在受应用 PIN 保护的 OP-TEE 中；在 Aurora 4 和 Sailfish OS 上将密钥保存在文件中 |
-| **HarmonyOS**（HarmonyOS 5 或更高版本，手机、平板电脑和手表） | 从 `apps/harmony` 构建 | 将密钥保存在 HUKS 中；手表应用通过配对的 HarmonyOS 手机工作 |
+| **HarmonyOS**（HarmonyOS 5 或更高版本，手机、平板电脑和手表） | 等待上架 AppGallery；在此之前从 `apps/harmony` 构建 | 将密钥保存在 HUKS 中；手表应用通过配对的 HarmonyOS 手机工作 |
 | **Mac 应用**（macOS 14 或更高版本） | 每个 [GitHub 发布版本](https://github.com/HunterEwok/cbb/releases)中的 `cbb-X.Y.Z.pkg` | 随后台服务一起安装的菜单栏应用 |
 | **Linux 和 Windows 托盘应用** | 包含在 Windows 和 Linux（x86-64、ARM64）的发布归档包中 | 随服务自动安装（在 Linux 上需要 GTK 4 和 WebKitGTK 6.0） |
 

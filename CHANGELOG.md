@@ -2266,6 +2266,16 @@ with 0.5 is set up again once. The details follow.
   The test bench's pages name the commands and suites `tools/bench` has, the root changed only
   with the recovery key, and the timeouts and thresholds the code uses.
   The guide's Russian, Spanish and Chinese translations follow the current English pages.
+- The website says what 0.6 does: a computer at home is the hub and phones are never one, a
+  group of phones meets at a relay, a computer joins by the six digits the phone shows, the
+  main device moves only with the recovery key, the iPhone app comes in 0.7 and the HarmonyOS
+  app waits for AppGallery. It adds the recovery key, admins, signed updates, copy lifetimes,
+  watches, the lab, FreeBSD and OpenWrt, compares with LocalSend too and adds servers and
+  terminals to the comparison; the pictures of the steps and of a group of phones show this.
+  The guide's and the design's diagrams show the six-digit code, the main device, the Rust
+  service with its Go helper, and the Aurora and HarmonyOS apps.
+- The apps say hub, forwarder and relay where they said base, connection server and backup
+  server, and the termbase holds the hub and turns the old words away.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
 - "How it works" explains first what happens to a copy, then the group, its keys and the

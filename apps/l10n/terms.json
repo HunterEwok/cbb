@@ -49,13 +49,17 @@
       "langs": {
         "en": {
           "use": "relay",
-          "find": "relays?"
+          "find": "relays?",
+          "avoid": [
+            "\\bbackup servers?\\b"
+          ]
         },
         "ru": {
           "use": "ретранслятор",
           "find": "ретранслятор\\pL*",
           "avoid": [
-            "\\bреле(?:й|я|ю|ем|е|и|ев|ям|ями|ях)\\b"
+            "\\bреле(?:й|я|ю|ем|е|и|ев|ям|ями|ях)\\b",
+            "\\b(?:запасн|резервн)\\pL* сервер\\pL*"
           ]
         }
       }
@@ -66,14 +70,39 @@
       "langs": {
         "en": {
           "use": "forwarder",
-          "find": "forwarders?"
+          "find": "forwarders?",
+          "avoid": [
+            "\\bconnection servers?\\b"
+          ]
         },
         "ru": {
           "use": "сервер пересылки",
           "find": "сервер\\pL* пересылки",
           "avoid": [
             "\\bфорвардер\\pL*",
-            "\\bпересыл(?:ьщик|атель)\\pL*"
+            "\\bпересыл(?:ьщик|атель)\\pL*",
+            "\\bсервер\\pL* (?:связи|соединения)\\b"
+          ]
+        }
+      }
+    },
+    {
+      "concept": "hub",
+      "note": "A computer, router or small board at home that the devices away from home reach through the tunnel; never a phone (docs/protocol.md, section 11). Apple says home hub, Google Nest Hub.",
+      "langs": {
+        "en": {
+          "use": "hub",
+          "find": "hubs?",
+          "avoid": [
+            "\\bbases?\\b"
+          ]
+        },
+        "ru": {
+          "use": "хаб",
+          "find": "хаб\\pL*",
+          "avoid": [
+            "\\bбаз(?:а|ы|е|у|ой|ою|ам|ами|ах)?\\b",
+            "\\bконцентратор\\pL*"
           ]
         }
       }

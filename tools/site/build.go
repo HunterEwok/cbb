@@ -42,17 +42,17 @@ const siteURL = "https://cbb.tools"
 // engines as a FAQPage. An answer is plain text: no links.
 var faq = []struct{ Q, A string }{
 	{"Is it free?", "Yes. Connect Beyond Borders is free software: no price, no subscription, no ads."},
-	{"Can anyone else read what I copy?", "No. Every copy is encrypted end to end on the device that makes it, for your own devices alone. Whatever passes it on, a base or a server, cannot read it."},
-	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on just makes sync away from home work at any time."},
-	{"Does it work away from home?", "Yes. Turn on Everywhere, and your devices reach each other through the group's base, a computer of yours or a phone while its app is open, or through a backup server that cannot read your copies. It works on hotel, office and campus Wi-Fi too."},
-	{"Why does the iPhone need a gesture?", "iOS does not let apps read the clipboard in the background. You send a copy with the Action button or a double tap on the back of the phone."},
-	{"Are my passwords synced?", "What password managers mark as secret is not synced automatically."},
-	{"Where is the iPhone app?", "It comes with TestFlight, which is not open yet."},
-	{"Does it work on hotel or office Wi-Fi?", "Yes. Away from home it also works on strict networks, such as hotel, office and campus Wi-Fi, which let few apps through."},
+	{"Can anyone else read what I copy?", "No. Every copy is encrypted end to end on the device that makes it, for your own devices alone. Whatever passes it on, a hub or a server, cannot read it."},
+	{"Do I need a computer?", "No. A group of phones only works too: the phones meet at a relay while their apps are open. A computer that is often on makes sync work at any time, and at home with no server at all."},
+	{"Does it work away from home?", "Yes. Turn on Everywhere, and your devices reach each other through your hub, a computer or router of yours at home, or at a relay that cannot read your copies. It works on hotel, office and campus Wi-Fi too."},
+	{"Why will the iPhone need a gesture?", "iOS does not let apps read the clipboard in the background. You will send a copy with the Action button or a double tap on the back of the phone."},
+	{"Are my passwords synced?", "What password managers mark as secret is not synced automatically. A password you send on purpose lives 60 seconds and is then cleared."},
+	{"Where is the iPhone app?", "It comes in version 0.7. Until then a computer can hold the group without the app."},
+	{"Where is the HarmonyOS app?", "It is ready and waits for AppGallery, the only place HarmonyOS installs apps from."},
 	{"Does it need the internet?", "No. At home your devices need only your own network, with or without the internet."},
-	{"What if I lose my phone?", "Remove it from the group on another device you trust. If the lost phone made the group, another phone of yours that you trust becomes the group's owner."},
+	{"What if I lose my phone?", "Remove it from the group on another device you trust. If the lost phone was the main device, the recovery key you kept when you made the group moves the group to another device of yours."},
 	{"Who makes it?", "One developer, HunterEwok, in the United Kingdom. There is no company, no investors and no ads, and Connect Beyond Borders will always be free and open source."},
-	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Connect Beyond Borders joins iPhone, Android, Aurora, Windows, Mac and Linux, at home and away, with no account."},
+	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Connect Beyond Borders joins Android, Aurora, Windows, Mac, Linux and FreeBSD, servers in tmux among them, at home and away, with no account."},
 }
 
 // Language is one language of the site.

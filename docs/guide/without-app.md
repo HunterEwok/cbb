@@ -7,8 +7,7 @@ home network, set up a second admin, and add computers from another network over
 
 ![A Linux computer holds the group and adds the Mac and Windows by a six-digit code](../images/without-app.svg)
 
-A computer that creates a group becomes its **main device** (called *root* in command-line tools
-and diagrams). A [rootless Linux install](install.md#without-sudo-rootless) can never be the main
+A computer that creates a group becomes its **main device** (called *root* in command-line tools). A [rootless Linux install](install.md#without-sudo-rootless) can never be the main
 device or an admin, and a Docker container requires `CBB_KEYS_IN_FILE=yes` in its environment
 before holding group keys.
 

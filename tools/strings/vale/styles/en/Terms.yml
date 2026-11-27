@@ -6,6 +6,9 @@ ignorecase: true
 nonword: true
 swap:
   '\broots?\b': 'main device'
+  '\bbackup servers?\b': 'relay'
+  '\bconnection servers?\b': 'forwarder'
+  '\bbases?\b': 'hub'
   '\bclaim(?:s|ed|ing)?\b': 'move the group'
   '\b(?:take|takes|taken|taking|took)\s+(?:\w+\s+)?group\s+over\b': 'move the group'
   '\b(?:group|it)\s+(?:was|is)\s+taken\s+over\b': 'move the group'

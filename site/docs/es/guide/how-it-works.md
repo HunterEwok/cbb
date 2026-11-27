@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3343c717b895 -->
+<!-- source: 03894eb46cc0 -->
 # Cómo funciona
 
 Para cualquiera que quiera entender qué ocurre con lo que copia y cómo conecta Connect Beyond Borders sus dispositivos. Connect Beyond Borders comparte un único portapapeles entre tus propios dispositivos sin cuentas, sin servicios en la nube y sin un servidor central.
@@ -36,7 +36,7 @@ Cada dispositivo tiene una función en el grupo:
 
 | Función | Qué dispositivos | Qué hace |
 |---|---|---|
-| **Dispositivo principal** (llamado *root* en las herramientas de línea de comandos y los diagramas) | El teléfono que crea el grupo, o un ordenador cuando funcionas [sin la app](without-app.md) | Guarda la clave principal del grupo, añade y quita dispositivos, elige administradores y fija las reglas del grupo |
+| **Dispositivo principal** (llamado *root* en las herramientas de línea de comandos) | El teléfono que crea el grupo, o un ordenador cuando funcionas [sin la app](without-app.md) | Guarda la clave principal del grupo, añade y quita dispositivos, elige administradores y fija las reglas del grupo |
 | **Administrador** | Otro teléfono o un ordenador elegido por el dispositivo principal | Añade y quita dispositivos normales, congela un ordenador administrador robado y envía acciones de administración como el [pegado remoto](remote-paste.md); un teléfono administrador también puede quitar a otro administrador |
 | **Miembro** | Cada ordenador, teléfono y dispositivo pequeño (como un router o una Raspberry Pi; consulta [dispositivos pequeños](../../member/README.md)) | Sincroniza el portapapeles |
 | **Miembro sin root** | Un ordenador Linux instalado sin permisos de administrador (`sudo`) | Sincroniza como cualquier miembro, pero no puede ser el dispositivo principal, un administrador ni un hub ([miembros sin root](#rootless-members)) |

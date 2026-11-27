@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 31ed0dc98c03 -->
+<!-- source: f59470cc5a63 -->
 # Sin la app
 
 Para cualquiera que quiera crear y gestionar un grupo de Connect Beyond Borders usando solo ordenadores, sin una app de teléfono. En esta página creas un grupo en un ordenador, añades más ordenadores en tu red doméstica, configuras un segundo administrador y añades ordenadores desde otra red por SSH o por una VPN.
 
 ![Un ordenador Linux sostiene el grupo y añade el Mac y Windows con un código de seis dígitos](../images/without-app.svg)
 
-Un ordenador que crea un grupo pasa a ser su **dispositivo principal** (llamado *root* en las herramientas de línea de comandos y los diagramas). Una [instalación sin root en Linux](install.md#without-sudo-rootless) nunca puede ser el dispositivo principal ni un administrador, y un contenedor de Docker requiere `CBB_KEYS_IN_FILE=yes` en su entorno antes de guardar claves de grupo.
+Un ordenador que crea un grupo pasa a ser su **dispositivo principal** (llamado *root* en las herramientas de línea de comandos). Una [instalación sin root en Linux](install.md#without-sudo-rootless) nunca puede ser el dispositivo principal ni un administrador, y un contenedor de Docker requiere `CBB_KEYS_IN_FILE=yes` en su entorno antes de guardar claves de grupo.
 
 ## 1. Crea el grupo en un ordenador
 

@@ -21,7 +21,8 @@ and OpenWrt. Its short name is CBB and its command-line tool is `cbb`.
 
 1. **Install the phone app.** Download the Android APK from the
    [latest release](https://github.com/HunterEwok/cbb/releases/latest), or see
-   [The apps](docs/guide/apps.md) for iPhone, Aurora OS, Sailfish OS, and HarmonyOS.
+   [The apps](docs/guide/apps.md) for iPhone, Aurora OS, Sailfish OS, and HarmonyOS. The iPhone
+   app comes in version 0.7, and the HarmonyOS app waits for AppGallery.
 2. **Install Connect Beyond Borders on a computer:**
 
    ```sh

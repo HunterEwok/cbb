@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="420" viewBox="0 0 1000 420" role="img" aria-label="The system context: a group of devices, the user, the systems&#x27; clipboards, an optional forwarder or relay, and the release mirror">
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="420" viewBox="0 0 1060 420" role="img" aria-label="The system context: a group of devices, the user, the systems&#x27; clipboards, an optional forwarder or relay, and the release mirror">
 <title>The system context: a group of devices, the user, the systems&#x27; clipboards, an optional forwarder or relay, and the release mirror</title>
 <style>
   .bg { fill: none; }
@@ -42,31 +42,31 @@
     .lbl-bg { fill: #0d1117; stroke: #3d444d; }
   }
 </style>
-<g class=""><rect class="card " x="175.0" y="18.0" width="310" height="64" rx="10"/><g transform="translate(187.0,36)" class="ic"><circle cx="14" cy="9" r="5"/><path d="M4 25c0 -6 4 -9 10 -9s10 3 10 9"/></g><text class="t" x="225.0" y="46">The user</text><text class="s" x="225.0" y="64">copies, pastes, pairs, admits, removes</text></g>
-<rect class="zone" x="10" y="110" width="640" height="140" rx="14"/>
+<g class=""><rect class="card " x="230.0" y="18.0" width="310" height="64" rx="10"/><g transform="translate(242.0,36)" class="ic"><circle cx="14" cy="9" r="5"/><path d="M4 25c0 -6 4 -9 10 -9s10 3 10 9"/></g><text class="t" x="280.0" y="46">The user</text><text class="s" x="280.0" y="64">copies, pastes, pairs, admits, removes</text></g>
+<rect class="zone" x="10" y="110" width="750" height="140" rx="14"/>
 <text class="zone-t" x="26" y="134">A CBB group: no central server</text>
-<g class="key"><rect class="card key" x="20.0" y="143.0" width="200" height="64" rx="10"/><g transform="translate(32.0,161)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="70.0" y="171">Computers</text><text class="s" x="70.0" y="189">Linux, Mac, Windows</text></g>
-<g class=""><rect class="card " x="230.0" y="143.0" width="200" height="64" rx="10"/><g transform="translate(242.0,161)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="280.0" y="171">Phones</text><text class="s" x="280.0" y="189">iPhone, iPad, Android</text></g>
-<g class=""><rect class="card " x="440.0" y="143.0" width="200" height="64" rx="10"/><g transform="translate(452.0,161)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="490.0" y="171">Routers, watches, TVs</text><text class="s" x="490.0" y="189">small members</text></g>
-<text class="note" x="330" y="236" text-anchor="middle">Members trust each other by the group&#x27;s certificates.</text>
-<g class=""><rect class="card " x="740.0" y="143.0" width="250" height="64" rx="10"/><g transform="translate(752.0,161)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="790.0" y="171">The systems&#x27; clipboards</text><text class="s" x="790.0" y="189">keyboards and screens</text></g>
-<path class="e-home" d="M650,175 L740.0,175.0"/>
-<path class="a-home" d="M740.0,175.0 L732.0,170.6 L732.0,179.4z"/>
-<path class="e-home" d="M330.0,82.0 L330,110"/>
-<path class="a-home" d="M330,110 L334.4,102.0 L325.6,102.0z"/>
-<path class="a-home" d="M330.0,82.0 L325.6,90.0 L334.4,90.0z"/>
+<g class="key"><rect class="card key" x="15.0" y="143.0" width="240" height="64" rx="10"/><g transform="translate(27.0,161)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="65.0" y="171">Computers</text><text class="s" x="65.0" y="189">Linux, Mac, Windows, FreeBSD</text></g>
+<g class=""><rect class="card " x="265.0" y="143.0" width="240" height="64" rx="10"/><g transform="translate(277.0,161)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="315.0" y="171">Phones</text><text class="s" x="315.0" y="189">iOS, Android, Aurora, HarmonyOS</text></g>
+<g class=""><rect class="card " x="515.0" y="143.0" width="240" height="64" rx="10"/><g transform="translate(527.0,161)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="565.0" y="171">Routers, watches, TVs</text><text class="s" x="565.0" y="189">small members</text></g>
+<text class="note" x="385" y="236" text-anchor="middle">Members trust each other by the group&#x27;s certificates.</text>
+<g class=""><rect class="card " x="800.0" y="143.0" width="250" height="64" rx="10"/><g transform="translate(812.0,161)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="850.0" y="171">The systems&#x27; clipboards</text><text class="s" x="850.0" y="189">keyboards and screens</text></g>
+<path class="e-home" d="M760,175 L800.0,175.0"/>
+<path class="a-home" d="M800.0,175.0 L792.0,170.6 L792.0,179.4z"/>
+<path class="e-home" d="M385.0,82.0 L385,110"/>
+<path class="a-home" d="M385,110 L389.4,102.0 L380.6,102.0z"/>
+<path class="a-home" d="M385.0,82.0 L380.6,90.0 L389.4,90.0z"/>
 <g class="srv"><rect class="card srv" x="35.0" y="323.0" width="350" height="64" rx="10"/><g transform="translate(47.0,341)" class="ic"><path d="M8 21h13a5 5 0 0 0 0 -10a7 7 0 0 0 -13.5 1.5A4.3 4.3 0 0 0 8 21z"/></g><text class="t" x="85.0" y="351">Forwarder or blind relay</text><text class="s" x="85.0" y="369">the project&#x27;s or yours; sees ciphertext only</text></g>
 <path class="e-tunnel" d="M210,250 L210.0,323.0"/>
 <path class="a-tunnel" d="M210.0,323.0 L215.5,313.0 L204.5,313.0z"/>
 <path class="a-tunnel" d="M210,250 L204.5,260.0 L215.5,260.0z"/>
-<g class=""><rect class="card " x="530.0" y="323.0" width="340" height="64" rx="10"/><g transform="translate(542.0,341)" class="ic"><rect x="5" y="4" width="18" height="8" rx="1.5"/><rect x="5" y="16" width="18" height="8" rx="1.5"/><line x1="9" y1="8" x2="11" y2="8"/><line x1="9" y1="20" x2="11" y2="20"/></g><text class="t" x="580.0" y="351">GitHub or the dl.cbb.tools mirror</text><text class="s" x="580.0" y="369">signed releases</text></g>
-<path class="e-home" d="M700.0,323.0 L700,250"/>
-<path class="a-home" d="M700,250 L695.6,258.0 L704.4,258.0z"/>
-<rect class="lbl-bg" x="652.4" y="139.0" width="85.3" height="22" rx="11.0"/>
-<text class="lbl home" x="695" y="154.0" text-anchor="middle">copy, paste</text>
+<g class=""><rect class="card " x="590.0" y="323.0" width="340" height="64" rx="10"/><g transform="translate(602.0,341)" class="ic"><rect x="5" y="4" width="18" height="8" rx="1.5"/><rect x="5" y="16" width="18" height="8" rx="1.5"/><line x1="9" y1="8" x2="11" y2="8"/><line x1="9" y1="20" x2="11" y2="20"/></g><text class="t" x="640.0" y="351">GitHub or the dl.cbb.tools mirror</text><text class="s" x="640.0" y="369">signed releases</text></g>
+<path class="e-home" d="M760.0,323.0 L760,250"/>
+<path class="a-home" d="M760,250 L755.6,258.0 L764.4,258.0z"/>
+<rect class="lbl-bg" x="737.4" y="139.0" width="85.3" height="22" rx="11.0"/>
+<text class="lbl home" x="780" y="154.0" text-anchor="middle">copy, paste</text>
 <rect class="lbl-bg" x="148.4" y="273.0" width="123.1" height="38" rx="11"/>
 <text class="lbl tunnel" x="210" y="288.0" text-anchor="middle">away from home,</text>
 <text class="lbl tunnel" x="210" y="304.0" text-anchor="middle">if you choose one</text>
-<rect class="lbl-bg" x="660.5" y="291.0" width="79.0" height="22" rx="11.0"/>
-<text class="lbl home" x="700" y="306.0" text-anchor="middle">cbb update</text>
+<rect class="lbl-bg" x="720.5" y="291.0" width="79.0" height="22" rx="11.0"/>
+<text class="lbl home" x="760" y="306.0" text-anchor="middle">cbb update</text>
 </svg>

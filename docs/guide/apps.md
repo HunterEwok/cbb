@@ -16,11 +16,11 @@ window and menu icon over the background service running on that computer.
 | **Android** (Android 10 or later) | `cbb-X.Y.Z.apk` in each [GitHub release](https://github.com/HunterEwok/cbb/releases) | Includes Wear OS watch support, self-updates, and push notifications |
 | **Android without Google** (F-Droid build) | `cbb-fdroid-X.Y.Z.apk` in each [GitHub release](https://github.com/HunterEwok/cbb/releases) | Reproducible build with no Google Play services; uses UnifiedPush for closed-app notifications and omits Wear OS |
 | **Android TV, Google TV, and Fire OS** | Same Android APK (`cbb-X.Y.Z.apk` or `cbb-fdroid-X.Y.Z.apk`) | D-pad interface; joins as a receive-only member |
-| **iPhone and iPad** (iOS 17 or later) | TestFlight (when invited) or built from `apps/ios` with Xcode | Control Center switch requires iOS 18 or later |
+| **iPhone and iPad** (iOS 17 or later) | Comes in version 0.7; until then, built from `apps/ios` with Xcode | Control Center switch requires iOS 18 or later |
 | **Apple Watch** (watchOS 10 or later) | Bundled with the iPhone app | Works through the paired iPhone |
 | **Wear OS** (Wear OS 3 or later) | `cbb-wear-X.Y.Z.apk` in each [GitHub release](https://github.com/HunterEwok/cbb/releases) (install with `adb install`) | Works through the paired Android phone (full build) |
 | **Aurora OS and Sailfish OS** | Built from `apps/silica` (signed RPMs for Aurora OS 5.1.5) | Stores admin keys in OP-TEE behind an app PIN on Aurora 5; file keys on Aurora 4 and Sailfish OS |
-| **HarmonyOS** (HarmonyOS 5 or later, phone, tablet, and watch) | Built from `apps/harmony` | Stores keys in HUKS; watch app works through the paired HarmonyOS phone |
+| **HarmonyOS** (HarmonyOS 5 or later, phone, tablet, and watch) | Waits for AppGallery; until then, built from `apps/harmony` | Stores keys in HUKS; watch app works through the paired HarmonyOS phone |
 | **Mac app** (macOS 14 or later) | `cbb-X.Y.Z.pkg` in each [GitHub release](https://github.com/HunterEwok/cbb/releases) | Menu bar app installed together with the background service |
 | **Tray app for Linux and Windows** | Included in the Windows and Linux (x86-64, ARM64) release archives | Installed automatically with the service (requires GTK 4 and WebKitGTK 6.0 on Linux) |
 

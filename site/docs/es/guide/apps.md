@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 07bd60070629 -->
+<!-- source: b8e7e372d74f -->
 # Las apps
 
 Para cualquiera que use las apps de Connect Beyond Borders en un teléfono, una tableta, un reloj, un televisor o un ordenador. Para instalar el servicio en segundo plano en ordenadores, routers y servidores, consulta [Instalación](install.md). Para los detalles técnicos, consulta [Especificación de las apps](../apps.md).
@@ -13,11 +13,11 @@ Connect Beyond Borders ofrece apps nativas para teléfonos, tabletas, relojes, A
 | **Android** (Android 10 o posterior) | `cbb-X.Y.Z.apk` en cada [versión en GitHub](https://github.com/HunterEwok/cbb/releases) | Incluye compatibilidad con relojes Wear OS, actualizaciones automáticas y notificaciones push |
 | **Android sin Google** (compilación F-Droid) | `cbb-fdroid-X.Y.Z.apk` en cada [versión en GitHub](https://github.com/HunterEwok/cbb/releases) | Compilación reproducible sin servicios de Google Play; usa UnifiedPush para avisos con la app cerrada y omite Wear OS |
 | **Android TV, Google TV y Fire OS** | El mismo APK de Android (`cbb-X.Y.Z.apk` o `cbb-fdroid-X.Y.Z.apk`) | Interfaz para mando direccional; se une como miembro de solo recepción |
-| **iPhone y iPad** (iOS 17 o posterior) | TestFlight (con invitación) o compilada desde `apps/ios` con Xcode | El control del Centro de control requiere iOS 18 o posterior |
+| **iPhone y iPad** (iOS 17 o posterior) | Llega en la versión 0.7; mientras tanto, compilada desde `apps/ios` con Xcode | El control del Centro de control requiere iOS 18 o posterior |
 | **Apple Watch** (watchOS 10 o posterior) | Incluida con la app del iPhone | Funciona a través del iPhone emparejado |
 | **Wear OS** (Wear OS 3 o posterior) | `cbb-wear-X.Y.Z.apk` en cada [versión en GitHub](https://github.com/HunterEwok/cbb/releases) (instalar con `adb install`) | Funciona a través del teléfono Android emparejado (compilación completa) |
 | **Aurora OS y Sailfish OS** | Compilada desde `apps/silica` (RPM firmados para Aurora OS 5.1.5) | Guarda las claves de administrador en OP-TEE tras un PIN de la app en Aurora 5; claves en archivo en Aurora 4 y Sailfish OS |
-| **HarmonyOS** (HarmonyOS 5 o posterior, teléfono, tableta y reloj) | Compilada desde `apps/harmony` | Guarda las claves en HUKS; la app del reloj funciona a través del teléfono HarmonyOS emparejado |
+| **HarmonyOS** (HarmonyOS 5 o posterior, teléfono, tableta y reloj) | Espera a AppGallery; mientras tanto, compilada desde `apps/harmony` | Guarda las claves en HUKS; la app del reloj funciona a través del teléfono HarmonyOS emparejado |
 | **App para Mac** (macOS 14 o posterior) | `cbb-X.Y.Z.pkg` en cada [versión en GitHub](https://github.com/HunterEwok/cbb/releases) | App de la barra de menús instalada junto con el servicio en segundo plano |
 | **App de bandeja para Linux y Windows** | Incluida en los archivos de versión de Windows y Linux (x86-64, ARM64) | Se instala automáticamente con el servicio (requiere GTK 4 y WebKitGTK 6.0 en Linux) |
 

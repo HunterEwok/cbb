@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 07bd60070629 -->
+<!-- source: b8e7e372d74f -->
 # Приложения
 
 Для всех, кто пользуется приложениями Connect Beyond Borders на телефоне, планшете, часах, телевизоре
@@ -18,11 +18,11 @@ Connect Beyond Borders предлагает нативные приложени�
 | **Android** (Android 10 или новее) | `cbb-X.Y.Z.apk` в каждом [релизе на GitHub](https://github.com/HunterEwok/cbb/releases) | Включает поддержку часов Wear OS, самостоятельное обновление и push-уведомления |
 | **Android без Google** (сборка F-Droid) | `cbb-fdroid-X.Y.Z.apk` в каждом [релизе на GitHub](https://github.com/HunterEwok/cbb/releases) | Воспроизводимая сборка без сервисов Google Play; использует UnifiedPush для уведомлений при закрытом приложении и не включает Wear OS |
 | **Android TV, Google TV и Fire OS** | Тот же APK для Android (`cbb-X.Y.Z.apk` или `cbb-fdroid-X.Y.Z.apk`) | Интерфейс под крестовину пульта; вступает как участник только для приёма |
-| **iPhone и iPad** (iOS 17 или новее) | TestFlight (по приглашению) или сборка из `apps/ios` в Xcode | Переключатель в Пункте управления требует iOS 18 или новее |
+| **iPhone и iPad** (iOS 17 или новее) | Выйдет в версии 0.7; до тех пор — сборка из `apps/ios` в Xcode | Переключатель в Пункте управления требует iOS 18 или новее |
 | **Apple Watch** (watchOS 10 или новее) | Входит в состав приложения для iPhone | Работает через связанный iPhone |
 | **Wear OS** (Wear OS 3 или новее) | `cbb-wear-X.Y.Z.apk` в каждом [релизе на GitHub](https://github.com/HunterEwok/cbb/releases) (установка через `adb install`) | Работает через связанный телефон Android (полная сборка) |
 | **Aurora OS и Sailfish OS** | Сборка из `apps/silica` (подписанные RPM для Aurora OS 5.1.5) | Хранит ключи администратора в OP-TEE за PIN-кодом приложения в Aurora 5; ключи в файлах на Aurora 4 и Sailfish OS |
-| **HarmonyOS** (HarmonyOS 5 или новее, телефон, планшет и часы) | Сборка из `apps/harmony` | Хранит ключи в HUKS; приложение для часов работает через связанный телефон HarmonyOS |
+| **HarmonyOS** (HarmonyOS 5 или новее, телефон, планшет и часы) | Ждёт AppGallery; до тех пор — сборка из `apps/harmony` | Хранит ключи в HUKS; приложение для часов работает через связанный телефон HarmonyOS |
 | **Приложение для Mac** (macOS 14 или новее) | `cbb-X.Y.Z.pkg` в каждом [релизе на GitHub](https://github.com/HunterEwok/cbb/releases) | Приложение в строке меню, устанавливается вместе с фоновой службой |
 | **Приложение в трее для Linux и Windows** | Включено в архивы релизов для Windows и Linux (x86-64, ARM64) | Устанавливается автоматически со службой (в Linux требуются GTK 4 и WebKitGTK 6.0) |
 

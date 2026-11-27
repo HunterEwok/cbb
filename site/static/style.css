@@ -276,7 +276,7 @@ nav a[aria-current] { color: var(--accent); }
 .chalk-table.centred th, .chalk-table.centred td { text-align: center; }
 .compare tr.us th { color: var(--chalk-yellow); }
 .compare td.systems { font-size: 20px; line-height: 1.15; }
-/* The apps compared: their names, then five columns of one width. */
+/* The apps compared: their names, then eight columns of one width. */
 @media (min-width: 700px) { .compare.apps { table-layout: fixed; } .compare.apps col.name { width: 22%; } .compare.apps thead th { font-size: 21px; hyphens: auto; } }
 .mark { display: inline-block; width: 30px; height: 30px; vertical-align: middle; fill: none; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
 .mark.yes { stroke: var(--chalk-yellow); }
@@ -576,9 +576,9 @@ nav a[aria-current] { color: var(--accent); }
   .draw .frame.drawn.alive .chalk .cmd { animation: type 9s linear infinite; }
   .draw .frame.drawn.alive .chalk .cursor { animation: blink 9s ease-in-out infinite; }
   .draw .frame.drawn.alive .chalk .check { animation: tick 9s linear infinite; }
-  /* Step 3: the camera's brackets close on the code, then a check. */
-  .draw .frame.drawn.alive .brackets { transform-box: view-box; transform-origin: 166px 70px; animation: focus 8s ease-in-out infinite; }
-  .draw .frame.drawn.alive .chalk .brackets ~ .check { animation: tick3 8s linear infinite; }
+  /* Step 3: the six digits are typed on the computer, then a check. */
+  .draw .frame.drawn.alive .chalk .code { animation: type 8s linear infinite; }
+  .draw .frame.drawn.alive .chalk .code ~ .check { animation: tick3 8s linear infinite; }
   /* The groups: the links are gone over again, one after another. */
   .draw .frame.drawn.alive .chalk .link.r0 { animation: redraw 12s linear infinite; }
   .draw .frame.drawn.alive .chalk .link.r1 { animation: redraw 12s linear 3s infinite; }
@@ -596,6 +596,7 @@ nav a[aria-current] { color: var(--accent); }
   .alive .compare tr.us td:nth-child(6) .mark { animation-delay: 1.6s; }
   .alive .compare tr.us td:nth-child(7) .mark { animation-delay: 2s; }
   .alive .compare tr.us td:nth-child(8) .mark { animation-delay: 2.4s; }
+  .alive .compare tr.us td:nth-child(9) .mark { animation-delay: 2.8s; }
   /* The commands: a chalk cursor after each, blinking now and then. */
   .alive.install-board pre code::after { content: "_"; color: var(--chalk-yellow); font-weight: 600; margin-inline-start: .2em; animation: blink 6s ease-in-out infinite; }
   @supports (animation-timeline: view()) {
@@ -609,7 +610,6 @@ nav a[aria-current] { color: var(--accent); }
 @keyframes type { 0%, 4% { stroke-dashoffset: 1; opacity: 1; animation-timing-function: ease-in-out; } 30% { stroke-dashoffset: 0; } 90% { stroke-dashoffset: 0; opacity: 1; } 97% { opacity: 0; } 100% { stroke-dashoffset: 1; opacity: 0; } }
 @keyframes tick { 0%, 40% { stroke-dashoffset: 1; opacity: 1; } 48% { stroke-dashoffset: 0; } 90% { stroke-dashoffset: 0; opacity: 1; } 97% { opacity: 0; } 100% { stroke-dashoffset: 1; opacity: 0; } }
 @keyframes blink { 0%, 55% { opacity: 1; } 60% { opacity: 0; } 66% { opacity: 1; } 72% { opacity: 0; } 78%, 100% { opacity: 1; } }
-@keyframes focus { 0% { transform: scale(1.4); opacity: .3; } 30%, 88% { transform: none; opacity: 1; } 100% { transform: scale(1.4); opacity: .3; } }
 @keyframes tick3 { 0%, 34% { stroke-dashoffset: 1; opacity: 1; } 44% { stroke-dashoffset: 0; } 86% { stroke-dashoffset: 0; opacity: 1; } 94% { opacity: 0; } 100% { stroke-dashoffset: 1; opacity: 0; } }
 @keyframes redraw { 0% { stroke-dashoffset: 0; } 3% { stroke-dashoffset: -1; } 4% { stroke-dashoffset: 1; } 12%, 100% { stroke-dashoffset: 0; } }
 @keyframes under { 0%, 10% { transform: scaleX(0); opacity: 1; } 30%, 80% { transform: none; opacity: 1; } 92%, 100% { transform: none; opacity: 0; } }

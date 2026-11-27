@@ -8,7 +8,7 @@ and share your clipboard between them.
 Connect Beyond Borders shares one encrypted clipboard across your own devices with no cloud or
 account. Your devices form a **group**: a set of devices that trust each other through signed
 records instead of a central server. The phone that creates the group is its **main device**
-(called *root* in command-line tools and diagrams): it holds the group's main key and admits new
+(called *root* in command-line tools): it holds the group's main key and admits new
 devices.
 
 ![A phone holding the group's key connects with Linux, Mac, and Windows computers so every device shares one clipboard directly on your home network](../images/group.svg)

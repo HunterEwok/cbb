@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 31ed0dc98c03 -->
+<!-- source: f59470cc5a63 -->
 # 不用应用
 
 写给只想用电脑、不使用手机应用来创建和管理 Connect Beyond Borders 群组的人。在本页中，你会在一台电脑上创建群组、添加家庭网络中的更多电脑、设置第二台管理员，并通过 SSH 或 VPN 从其他网络添加电脑。
 
 ![一台 Linux 电脑持有群组，用六位数字码添加 Mac 和 Windows](../images/without-app.svg)
 
-创建群组的电脑会成为群组的**主设备**（在命令行工具和图示中称为 *root*）。[无 root Linux 安装](install.md#without-sudo-rootless)永远不能成为主设备或管理员，而 Docker 容器在保管群组密钥之前需要在环境中设置 `CBB_KEYS_IN_FILE=yes`。
+创建群组的电脑会成为群组的**主设备**（在命令行工具中称为 *root*）。[无 root Linux 安装](install.md#without-sudo-rootless)永远不能成为主设备或管理员，而 Docker 容器在保管群组密钥之前需要在环境中设置 `CBB_KEYS_IN_FILE=yes`。
 
 ## 1. 在电脑上创建群组
 

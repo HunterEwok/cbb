@@ -44,7 +44,7 @@
 </style>
 <rect class="zone" x="10" y="10" width="712" height="200" rx="14"/>
 <text class="zone-t" x="26" y="34">家庭网络</text>
-<g class="key"><rect class="card key" x="30.0" y="50.0" width="150" height="64" rx="10"/><g transform="translate(42.0,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="78">手机</text><text class="s" x="80.0" y="96">装有应用</text><rect class="badge" x="157.6" y="41.0" width="14.4" height="18" rx="9"/><text class="badge-t" x="164.8" y="54.0" text-anchor="middle">根</text></g>
+<g class="key"><rect class="card key" x="30.0" y="50.0" width="150" height="64" rx="10"/><g transform="translate(42.0,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.0" y="78">手机</text><text class="s" x="80.0" y="96">装有应用</text><rect class="badge" x="144.8" y="41.0" width="27.200000000000003" height="18" rx="9"/><text class="badge-t" x="158.4" y="54.0" text-anchor="middle">主设备</text></g>
 <path class="e-home" d="M105.0,114.0 L105.0,150"/>
 <g class=""><rect class="card " x="204.0" y="56.0" width="150" height="52" rx="10"/><g transform="translate(216.0,68)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="254.0" y="87">笔记本</text></g>
 <path class="e-home" d="M279.0,108.0 L279.0,150"/>

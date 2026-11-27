@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97987cb74ebc -->
+<!-- source: e51f90fef61a -->
 # Inicio rápido
 
 Para cualquiera que configure Connect Beyond Borders por primera vez con un teléfono y un ordenador en una red doméstica. En cuatro pasos, instalas la app del teléfono, creas un grupo, añades tu primer ordenador y compartes tu portapapeles entre ellos.
 
-Connect Beyond Borders comparte un único portapapeles cifrado entre tus propios dispositivos sin nube ni cuentas. Tus dispositivos forman un **grupo**: un conjunto de dispositivos que confían entre sí mediante registros firmados en lugar de un servidor central. El teléfono que crea el grupo es su **dispositivo principal** (llamado *root* en las herramientas de línea de comandos y los diagramas): guarda la clave principal del grupo y admite dispositivos nuevos.
+Connect Beyond Borders comparte un único portapapeles cifrado entre tus propios dispositivos sin nube ni cuentas. Tus dispositivos forman un **grupo**: un conjunto de dispositivos que confían entre sí mediante registros firmados en lugar de un servidor central. El teléfono que crea el grupo es su **dispositivo principal** (llamado *root* en las herramientas de línea de comandos): guarda la clave principal del grupo y admite dispositivos nuevos.
 
 ![Un teléfono que guarda la clave del grupo se conecta con ordenadores Linux, Mac y Windows para que cada dispositivo comparta un único portapapeles directamente en tu red doméstica](../images/group.svg)
 

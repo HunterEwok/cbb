@@ -1829,8 +1829,8 @@
         <translation>Доступна CBB %1.</translation>
     </message>
     <message>
-        <source>Check that the base is on and online.</source>
-        <translation>Проверьте, что база включена и в сети.</translation>
+        <source>Check that the hub is on and online.</source>
+        <translation>Проверьте, что хаб включён и в сети.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
@@ -1857,8 +1857,8 @@
         <translation>Всё синхронизируется.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no base.</source>
-        <translation>«Везде» включено, но в группе нет базы.</translation>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>«Везде» включено, но в группе нет хаба.</translation>
     </message>
     <message>
         <source>If this is your home network, mark it as home.</source>
@@ -1877,8 +1877,8 @@
         <translation>Разрешите CBB в файрволе этого компьютера.</translation>
     </message>
     <message>
-        <source>Make a computer at home the base, in its advanced settings.</source>
-        <translation>Сделайте домашний компьютер базой в его расширенных настройках.</translation>
+        <source>Make a computer at home the hub, on its page in the app.</source>
+        <translation>Сделайте домашний компьютер хабом на его странице в приложении.</translation>
     </message>
     <message>
         <source>Make a new group and join your devices to it.</source>
@@ -1921,16 +1921,8 @@
         <translation>Синхронизация выключена на: %1.</translation>
     </message>
     <message>
-        <source>The backup server does not answer.</source>
-        <translation>Запасной сервер не отвечает.</translation>
-    </message>
-    <message>
-        <source>The base %1 does not answer.</source>
-        <translation>База %1 не отвечает.</translation>
-    </message>
-    <message>
-        <source>The connection server does not take this base.</source>
-        <translation>Сервер связи не принимает эту базу.</translation>
+        <source>The forwarder does not take this hub.</source>
+        <translation>Сервер пересылки не принимает этот хаб.</translation>
     </message>
     <message>
         <source>The group has records of a newer version.</source>
@@ -1961,8 +1953,12 @@
         <translation>Ключ восстановления группы использовали дважды, поэтому группа остановилась навсегда.</translation>
     </message>
     <message>
-        <source>The list of the connection servers' entry points is out of date.</source>
-        <translation>Список точек входа серверов связи устарел.</translation>
+        <source>The hub %1 does not answer.</source>
+        <translation>Хаб %1 не отвечает.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>Список точек входа серверов пересылки устарел.</translation>
     </message>
     <message>
         <source>The main device's key signed two different histories, so the group stopped.</source>
@@ -1973,8 +1969,12 @@
         <translation>Записи главного устройства ждут записей, которые ещё ни одно устройство не передало.</translation>
     </message>
     <message>
-        <source>The tunnel to the base %1 does not get through.</source>
-        <translation>Туннель к базе %1 не проходит.</translation>
+        <source>The relay does not answer.</source>
+        <translation>Ретранслятор не отвечает.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>Туннель к хабу %1 не проходит.</translation>
     </message>
     <message>
         <source>This computer has not met its group on this network.</source>
@@ -1997,8 +1997,8 @@
         <translation>Это устройство заглушено: его копии не доходят до группы.</translation>
     </message>
     <message>
-        <source>This device is the base, and no device has connected yet.</source>
-        <translation>Это устройство — база, и к нему ещё никто не подключился.</translation>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>Это устройство — хаб, и к нему ещё никто не подключился.</translation>
     </message>
     <message>
         <source>This device was removed from the group.</source>
@@ -2013,8 +2013,8 @@
         <translation>Это единственное устройство группы.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on Strict networks on the base.</source>
-        <translation>Эта сеть может блокировать туннели: включите «Строгие сети» на базе.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the hub.</source>
+        <translation>Эта сеть может блокировать туннели: включите «Строгие сети» на хабе.</translation>
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>
