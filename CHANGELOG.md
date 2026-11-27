@@ -2251,7 +2251,7 @@ with 0.5 is set up again once. The details follow.
   explanation, says what the program does today, and its facts were checked against the code.
   So are the reference (commands, settings, errors, limits, devices, glossary), the
   administrators' pages, the README, the docs' map, the apps' page, the shorter engineering
-  pages and the design; the administrators' pages set a blind relay once, on the main device, and say that
+  pages, the design and the protocol; the administrators' pages set a blind relay once, on the main device, and say that
   every device of a group runs the same release.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
