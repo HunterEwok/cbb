@@ -1,65 +1,115 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5013aca345ad -->
+<!-- source: f59470cc5a63 -->
 # Bila programu
 
-Kikundi cha kompyuta hakihitaji programu ya simu: kompyuta inaweza kushikilia kikundi.
+Kwa yeyote anayetaka kuunda na kusimamia kikundi cha Connect Beyond Borders kwa kutumia kompyuta pekee, bila programu ya simu. Kwenye ukurasa huu, unaunda kikundi kwenye kompyuta moja, unaongeza kompyuta zaidi kwenye mtandao wako wa nyumbani, unaweka msimamizi wa pili, na unaongeza kompyuta kutoka mtandao mwingine kupitia SSH au VPN.
 
 ![Kompyuta ya Linux inashikilia kikundi na kuongeza Mac na Windows kwa msimbo wa tarakimu sita](../images/without-app.svg)
 
-## 1. Tengeneza kikundi kwenye kompyuta
+Kompyuta inayounda kikundi inakuwa **kifaa kikuu** chake (kinachoitwa *root* katika zana za mstari wa amri na michoro). [Usakinishaji wa Linux bila root](install.md#without-sudo-rootless) hauwezi kamwe kuwa kifaa kikuu wala msimamizi, na kontena ya Docker inahitaji `CBB_KEYS_IN_FILE=yes` katika mazingira yake kabla ya kushikilia funguo za kikundi.
 
-[Sakinisha](install.md) Connect Beyond Borders kwenye kompyuta inayowashwa mara nyingi: Linux, Windows, Mac au FreeBSD. Inashikilia kikundi. Kisha:
+## 1. Unda kikundi kwenye kompyuta
+
+Chagua kompyuta inayowashwa mara kwa mara (Linux, macOS, Windows, au FreeBSD) na [usakinishe Connect Beyond Borders](install.md).
+
+1. Endesha kwenye kompyuta hiyo (acha `sudo` kwenye terminal ya msimamizi wa mfumo kwenye Windows, au bofya **Unda kikundi** katika programu ya Mac au programu ya trei):
+
+   ```sh
+   sudo cbb new
+   ```
+
+2. Hifadhi **karatasi ya urejeshaji** inayoonyeshwa kwenye skrini—mistari minne ya herufi na tarakimu pamoja na msimbo wa QR. Ichapishe au uiandike na uihifadhi mahali tofauti na vifaa vyako.
+
+**Matokeo:** Kompyuta hii inakuwa kifaa kikuu cha kikundi. Kwenye Mac yenye Apple silicon au chipu ya T2, au kompyuta ya Linux au Windows yenye TPM 2.0, funguo zake hukaa kwenye maunzi ya usalama; vinginevyo hukaa kwenye faili zilizolindwa (`cbb keys` huanza kwenye `files`; tazama [Funguo na uthibitisho](keys.md)). Hakuna kinachohifadhi nakala ya karatasi ya urejeshaji—ndiyo njia pekee ya kuhamisha kikundi ikiwa kompyuta hii itapotea.
+
+## 2. Ongeza kompyuta kwenye mtandao wako wa nyumbani
+
+Sakinisha Connect Beyond Borders kwenye kila kompyuta ya ziada kwenye mtandao mmoja wa nyumbani, kisha ioanishe:
+
+1. Kwenye kifaa kikuu (au kompyuta yoyote ya msimamizi), fungua dirisha la kuoanisha:
+
+   ```sh
+   sudo cbb pair
+   ```
+
+   **Matokeo:** Terminal inaonyesha msimbo wa kuoanisha wa tarakimu 6 na msimbo wa QR, na inasubiri kwa dakika 5. Unaweza pia kufungua dirisha la kuoanisha kutoka kitufe cha **+** katika programu ya Mac au programu ya trei.
+
+2. Kwenye kompyuta mpya, jiunge na kikundi:
+   - **Terminal:** Endesha `sudo cbb pair -code` (acha `sudo` kwenye terminal ya msimamizi wa mfumo kwenye Windows) na uandike tarakimu 6 unapoulizwa.
+   - **Programu ya kompyuta:** Fungua **CBB**, chagua **Jiunge na kikundi**, na uandike tarakimu 6.
+
+   Kila msimbo usio sahihi hutumia mojawapo ya majaribio 3; dirisha hufungwa baada ya majaribio 3 yasiyofanikiwa au mara tu kifaa kinapojiunga.
+
+**Matokeo:** Kompyuta zote mbili zinathibitisha kujiunga, na mbao zako za kunakili husawazisha kiotomatiki. Nakili maandishi kwenye kompyuta moja na uyabandike kwenye nyingine ili kuhakikisha (tazama [Kuanza haraka: nakili kwenye kimoja, bandika kwenye kingine](quickstart.md#4-copy-on-one-paste-on-another)).
+
+## 3. Ongeza msimamizi wa pili na uhifadhi karatasi yako ya urejeshaji salama
+
+Pandisha cheo kompyuta ya pili kuwa **msimamizi** ili bado uweze kuongeza na kuondoa vifaa wakati kifaa kikuu kiko nje ya mtandao. Kumbuka kwamba kompyuta inaweza kupandishwa cheo kuwa msimamizi ikiwa tu ilioanishwa moja kwa moja na kifaa kikuu.
+
+1. Tafuta jina la kompyuta au kitambulisho cha kifaa kwa `cbb status`.
+2. Kwenye kifaa kikuu, pandisha cheo kompyuta hiyo:
+   - **Kompyuta yenye TPM 2.0 au Secure Enclave:**
+
+     ```sh
+     sudo cbb admin NAME
+     ```
+
+   - **Kompyuta ambayo funguo zake hukaa kwenye faili** (inahitaji kiwango cha funguo `files`, kinachowekwa kwa `sudo cbb keys files`):
+
+     ```sh
+     sudo cbb admin -allow-file-key NAME
+     ```
+
+     Yeyote anayenakili faili za funguo za msimamizi mwenye funguo za faili anaweza kutenda kama msimamizi hadi msimamizi mwingine aiondoe kompyuta hiyo, kwa hiyo pandisha cheo kompyuta unazozilinda kimwili na zenye diski iliyosimbwa pekee.
+
+**Matokeo:** `cbb status` inaorodhesha kompyuta ya pili kama msimamizi, nayo inaweza kuendesha `sudo cbb pair` na `sudo cbb remove NAME` kwa wanachama wa kawaida.
+
+Ikiwa kifaa kikuu kitawahi kupotea au kuharibika, hamishia kikundi kwenye kompyuta nyingine ya kikundi kwa kutumia karatasi yako ya urejeshaji:
 
 ```sh
-sudo cbb new
+sudo cbb recovery -leave LOST-DEVICE
 ```
 
-Kompyuta hii sasa ni **mzizi** wa kikundi: inashikilia ufunguo wa kikundi na kuongeza na kuondoa vifaa. Ufunguo wake uko kwenye TPM au Secure Enclave ya kompyuta ikiwa inayo, vinginevyo kwenye faili inayolindwa na mfumo.
-
-`cbb new` pia huonyesha **karatasi ya urejeshaji** ya kikundi mara moja: mistari minne ya herufi na tarakimu na msimbo wa QR. Iandike au uchapishe skrini, na uiweke mbali na vifaa vyako. Kwa hiyo unarudisha kikundi kompyuta hii ikipotea (`cbb recovery`); hakuna kinachohifadhi nakala.
-
-## 2. Ongeza kompyuta
-
-Kwenye mzizi:
-
-```sh
-sudo cbb pair
-```
-
-Hufungua dirisha la kuoanisha, huonyesha msimbo wa tarakimu sita na kusubiri. Kwenye kompyuta mpya endesha `sudo cbb pair -code` na uandike msimbo huo: inapata dirisha kwenye mtandao wa nyumbani na kujiunga ndani ya sekunde chache. Msimbo usio sahihi hutumia mojawapo ya majaribio matatu; dirisha hufungwa baada ya la tatu, au kompyuta ikishajiunga.
-
-Kisha kila kompyuta husawazisha, kama katika [mwanzo wa haraka](quickstart.md#4-copy-on-one-paste-on-another).
-
-## 3. Usitegemee kompyuta moja
-
-Fanya kompyuta ya pili kuwa msimamizi, ili iweze pia kuongeza na kuondoa vifaa:
-
-```sh
-sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
-```
-
-Kompyuta ya Linux au ya Windows yenye TPM huweka ufunguo wa msimamizi humo, na Mac kwenye Secure Enclave yake. Kompyuta isiyo na chochote kati ya hivyo huuweka kwenye faili, kwa hivyo `cbb admin` huomba kwanza `-allow-file-key`: yeyote anayenakili faili hiyo hutenda kama msimamizi hadi msimamizi mwingine aondoe kompyuta hiyo, kwa hivyo fanya msimamizi kompyuta unayoitunza salama tu.
-
-Mzizi ukipotea au kuharibika, kompyuta nyingine inakuwa mzizi kwa karatasi ya urejeshaji ya kikundi, na kila kifaa kingine kinabaki:
-
-```sh
-sudo cbb recovery            # then type the recovery key from the sheet
-```
-
-Zaidi katika [kifaa kikipotea au kuibiwa](lost-device.md).
+Kisha andika ufunguo wa urejeshaji kutoka kwenye karatasi unapoulizwa (au pitisha `-yubikey` ikiwa uliufunga kwenye YubiKey). Tazama [Kifaa kikipotea au kuibiwa](lost-device.md) kwa utaratibu kamili.
 
 ## Kujiunga kutoka mtandao mwingine
 
-Kompyuta isiyo nyumbani hujiunga kwa mwaliko kutoka kitovu ([Nje ya nyumbani](away-from-home.md#a-computer-that-is-not-at-home-an-invitation)), au kupitia muunganisho unaoudhibiti tayari:
+Ili kuongeza kompyuta ambayo haiko kwenye mtandao wako wa nyumbani, unaweza kutuma [mwaliko kupitia kitovu](away-from-home.md#a-computer-that-is-not-at-home-an-invitation), au kuoanisha kupitia handaki la SSH au VPN yako mwenyewe.
 
-- **SSH** kwenda kwenye mzizi au msimamizi: kwenye kompyuta mpya endesha `ssh -N -L 18764:localhost:8764 user@that-machine`, kisha `sudo cbb pair` pale (katika kikao kingine cha SSH) na `sudo cbb pair -code 127.0.0.1:18764` hapa.
-- **VPN yako mwenyewe** inayozipa mashine zote mbili anwani za kibinafsi: `sudo cbb pair` kwenye mzizi au msimamizi, kisha `sudo cbb pair -code ITS-VPN-ADDRESS:8764` hapa. Kwenye Linux, endesha kisakinishi tena baada ya kuweka VPN, ili kanuni zake za ngome ya moto ziruhusu mtandao wa VPN.
+### Kupitia SSH
 
-Kwa njia zote mbili, andika mstari ambao `cbb pair` huchapisha chini ya msimbo (`cbb://pair?...`) badala ya tarakimu sita: tarakimu peke yake hazitaji dirisha lolote mahali ambapo mDNS haifiki, na mstari unalitaja, ukiwa na msimbo uleule ndani yake.
+1. Kwenye kompyuta mpya, elekeza mlango wa ndani kwenda kwenye mlango wa mwanachama wa kifaa kikuu au msimamizi (8764 kwa chaguo-msingi):
 
-Misimbo haisafiri kamwe: kila kompyuta hukokotoa msimbo wake yenyewe kutokana na kuoanisha, ambako hufanyika ndani ya SSH au VPN yako, na ndani ya TLS. Kompyuta mpya husawazisha kupitia njia hiyo hadi huduma yake ianzishwe upya; ili kuendelea kusawazisha baadaye, washa [usawazishaji nje ya nyumbani](away-from-home.md) kwenye zote mbili kabla ya kufunga muunganisho.
+   ```sh
+   ssh -N -L 18764:localhost:8764 user@admin-machine
+   ```
 
-## Kikundi cha kabla ya 0.6
+2. Katika kipindi kingine cha SSH kwenye kifaa kikuu au kompyuta ya msimamizi, fungua dirisha la kuoanisha:
 
-0.6 inasoma rekodi za kikundi za toleo 2 pekee, na haina njia ya kurudi kwenye vikundi vya zamani. Kompyuta iliyosasishwa kutoka toleo la awali huacha kikundi chake cha zamani inapoanza kwa mara ya kwanza: huhamisha faili za kikundi hadi `before-0.6` kwenye saraka yake ya hali, huhifadhi mipangilio yake, na `cbb status` husema hivyo. Unda kikundi upya: `cbb new` kwenye kompyuta moja, kisha `cbb pair -code` kwenye nyingine.
+   ```sh
+   sudo cbb pair
+   ```
+
+   Nakili mstari mzima wa `cbb://pair?...` uliochapishwa chini ya tarakimu 6. (Bila ugunduzi wa mtandao wa ndani, tarakimu 6 peke yake haziwezi kutambua dirisha; mstari wa `cbb://pair?...` hubeba maelezo ya dirisha na msimbo vyote viwili.)
+
+3. Kwenye kompyuta mpya, jiunge kupitia mlango ulioelekezwa na ubandike mstari wa `cbb://pair?...` unapoulizwa:
+
+   ```sh
+   sudo cbb pair -code 127.0.0.1:18764
+   ```
+
+**Matokeo:** Kompyuta mpya inajiunga na kikundi kupitia handaki la SSH ndani ya TLS 1.3.
+
+### Kupitia VPN yako mwenyewe
+
+1. Kwenye Linux, ikiwa uliweka VPN baada ya kusakinisha Connect Beyond Borders, endesha kisakinishi tena ili kanuni za ngome ziruhusu subnet yako ya VPN.
+2. Kwenye kifaa kikuu au kompyuta ya msimamizi, endesha `sudo cbb pair` na unakili mstari wa `cbb://pair?...` uliochapishwa chini ya tarakimu 6.
+3. Kwenye kompyuta mpya, jiunge kwa kutumia anwani ya VPN na mlango wa kompyuta ya msimamizi, na ubandike mstari wa `cbb://pair?...` unapoulizwa:
+
+   ```sh
+   sudo cbb pair -code ADMIN-VPN-ADDRESS:8764
+   ```
+
+**Matokeo:** Kompyuta mpya inajiunga na kikundi chako kupitia VPN ndani ya TLS 1.3.
+
+Siri ya kuoanisha haisafiri kamwe bila usimbaji: kompyuta zote mbili hutengeneza uthibitisho wa kipindi ndani ya TLS 1.3. Kompyuta mpya huendelea kusawazisha kupitia njia hiyo ya muda ya kuoanisha hadi huduma yake ianzishwe upya; ili kuendelea kusawazisha kwa kudumu baada ya kufunga SSH au VPN yako, sanidi [kusawazisha ukiwa mbali na nyumbani](away-from-home.md) kwenye vifaa vyote viwili kwanza.

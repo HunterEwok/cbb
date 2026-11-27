@@ -2271,7 +2271,8 @@ with 0.5 is set up again once. The details follow.
   the limits page gives `stable.json` its 14 days and `attest-status.json` its 8.
   The test bench's pages name the commands and suites `tools/bench` has, the root changed only
   with the recovery key, and the timeouts and thresholds the code uses.
-  The guide's Russian, Spanish and Chinese translations follow the current English pages.
+  The guide's Russian, Spanish, Chinese, Arabic, Hebrew, Hindi and Swahili translations follow
+  the current English pages.
 - The website says what 0.6 does: a computer at home is the hub and phones are never one, a
   group of phones meets at a relay, a computer joins by the six digits the phone shows, the
   main device moves only with the recovery key, the iPhone app comes in 0.7 and the HarmonyOS
