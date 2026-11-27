@@ -2250,8 +2250,8 @@ with 0.5 is set up again once. The details follow.
 - The user guide's pages are rewritten to one standard: each is a tutorial, a how-to or an
   explanation, says what the program does today, and its facts were checked against the code.
   So are the reference (commands, settings, errors, limits, devices, glossary), the
-  administrators' pages, the README, the docs' map, the apps' page and the shorter engineering
-  pages; the administrators' pages set a blind relay once, on the main device, and say that
+  administrators' pages, the README, the docs' map, the apps' page, the shorter engineering
+  pages and the design; the administrators' pages set a blind relay once, on the main device, and say that
   every device of a group runs the same release.
 - The phone apps' accessibility test keeps the element tree with its picture when the audit
   reports an issue it ties to no element, so CI's log shows what was on the screen.
@@ -3357,6 +3357,9 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `cbb global on`, `cbb global hub -away-on` and `cbb global relay` warn that the device's keys
+  sit in files only where they do; a device with its keys in a TPM or the Secure Enclave is
+  told what sync away from home does, without that warning.
 - `cbb takeover`, `cbb takeover -delay` and `cbb handover` print only the service's answer,
   which points to the recovery key, and no longer a claim that waits; a recovery the service
   did not finish says so. `cbb`'s help shows that `cbb remote code` reads the TV's code from

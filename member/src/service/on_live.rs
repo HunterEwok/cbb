@@ -596,7 +596,7 @@ impl Service {
         match h.name.as_str() {
             "on" if !h.consent => {
                 return Err(Error::msg(
-                    "this device keeps its keys in files, so sync away from home needs your consent; run cbb global on and read what it says",
+                    "sync away from home needs your consent; run cbb global on and read what it says",
                 ));
             }
             "on" => {
