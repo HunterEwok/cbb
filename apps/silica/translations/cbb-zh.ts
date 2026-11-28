@@ -43,19 +43,19 @@
     </message>
     <message>
         <source>New collection…</source>
-        <translation>新建集合…</translation>
+        <translation>新建合集…</translation>
     </message>
     <message>
         <source>Rename collection…</source>
-        <translation>重命名集合…</translation>
+        <translation>重命名合集…</translation>
     </message>
     <message>
         <source>Take out of collection</source>
-        <translation>移出集合</translation>
+        <translation>移出合集</translation>
     </message>
     <message>
         <source>Ungroup</source>
-        <translation>解散集合</translation>
+        <translation>取消分组</translation>
     </message>
 </context>
 <context>
@@ -273,7 +273,7 @@
     </message>
     <message>
         <source>New collection</source>
-        <translation>新建集合</translation>
+        <translation>新建合集</translation>
     </message>
     <message>
         <source>Office, Home, TVs…</source>
@@ -285,7 +285,7 @@
     </message>
     <message>
         <source>Rename collection</source>
-        <translation>重命名集合</translation>
+        <translation>重命名合集</translation>
     </message>
 </context>
 <context>
@@ -296,15 +296,15 @@
     </message>
     <message>
         <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
-        <translation>此集合中还没有设备。在主页面长按设备的磁贴即可将其移到这里。</translation>
+        <translation>此合集中还没有设备。在主页面长按设备的磁贴即可将其移到这里。</translation>
     </message>
     <message>
         <source>Rename collection…</source>
-        <translation>重命名集合…</translation>
+        <translation>重命名合集…</translation>
     </message>
     <message>
         <source>Ungroup</source>
-        <translation>解散集合</translation>
+        <translation>取消分组</translation>
     </message>
 </context>
 <context>
@@ -506,7 +506,7 @@
     </message>
     <message>
         <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
-        <translation>这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用纸页。</translation>
+        <translation>这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用恢复单。</translation>
     </message>
     <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
@@ -546,7 +546,7 @@
     </message>
     <message>
         <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
-        <translation>应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。</translation>
+        <translation>应用无法使用此 YubiKey 的管理密钥。请改用打印的恢复单。</translation>
     </message>
     <message>
         <source>The device did not paste.</source>
@@ -586,7 +586,7 @@
     </message>
     <message>
         <source>The phone could not save the sheet.</source>
-        <translation>手机无法保存纸页。</translation>
+        <translation>手机无法保存恢复单。</translation>
     </message>
     <message>
         <source>The phone has no key yet.</source>
@@ -638,11 +638,11 @@
     </message>
     <message>
         <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
-        <translation>这个 YubiKey 上有本群组的两个恢复密钥。请改用纸页。</translation>
+        <translation>这个 YubiKey 上有本群组的两个恢复密钥。请改用恢复单。</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
-        <translation>此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。</translation>
+        <translation>此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的恢复单。</translation>
     </message>
     <message>
         <source>This build of CBB is broken.</source>
@@ -720,11 +720,11 @@
     </message>
     <message>
         <source>A change of the group's main device is on its way.</source>
-        <translation>群组主设备的更换正在传来。</translation>
+        <translation>群组主设备的更换即将生效。</translation>
     </message>
     <message>
         <source>Leave the group</source>
-        <translation>离开群组</translation>
+        <translation>退出群组</translation>
     </message>
     <message>
         <source>Leaving the group</source>
@@ -764,7 +764,7 @@
     </message>
     <message>
         <source>The group's devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</source>
-        <translation>群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。</translation>
+        <translation>群组的设备现在拒绝它。退出群组即可删除这里的密钥；之后它可以重新加入群组。</translation>
     </message>
     <message>
         <source>The group's main device changed</source>
@@ -1042,7 +1042,7 @@
     </message>
     <message>
         <source>Connected to the hub through the tunnel.</source>
-        <translation>已通过隧道连上中心节点。</translation>
+        <translation>已通过隧道连接到中心节点。</translation>
     </message>
     <message>
         <source>Connecting to the hub through the tunnel…</source>
@@ -1082,7 +1082,7 @@
     </message>
     <message>
         <source>Leave the group</source>
-        <translation>离开群组</translation>
+        <translation>退出群组</translation>
     </message>
     <message>
         <source>Leaving the group</source>
@@ -1102,7 +1102,7 @@
     </message>
     <message>
         <source>New collection…</source>
-        <translation>新建集合…</translation>
+        <translation>新建合集…</translation>
     </message>
     <message>
         <source>Off for 15 minutes</source>
@@ -1154,7 +1154,7 @@
     </message>
     <message>
         <source>This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.</source>
-        <translation>此手机所在的群组创建于 0.6 之前，此版本已不再运行它。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。</translation>
+        <translation>此手机所在的群组创建于 0.6 之前，此版本已无法运行该群组。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。</translation>
     </message>
     <message>
         <source>Turn Everywhere off</source>
@@ -1286,7 +1286,7 @@
     </message>
     <message>
         <source>%1 from the group is in the gallery</source>
-        <translation>来自群组的%1已存入图库</translation>
+        <translation>来自群组的 %1 已存入图库</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
@@ -1419,7 +1419,7 @@
     </message>
     <message>
         <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
-        <translation>将 YubiKey 插入 USB-C 接口，然后输入其 PIN 码。</translation>
+        <translation>将 YubiKey 插入 USB-C 接口，然后输入其 PIN。</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
@@ -1467,7 +1467,7 @@
     </message>
     <message>
         <source>The sheet is saved in Documents.</source>
-        <translation>纸页已保存到“文档”。</translation>
+        <translation>恢复单已保存到“文档”。</translation>
     </message>
     <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
@@ -1755,7 +1755,7 @@
     </message>
     <message>
         <source>Secret lifetime</source>
-        <translation>机密的有效期</translation>
+        <translation>机密保留时长</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1802,7 +1802,7 @@
     <name>WhySection</name>
     <message>
         <source>A change of the group's main device is on its way.</source>
-        <translation>群组主设备的更换正在传来。</translation>
+        <translation>群组主设备的更换即将生效。</translation>
     </message>
     <message>
         <source>A copy waits until this device learns which device sent it.</source>
@@ -1834,7 +1834,7 @@
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
-        <translation>请确认其他设备已打开“随处”。</translation>
+        <translation>请确认其他设备已开启“随处”。</translation>
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
@@ -1850,7 +1850,7 @@
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
-        <translation>在家以外的设备可能无法连接到它；CBB 会自动重试。</translation>
+        <translation>离家在外的设备可能无法连接到它；CBB 会自动重试。</translation>
     </message>
     <message>
         <source>Everything syncs.</source>
@@ -1942,7 +1942,7 @@
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
-        <translation>由群组的所有者在其提醒中决定。</translation>
+        <translation>由群组的所有者决定其提醒。</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
@@ -2018,7 +2018,7 @@
     </message>
     <message>
         <source>Turn on Everywhere to sync away from home.</source>
-        <translation>打开“随处”，以便在家以外同步。</translation>
+        <translation>开启“随处”，以便离家时也能同步。</translation>
     </message>
     <message>
         <source>Turn on another device of the group.</source>

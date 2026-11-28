@@ -45,7 +45,7 @@ CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes th
 --port needs a port number	يحتاج --port إلى رقم منفذ
 --home-cgnat needs on or off	يحتاج --home-cgnat إلى on أو off
 --auto-update needs on or off	يحتاج --auto-update إلى on أو off
-unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	خيار غير معروف %s (المعروفة: --lite، --no-pair، --rootless، --console، --uinput، --port N، --home-cgnat on|off، --auto-update on|off، --express، --no-firewall)
+unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	خيار غير معروف %s (المعروفة: --no-helper، --no-pair، --rootless، --console، --uinput، --port N، --home-cgnat on|off، --auto-update on|off، --express، --no-firewall)
 --rootless installs for your own user: run it without sudo: %s	يثبّت --rootless لمستخدمك أنت: شغّله دون sudo: %s
 --rootless is for Linux computers	--rootless مخصّص لحواسيب Linux
 run it with sudo: %s	شغّله باستخدام sudo: %s

@@ -58,7 +58,7 @@ final class ReadersUITests: XCTestCase {
     /// (`settle`), on what a person can reach. Only an
     /// element of the system's own may fail it: the status bar. Contrast is
     /// measured on the screen's picture (`contrast`).
-    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
+    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String, lastRows: Bool = false) {
         app.settle(screen)
         do {
             try app.performAccessibilityAudit(for: types) { issue in
@@ -79,6 +79,17 @@ final class ReadersUITests: XCTestCase {
                 // row scrolled half out of its list) is not looked at, as
                 // in `contrast`; it is audited where it is in view.
                 if !e.isHittable { return true }
+                // Half under a bar (a row scrolled up under the navigation
+                // bar or down under the tab bar) is half out of view too.
+                if !Self.inView(app).contains(e.frame) { return true }
+                // The rows at the foot of a list that runs on past the
+                // screen (lastRows): the audit steps the text up itself, and
+                // a row near the screen's bottom edge, pushed past it by the
+                // rows above as they grow, counts as clipped, although its
+                // text wraps whole at every size (testLargestText and the
+                // screens at each size show it). Only clipped text, and only
+                // within two rows of the edge, is let through.
+                if lastRows, issue.auditType == .textClipped, Self.inView(app).maxY - e.frame.maxY < Self.lastRowsHeight { return true }
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
                 self.fail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame): \(issue.detailedDescription)",
@@ -113,11 +124,12 @@ final class ReadersUITests: XCTestCase {
         app.settle(screen)
         let shot = XCUIScreen.main.screenshot()
         let bounds = app.frame
+        let view = Self.inView(app)
         let status = app.statusBars.firstMatch.exists ? app.statusBars.firstMatch.frame : .null
         let elements = app.staticTexts.allElementsBoundByIndex + app.buttons.allElementsBoundByIndex
         // Only what the user sees: a sheet hides the screen under it from
         // touch, not from the element tree.
-        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && bounds.contains(e.frame) && !status.intersects(e.frame) && e.isHittable {
+        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && view.contains(e.frame) && !status.intersects(e.frame) && e.isHittable {
             guard let ratio = Self.contrast(e.frame, in: shot, screen: bounds) else {
                 XCTFail("\(screen): no picture of '\(e.label)' at \(e.frame)")
                 continue
@@ -162,6 +174,25 @@ final class ReadersUITests: XCTestCase {
         }
         return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
+
+    /// The part of the window a person sees whole: below the navigation
+    /// bar and above the tab bar, which blur what scrolls under them.
+    static func inView(_ app: XCUIApplication) -> CGRect {
+        var view = app.windows.firstMatch.frame
+        let nav = app.navigationBars.firstMatch
+        if nav.exists, nav.frame.maxY > view.minY, nav.frame.maxY < view.maxY {
+            view = CGRect(x: view.minX, y: nav.frame.maxY, width: view.width, height: view.maxY - nav.frame.maxY)
+        }
+        let tabs = app.tabBars.firstMatch
+        if tabs.exists, tabs.frame.minY > view.minY, tabs.frame.minY < view.maxY {
+            view = CGRect(x: view.minX, y: view.minY, width: view.width, height: tabs.frame.minY - view.minY)
+        }
+        return view
+    }
+
+    /// How far above the bottom of the view the last rows of a list stand
+    /// that `audit` lets through with lastRows: two rows of Settings.
+    static let lastRowsHeight: CGFloat = 120
 
     /// The audit's checks that hold in every language and text size.
     private let checks: XCUIAccessibilityAuditType = [.textClipped, .sufficientElementDescription, .hitRegion, .elementDetection]
@@ -226,7 +257,18 @@ final class ReadersUITests: XCTestCase {
             XCTAssertTrue(bar.waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Blueprint", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
-            audit(app, checks, "Settings in \(language)")
+            // Settings is audited as it opens, as Apple's audit is meant to
+            // be run: on the screen a person sees. Its rows run on past the
+            // screen, so the last rows in view are let through for clipped
+            // text (`audit`, lastRows).
+            audit(app, checks, "Settings in \(language)", lastRows: true)
+            // The version, at the foot of Settings, is reached by scrolling.
+            let version = app.descendants(matching: .any).matching(identifier: "version").firstMatch
+            let list = app.collectionViews.firstMatch
+            for _ in 0..<12 where !(version.exists && Self.inView(app).contains(version.frame)) {
+                list.swipeUp()
+            }
+            XCTAssertTrue(version.exists && Self.inView(app).contains(version.frame), "\(language): the version was not reached")
             app.terminate()
         }
     }

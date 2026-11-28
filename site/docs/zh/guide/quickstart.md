@@ -20,7 +20,7 @@ Connect Beyond Borders 在你自己的设备之间共享同一个加密剪贴板
 4. 按提示使用指纹、面容或屏幕锁确认。应用会在手机的安全硬件中创建群组的主密钥。
 5. 保存群组的**恢复密钥**，应用只会显示这一次。选择**写在纸上**以打印或保存，选择**写入 YubiKey** 以存入 YubiKey，或者两种都选。请将恢复密钥与设备分开存放：如果这部手机丢失，这是将群组移到另一台主设备的唯一途径（[密钥与认证](keys.md)）。
 
-**你会看到**：关闭恢复密钥界面后，应用会打开**添加设备**界面，显示一个二维码和六位配对码。如果关闭该界面，应用会显示**主页**，其中列出你的手机在线。
+**你会看到**：关闭恢复密钥界面后，应用会打开**添加设备**界面，显示一个二维码和六位配对码。如果关闭该界面，应用会显示**主页**，其中你的手机显示为在线。
 
 ## 2. 在电脑上安装 Connect Beyond Borders
 
@@ -34,7 +34,7 @@ Connect Beyond Borders 在你自己的设备之间共享同一个加密剪贴板
 
   在 macOS 14 或更高版本上，你也可以从[最新 GitHub 发布版本](https://github.com/HunterEwok/cbb/releases/latest)下载并打开 `cbb-X.Y.Z.pkg`，同时安装后台服务和菜单栏应用。
 
-- 在 **Windows** 10（1809 或更高版本）或 11 上，以**以管理员身份运行**打开 PowerShell 并运行：
+- 在 **Windows** 10（1809 或更高版本）或 11 上，右键选择**以管理员身份运行**打开 PowerShell 并运行：
 
   ```powershell
   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex

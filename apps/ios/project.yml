@@ -59,6 +59,10 @@ targets:
     info:
       path: CBB/Info.plist
       properties:
+        # The build's numbers, which testflight.sh and release.yml set; without
+        # them xcodegen writes 1 and 1.0, and App Store Connect refuses the upload.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
@@ -123,6 +127,8 @@ targets:
     info:
       path: ShareExtension/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
@@ -155,6 +161,8 @@ targets:
     info:
       path: NotificationService/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
@@ -186,6 +194,8 @@ targets:
     info:
       path: Widgets/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
@@ -207,6 +217,8 @@ targets:
     info:
       path: Watch/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]

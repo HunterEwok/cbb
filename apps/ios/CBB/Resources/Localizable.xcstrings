@@ -686,7 +686,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "群组主设备的更换正在传来。"
+            "value": "群组主设备的更换即将生效。"
           }
         }
       }
@@ -2296,7 +2296,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "管理员会读取副本，所以它是也读取副本的中心节点，而不是只转发副本的中心节点。"
+            "value": "管理员会读取副本，所以它也是会读取副本的中心节点，而不是只转发副本的中心节点。"
           }
         }
       }
@@ -3587,7 +3587,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "更改副本和机密的有效期"
+            "value": "更改副本和机密的保留时长"
           }
         }
       }
@@ -3725,7 +3725,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "请确认其他设备已打开“随处”。"
+            "value": "请确认其他设备已开启“随处”。"
           }
         }
       }
@@ -5289,7 +5289,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在家以外的设备可能无法连接到它；CBB 会自动重试。"
+            "value": "离家在外的设备可能无法连接到它；CBB 会自动重试。"
           }
         }
       }
@@ -5749,7 +5749,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用纸页。"
+            "value": "这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用恢复单。"
           }
         }
       }
@@ -8923,7 +8923,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "离开群组"
+            "value": "退出群组"
           }
         }
       }
@@ -9015,7 +9015,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "离开群组？"
+            "value": "退出群组？"
           }
         }
       }
@@ -9521,7 +9521,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "手机丢了？让第二部手机成为管理员：在那部手机上点按“我已在另一部手机上使用 CBB”，然后在这里用 + 扫描它的代码。"
+            "value": "手机丢了？让第二部手机成为管理员：在那部手机上点按“我已在另一部手机上使用 CBB”，然后在这里用 + 扫描它的二维码。"
           }
         }
       }
@@ -10073,7 +10073,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让第二部手机成为管理员：在那部手机上点按“加入群组”，然后在这里用 + 扫描它的代码。"
+            "value": "让第二部手机成为管理员：在那部手机上点按“加入群组”，然后在这里用 + 扫描它的二维码。"
           }
         }
       }
@@ -11821,7 +11821,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "五分钟内没有手机扫描代码。请重试。"
+            "value": "五分钟内没有手机扫描二维码。请重试。"
           }
         }
       }
@@ -12511,7 +12511,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在电脑上运行 cbb pair，并扫描它显示的代码。"
+            "value": "在电脑上运行 cbb pair，并扫描它显示的二维码。"
           }
         }
       }
@@ -16283,7 +16283,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "扫描群组恢复纸上的二维码，或输入其文字。密钥只为这次更换留在这部手机上。"
+            "value": "扫描群组恢复单上的二维码，或输入其文字。密钥只为这次更换留在这部手机上。"
           }
         }
       }
@@ -16421,7 +16421,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "机密的有效期"
+            "value": "机密保留时长"
           }
         }
       }
@@ -19365,7 +19365,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。"
+            "value": "应用无法使用此 YubiKey 的管理密钥。请改用打印的恢复单。"
           }
         }
       }
@@ -19641,7 +19641,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代码不匹配。请在电脑上再次运行 cbb pair 并扫描新代码。"
+            "value": "代码不匹配。请在电脑上再次运行 cbb pair 并扫描新二维码。"
           }
         }
       }
@@ -19687,7 +19687,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代码不匹配。请再次扫描设备的代码。"
+            "value": "代码不匹配。请再次扫描设备的二维码。"
           }
         }
       }
@@ -20745,7 +20745,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "之后群组允许文件中的密钥成为管理员和中心节点（设置，管理员密钥）。"
+            "value": "之后群组允许文件中的密钥成为管理员和中心节点（“设置”>“管理员密钥”）。"
           }
         }
       }
@@ -20883,7 +20883,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。"
+            "value": "群组的设备现在拒绝它。退出群组即可删除这里的密钥；之后它可以重新加入群组。"
           }
         }
       }
@@ -21251,7 +21251,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "由群组的所有者在其提醒中决定。"
+            "value": "由群组的所有者决定其提醒。"
           }
         }
       }
@@ -22769,7 +22769,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个 YubiKey 上有本群组的两个恢复密钥。请改用纸页。"
+            "value": "这个 YubiKey 上有本群组的两个恢复密钥。请改用恢复单。"
           }
         }
       }
@@ -22815,7 +22815,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。"
+            "value": "此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的恢复单。"
           }
         }
       }
@@ -24103,7 +24103,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此手机所在的群组创建于 0.6 之前，此版本已不再运行它。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。"
+            "value": "此手机所在的群组创建于 0.6 之前，此版本已无法运行该群组。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。"
           }
         }
       }
@@ -25161,7 +25161,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开“随处”，以便在家以外同步。"
+            "value": "开启“随处”，以便离家时也能同步。"
           }
         }
       }
@@ -25575,7 +25575,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "输入 YubiKey 的 PIN 码。"
+            "value": "输入 YubiKey 的 PIN。"
           }
         }
       }

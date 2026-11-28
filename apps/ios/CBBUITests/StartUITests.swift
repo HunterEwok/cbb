@@ -91,7 +91,7 @@ final class StartUITests: XCTestCase {
         // what the taps store.
         var app = launch()
         openSettings(app)
-        let version = app.staticTexts["Version"]
+        let version = app.descendants(matching: .any).matching(identifier: "version").firstMatch
         scrollTo(version, in: app)
         // The taps are kept, so on a simulator that ran this test before the
         // switch shows at once; a fresh one, as in CI, shows it only after.

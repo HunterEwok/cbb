@@ -104,7 +104,7 @@ SteamOS 每次系统更新都会替换根文件系统，因此安装程序会把
 
 支持 x86-64 和 ARM64 架构的 Windows 10（1809 或更高版本）和 Windows 11。
 
-1. 以**以管理员身份运行**打开 PowerShell。
+1. 右键选择**以管理员身份运行**打开 PowerShell。
 2. 运行安装程序：
 
    ```powershell
@@ -276,7 +276,7 @@ Connect Beyond Borders 需要来自家庭网络的传入 **TCP 端口 8764**（�
 
 如果是通过 Homebrew 安装的，请先运行卸载脚本，再运行 `brew uninstall cbb`。
 
-卸载会移除程序、后台服务、剪贴板代理、更新定时器、安装程序添加的防火墙规则，以及（在 macOS 上）通过 `.pkg` 安装的 `/Applications/CBB.app`。你设备的密钥和群组状态会保留在磁盘上，这样重新安装即可重新连回同一个群组。
+卸载会移除程序、后台服务、剪贴板代理、更新定时器、安装程序添加的防火墙规则，以及（在 macOS 上）通过 `.pkg` 安装的 `/Applications/CBB.app`。你设备的密钥和群组状态会保留在磁盘上，这样重新安装即可重新加入同一个群组。
 
 - **同时删除密钥和群组状态**：在 Unix 系统上加上 `--purge`，或在 Windows 上以管理员身份在 PowerShell 中运行 `uninstall.ps1 -Purge`。之后，请在管理员设备上将该设备从群组中移除（`sudo cbb remove NAME` 或在手机应用中操作）。
 - **退出群组但不卸载**：运行 `sudo cbb leave`（无 root 的 Linux 不加 `sudo`，Windows 上在管理员终端中运行 `cbb leave`）。这会删除设备的密钥和群组文件，同时保留 Connect Beyond Borders 已安装，使该设备可以再次加入群组。
