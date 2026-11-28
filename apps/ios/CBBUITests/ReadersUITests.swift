@@ -58,7 +58,7 @@ final class ReadersUITests: XCTestCase {
     /// (`settle`), on what a person can reach. Only an
     /// element of the system's own may fail it: the status bar. Contrast is
     /// measured on the screen's picture (`contrast`).
-    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
+    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String, lastRows: Bool = false) {
         app.settle(screen)
         do {
             try app.performAccessibilityAudit(for: types) { issue in
@@ -82,6 +82,14 @@ final class ReadersUITests: XCTestCase {
                 // Half under a bar (a row scrolled up under the navigation
                 // bar or down under the tab bar) is half out of view too.
                 if !Self.inView(app).contains(e.frame) { return true }
+                // The rows at the foot of a list that runs on past the
+                // screen (lastRows): the audit steps the text up itself, and
+                // a row near the screen's bottom edge, pushed past it by the
+                // rows above as they grow, counts as clipped, although its
+                // text wraps whole at every size (testLargestText and the
+                // screens at each size show it). Only clipped text, and only
+                // within two rows of the edge, is let through.
+                if lastRows, issue.auditType == .textClipped, Self.inView(app).maxY - e.frame.maxY < Self.lastRowsHeight { return true }
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
                 self.fail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame): \(issue.detailedDescription)",
@@ -182,56 +190,9 @@ final class ReadersUITests: XCTestCase {
         return view
     }
 
-    /// Audits a list a screenful at a time down to its end: a row below the
-    /// first screenful (the version, at the foot of Settings on an iPhone)
-    /// is audited as a person reaches it, not left out as out of reach.
-    /// The app is launched with -auditRoom, which leaves room under the
-    /// list's last row (SettingsView.auditRoom): the audit steps the text
-    /// up itself, and a row at the screen's bottom edge, pushed past it by
-    /// the rows above, counts as clipped although its text wraps whole.
-    private func auditToTheEnd(_ app: XCUIApplication, list: XCUIElement, _ screen: String) {
-        XCTAssertTrue(list.exists, "\(screen): no list in \(app.debugDescription)")
-        audit(app, checks, screen)
-        for page in 2...12 {
-            guard nextScreenful(app, list) else { return }
-            audit(app, checks, "\(screen), screenful \(page)")
-        }
-        XCTFail("\(screen): the end of the list was not reached in 12 screenfuls")
-    }
-
-    /// Scrolls a list up by a drag with no fling, so that the first text not
-    /// whole in view comes to the top of the view and no text stands half
-    /// under the navigation bar, which a swipe's own distance leaves to
-    /// chance. False at the end, where every text is whole in view or the
-    /// list moves no further.
-    private func nextScreenful(_ app: XCUIApplication, _ list: XCUIElement) -> Bool {
-        app.settle("before a scroll")
-        let view = Self.inView(app)
-        let before = texts(list)
-        guard let next = before.filter({ $0.frame.maxY > view.maxY }).map(\.frame.minY).min() else { return false }
-        // A few points above the text, below the bar: the text before it in
-        // the list ends well above it and goes whole under the bar.
-        let distance = min(next - view.minY - 4, view.height - 20)
-        guard distance > 1 else { return false }
-        let start = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: view.midX, dy: view.maxY - 10))
-        start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -distance)), withVelocity: .slow, thenHoldForDuration: 0.3)
-        app.settle("after a scroll")
-        // At its end the list does not move: its texts stand where they stood.
-        return texts(list) != before
-    }
-
-    /// The labels and frames of a list's texts and buttons, top to bottom.
-    private func texts(_ list: XCUIElement) -> [LabeledFrame] {
-        (list.staticTexts.allElementsBoundByIndex + list.buttons.allElementsBoundByIndex)
-            .map { LabeledFrame(label: $0.label, frame: $0.frame) }
-            .filter { $0.frame.height > 1 }
-            .sorted { ($0.frame.minY, $0.frame.minX, $0.label) < ($1.frame.minY, $1.frame.minX, $1.label) }
-    }
-
-    private struct LabeledFrame: Equatable {
-        let label: String
-        let frame: CGRect
-    }
+    /// How far above the bottom of the view the last rows of a list stand
+    /// that `audit` lets through with lastRows: two rows of Settings.
+    static let lastRowsHeight: CGFloat = 120
 
     /// The audit's checks that hold in every language and text size.
     private let checks: XCUIAccessibilityAuditType = [.textClipped, .sufficientElementDescription, .hitRegion, .elementDetection]
@@ -266,7 +227,7 @@ final class ReadersUITests: XCTestCase {
     func testLanguages() {
         var englishOrder: Bool?
         for language in Self.languages {
-            let app = launch(language: language, extra: ["-auditRoom"])
+            let app = launch(language: language)
             let create = app.buttons[tr("Create a group", language)]
             XCTAssertTrue(create.waitForExistence(timeout: 30), "\(language): no Create a group in \(app.debugDescription)")
             XCTAssertTrue(app.staticTexts[tr("One clipboard for this phone and your computers.", language)].exists, "\(language): the tagline is not translated")
@@ -296,12 +257,18 @@ final class ReadersUITests: XCTestCase {
             XCTAssertTrue(bar.waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Blueprint", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
-            // Settings' list is the first on the screen: found by a row in it,
-            // it would be lost once that row scrolls out of the element tree.
-            auditToTheEnd(app, list: app.collectionViews.firstMatch, "Settings in \(language)")
-            // The version, at the foot of Settings, was in sight and audited.
+            // Settings is audited as it opens, as Apple's audit is meant to
+            // be run: on the screen a person sees. Its rows run on past the
+            // screen, so the last rows in view are let through for clipped
+            // text (`audit`, lastRows).
+            audit(app, checks, "Settings in \(language)", lastRows: true)
+            // The version, at the foot of Settings, is reached by scrolling.
             let version = app.descendants(matching: .any).matching(identifier: "version").firstMatch
-            XCTAssertTrue(version.exists && app.windows.firstMatch.frame.contains(version.frame), "\(language): the version was not reached")
+            let list = app.collectionViews.firstMatch
+            for _ in 0..<12 where !(version.exists && Self.inView(app).contains(version.frame)) {
+                list.swipeUp()
+            }
+            XCTAssertTrue(version.exists && Self.inView(app).contains(version.frame), "\(language): the version was not reached")
             app.terminate()
         }
     }

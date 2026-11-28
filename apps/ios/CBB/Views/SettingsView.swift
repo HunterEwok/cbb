@@ -37,18 +37,6 @@ struct SettingsView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
 
-    #if DEBUG
-    /// Room under the last row for the UI tests' accessibility audit, with
-    /// -auditRoom in debug builds only: the audit steps the text up itself,
-    /// and a row at the screen's bottom edge, pushed past it by the rows
-    /// above as they grow, counts as clipped. With the room the last rows
-    /// can be scrolled up and audited where they have room to grow, as
-    /// every row above them is.
-    private static let auditRoom: CGFloat = ProcessInfo.processInfo.arguments.contains("-auditRoom") ? 600 : 0
-    #else
-    private static let auditRoom: CGFloat = 0
-    #endif
-
     /// Whether the page shows a part.
     private func shows(_ p: SettingsPart) -> Bool { part == nil || part == p }
 
@@ -109,7 +97,6 @@ struct SettingsView: View {
             if shows(.about) { aboutSections }
         }
         .scrollContentBackground(.hidden)
-        .contentMargins(.bottom, Self.auditRoom, for: .scrollContent)
         .background(AppBackground())
         .navigationTitle(part?.title ?? Text("Settings"))
         .sheet(isPresented: $changeRoot) { ChangeRootView() }
@@ -161,7 +148,7 @@ struct SettingsView: View {
             LabeledContent {
                 Text(verbatim: version).font(.system(.body, design: .monospaced))
             } label: {
-                Text("Version").fixedSize(horizontal: false, vertical: true)
+                Text("Version")
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -184,10 +171,10 @@ struct SettingsView: View {
                 .onChange(of: errorDetails, initial: true) { _, on in Shared.defaults.set(on, forKey: "ShowErrorDetails") }
             }
             Link(destination: URL(string: "https://github.com/HunterEwok/cbb")!) {
-                Text("Source code and license (AGPL-3.0)").fixedSize(horizontal: false, vertical: true)
+                Text("Source code and license (AGPL-3.0)")
             }
         } header: {
-            Text("About").fixedSize(horizontal: false, vertical: true)
+            Text("About")
         }
         .listRowBackground(palette.surface)
     }
